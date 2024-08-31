@@ -1,26 +1,21 @@
-import os
-import sys
-import time
-import subprocess
 import pandas as pd
 import numpy as np
 import tensorflow as tf
 import matplotlib.pyplot as plt
 
 from IPython.display import display, clear_output
-from datetime import datetime, timedelta
-from enum import Enum
+
+ 
 
 class tools:
   def __init__(self):
-    pass 
-  
+    pass   
+
   def get_historical_data(self, file_name):
     df = pd.read_csv(file_name)
     print(f"Raw Data           : {df.shape}")
 
-    return df
-  
+    return df  
 
 #-----------------------------indicators--------------------------
 
@@ -195,6 +190,7 @@ class tools:
     fig, ax1 = plt.subplots(figsize = (12, 6))
 
     ax2 = ax1.twinx()
+  
     ax1.plot(y, label = "Actual", color = "blue")
     ax2.plot(y_hat, label = "Predicted", color = "red")
 
@@ -208,7 +204,7 @@ class tools:
 # -----------------------------------------------------------------------
   def show_naive(self, df):
  
-    df_range = np.round((df.close - df.open) / df.open, 4)
+    df_range = np.round((df.close - df.open) / df.open, 6) * 100
    
     evalu = pd.DataFrame()
     evalu["y_hat"] = df_range
@@ -220,18 +216,30 @@ class tools:
     self.show_evaluation(evalu)
 
   def show_evaluation(self, df):
-
-    df["win"] = (df.y_hat > 0) & (df.y > 0)
-    df["win"] = df.win.astype(int)
     
-    df.loc[df["y_hat"] <= 0, "win"] = 0
-    df.loc[(df["y_hat"] > 0) & (df["y"] <= 0), "win"] = -1
+    # Calculate win column
+    df["win"] = ((df.y_hat > 0) & (df.y > 0)) | ((df.y_hat < 0) & (df.y < 0))
+    df["win"] = df["win"].astype(int)
+    df.loc[(df["y"] != 0) & (df["win"] == 0), "win"] = -1
 
+    # Print win value counts
+    counts = df["win"].value_counts().to_string()
+    print(f"Win Value Counts: \n{counts}")
 
-    counts = df.win.value_counts().to_string()
-    print(f"Win Value Counts: \n {counts}")
-        
-    balance = df.loc[df["win"] != 0, "y"].sum() *100
+    # Calculate balances
+    balance_positive_win = df.loc[(df["win"] == 1) & (df["y"] > 0), "y"].sum() * 100
+    balance_negative_win = -df.loc[(df["win"] == 1) & (df["y"] < 0), "y"].sum() * 100
+    balance_win = balance_positive_win + balance_negative_win
+
+    balance_positive_loss = df.loc[(df["win"] == -1) & (df["y"] > 0), "y"].sum() * 100
+    balance_negative_loss = -df.loc[(df["win"] == -1) & (df["y"] < 0), "y"].sum() * 100
+    balance_loss = balance_positive_loss + balance_negative_loss
+
+    balance = balance_win - balance_loss
+
+    # Print balance
     print(f"\nBalance: {balance:.2f} %\n")
-        
+
+    # Print comparison DataFrame
     print("Comparison DataFrame:\n\n", df)
+   
