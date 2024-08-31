@@ -15,6 +15,7 @@ class tools:
   def __init__(self):
     pass 
   
+
   def get_historical_data(self, file_name):
     df = pd.read_csv(file_name)
     print(f"Raw Data           : {df.shape}")
