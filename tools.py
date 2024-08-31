@@ -176,4 +176,4 @@ class tools:
     def save_file(self, data, symbol, timeframe):
         file_name = f"scaled_data/{symbol}-{TimeFrame(timeframe).name}-scaled.csv".lower()
         data.to_csv(file_name, index = False)
-        
+ 
