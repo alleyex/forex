@@ -10,7 +10,7 @@ if not mt5.initialize():
     print("initialize() failed, error code =", mt5.last_error())
     quit()
 
-timeframe = mt5.TIMEFRAME_M2
+timeframe = mt5.TIMEFRAME_D1
 symbol = "USDJPY"
 
 df = tool.get_historical_data(symbol, timeframe)
