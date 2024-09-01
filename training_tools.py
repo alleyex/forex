@@ -5,17 +5,13 @@ import matplotlib.pyplot as plt
 
 from IPython.display import display, clear_output
 
- 
-
 class tools:
   def __init__(self):
     pass   
 
-
   def get_historical_data(self, file_name):
     df = pd.read_csv(file_name)
     print(f"Raw Data           : {df.shape}")
-
     return df  
 
 #-----------------------------indicators--------------------------
@@ -40,6 +36,7 @@ class tools:
 
   def sma(self, data, window):
     return data.rolling(window).mean()
+
   
   def ema(self, data, span):
     return data.ewm(span=span, adjust=False).mean()  
@@ -187,11 +184,15 @@ class tools:
     return tf.keras.callbacks.LambdaCallback(on_epoch_end = callback)
 
 
+    return df
+
+
   def plot_predict(self, y_hat, y):  
     fig, ax1 = plt.subplots(figsize = (12, 6))
 
     ax2 = ax1.twinx()
   
+
     ax1.plot(y, label = "Actual", color = "blue")
     ax2.plot(y_hat, label = "Predicted", color = "red")
 
@@ -203,10 +204,10 @@ class tools:
 
 
 # -----------------------------------------------------------------------
-  def show_naive(self, df):
- 
+  def show_naive(self, df): 
+
     df_range = np.round((df.close - df.open) / df.open, 6) * 100
-   
+
     evalu = pd.DataFrame()
     evalu["y_hat"] = df_range
     evalu["y"] = df_range.shift(-1)
@@ -242,3 +243,4 @@ class tools:
     print(f"\nBalance: {balance:.2f} %\n")
     # Print comparison DataFrame
     print("Comparison DataFrame:\n\n", df)
+
