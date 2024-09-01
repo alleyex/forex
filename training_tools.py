@@ -11,6 +11,7 @@ class tools:
   def __init__(self):
     pass   
 
+
   def get_historical_data(self, file_name):
     df = pd.read_csv(file_name)
     print(f"Raw Data           : {df.shape}")
@@ -239,7 +240,5 @@ class tools:
 
     # Print balance
     print(f"\nBalance: {balance:.2f} %\n")
-
     # Print comparison DataFrame
     print("Comparison DataFrame:\n\n", df)
-   
