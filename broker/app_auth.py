@@ -1,38 +1,39 @@
-from typing import Callable, Optional, Protocol
-from dataclasses import dataclass, field
+"""
+cTrader 應用程式層級認證服務
+"""
+from typing import Callable, Optional
+from dataclasses import dataclass
 
 from ctrader_open_api import Client, Protobuf, TcpProtocol, EndPoints
 from ctrader_open_api.messages.OpenApiMessages_pb2 import ProtoOAApplicationAuthReq
 
+from broker.base import BaseAuthService, BaseCallbacks
 from config.constants import MessageType, ConnectionStatus
 from config.settings import AppCredentials
 
 
-class AuthCallbacks(Protocol):
-    """Protocol defining expected callbacks"""
-    def on_app_auth_success(self, client: Client) -> None: ...
-    def on_error(self, error: str) -> None: ...
-    def on_log(self, message: str) -> None: ...
-    def on_status_changed(self, status: ConnectionStatus) -> None: ...
-
-
 @dataclass
-class AppAuthServiceCallbacks:
-    """Callback container with defaults"""
+class AppAuthServiceCallbacks(BaseCallbacks):
+    """AppAuthService 的回調函式容器"""
     on_app_auth_success: Optional[Callable[[Client], None]] = None
-    on_error: Optional[Callable[[str], None]] = None
-    on_log: Optional[Callable[[str], None]] = None
     on_status_changed: Optional[Callable[[ConnectionStatus], None]] = None
 
 
-class AppAuthService:
+class AppAuthService(BaseAuthService):
     """
-    Handles application-level authentication with cTrader Open API.
+    處理 cTrader Open API 的應用程式層級認證
     
-    Usage:
+    使用方式：
         service = AppAuthService.create("demo", "token.json")
-        service.set_callbacks(callbacks)
+        service.set_callbacks(
+            on_app_auth_success=lambda client: print("成功"),
+            on_error=lambda err: print(f"錯誤: {err}"),
+        )
         service.connect()
+    
+    Attributes:
+        status: 目前的連線狀態
+        is_app_authenticated: 是否已完成應用程式認證
     """
     
     def __init__(
@@ -41,36 +42,49 @@ class AppAuthService:
         host: str,
         port: int,
     ):
+        super().__init__()
         self._credentials = credentials
         self._host = host
         self._port = port
-        self._status = ConnectionStatus.DISCONNECTED
         self._callbacks = AppAuthServiceCallbacks()
         self._client: Optional[Client] = None
 
     @classmethod
     def create(cls, host_type: str, token_file: str) -> "AppAuthService":
-        """Factory method to create service with configuration"""
+        """
+        工廠方法：從設定檔建立服務實例
+        
+        Args:
+            host_type: "demo" 或 "live"
+            token_file: 憑證檔案路徑
+            
+        Returns:
+            AppAuthService 實例
+            
+        Raises:
+            FileNotFoundError: 找不到憑證檔案
+            ValueError: 憑證格式錯誤
+        """
         credentials = AppCredentials.from_file(token_file)
-        
-        host = (
-            EndPoints.PROTOBUF_DEMO_HOST 
-            if host_type == "demo" 
-            else EndPoints.PROTOBUF_LIVE_HOST
-        )
-        
+        host = cls._resolve_host(host_type)
         return cls(
             credentials=credentials,
             host=host,
             port=EndPoints.PROTOBUF_PORT,
         )
 
-    @property
-    def status(self) -> ConnectionStatus:
-        return self._status
-    
+    @staticmethod
+    def _resolve_host(host_type: str) -> str:
+        """解析主機類型為實際主機位址"""
+        hosts = {
+            "demo": EndPoints.PROTOBUF_DEMO_HOST,
+            "live": EndPoints.PROTOBUF_LIVE_HOST,
+        }
+        return hosts.get(host_type, EndPoints.PROTOBUF_DEMO_HOST)
+
     @property
     def is_app_authenticated(self) -> bool:
+        """檢查是否已完成應用程式認證"""
         return self._status >= ConnectionStatus.APP_AUTHENTICATED
 
     def set_callbacks(
@@ -80,7 +94,7 @@ class AppAuthService:
         on_log: Optional[Callable[[str], None]] = None,
         on_status_changed: Optional[Callable[[ConnectionStatus], None]] = None,
     ) -> None:
-        """Set callback functions for various events"""
+        """設定回調函式"""
         self._callbacks = AppAuthServiceCallbacks(
             on_app_auth_success=on_app_auth_success,
             on_error=on_error,
@@ -89,7 +103,7 @@ class AppAuthService:
         )
 
     def connect(self) -> None:
-        """Initialize connection and start authentication flow"""
+        """初始化連線並開始認證流程"""
         self._set_status(ConnectionStatus.CONNECTING)
         
         self._client = Client(self._host, self._port, TcpProtocol)
@@ -97,65 +111,72 @@ class AppAuthService:
         self._client.setDisconnectedCallback(self._handle_disconnected)
         self._client.setMessageReceivedCallback(self._handle_message)
         
-        self._log("🚀 Connecting to cTrader...")
+        self._log("🚀 正在連線到 cTrader...")
         self._client.startService()
 
     def get_client(self) -> Client:
-        """Get the authenticated client for use by other services"""
+        """
+        取得已認證的 Client 實例
+        
+        Returns:
+            Client 實例
+            
+        Raises:
+            RuntimeError: 尚未完成認證或 Client 未初始化
+        """
         if not self.is_app_authenticated:
-            raise RuntimeError("Application not authenticated yet")
+            raise RuntimeError("應用程式尚未完成認證")
         if self._client is None:
-            raise RuntimeError("Client not initialized")
+            raise RuntimeError("Client 尚未初始化")
         return self._client
 
     # ─────────────────────────────────────────────────────────────
-    # Private Methods
+    # 連線回調處理
     # ─────────────────────────────────────────────────────────────
 
-    def _set_status(self, status: ConnectionStatus) -> None:
-        """Update status and notify callback"""
-        self._status = status
-        if self._callbacks.on_status_changed:
-            self._callbacks.on_status_changed(status)
-
-    def _log(self, message: str) -> None:
-        """Log message through callback or print"""
-        if self._callbacks.on_log:
-            self._callbacks.on_log(message)
-        else:
-            print(message)
-
-    def _emit_error(self, error: str) -> None:
-        """Emit error through callback"""
-        self._log(f"❌ {error}")
-        if self._callbacks.on_error:
-            self._callbacks.on_error(error)
-
     def _handle_connected(self, client: Client) -> None:
-        """Callback when TCP connection established"""
+        """TCP 連線建立後的回調"""
         self._set_status(ConnectionStatus.CONNECTED)
-        self._log("✅ Connected!")
+        self._log("✅ 已連線！")
         self._send_app_auth(client)
 
     def _handle_disconnected(self, client: Client, reason: str) -> None:
-        """Callback when disconnected"""
+        """斷線後的回調"""
         self._set_status(ConnectionStatus.DISCONNECTED)
-        self._emit_error(f"Disconnected: {reason}")
+        self._emit_error(f"已斷線: {reason}")
 
     def _send_app_auth(self, client: Client) -> None:
-        """Send application authentication request"""
+        """發送應用程式認證請求"""
         request = ProtoOAApplicationAuthReq()
         request.clientId = self._credentials.client_id
         request.clientSecret = self._credentials.client_secret
         
-        self._log("📤 Sending Application Auth...")
+        self._log("📤 正在發送應用程式認證...")
         client.send(request)
 
+    # ─────────────────────────────────────────────────────────────
+    # 訊息處理
+    # ─────────────────────────────────────────────────────────────
+
     def _handle_message(self, client: Client, message) -> None:
-        """Route incoming messages to appropriate handlers"""
+        """路由傳入的訊息到適當的處理器"""
         msg = Protobuf.extract(message)
         msg_type = msg.payloadType
         
+        # 內建處理器
+        handled = self._handle_internal_message(client, msg, msg_type)
+        
+        # 外部註冊的處理器
+        if self._dispatch_to_handlers(client, msg):
+            handled = True
+
+        if not handled:
+            self._log(f"📩 未處理的訊息類型: {msg_type}")
+
+    def _handle_internal_message(
+        self, client: Client, msg: object, msg_type: int
+    ) -> bool:
+        """處理內建訊息類型"""
         handlers = {
             MessageType.APP_AUTH_RESPONSE: self._handle_app_auth_response,
             MessageType.ERROR_RESPONSE: self._handle_error_response,
@@ -165,22 +186,22 @@ class AppAuthService:
         handler = handlers.get(msg_type)
         if handler:
             handler(client, msg)
-        else:
-            self._log(f"📩 Unhandled message type: {msg_type}")
+            return True
+        return False
 
     def _handle_app_auth_response(self, client: Client, msg) -> None:
-        """Handle successful application authentication"""
+        """處理應用程式認證成功回應"""
         self._set_status(ConnectionStatus.APP_AUTHENTICATED)
-        self._log("✅ Application Authorized!")
+        self._log("✅ 應用程式已授權！")
         
         if self._callbacks.on_app_auth_success:
             self._callbacks.on_app_auth_success(client)
 
     def _handle_error_response(self, client: Client, msg) -> None:
-        """Handle error response from server"""
-        error_msg = f"Error {msg.errorCode}: {msg.description}"
+        """處理錯誤回應"""
+        error_msg = f"錯誤 {msg.errorCode}: {msg.description}"
         self._emit_error(error_msg)
 
     def _handle_heartbeat(self, client: Client, msg) -> None:
-        """Handle heartbeat (no action needed)"""
+        """處理心跳（無需動作）"""
         pass

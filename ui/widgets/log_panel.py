@@ -7,7 +7,7 @@ class LogPanel(QWidget):
         super().__init__()
 
         layout = QVBoxLayout()
-        title = QLabel("Log Panel")
+        title = QLabel("日誌面板")
         self.text = QTextEdit()
         self.text.setReadOnly(True)
 

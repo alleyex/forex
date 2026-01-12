@@ -11,9 +11,9 @@ class TradePanel(QWidget):
 
         layout = QVBoxLayout()
 
-        title = QLabel("Trade Panel")
-        self.btn_buy = QPushButton("BUY")
-        self.btn_sell = QPushButton("SELL")
+        title = QLabel("交易面板")
+        self.btn_buy = QPushButton("買入")
+        self.btn_sell = QPushButton("賣出")
 
         self.btn_buy.clicked.connect(self.buy_clicked.emit)
         self.btn_sell.clicked.connect(self.sell_clicked.emit)
