@@ -1,146 +1,184 @@
 """
-共用基礎類別和協定定義
+V2: 共用基礎類別與協定定義（Protocol + Generic + 型別安全）
 """
-from typing import Callable, Optional, TypeVar, Generic
+from __future__ import annotations
+
 from dataclasses import dataclass
-from abc import ABC, abstractmethod
+from typing import (
+    Callable,
+    Generic,
+    Optional,
+    Protocol,
+    TypeVar,
+    runtime_checkable,
+)
+
+from abc import ABC
 
 from config.constants import ConnectionStatus
 
 
+# --- Type variables ---
+TClient = TypeVar("TClient")
+TMsg = TypeVar("TMsg")
+TCb = TypeVar("TCb", bound="StatusCallbacks")
+
+
+# --- Callback Protocols (型別安全的回呼介面) ---
+@runtime_checkable
+class LoggingCallbacks(Protocol):
+    on_error: Optional[Callable[[str], None]]
+    on_log: Optional[Callable[[str], None]]
+
+
+@runtime_checkable
+class StatusCallbacks(LoggingCallbacks, Protocol):
+    on_status_changed: Optional[Callable[[ConnectionStatus], None]]
+
+
+# 如果你只想要「最小集合」的 callbacks，可以用這個資料類當預設實作
 @dataclass
 class BaseCallbacks:
-    """基礎回調容器，包含日誌和錯誤處理"""
     on_error: Optional[Callable[[str], None]] = None
     on_log: Optional[Callable[[str], None]] = None
+    on_status_changed: Optional[Callable[[ConnectionStatus], None]] = None
 
 
-class LoggingMixin:
+# Backward-compatible alias
+DefaultCallbacks = BaseCallbacks
+
+
+# --- Mixins ---
+class LoggingMixin(Generic[TCb]):
     """
     提供日誌和錯誤發送功能的混入類別
-    
-    使用此混入的類別必須定義 _callbacks 屬性
+    使用此混入的類別必須定義 _callbacks 屬性（符合 StatusCallbacks）
     """
-    
-    _callbacks: BaseCallbacks
-    
+
+    _callbacks: TCb
+
     def _log(self, message: str) -> None:
-        """透過回調函式或 print 輸出日誌"""
-        if self._callbacks.on_log:
-            self._callbacks.on_log(message)
+        cb = getattr(self, "_callbacks", None)
+        if cb and cb.on_log:
+            cb.on_log(message)
         else:
             print(message)
 
     def _emit_error(self, error: str) -> None:
-        """透過回調函式發送錯誤"""
         self._log(f"❌ {error}")
-        if self._callbacks.on_error:
-            self._callbacks.on_error(error)
+        cb = getattr(self, "_callbacks", None)
+        if cb and cb.on_error:
+            cb.on_error(error)
 
 
-class StatusMixin:
+class StatusMixin(Generic[TCb]):
     """
     提供狀態管理功能的混入類別
-    
-    使用此混入的類別必須定義：
-    - _status 屬性
-    - _callbacks 屬性（需包含 on_status_changed）
+    需要：
+    - _status: ConnectionStatus
+    - _callbacks: StatusCallbacks
     """
-    
+
     _status: ConnectionStatus
-    _callbacks: object  # 應包含 on_status_changed
-    
+    _callbacks: TCb
+
     def _set_status(self, status: ConnectionStatus) -> None:
-        """更新狀態並通知回調"""
         self._status = status
-        callback = getattr(self._callbacks, 'on_status_changed', None)
-        if callback:
-            callback(status)
+        if self._callbacks.on_status_changed:
+            self._callbacks.on_status_changed(status)
 
 
 class OperationStateMixin:
-    """
-    提供操作狀態管理功能的混入類別
-    
-    用於追蹤異步操作是否正在進行中
-    """
-    
+    """追蹤異步/長操作是否進行中（防止重複觸發）"""
+
     _in_progress: bool = False
-    
+
     @property
     def in_progress(self) -> bool:
         return self._in_progress
-    
+
     def _start_operation(self) -> bool:
-        """
-        標記操作開始
-        
-        Returns:
-            bool: 若操作成功開始回傳 True，若已在進行中回傳 False
-        """
         if self._in_progress:
             return False
         self._in_progress = True
         return True
-    
+
     def _end_operation(self) -> None:
-        """標記操作完成"""
         self._in_progress = False
 
+    # 可選：提供一個安全的 helper，避免忘記 end_operation
+    def _run_guarded(self, fn: Callable[[], None]) -> bool:
+        if not self._start_operation():
+            return False
+        try:
+            fn()
+            return True
+        finally:
+            self._end_operation()
 
-class BaseService(LoggingMixin, StatusMixin, OperationStateMixin, ABC):
+
+class BaseService(LoggingMixin[TCb], StatusMixin[TCb], OperationStateMixin, ABC, Generic[TCb]):
     """
-    服務基礎類別
-    
-    整合日誌、狀態管理和操作狀態追蹤功能
+    服務基礎類別：整合 log/status/in-progress
     """
-    
-    def __init__(self):
+
+    _callbacks: TCb
+    _status: ConnectionStatus
+
+    def __init__(self, callbacks: Optional[TCb] = None):
+        if callbacks is None:
+            callbacks = BaseCallbacks()  # type: ignore[assignment]
+        self._callbacks = callbacks
         self._in_progress = False
         self._status = ConnectionStatus.DISCONNECTED
-    
+
     @property
     def status(self) -> ConnectionStatus:
         return self._status
 
 
-class BaseAuthService(BaseService):
+# --- Auth service: msg handler 也型別安全 ---
+MessageHandler = Callable[[TClient, TMsg], bool]
+
+
+class BaseAuthService(BaseService[TCb], Generic[TCb, TClient, TMsg]):
     """
-    認證服務基礎類別
-    
-    提供訊息處理器註冊功能
+    認證服務基礎類別：提供訊息處理器註冊功能（型別安全）
     """
-    
-    def __init__(self):
-        super().__init__()
-        self._message_handlers: list[Callable[[object, object], bool]] = []
-    
-    def add_message_handler(self, handler: Callable[[object, object], bool]) -> None:
-        """
-        註冊額外的訊息處理器
-        
-        Args:
-            handler: 處理函式，回傳 True 表示已處理該訊息
-        """
+
+    def __init__(self, callbacks: Optional[TCb] = None):
+        super().__init__(callbacks=callbacks)
+        self._message_handlers: list[MessageHandler[TClient, TMsg]] = []
+
+    def add_message_handler(self, handler: MessageHandler[TClient, TMsg]) -> None:
         self._message_handlers.append(handler)
-    
-    def remove_message_handler(self, handler: Callable[[object, object], bool]) -> None:
-        """移除訊息處理器"""
+
+    def remove_message_handler(self, handler: MessageHandler[TClient, TMsg]) -> None:
         if handler in self._message_handlers:
             self._message_handlers.remove(handler)
-    
-    def _dispatch_to_handlers(self, client: object, msg: object) -> bool:
+
+    def _dispatch_to_handlers(self, client: TClient, msg: TMsg, *, stop_on_handled: bool = True) -> bool:
         """
         將訊息分發給已註冊的處理器
-        
+
+        Args:
+            stop_on_handled:
+                True  -> 任一 handler 回 True 就停止（常見、效率高）
+                False -> 讓所有 handler 都有機會處理（做廣播/監聽時用）
+
         Returns:
             bool: 若任一處理器處理了訊息則回傳 True
         """
-        handled = False
-        for handler in self._message_handlers:
+        handled_any = False
+
+        for handler in list(self._message_handlers):  # 複製一份，避免迭代時被移除/新增造成問題
             try:
-                if handler(client, msg):
-                    handled = True
+                handled = handler(client, msg)
+                if handled:
+                    handled_any = True
+                    if stop_on_handled:
+                        break
             except Exception as e:
                 self._log(f"⚠️ 訊息處理器錯誤: {e}")
-        return handled
+
+        return handled_any
