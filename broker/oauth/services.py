@@ -14,8 +14,8 @@ from ctrader_open_api.messages.OpenApiModelMessages_pb2 import ProtoOAPayloadTyp
 
 from broker.base import BaseService, BaseCallbacks, OperationStateMixin, LoggingMixin
 from broker.app_auth import AppAuthService
-from broker.oauth.tokens import TokenExchanger
-from broker.oauth.callback_server import CallbackServer
+from .tokens import TokenExchanger
+from .callback_server import CallbackServer
 from config.constants import ConnectionStatus, MessageType
 from config.settings import OAuthTokens, AppCredentials
 
