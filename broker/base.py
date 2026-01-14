@@ -10,6 +10,7 @@ from typing import (
     Optional,
     Protocol,
     TypeVar,
+    cast,
     runtime_checkable,
 )
 
@@ -127,7 +128,7 @@ class BaseService(LoggingMixin[TCb], StatusMixin[TCb], OperationStateMixin, ABC,
 
     def __init__(self, callbacks: Optional[TCb] = None):
         if callbacks is None:
-            callbacks = BaseCallbacks()  # type: ignore[assignment]
+            callbacks = cast(TCb, BaseCallbacks())
         self._callbacks = callbacks
         self._in_progress = False
         self._status = ConnectionStatus.DISCONNECTED
@@ -156,6 +157,9 @@ class BaseAuthService(BaseService[TCb], Generic[TCb, TClient, TMsg]):
     def remove_message_handler(self, handler: MessageHandler[TClient, TMsg]) -> None:
         if handler in self._message_handlers:
             self._message_handlers.remove(handler)
+
+    def clear_message_handlers(self) -> None:
+        self._message_handlers.clear()
 
     def _dispatch_to_handlers(self, client: TClient, msg: TMsg, *, stop_on_handled: bool = True) -> bool:
         """

@@ -1,7 +1,7 @@
 """
 OAuth 相關服務
 """
-from typing import Callable, Optional
+from typing import Callable, Optional, Protocol, Sequence
 from dataclasses import dataclass
 import threading
 
@@ -24,6 +24,25 @@ from config.settings import OAuthTokens, AppCredentials
 # OAuth 帳戶認證服務
 # ─────────────────────────────────────────────────────────────
 
+class OAuthMessage(Protocol):
+    payloadType: int
+    errorCode: int
+    description: str
+
+
+class AccountInfoMessage(Protocol):
+    ctidTraderAccountId: int
+    isLive: bool
+    traderLogin: Optional[int]
+
+
+class AccountListMessage(Protocol):
+    payloadType: int
+    errorCode: int
+    description: str
+    ctidTraderAccount: Sequence[AccountInfoMessage]
+
+
 @dataclass
 class OAuthServiceCallbacks(BaseCallbacks):
     """OAuthService 的回調函式"""
@@ -31,7 +50,7 @@ class OAuthServiceCallbacks(BaseCallbacks):
     on_status_changed: Optional[Callable[[ConnectionStatus], None]] = None
 
 
-class OAuthService(BaseService):
+class OAuthService(BaseService[OAuthServiceCallbacks]):
     """
     處理 OAuth 帳戶認證流程
     
@@ -47,11 +66,10 @@ class OAuthService(BaseService):
         client: Client,
         tokens: OAuthTokens,
     ):
-        super().__init__()
+        super().__init__(callbacks=OAuthServiceCallbacks())
         self._app_auth_service = app_auth_service
         self._client = client
         self._tokens = tokens
-        self._callbacks = OAuthServiceCallbacks()
 
     @classmethod
     def create(cls, app_auth_service: AppAuthService, token_file: str) -> "OAuthService":
@@ -111,7 +129,7 @@ class OAuthService(BaseService):
         request.ctidTraderAccountId = int(self._tokens.account_id)
         self._client.send(request)
 
-    def _handle_message(self, client: Client, msg) -> bool:
+    def _handle_message(self, client: Client, msg: OAuthMessage) -> bool:
         """處理帳戶認證回應"""
         if not self._in_progress:
             return False
@@ -131,14 +149,16 @@ class OAuthService(BaseService):
     def _on_auth_success(self) -> None:
         """認證成功處理"""
         self._end_operation()
+        self._app_auth_service.remove_message_handler(self._handle_message)
         self._set_status(ConnectionStatus.ACCOUNT_AUTHENTICATED)
         self._log("✅ 帳戶已授權！")
         if self._callbacks.on_oauth_success:
             self._callbacks.on_oauth_success(self._tokens)
 
-    def _on_auth_error(self, msg) -> None:
+    def _on_auth_error(self, msg: OAuthMessage) -> None:
         """認證錯誤處理"""
         self._end_operation()
+        self._app_auth_service.remove_message_handler(self._handle_message)
         self._emit_error(f"錯誤 {msg.errorCode}: {msg.description}")
         self._set_status(ConnectionStatus.DISCONNECTED)
 
@@ -153,7 +173,7 @@ class OAuthLoginServiceCallbacks(BaseCallbacks):
     on_oauth_login_success: Optional[Callable[[OAuthTokens], None]] = None
 
 
-class OAuthLoginService(LoggingMixin, OperationStateMixin):
+class OAuthLoginService(LoggingMixin[OAuthLoginServiceCallbacks], OperationStateMixin):
     """
     處理瀏覽器式 OAuth 授權碼流程
     
@@ -247,7 +267,7 @@ class AccountListServiceCallbacks(BaseCallbacks):
     on_accounts_received: Optional[Callable[[list], None]] = None
 
 
-class AccountListService(LoggingMixin, OperationStateMixin):
+class AccountListService(LoggingMixin[AccountListServiceCallbacks], OperationStateMixin):
     """
     透過存取權杖取得帳戶列表
     
@@ -295,7 +315,7 @@ class AccountListService(LoggingMixin, OperationStateMixin):
         self._log("📥 正在取得帳戶列表...")
         self._app_auth_service.get_client().send(request)
 
-    def _handle_message(self, client: Client, msg) -> bool:
+    def _handle_message(self, client: Client, msg: AccountListMessage) -> bool:
         """處理帳戶列表回應"""
         if not self._in_progress:
             return False
@@ -310,21 +330,23 @@ class AccountListService(LoggingMixin, OperationStateMixin):
 
         return False
 
-    def _on_accounts_received(self, msg) -> None:
+    def _on_accounts_received(self, msg: AccountListMessage) -> None:
         """帳戶列表接收成功"""
         self._end_operation()
+        self._app_auth_service.remove_message_handler(self._handle_message)
         accounts = self._parse_accounts(msg.ctidTraderAccount)
         self._log(f"✅ 已接收帳戶: {len(accounts)} 個")
         if self._callbacks.on_accounts_received:
             self._callbacks.on_accounts_received(accounts)
 
-    def _on_error(self, msg) -> None:
+    def _on_error(self, msg: AccountListMessage) -> None:
         """帳戶列表接收失敗"""
         self._end_operation()
+        self._app_auth_service.remove_message_handler(self._handle_message)
         self._emit_error(f"錯誤 {msg.errorCode}: {msg.description}")
 
     @staticmethod
-    def _parse_accounts(raw_accounts) -> list:
+    def _parse_accounts(raw_accounts: Sequence[AccountInfoMessage]) -> list:
         """解析原始帳戶資料"""
         return [
             {

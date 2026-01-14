@@ -1,7 +1,7 @@
 """
 cTrader 應用程式層級認證服務
 """
-from typing import Callable, Optional
+from typing import Callable, Optional, Protocol
 from dataclasses import dataclass
 
 from ctrader_open_api import Client, Protobuf, TcpProtocol, EndPoints
@@ -19,7 +19,13 @@ class AppAuthServiceCallbacks(BaseCallbacks):
     on_status_changed: Optional[Callable[[ConnectionStatus], None]] = None
 
 
-class AppAuthService(BaseAuthService):
+class AppAuthMessage(Protocol):
+    payloadType: int
+    errorCode: int
+    description: str
+
+
+class AppAuthService(BaseAuthService[AppAuthServiceCallbacks, Client, AppAuthMessage]):
     """
     處理 cTrader Open API 的應用程式層級認證
     
@@ -42,11 +48,10 @@ class AppAuthService(BaseAuthService):
         host: str,
         port: int,
     ):
-        super().__init__()
+        super().__init__(callbacks=AppAuthServiceCallbacks())
         self._credentials = credentials
         self._host = host
         self._port = port
-        self._callbacks = AppAuthServiceCallbacks()
         self._client: Optional[Client] = None
 
     @classmethod
@@ -143,6 +148,7 @@ class AppAuthService(BaseAuthService):
     def _handle_disconnected(self, client: Client, reason: str) -> None:
         """斷線後的回調"""
         self._set_status(ConnectionStatus.DISCONNECTED)
+        self.clear_message_handlers()
         self._emit_error(f"已斷線: {reason}")
 
     def _send_app_auth(self, client: Client) -> None:
@@ -200,6 +206,7 @@ class AppAuthService(BaseAuthService):
     def _handle_error_response(self, client: Client, msg) -> None:
         """處理錯誤回應"""
         error_msg = f"錯誤 {msg.errorCode}: {msg.description}"
+        self._set_status(ConnectionStatus.DISCONNECTED)
         self._emit_error(error_msg)
 
     def _handle_heartbeat(self, client: Client, msg) -> None:
