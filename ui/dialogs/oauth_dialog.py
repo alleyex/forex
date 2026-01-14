@@ -6,7 +6,7 @@ from typing import Optional
 
 from PySide6.QtWidgets import (
     QVBoxLayout, QHBoxLayout, QLabel, QLineEdit,
-    QPushButton, QFormLayout, QWidget,
+    QPushButton, QFormLayout, QWidget, QSizePolicy,
 )
 from PySide6.QtCore import Signal, Slot, Qt
 
@@ -135,17 +135,26 @@ class OAuthDialog(BaseAuthDialog):
         parent=None,
         auto_connect: bool = False,
         app_auth_service: Optional[AppAuthService] = None,
+        oauth_service: Optional[OAuthService] = None,
     ):
         super().__init__(token_file, parent, auto_connect)
         self._app_auth_service = app_auth_service
         self._state = OAuthDialogState()
-        
-        self._service: Optional[OAuthService] = None
+
+        self._service: Optional[OAuthService] = oauth_service
         self._login_service: Optional[OAuthLoginService] = None
         self._account_list_service: Optional[AccountListService] = None
 
         self._setup_ui()
         self._connect_signals()
+        if self._service:
+            self._service.set_callbacks(
+                on_oauth_success=lambda t: self.authSucceeded.emit(t),
+                on_error=lambda e: self.authFailed.emit(e),
+                on_log=lambda m: self.logReceived.emit(m),
+                on_status_changed=lambda s: self.statusChanged.emit(int(s)),
+            )
+            self.statusChanged.emit(int(self._service.status))
         self._load_initial_data()
 
     def _setup_ui(self) -> None:
@@ -181,14 +190,19 @@ class OAuthDialog(BaseAuthDialog):
         self._btn_exchange_code = QPushButton("🔁 交換授權碼")
         self._btn_fetch_accounts = QPushButton("📥 取得帳戶")
         self._btn_connect = QPushButton("🔗 連線")
-        self._btn_disconnect = QPushButton("🔌 中斷連線")
-        self._btn_connect.setMinimumHeight(40)
+        for btn in [
+            self._btn_authorize,
+            self._btn_exchange_code,
+            self._btn_fetch_accounts,
+            self._btn_connect,
+        ]:
+            btn.setMinimumHeight(40)
+            btn.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
 
         layout.addWidget(self._btn_authorize)
         layout.addWidget(self._btn_exchange_code)
         layout.addWidget(self._btn_fetch_accounts)
         layout.addWidget(self._btn_connect)
-        layout.addWidget(self._btn_disconnect)
 
         return layout
 
@@ -198,7 +212,6 @@ class OAuthDialog(BaseAuthDialog):
         self._btn_exchange_code.clicked.connect(self._exchange_auth_code)
         self._btn_fetch_accounts.clicked.connect(self._fetch_accounts)
         self._btn_connect.clicked.connect(self._start_auth)
-        self._btn_disconnect.clicked.connect(self._disconnect_account)
 
         self.authSucceeded.connect(self._handle_auth_success)
         self.authFailed.connect(self._handle_auth_error)
@@ -332,6 +345,9 @@ class OAuthDialog(BaseAuthDialog):
         """開始帳戶認證"""
         if self._state.auth_in_progress:
             return
+        if self._service and self._service.status == ConnectionStatus.ACCOUNT_AUTHENTICATED:
+            self._log_info("帳戶已授權，無需重新連線")
+            return
 
         if not self._app_auth_service:
             self._log_error("缺少應用程式認證服務")
@@ -370,17 +386,6 @@ class OAuthDialog(BaseAuthDialog):
         reactor.callFromThread(self._service.connect)
 
     @Slot()
-    def _disconnect_account(self) -> None:
-        """中斷帳戶連線"""
-        if not self._service:
-            self._log_warning("尚未建立 OAuth 服務")
-            return
-
-        self._service.disconnect()
-        self._state.auth_in_progress = False
-        self._state.accounts_in_progress = False
-        self._refresh_controls()
-
     # ─────────────────────────────────────────────────────────────
     # 槽函式
     # ─────────────────────────────────────────────────────────────
@@ -454,7 +459,6 @@ class OAuthDialog(BaseAuthDialog):
         self._btn_exchange_code.setEnabled(enabled)
         self._btn_fetch_accounts.setEnabled(enabled)
         self._btn_connect.setEnabled(enabled)
-        self._btn_disconnect.setEnabled(self._service is not None)
 
     # ─────────────────────────────────────────────────────────────
     # 輔助方法

@@ -3,7 +3,7 @@ OAuth 帳戶認證服務
 """
 from dataclasses import dataclass
 import threading
-from typing import Callable, Optional, Protocol
+from typing import Callable, Optional, Protocol, List
 
 from ctrader_open_api import Client
 from ctrader_open_api.messages.OpenApiMessages_pb2 import ProtoOAAccountAuthReq
@@ -48,6 +48,7 @@ class OAuthService(BaseService[OAuthServiceCallbacks]):
         self._client = client
         self._tokens = tokens
         self._timeout_timer: Optional[threading.Timer] = None
+        self._log_history: List[str] = []
 
     @classmethod
     def create(cls, app_auth_service: AppAuthService, token_file: str) -> "OAuthService":
@@ -76,6 +77,16 @@ class OAuthService(BaseService[OAuthServiceCallbacks]):
             on_log=on_log,
             on_status_changed=on_status_changed,
         )
+        if self._callbacks.on_log:
+            for message in self._log_history:
+                self._callbacks.on_log(message)
+
+    def get_log_history(self) -> list[str]:
+        return list(self._log_history)
+
+    def _log(self, message: str) -> None:
+        self._log_history.append(message)
+        super()._log(message)
 
     def connect(self, timeout_seconds: Optional[int] = None) -> None:
         """發送帳戶認證請求"""
@@ -100,6 +111,10 @@ class OAuthService(BaseService[OAuthServiceCallbacks]):
             self._end_operation()
         self._cancel_timeout_timer()
         self._app_auth_service.remove_message_handler(self._handle_message)
+        if self._status == ConnectionStatus.ACCOUNT_AUTHENTICATED:
+            # 帳戶已授權時無法透過此流程解除伺服器端的授權
+            self._log("🔌 已停止監聽，但帳戶仍為已授權狀態")
+            return
         self._set_status(ConnectionStatus.DISCONNECTED)
         self._log("🔌 已中斷帳戶連線")
 

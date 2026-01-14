@@ -1,11 +1,19 @@
 # ui/main_window.py
 from typing import Optional
 
-from PySide6.QtWidgets import QMainWindow, QWidget, QHBoxLayout, QLabel
+from PySide6.QtWidgets import (
+    QMainWindow,
+    QWidget,
+    QHBoxLayout,
+    QLabel,
+    QMessageBox,
+)
 from PySide6.QtCore import Slot
 
 from ui.widgets.trade_panel import TradePanel
 from ui.widgets.log_panel import LogPanel
+from ui.dialogs.app_auth_dialog import AppAuthDialog
+from ui.dialogs.oauth_dialog import OAuthDialog
 from broker.services.app_auth_service import AppAuthService
 from broker.services.oauth_service import OAuthService
 from config.constants import ConnectionStatus
@@ -50,10 +58,26 @@ class MainWindow(QMainWindow):
         status_bar.addWidget(self._app_auth_status_label)
         status_bar.addWidget(self._oauth_status_label)
 
+        self._setup_menu_toolbar()
+
     def _connect_signals(self) -> None:
         """Connect panel signals"""
         self._trade_panel.buy_clicked.connect(self._on_buy_clicked)
         self._trade_panel.sell_clicked.connect(self._on_sell_clicked)
+
+    def _setup_menu_toolbar(self) -> None:
+        """Create menu and toolbar actions"""
+        auth_menu = self.menuBar().addMenu("認證")
+
+        self._action_app_auth = auth_menu.addAction("App 認證")
+        self._action_oauth = auth_menu.addAction("OAuth 認證")
+
+        toolbar = self.addToolBar("認證")
+        toolbar.addAction(self._action_app_auth)
+        toolbar.addAction(self._action_oauth)
+
+        self._action_app_auth.triggered.connect(self._open_app_auth_dialog)
+        self._action_oauth.triggered.connect(self._open_oauth_dialog)
 
     @Slot()
     def _on_buy_clicked(self) -> None:
@@ -78,6 +102,37 @@ class MainWindow(QMainWindow):
         self._oauth_service = service
         self._log_panel.add_log("✅ OAuth 已連線")
         self._oauth_status_label.setText(self._format_oauth_status())
+
+    def _open_app_auth_dialog(self) -> None:
+        dialog = AppAuthDialog(
+            token_file="token.json",
+            auto_connect=False,
+            app_auth_service=self._service,
+            parent=self,
+        )
+        if dialog.exec() == AppAuthDialog.Accepted:
+            service = dialog.get_service()
+            if service:
+                self.set_service(service)
+
+    def _open_oauth_dialog(self) -> None:
+        if not self._service:
+            QMessageBox.warning(self, "需要 App 認證", "請先完成 App 認證，再進行 OAuth。")
+            return
+        auto_connect = True
+        if self._oauth_service and self._oauth_service.status == ConnectionStatus.ACCOUNT_AUTHENTICATED:
+            auto_connect = False
+        dialog = OAuthDialog(
+            token_file="token.json",
+            auto_connect=auto_connect,
+            app_auth_service=self._service,
+            oauth_service=self._oauth_service,
+            parent=self,
+        )
+        if dialog.exec() == OAuthDialog.Accepted:
+            oauth_service = dialog.get_service()
+            if oauth_service:
+                self.set_oauth_service(oauth_service)
 
     def _format_app_auth_status(self) -> str:
         """Format app auth status for display"""

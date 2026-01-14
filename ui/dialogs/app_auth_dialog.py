@@ -90,13 +90,22 @@ class AppAuthDialog(BaseAuthDialog):
         self, 
         token_file: str = "token.json", 
         parent=None, 
-        auto_connect: bool = False
+        auto_connect: bool = False,
+        app_auth_service: Optional[AppAuthService] = None,
     ):
         super().__init__(token_file, parent, auto_connect)
-        self._service: Optional[AppAuthService] = None
+        self._service: Optional[AppAuthService] = app_auth_service
         
         self._setup_ui()
         self._connect_signals()
+        if self._service:
+            self._service.set_callbacks(
+                on_app_auth_success=lambda c: self.authSucceeded.emit(c),
+                on_error=lambda e: self.authFailed.emit(e),
+                on_log=lambda m: self.logReceived.emit(m),
+                on_status_changed=lambda s: self.statusChanged.emit(int(s)),
+            )
+            self.statusChanged.emit(int(self._service.status))
         self._load_credentials()
 
     def _setup_ui(self) -> None:
@@ -132,6 +141,7 @@ class AppAuthDialog(BaseAuthDialog):
         self._btn_connect.clicked.connect(self._start_auth)
         self.authSucceeded.connect(self._handle_success)
         self.authFailed.connect(self._handle_error)
+        self.statusChanged.connect(self._handle_status_changed)
 
     # ─────────────────────────────────────────────────────────────
     # 認證流程
@@ -194,6 +204,15 @@ class AppAuthDialog(BaseAuthDialog):
         self._log_error(error)
         self._set_controls_enabled(True)
         self._state.in_progress = False
+
+    @Slot(int)
+    def _handle_status_changed(self, status: int) -> None:
+        """同步按鈕狀態與認證狀態"""
+        if status >= ConnectionStatus.APP_AUTHENTICATED:
+            self._set_controls_enabled(False)
+            return
+        if not self._state.in_progress:
+            self._set_controls_enabled(True)
 
     # ─────────────────────────────────────────────────────────────
     # 控制項狀態

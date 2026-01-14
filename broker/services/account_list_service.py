@@ -3,7 +3,7 @@
 """
 from dataclasses import dataclass
 import threading
-from typing import Callable, Optional, Protocol, Sequence
+from typing import Callable, Optional, Protocol, Sequence, List
 
 from ctrader_open_api import Client
 from ctrader_open_api.messages.OpenApiMessages_pb2 import ProtoOAGetAccountListByAccessTokenReq
@@ -48,6 +48,7 @@ class AccountListService(LoggingMixin[AccountListServiceCallbacks], OperationSta
         self._callbacks = AccountListServiceCallbacks()
         self._in_progress = False
         self._timeout_timer: Optional[threading.Timer] = None
+        self._log_history: List[str] = []
 
     def set_callbacks(
         self,
@@ -62,6 +63,16 @@ class AccountListService(LoggingMixin[AccountListServiceCallbacks], OperationSta
             on_error=on_error,
             on_log=on_log,
         )
+        if self._callbacks.on_log:
+            for message in self._log_history:
+                self._callbacks.on_log(message)
+
+    def get_log_history(self) -> list[str]:
+        return list(self._log_history)
+
+    def _log(self, message: str) -> None:
+        self._log_history.append(message)
+        super()._log(message)
 
     def fetch(self, timeout_seconds: Optional[int] = None) -> None:
         """取得帳戶列表"""
