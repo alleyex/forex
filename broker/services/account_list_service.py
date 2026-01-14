@@ -86,7 +86,15 @@ class AccountListService(LogHistoryMixin[AccountListServiceCallbacks], Operation
         request = ProtoOAGetAccountListByAccessTokenReq()
         request.accessToken = self._access_token
         self._log("📥 正在取得帳戶列表...")
-        self._app_auth_service.get_client().send(request)
+        try:
+            client = self._app_auth_service.get_client()
+        except Exception as exc:
+            self._emit_error(str(exc))
+            self._end_operation()
+            self._app_auth_service.remove_message_handler(self._handle_message)
+            self._cancel_timeout_timer()
+            return
+        client.send(request)
 
     def _handle_message(self, client: Client, msg: AccountListMessage) -> bool:
         """處理帳戶列表回應"""

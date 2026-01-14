@@ -8,8 +8,8 @@ from PySide6.QtWidgets import (
     QLabel,
     QMessageBox,
 )
-from PySide6.QtCore import Slot, Signal
-from PySide6.QtGui import QAction
+from PySide6.QtCore import Slot, Signal, QTimer
+from PySide6.QtGui import QAction, QFont
 
 from ui.widgets.trade_panel import TradePanel
 from ui.widgets.log_panel import LogPanel
@@ -51,9 +51,19 @@ class MainWindow(QMainWindow):
         self._trendbar_active = False
         self._trendbar_symbol_id = 1
         self._price_digits = 5
+        self._app_auth_dialog_open = False
+        self._oauth_dialog_open = False
+        self._reconnect_timer = QTimer(self)
+        self._reconnect_timer.setInterval(5000)
+        self._reconnect_timer.timeout.connect(self._attempt_reconnect)
+        self._reconnect_logged = False
         
         self._setup_ui()
         self._connect_signals()
+        if self._service:
+            self.set_service(self._service)
+        if self._oauth_service:
+            self.set_oauth_service(self._oauth_service)
 
     def _setup_ui(self) -> None:
         """Initialize UI components"""
@@ -72,7 +82,7 @@ class MainWindow(QMainWindow):
         layout.addWidget(self._log_panel, stretch=3)
         
         self.setCentralWidget(central)
-        self.logRequested.connect(self._log_panel.add_log)
+        self.logRequested.connect(self._handle_log_message)
         self.accountsReceived.connect(self._handle_accounts_received)
         self.fundsReceived.connect(self._handle_funds_received)
         status_bar = self.statusBar()
@@ -80,7 +90,6 @@ class MainWindow(QMainWindow):
         self._oauth_status_label = QLabel(self._format_oauth_status())
         status_bar.addWidget(self._app_auth_status_label)
         status_bar.addWidget(self._oauth_status_label)
-
         self._setup_menu_toolbar()
 
     def _connect_signals(self) -> None:
@@ -98,6 +107,7 @@ class MainWindow(QMainWindow):
 
         toolbar = self.addToolBar("認證")
         toolbar.addAction(self._action_oauth)
+        toolbar.setFont(QFont("", 12))
 
         self._action_app_auth.triggered.connect(self._open_app_auth_dialog)
         self._action_oauth.triggered.connect(self._open_oauth_dialog)
@@ -116,10 +126,12 @@ class MainWindow(QMainWindow):
         if not self._service:
             self._log_panel.add_log("⚠️ 尚未完成 App 認證")
             return
+        if not self._service.is_app_authenticated:
+            self._log_panel.add_log("⚠️ App 認證已中斷，請稍候自動重連")
+            return
         if not self._oauth_service or self._oauth_service.status != ConnectionStatus.ACCOUNT_AUTHENTICATED:
             self._log_panel.add_log("⚠️ 尚未完成 OAuth 帳戶認證")
             return
-
         try:
             tokens = OAuthTokens.from_file("token.json")
         except Exception as exc:
@@ -172,6 +184,9 @@ class MainWindow(QMainWindow):
     def _on_trendbar_history_clicked(self) -> None:
         if not self._service:
             self._log_panel.add_log("⚠️ 尚未完成 App 認證")
+            return
+        if not self._service.is_app_authenticated:
+            self._log_panel.add_log("⚠️ App 認證已中斷，請稍候自動重連")
             return
         if not self._oauth_service or self._oauth_service.status != ConnectionStatus.ACCOUNT_AUTHENTICATED:
             self._log_panel.add_log("⚠️ 尚未完成 OAuth 帳戶認證")
@@ -227,6 +242,13 @@ class MainWindow(QMainWindow):
         self._log_panel.add_log("📄 已送出取得基本資料請求")
         if not self._service:
             self._log_panel.add_log("⚠️ 尚未完成 App 認證")
+            return
+        if not self._service.is_app_authenticated:
+            self._log_panel.add_log("⚠️ App 認證已中斷，請稍候自動重連")
+            return
+        if not self._oauth_service or self._oauth_service.status != ConnectionStatus.ACCOUNT_AUTHENTICATED:
+            self._log_panel.add_log("⚠️ OAuth 尚未完成認證，將自動重新認證")
+            self._auto_oauth_connect()
             return
         try:
             tokens = OAuthTokens.from_file("token.json")
@@ -346,19 +368,36 @@ class MainWindow(QMainWindow):
     def set_service(self, service: AppAuthService) -> None:
         """Set the authenticated service"""
         self._service = service
-        self._log_panel.add_log("✅ 服務已連線")
+        self._trendbar_service = None
+        self._trendbar_history_service = None
+        self._trendbar_active = False
+        self._trade_panel.set_trendbar_active(False)
+        self._service.set_callbacks(
+            on_app_auth_success=self._handle_app_auth_success,
+            on_log=self.logRequested.emit,
+            on_status_changed=self._handle_app_auth_status_changed,
+        )
         self._app_auth_status_label.setText(self._format_app_auth_status())
+        if self._service.is_app_authenticated:
+            self._auto_oauth_connect()
 
     def set_oauth_service(self, service: OAuthService) -> None:
         """Set the OAuth service"""
         self._oauth_service = service
-        self._log_panel.add_log("✅ OAuth 已連線")
+        self._oauth_service.set_callbacks(
+            on_oauth_success=self._handle_oauth_success,
+            on_log=self.logRequested.emit,
+            on_status_changed=self._handle_oauth_status_changed,
+        )
         self._oauth_status_label.setText(self._format_oauth_status())
 
-    def _open_app_auth_dialog(self) -> None:
+    def _open_app_auth_dialog(self, auto_connect: bool = False) -> None:
+        if self._app_auth_dialog_open:
+            return
+        self._app_auth_dialog_open = True
         dialog = AppAuthDialog(
             token_file="token.json",
-            auto_connect=False,
+            auto_connect=auto_connect,
             app_auth_service=self._service,
             parent=self,
         )
@@ -366,14 +405,17 @@ class MainWindow(QMainWindow):
             service = dialog.get_service()
             if service:
                 self.set_service(service)
+        self._app_auth_dialog_open = False
 
-    def _open_oauth_dialog(self) -> None:
+    def _open_oauth_dialog(self, auto_connect: bool = True) -> None:
+        if self._oauth_dialog_open:
+            return
         if not self._service:
             QMessageBox.warning(self, "需要 App 認證", "請先完成 App 認證，再進行 OAuth。")
             return
-        auto_connect = True
         if self._oauth_service and self._oauth_service.status == ConnectionStatus.ACCOUNT_AUTHENTICATED:
             auto_connect = False
+        self._oauth_dialog_open = True
         dialog = OAuthDialog(
             token_file="token.json",
             auto_connect=auto_connect,
@@ -386,6 +428,7 @@ class MainWindow(QMainWindow):
             if oauth_service:
                 self.set_oauth_service(oauth_service)
             self._on_fetch_account_info()
+        self._oauth_dialog_open = False
 
     def _format_app_auth_status(self) -> str:
         """Format app auth status for display"""
@@ -418,3 +461,71 @@ class MainWindow(QMainWindow):
 
         text = status_map.get(self._oauth_service.status, "❓ 未知")
         return f"OAuth 狀態: {text}"
+
+    @Slot(str)
+    def _handle_log_message(self, message: str) -> None:
+        self._log_panel.add_log(message)
+
+    def _handle_app_auth_success(self, _client) -> None:
+        self._app_auth_status_label.setText(self._format_app_auth_status())
+        self._log_panel.add_log("✅ 服務已連線")
+        self._auto_oauth_connect()
+
+    def _handle_app_auth_status_changed(self, status: ConnectionStatus) -> None:
+        self._app_auth_status_label.setText(self._format_app_auth_status())
+        if status == ConnectionStatus.DISCONNECTED and self._oauth_service:
+            self._oauth_service.disconnect()
+            self._oauth_status_label.setText(self._format_oauth_status())
+            self._trendbar_service = None
+            self._trendbar_history_service = None
+            self._trendbar_active = False
+            self._trade_panel.set_trendbar_active(False)
+            if not self._reconnect_timer.isActive():
+                self._reconnect_timer.start()
+                if not self._reconnect_logged:
+                    self._log_panel.add_log("🔄 偵測到斷線，將自動嘗試重新連線")
+                    self._reconnect_logged = True
+        if status >= ConnectionStatus.APP_AUTHENTICATED:
+            if self._reconnect_timer.isActive():
+                self._reconnect_timer.stop()
+            self._reconnect_logged = False
+
+    def _handle_oauth_success(self, _tokens) -> None:
+        self._oauth_status_label.setText(self._format_oauth_status())
+        self._log_panel.add_log("✅ OAuth 已連線")
+
+    def _handle_oauth_status_changed(self, _status: ConnectionStatus) -> None:
+        self._oauth_status_label.setText(self._format_oauth_status())
+
+    def _auto_oauth_connect(self) -> None:
+        if not self._service:
+            return
+        if self._oauth_service and self._oauth_service.status == ConnectionStatus.ACCOUNT_AUTHENTICATED:
+            return
+        if not self._oauth_service:
+            try:
+                self._oauth_service = OAuthService.create(self._service, "token.json")
+            except Exception as exc:
+                self.logRequested.emit(f"⚠️ 無法建立 OAuth 服務: {exc}")
+                return
+            self.set_oauth_service(self._oauth_service)
+
+        reactor_manager.ensure_running()
+        from twisted.internet import reactor
+        reactor.callFromThread(self._oauth_service.connect)
+
+    def _attempt_reconnect(self) -> None:
+        if not self._service:
+            return
+        if self._service.is_app_authenticated:
+            self._reconnect_timer.stop()
+            self._reconnect_logged = False
+            return
+        if self._service.status == ConnectionStatus.CONNECTING:
+            return
+        reactor_manager.ensure_running()
+        from twisted.internet import reactor
+        reactor.callFromThread(self._service.connect)
+
+
+    # Heartbeat display removed.

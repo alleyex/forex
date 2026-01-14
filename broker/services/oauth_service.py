@@ -80,6 +80,9 @@ class OAuthService(BaseService[OAuthServiceCallbacks]):
 
     def connect(self, timeout_seconds: Optional[int] = None) -> None:
         """發送帳戶認證請求"""
+        if self._status == ConnectionStatus.ACCOUNT_AUTHENTICATED:
+            self._log("ℹ️ 帳戶已授權，略過重複認證")
+            return
         self._set_status(ConnectionStatus.CONNECTING)
         self._log("🔐 正在發送帳戶認證...")
 
@@ -89,6 +92,14 @@ class OAuthService(BaseService[OAuthServiceCallbacks]):
             return
 
         if not self._start_operation():
+            return
+
+        try:
+            self._client = self._app_auth_service.get_client()
+        except Exception as exc:
+            self._emit_error(str(exc))
+            self._set_status(ConnectionStatus.DISCONNECTED)
+            self._end_operation()
             return
 
         self._app_auth_service.add_message_handler(self._handle_message)
@@ -101,10 +112,6 @@ class OAuthService(BaseService[OAuthServiceCallbacks]):
             self._end_operation()
         self._cancel_timeout_timer()
         self._app_auth_service.remove_message_handler(self._handle_message)
-        if self._status == ConnectionStatus.ACCOUNT_AUTHENTICATED:
-            # 帳戶已授權時無法透過此流程解除伺服器端的授權
-            self._log("🔌 已停止監聽，但帳戶仍為已授權狀態")
-            return
         self._set_status(ConnectionStatus.DISCONNECTED)
         self._log("🔌 已中斷帳戶連線")
 
