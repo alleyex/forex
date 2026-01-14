@@ -1,8 +1,8 @@
 """
 cTrader 應用程式層級認證服務
 """
-from typing import Callable, Optional, Protocol
 from dataclasses import dataclass
+from typing import Callable, Optional, Protocol
 
 from ctrader_open_api import Client, Protobuf, TcpProtocol, EndPoints
 from ctrader_open_api.messages.OpenApiMessages_pb2 import ProtoOAApplicationAuthReq
@@ -28,7 +28,7 @@ class AppAuthMessage(Protocol):
 class AppAuthService(BaseAuthService[AppAuthServiceCallbacks, Client, AppAuthMessage]):
     """
     處理 cTrader Open API 的應用程式層級認證
-    
+
     使用方式：
         service = AppAuthService.create("demo", "token.json")
         service.set_callbacks(
@@ -36,14 +36,14 @@ class AppAuthService(BaseAuthService[AppAuthServiceCallbacks, Client, AppAuthMes
             on_error=lambda err: print(f"錯誤: {err}"),
         )
         service.connect()
-    
+
     Attributes:
         status: 目前的連線狀態
         is_app_authenticated: 是否已完成應用程式認證
     """
-    
+
     def __init__(
-        self, 
+        self,
         credentials: AppCredentials,
         host: str,
         port: int,
@@ -58,14 +58,14 @@ class AppAuthService(BaseAuthService[AppAuthServiceCallbacks, Client, AppAuthMes
     def create(cls, host_type: str, token_file: str) -> "AppAuthService":
         """
         工廠方法：從設定檔建立服務實例
-        
+
         Args:
             host_type: "demo" 或 "live"
             token_file: 憑證檔案路徑
-            
+
         Returns:
             AppAuthService 實例
-            
+
         Raises:
             FileNotFoundError: 找不到憑證檔案
             ValueError: 憑證格式錯誤
@@ -115,22 +115,22 @@ class AppAuthService(BaseAuthService[AppAuthServiceCallbacks, Client, AppAuthMes
             return
 
         self._set_status(ConnectionStatus.CONNECTING)
-        
+
         self._client = Client(self._host, self._port, TcpProtocol)
         self._client.setConnectedCallback(self._handle_connected)
         self._client.setDisconnectedCallback(self._handle_disconnected)
         self._client.setMessageReceivedCallback(self._handle_message)
-        
+
         self._log("🚀 正在連線到 cTrader...")
         self._client.startService()
 
     def get_client(self) -> Client:
         """
         取得已認證的 Client 實例
-        
+
         Returns:
             Client 實例
-            
+
         Raises:
             RuntimeError: 尚未完成認證或 Client 未初始化
         """
@@ -162,7 +162,7 @@ class AppAuthService(BaseAuthService[AppAuthServiceCallbacks, Client, AppAuthMes
         request = ProtoOAApplicationAuthReq()
         request.clientId = self._credentials.client_id
         request.clientSecret = self._credentials.client_secret
-        
+
         self._log("📤 正在發送應用程式認證...")
         client.send(request)
 
@@ -174,10 +174,10 @@ class AppAuthService(BaseAuthService[AppAuthServiceCallbacks, Client, AppAuthMes
         """路由傳入的訊息到適當的處理器"""
         msg = Protobuf.extract(message)
         msg_type = msg.payloadType
-        
+
         # 內建處理器
         handled = self._handle_internal_message(client, msg, msg_type)
-        
+
         # 外部註冊的處理器
         if self._dispatch_to_handlers(client, msg):
             handled = True
@@ -194,7 +194,7 @@ class AppAuthService(BaseAuthService[AppAuthServiceCallbacks, Client, AppAuthMes
             MessageType.ERROR_RESPONSE: self._handle_error_response,
             MessageType.HEARTBEAT: self._handle_heartbeat,
         }
-        
+
         handler = handlers.get(msg_type)
         if handler:
             handler(client, msg)
@@ -206,7 +206,7 @@ class AppAuthService(BaseAuthService[AppAuthServiceCallbacks, Client, AppAuthMes
         self._end_operation()
         self._set_status(ConnectionStatus.APP_AUTHENTICATED)
         self._log("✅ 應用程式已授權！")
-        
+
         if self._callbacks.on_app_auth_success:
             self._callbacks.on_app_auth_success(client)
 

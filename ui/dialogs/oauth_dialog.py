@@ -12,8 +12,10 @@ from PySide6.QtCore import Signal, Slot, Qt
 
 from ui.dialogs.base_auth_dialog import BaseAuthDialog, DialogState
 from broker.account import parse_accounts
-from broker.oauth import OAuthService, OAuthLoginService, AccountListService
-from broker.app_auth import AppAuthService
+from broker.services.oauth_service import OAuthService
+from broker.services.oauth_login_service import OAuthLoginService
+from broker.services.account_list_service import AccountListService
+from broker.services.app_auth_service import AppAuthService
 from config.constants import ConnectionStatus
 from config.settings import OAuthTokens
 from ui.dialogs.account_dialog import AccountDialog

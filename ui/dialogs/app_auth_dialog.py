@@ -10,7 +10,7 @@ from PySide6.QtWidgets import (
 from PySide6.QtCore import Signal, Slot, Qt
 
 from ui.dialogs.base_auth_dialog import BaseAuthDialog
-from broker.app_auth import AppAuthService
+from broker.services.app_auth_service import AppAuthService
 from config.constants import ConnectionStatus
 from config.settings import AppCredentials
 from utils.reactor_manager import reactor_manager

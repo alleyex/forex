@@ -6,8 +6,8 @@ from PySide6.QtCore import Slot
 
 from ui.widgets.trade_panel import TradePanel
 from ui.widgets.log_panel import LogPanel
-from broker.app_auth import AppAuthService
-from broker.oauth import OAuthService
+from broker.services.app_auth_service import AppAuthService
+from broker.services.oauth_service import OAuthService
 from config.constants import ConnectionStatus
 
 
