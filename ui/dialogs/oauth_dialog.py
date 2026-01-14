@@ -11,7 +11,7 @@ from PySide6.QtWidgets import (
 from PySide6.QtCore import Signal, Slot, Qt
 
 from ui.dialogs.base_auth_dialog import BaseAuthDialog, DialogState
-from broker.account import parse_accounts
+from broker.account import AccountInfo, parse_accounts
 from broker.services.oauth_service import OAuthService
 from broker.services.oauth_login_service import OAuthLoginService
 from broker.services.account_list_service import AccountListService
@@ -140,10 +140,12 @@ class OAuthDialog(BaseAuthDialog):
         super().__init__(token_file, parent, auto_connect)
         self._app_auth_service = app_auth_service
         self._state = OAuthDialogState()
+        self._accept_after_accounts = False
 
         self._service: Optional[OAuthService] = oauth_service
         self._login_service: Optional[OAuthLoginService] = None
         self._account_list_service: Optional[AccountListService] = None
+        self._selected_account: Optional[AccountInfo] = None
 
         self._setup_ui()
         self._connect_signals()
@@ -225,6 +227,12 @@ class OAuthDialog(BaseAuthDialog):
         try:
             tokens = OAuthTokens.from_file(self._token_file)
             self._form.load_tokens(tokens)
+            if tokens.account_id and self._selected_account is None:
+                self._selected_account = AccountInfo(
+                    account_id=int(tokens.account_id),
+                    is_live=None,
+                    trader_login=None,
+                )
         except FileNotFoundError:
             self._log_warning(f"找不到 Token 檔案: {self._token_file}")
         except Exception as exc:
@@ -395,6 +403,10 @@ class OAuthDialog(BaseAuthDialog):
         self._log_success("帳戶認證成功！")
         self._state.auth_in_progress = False
         self._refresh_controls()
+        if self._app_auth_service:
+            self._accept_after_accounts = True
+            self._fetch_accounts()
+            return
         self.accept()
 
     @Slot(str)
@@ -425,23 +437,30 @@ class OAuthDialog(BaseAuthDialog):
         parsed_accounts = parse_accounts(accounts)
         self._log_success(f"取得帳戶數: {len(parsed_accounts)}")
         if len(parsed_accounts) == 1:
+            self._selected_account = parsed_accounts[0]
             self._form.account_id.setText(str(parsed_accounts[0].account_id))
         elif len(parsed_accounts) > 1:
             dialog = AccountDialog(parsed_accounts, self)
             if dialog.exec() == dialog.Accepted:
                 selected = dialog.get_selected_account()
                 if selected:
+                    self._selected_account = selected
                     self._form.account_id.setText(str(selected.account_id))
             else:
                 self._log_warning("已取消帳戶選擇")
         self._state.accounts_in_progress = False
         self._refresh_controls()
+        if self._accept_after_accounts and self._selected_account:
+            self._accept_after_accounts = False
+            self.accept()
 
     @Slot(str)
     def _handle_accounts_error(self, error: str) -> None:
         self._log_error(error)
         self._state.accounts_in_progress = False
         self._refresh_controls()
+        if self._accept_after_accounts:
+            self._accept_after_accounts = False
 
     # ─────────────────────────────────────────────────────────────
     # 控制項狀態
@@ -496,3 +515,7 @@ class OAuthDialog(BaseAuthDialog):
     def get_service(self) -> Optional[OAuthService]:
         """取得認證後的服務實例"""
         return self._service
+
+    def get_selected_account(self) -> Optional[AccountInfo]:
+        """取得已選擇的帳戶資訊"""
+        return self._selected_account

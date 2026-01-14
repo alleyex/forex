@@ -3,13 +3,13 @@
 """
 from dataclasses import dataclass
 import threading
-from typing import Callable, Optional, Protocol, Sequence, List
+from typing import Callable, Optional, Protocol, Sequence
 
 from ctrader_open_api import Client
 from ctrader_open_api.messages.OpenApiMessages_pb2 import ProtoOAGetAccountListByAccessTokenReq
 from ctrader_open_api.messages.OpenApiModelMessages_pb2 import ProtoOAPayloadType
 
-from broker.base import BaseCallbacks, LoggingMixin, OperationStateMixin, build_callbacks
+from broker.base import BaseCallbacks, LogHistoryMixin, OperationStateMixin, build_callbacks
 from broker.services.app_auth_service import AppAuthService
 
 
@@ -32,7 +32,7 @@ class AccountListServiceCallbacks(BaseCallbacks):
     on_accounts_received: Optional[Callable[[list], None]] = None
 
 
-class AccountListService(LoggingMixin[AccountListServiceCallbacks], OperationStateMixin):
+class AccountListService(LogHistoryMixin[AccountListServiceCallbacks], OperationStateMixin):
     """
     透過存取權杖取得帳戶列表
 
@@ -48,7 +48,10 @@ class AccountListService(LoggingMixin[AccountListServiceCallbacks], OperationSta
         self._callbacks = AccountListServiceCallbacks()
         self._in_progress = False
         self._timeout_timer: Optional[threading.Timer] = None
-        self._log_history: List[str] = []
+        self._log_history = []
+
+    def set_access_token(self, access_token: str) -> None:
+        self._access_token = access_token
 
     def set_callbacks(
         self,
@@ -63,16 +66,7 @@ class AccountListService(LoggingMixin[AccountListServiceCallbacks], OperationSta
             on_error=on_error,
             on_log=on_log,
         )
-        if self._callbacks.on_log:
-            for message in self._log_history:
-                self._callbacks.on_log(message)
-
-    def get_log_history(self) -> list[str]:
-        return list(self._log_history)
-
-    def _log(self, message: str) -> None:
-        self._log_history.append(message)
-        super()._log(message)
+        self._replay_log_history()
 
     def fetch(self, timeout_seconds: Optional[int] = None) -> None:
         """取得帳戶列表"""

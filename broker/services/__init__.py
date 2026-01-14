@@ -2,6 +2,9 @@ from .app_auth_service import AppAuthService, AppAuthServiceCallbacks
 from .oauth_service import OAuthService, OAuthServiceCallbacks
 from .oauth_login_service import OAuthLoginService, OAuthLoginServiceCallbacks
 from .account_list_service import AccountListService, AccountListServiceCallbacks
+from .account_funds_service import AccountFundsService, AccountFundsServiceCallbacks, AccountFunds
+from .trendbar_service import TrendbarService, TrendbarServiceCallbacks
+from .trendbar_history_service import TrendbarHistoryService, TrendbarHistoryCallbacks
 
 __all__ = [
     "AppAuthService",
@@ -12,4 +15,11 @@ __all__ = [
     "OAuthLoginServiceCallbacks",
     "AccountListService",
     "AccountListServiceCallbacks",
+    "AccountFundsService",
+    "AccountFundsServiceCallbacks",
+    "AccountFunds",
+    "TrendbarService",
+    "TrendbarServiceCallbacks",
+    "TrendbarHistoryService",
+    "TrendbarHistoryCallbacks",
 ]

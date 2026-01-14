@@ -7,14 +7,14 @@ class AccountInfo:
     """Account information for selection and display."""
 
     account_id: int
-    is_live: bool
+    is_live: Optional[bool]
     trader_login: Optional[int] = None
 
     @classmethod
     def from_dict(cls, data: dict) -> "AccountInfo":
         return cls(
             account_id=int(data.get("account_id", 0)),
-            is_live=bool(data.get("is_live", False)),
+            is_live=bool(data.get("is_live", False)) if data.get("is_live") is not None else None,
             trader_login=data.get("trader_login"),
         )
 

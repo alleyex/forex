@@ -2,7 +2,7 @@
 cTrader 應用程式層級認證服務
 """
 from dataclasses import dataclass
-from typing import Callable, Optional, Protocol, List
+from typing import Callable, Optional, Protocol
 
 from ctrader_open_api import Client, Protobuf, TcpProtocol, EndPoints
 from ctrader_open_api.messages.OpenApiMessages_pb2 import ProtoOAApplicationAuthReq
@@ -53,7 +53,6 @@ class AppAuthService(BaseAuthService[AppAuthServiceCallbacks, Client, AppAuthMes
         self._host = host
         self._port = port
         self._client: Optional[Client] = None
-        self._log_history: List[str] = []
 
     @classmethod
     def create(cls, host_type: str, token_file: str) -> "AppAuthService":
@@ -108,16 +107,7 @@ class AppAuthService(BaseAuthService[AppAuthServiceCallbacks, Client, AppAuthMes
             on_log=on_log,
             on_status_changed=on_status_changed,
         )
-        if self._callbacks.on_log:
-            for message in self._log_history:
-                self._callbacks.on_log(message)
-
-    def get_log_history(self) -> list[str]:
-        return list(self._log_history)
-
-    def _log(self, message: str) -> None:
-        self._log_history.append(message)
-        super()._log(message)
+        self._replay_log_history()
 
     def connect(self) -> None:
         """初始化連線並開始認證流程"""
@@ -223,6 +213,8 @@ class AppAuthService(BaseAuthService[AppAuthServiceCallbacks, Client, AppAuthMes
 
     def _handle_error_response(self, client: Client, msg) -> None:
         """處理錯誤回應"""
+        if "ALREADY_SUBSCRIBED" in f"{msg.errorCode}" or "ALREADY_SUBSCRIBED" in msg.description:
+            return
         error_msg = f"錯誤 {msg.errorCode}: {msg.description}"
         self._end_operation()
         self._set_status(ConnectionStatus.DISCONNECTED)

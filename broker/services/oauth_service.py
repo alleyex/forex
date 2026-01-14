@@ -3,7 +3,7 @@ OAuth 帳戶認證服務
 """
 from dataclasses import dataclass
 import threading
-from typing import Callable, Optional, Protocol, List
+from typing import Callable, Optional, Protocol
 
 from ctrader_open_api import Client
 from ctrader_open_api.messages.OpenApiMessages_pb2 import ProtoOAAccountAuthReq
@@ -48,7 +48,6 @@ class OAuthService(BaseService[OAuthServiceCallbacks]):
         self._client = client
         self._tokens = tokens
         self._timeout_timer: Optional[threading.Timer] = None
-        self._log_history: List[str] = []
 
     @classmethod
     def create(cls, app_auth_service: AppAuthService, token_file: str) -> "OAuthService":
@@ -77,16 +76,7 @@ class OAuthService(BaseService[OAuthServiceCallbacks]):
             on_log=on_log,
             on_status_changed=on_status_changed,
         )
-        if self._callbacks.on_log:
-            for message in self._log_history:
-                self._callbacks.on_log(message)
-
-    def get_log_history(self) -> list[str]:
-        return list(self._log_history)
-
-    def _log(self, message: str) -> None:
-        self._log_history.append(message)
-        super()._log(message)
+        self._replay_log_history()
 
     def connect(self, timeout_seconds: Optional[int] = None) -> None:
         """發送帳戶認證請求"""

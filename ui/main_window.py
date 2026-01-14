@@ -8,19 +8,32 @@ from PySide6.QtWidgets import (
     QLabel,
     QMessageBox,
 )
-from PySide6.QtCore import Slot
+from PySide6.QtCore import Slot, Signal
+from PySide6.QtGui import QAction
 
 from ui.widgets.trade_panel import TradePanel
 from ui.widgets.log_panel import LogPanel
 from ui.dialogs.app_auth_dialog import AppAuthDialog
 from ui.dialogs.oauth_dialog import OAuthDialog
 from broker.services.app_auth_service import AppAuthService
+from broker.services.account_list_service import AccountListService
+from broker.services.account_funds_service import AccountFundsService, AccountFunds
+from broker.services.trendbar_service import TrendbarService
+from broker.services.trendbar_history_service import TrendbarHistoryService
 from broker.services.oauth_service import OAuthService
+from broker.account import parse_accounts
+from config.settings import OAuthTokens
+from utils.reactor_manager import reactor_manager
+
 from config.constants import ConnectionStatus
 
 
 class MainWindow(QMainWindow):
     """Main application window"""
+
+    logRequested = Signal(str)
+    accountsReceived = Signal(list, object)
+    fundsReceived = Signal(object)
     
     def __init__(
         self,
@@ -31,6 +44,13 @@ class MainWindow(QMainWindow):
         super().__init__(parent)
         self._service = service
         self._oauth_service = oauth_service
+        self._account_list_service: Optional[AccountListService] = None
+        self._account_funds_service: Optional[AccountFundsService] = None
+        self._trendbar_service: Optional[TrendbarService] = None
+        self._trendbar_history_service: Optional[TrendbarHistoryService] = None
+        self._trendbar_active = False
+        self._trendbar_symbol_id = 1
+        self._price_digits = 5
         
         self._setup_ui()
         self._connect_signals()
@@ -52,6 +72,9 @@ class MainWindow(QMainWindow):
         layout.addWidget(self._log_panel, stretch=3)
         
         self.setCentralWidget(central)
+        self.logRequested.connect(self._log_panel.add_log)
+        self.accountsReceived.connect(self._handle_accounts_received)
+        self.fundsReceived.connect(self._handle_funds_received)
         status_bar = self.statusBar()
         self._app_auth_status_label = QLabel(self._format_app_auth_status())
         self._oauth_status_label = QLabel(self._format_oauth_status())
@@ -62,8 +85,9 @@ class MainWindow(QMainWindow):
 
     def _connect_signals(self) -> None:
         """Connect panel signals"""
-        self._trade_panel.buy_clicked.connect(self._on_buy_clicked)
-        self._trade_panel.sell_clicked.connect(self._on_sell_clicked)
+        self._trade_panel.trendbar_toggle_clicked.connect(self._on_trendbar_toggle_clicked)
+        self._trade_panel.trendbar_history_clicked.connect(self._on_trendbar_history_clicked)
+        self._action_fetch_account_info.triggered.connect(self._on_fetch_account_info)
 
     def _setup_menu_toolbar(self) -> None:
         """Create menu and toolbar actions"""
@@ -73,23 +97,251 @@ class MainWindow(QMainWindow):
         self._action_oauth = auth_menu.addAction("OAuth 認證")
 
         toolbar = self.addToolBar("認證")
-        toolbar.addAction(self._action_app_auth)
         toolbar.addAction(self._action_oauth)
 
         self._action_app_auth.triggered.connect(self._open_app_auth_dialog)
         self._action_oauth.triggered.connect(self._open_oauth_dialog)
 
-    @Slot()
-    def _on_buy_clicked(self) -> None:
-        """Handle buy button click"""
-        self._log_panel.add_log("🟢 已送出買入請求")
-        # TODO: Implement actual order logic using self._service
+        self._action_fetch_account_info = QAction("基本資料", self)
+        toolbar.addAction(self._action_fetch_account_info)
 
     @Slot()
-    def _on_sell_clicked(self) -> None:
-        """Handle sell button click"""
-        self._log_panel.add_log("🔴 已送出賣出請求")
-        # TODO: Implement actual order logic using self._service
+    def _on_trendbar_toggle_clicked(self) -> None:
+        if self._trendbar_active:
+            self._stop_trendbar()
+        else:
+            self._start_trendbar()
+
+    def _start_trendbar(self) -> None:
+        if not self._service:
+            self._log_panel.add_log("⚠️ 尚未完成 App 認證")
+            return
+        if not self._oauth_service or self._oauth_service.status != ConnectionStatus.ACCOUNT_AUTHENTICATED:
+            self._log_panel.add_log("⚠️ 尚未完成 OAuth 帳戶認證")
+            return
+
+        try:
+            tokens = OAuthTokens.from_file("token.json")
+        except Exception as exc:
+            self._log_panel.add_log(f"⚠️ 無法讀取 OAuth Token: {exc}")
+            return
+        if not tokens.account_id:
+            self._log_panel.add_log("⚠️ 缺少帳戶 ID")
+            return
+
+        if self._trendbar_service is None:
+            self._trendbar_service = TrendbarService(app_auth_service=self._service)
+
+        self._trendbar_service.clear_log_history()
+        self._trendbar_service.set_callbacks(
+            on_trendbar=lambda data: self.logRequested.emit(
+                f"📊 M1 {data['timestamp']} "
+                f"O={self._format_price(data['open'])} "
+                f"H={self._format_price(data['high'])} "
+                f"L={self._format_price(data['low'])} "
+                f"C={self._format_price(data['close'])}"
+            ),
+            on_error=lambda e: self.logRequested.emit(f"⚠️ 趨勢棒錯誤: {e}"),
+            on_log=self.logRequested.emit,
+        )
+
+        reactor_manager.ensure_running()
+        from twisted.internet import reactor
+        reactor.callFromThread(
+            self._trendbar_service.subscribe,
+            tokens.account_id,
+            self._trendbar_symbol_id,
+        )
+        self._trendbar_active = True
+        self._trade_panel.set_trendbar_active(True)
+        self._log_panel.add_log(f"📈 已開始 M1 趨勢棒：symbol {self._trendbar_symbol_id}")
+
+    def _stop_trendbar(self) -> None:
+        if not self._trendbar_service or not self._trendbar_service.in_progress:
+            self._log_panel.add_log("ℹ️ 目前沒有趨勢棒訂閱")
+            self._trendbar_active = False
+            self._trade_panel.set_trendbar_active(False)
+            return
+        reactor_manager.ensure_running()
+        from twisted.internet import reactor
+        reactor.callFromThread(self._trendbar_service.unsubscribe)
+        self._trendbar_active = False
+        self._trade_panel.set_trendbar_active(False)
+
+    @Slot()
+    def _on_trendbar_history_clicked(self) -> None:
+        if not self._service:
+            self._log_panel.add_log("⚠️ 尚未完成 App 認證")
+            return
+        if not self._oauth_service or self._oauth_service.status != ConnectionStatus.ACCOUNT_AUTHENTICATED:
+            self._log_panel.add_log("⚠️ 尚未完成 OAuth 帳戶認證")
+            return
+
+        try:
+            tokens = OAuthTokens.from_file("token.json")
+        except Exception as exc:
+            self._log_panel.add_log(f"⚠️ 無法讀取 OAuth Token: {exc}")
+            return
+        if not tokens.account_id:
+            self._log_panel.add_log("⚠️ 缺少帳戶 ID")
+            return
+
+        if self._trendbar_history_service is None:
+            self._trendbar_history_service = TrendbarHistoryService(app_auth_service=self._service)
+
+        self._trendbar_history_service.clear_log_history()
+        self._trendbar_history_service.set_callbacks(
+            on_history_received=self._handle_trendbar_history,
+            on_error=lambda e: self.logRequested.emit(f"⚠️ 歷史資料錯誤: {e}"),
+            on_log=self.logRequested.emit,
+        )
+
+        reactor_manager.ensure_running()
+        from twisted.internet import reactor
+        bars_per_day = 24 * 12
+        two_years_bars = 365 * 2 * bars_per_day
+        reactor.callFromThread(
+            self._trendbar_history_service.fetch,
+            tokens.account_id,
+            self._trendbar_symbol_id,
+            two_years_bars,
+        )
+
+    def _handle_trendbar_history(self, bars: list) -> None:
+        self.logRequested.emit("📚 M5 歷史資料（最近 2 年）")
+        if not bars:
+            self.logRequested.emit("⚠️ 歷史資料為空")
+            return
+        for bar in bars:
+            self.logRequested.emit(
+                f"🕒 {bar['timestamp']} "
+                f"O={self._format_price(bar['open'])} "
+                f"H={self._format_price(bar['high'])} "
+                f"L={self._format_price(bar['low'])} "
+                f"C={self._format_price(bar['close'])}"
+            )
+
+    @Slot()
+    def _on_fetch_account_info(self) -> None:
+        """Handle fetch account info click"""
+        self._log_panel.add_log("📄 已送出取得基本資料請求")
+        if not self._service:
+            self._log_panel.add_log("⚠️ 尚未完成 App 認證")
+            return
+        try:
+            tokens = OAuthTokens.from_file("token.json")
+        except Exception as exc:
+            self._log_panel.add_log(f"⚠️ 無法讀取 OAuth Token: {exc}")
+            return
+        if not tokens.access_token:
+            self._log_panel.add_log("⚠️ 缺少 Access Token")
+            return
+
+        if self._account_list_service is not None and self._account_list_service.in_progress:
+            self._log_panel.add_log("⏳ 正在取得帳戶列表，請稍候")
+            return
+
+        if self._account_list_service is None:
+            self._account_list_service = AccountListService(
+                app_auth_service=self._service,
+                access_token=tokens.access_token,
+            )
+        else:
+            if self._account_list_service.in_progress:
+                self._log_panel.add_log("⏳ 正在取得帳戶列表，請稍候")
+                return
+            self._account_list_service.set_access_token(tokens.access_token)
+
+        self._account_list_service.clear_log_history()
+        self._account_list_service.set_callbacks(
+            on_accounts_received=lambda accounts: self.accountsReceived.emit(
+                accounts, tokens.account_id
+            ),
+            on_error=lambda e: self.logRequested.emit(f"⚠️ 取得帳戶失敗: {e}"),
+            on_log=self.logRequested.emit,
+        )
+
+        reactor_manager.ensure_running()
+        from twisted.internet import reactor
+        reactor.callFromThread(self._account_list_service.fetch)
+
+    def _handle_accounts_received(self, accounts: list, account_id: Optional[int]) -> None:
+        try:
+            self.logRequested.emit(f"📄 帳戶數量: {len(accounts)}")
+            parsed = parse_accounts(accounts)
+            if not parsed:
+                self.logRequested.emit("⚠️ 帳戶列表為空")
+                return
+
+            selected = None
+            if account_id:
+                for item in parsed:
+                    if item.account_id == int(account_id):
+                        selected = item
+                        break
+            if selected is None:
+                selected = parsed[0]
+
+            env_text = "真實" if selected.is_live else "模擬"
+            login_text = "-" if selected.trader_login is None else str(selected.trader_login)
+            self.logRequested.emit("📄 帳戶基本資料")
+            self.logRequested.emit(f"帳戶 ID: {selected.account_id}")
+            self.logRequested.emit(f"環境: {env_text}")
+            self.logRequested.emit(f"交易登入: {login_text}")
+            self._fetch_account_funds(selected.account_id)
+        except Exception as exc:
+            self.logRequested.emit(f"⚠️ 帳戶資料解析失敗: {exc}")
+
+    def _fetch_account_funds(self, account_id: int) -> None:
+        if not self._service:
+            self.logRequested.emit("⚠️ 尚未完成 App 認證")
+            return
+
+        if self._account_funds_service is not None and self._account_funds_service.in_progress:
+            self.logRequested.emit("⏳ 正在取得帳戶資金，請稍候")
+            return
+
+        if self._account_funds_service is None:
+            self._account_funds_service = AccountFundsService(app_auth_service=self._service)
+
+        self._account_funds_service.clear_log_history()
+        self._account_funds_service.set_callbacks(
+            on_funds_received=lambda funds: self.fundsReceived.emit(funds),
+            on_error=lambda e: self.logRequested.emit(f"⚠️ 取得帳戶資金失敗: {e}"),
+            on_log=self.logRequested.emit,
+        )
+
+        reactor_manager.ensure_running()
+        from twisted.internet import reactor
+        reactor.callFromThread(self._account_funds_service.fetch, account_id)
+
+    def _handle_funds_received(self, funds: AccountFunds) -> None:
+        self.logRequested.emit("📄 帳戶資金狀態")
+        money_digits = funds.money_digits if funds.money_digits is not None else 2
+        self.logRequested.emit(f"餘額: {self._format_money(funds.balance, money_digits)}")
+        self.logRequested.emit(f"淨值: {self._format_money(funds.equity, money_digits)}")
+        self.logRequested.emit(f"可用資金: {self._format_money(funds.free_margin, money_digits)}")
+        self.logRequested.emit(f"已用保證金: {self._format_money(funds.used_margin, money_digits)}")
+        if funds.margin_level is None:
+            margin_text = "-"
+        else:
+            margin_text = f"{funds.margin_level:.2f}%"
+        self.logRequested.emit(f"保證金比例: {margin_text}")
+        self.logRequested.emit(f"帳戶幣別: {funds.currency or '-'}")
+
+    @staticmethod
+    def _format_money(value: Optional[float], digits: int) -> str:
+        if value is None:
+            return "-"
+        if digits <= 0:
+            return str(int(round(value)))
+        return f"{value:.{digits}f}"
+
+    def _format_price(self, value: Optional[int]) -> str:
+        if value is None:
+            return "-"
+        scale = 10 ** self._price_digits
+        return f"{value / scale:.{self._price_digits}f}"
 
     def set_service(self, service: AppAuthService) -> None:
         """Set the authenticated service"""
@@ -133,6 +385,7 @@ class MainWindow(QMainWindow):
             oauth_service = dialog.get_service()
             if oauth_service:
                 self.set_oauth_service(oauth_service)
+            self._on_fetch_account_info()
 
     def _format_app_auth_status(self) -> str:
         """Format app auth status for display"""

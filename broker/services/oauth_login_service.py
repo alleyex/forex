@@ -3,9 +3,9 @@ OAuth 登入服務（瀏覽器流程）
 """
 from dataclasses import dataclass
 import threading
-from typing import Callable, Optional, List
+from typing import Callable, Optional
 
-from broker.base import BaseCallbacks, LoggingMixin, OperationStateMixin, build_callbacks
+from broker.base import BaseCallbacks, LogHistoryMixin, OperationStateMixin, build_callbacks
 from broker.oauth.tokens import TokenExchanger
 from broker.oauth.callback_server import CallbackServer
 from config.settings import OAuthTokens, AppCredentials
@@ -17,7 +17,7 @@ class OAuthLoginServiceCallbacks(BaseCallbacks):
     on_oauth_login_success: Optional[Callable[[OAuthTokens], None]] = None
 
 
-class OAuthLoginService(LoggingMixin[OAuthLoginServiceCallbacks], OperationStateMixin):
+class OAuthLoginService(LogHistoryMixin[OAuthLoginServiceCallbacks], OperationStateMixin):
     """
     處理瀏覽器式 OAuth 授權碼流程
 
@@ -38,7 +38,7 @@ class OAuthLoginService(LoggingMixin[OAuthLoginServiceCallbacks], OperationState
         self._callback_server = CallbackServer(redirect_uri)
         self._callbacks = OAuthLoginServiceCallbacks()
         self._in_progress = False
-        self._log_history: List[str] = []
+        self._log_history = []
 
     @classmethod
     def create(cls, token_file: str, redirect_uri: str) -> "OAuthLoginService":
@@ -59,16 +59,7 @@ class OAuthLoginService(LoggingMixin[OAuthLoginServiceCallbacks], OperationState
             on_error=on_error,
             on_log=on_log,
         )
-        if self._callbacks.on_log:
-            for message in self._log_history:
-                self._callbacks.on_log(message)
-
-    def get_log_history(self) -> list[str]:
-        return list(self._log_history)
-
-    def _log(self, message: str) -> None:
-        self._log_history.append(message)
-        super()._log(message)
+        self._replay_log_history()
 
     def connect(self) -> None:
         """在背景執行緒中啟動 OAuth 流程"""

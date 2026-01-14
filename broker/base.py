@@ -77,6 +77,28 @@ class LoggingMixin(Generic[TCb]):
             cb.on_error(error)
 
 
+class LogHistoryMixin(LoggingMixin[TCb], Generic[TCb]):
+    """提供日誌歷史紀錄與回放"""
+
+    _log_history: list[str]
+
+    def _log(self, message: str) -> None:
+        self._log_history.append(message)
+        super()._log(message)
+
+    def _replay_log_history(self) -> None:
+        cb = getattr(self, "_callbacks", None)
+        if cb and cb.on_log:
+            for message in self._log_history:
+                cb.on_log(message)
+
+    def get_log_history(self) -> list[str]:
+        return list(self._log_history)
+
+    def clear_log_history(self) -> None:
+        self._log_history.clear()
+
+
 class StatusMixin(Generic[TCb]):
     """
     提供狀態管理功能的混入類別
@@ -123,7 +145,7 @@ class OperationStateMixin:
             self._end_operation()
 
 
-class BaseService(LoggingMixin[TCb], StatusMixin[TCb], OperationStateMixin, ABC, Generic[TCb]):
+class BaseService(LogHistoryMixin[TCb], StatusMixin[TCb], OperationStateMixin, ABC, Generic[TCb]):
     """
     服務基礎類別：整合 log/status/in-progress
     """
@@ -134,6 +156,7 @@ class BaseService(LoggingMixin[TCb], StatusMixin[TCb], OperationStateMixin, ABC,
     def __init__(self, callbacks: Optional[TCb] = None):
         if callbacks is None:
             callbacks = cast(TCb, BaseCallbacks())
+        self._log_history = []
         self._callbacks = callbacks
         self._in_progress = False
         self._status = ConnectionStatus.DISCONNECTED
