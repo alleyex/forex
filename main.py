@@ -23,7 +23,7 @@ def main() -> int:
 
     oauth_dialog = OAuthDialog(
         token_file="token.json",
-        auto_connect=False,
+        auto_connect=True,
         app_auth_service=service,
     )
     if oauth_dialog.exec() != OAuthDialog.Accepted:

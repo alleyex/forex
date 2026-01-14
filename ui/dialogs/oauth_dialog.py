@@ -179,12 +179,14 @@ class OAuthDialog(BaseAuthDialog):
         self._btn_exchange_code = QPushButton("🔁 交換授權碼")
         self._btn_fetch_accounts = QPushButton("📥 取得帳戶")
         self._btn_connect = QPushButton("🔗 連線")
+        self._btn_disconnect = QPushButton("🔌 中斷連線")
         self._btn_connect.setMinimumHeight(40)
 
         layout.addWidget(self._btn_authorize)
         layout.addWidget(self._btn_exchange_code)
         layout.addWidget(self._btn_fetch_accounts)
         layout.addWidget(self._btn_connect)
+        layout.addWidget(self._btn_disconnect)
 
         return layout
 
@@ -194,6 +196,7 @@ class OAuthDialog(BaseAuthDialog):
         self._btn_exchange_code.clicked.connect(self._exchange_auth_code)
         self._btn_fetch_accounts.clicked.connect(self._fetch_accounts)
         self._btn_connect.clicked.connect(self._start_auth)
+        self._btn_disconnect.clicked.connect(self._disconnect_account)
 
         self.authSucceeded.connect(self._handle_auth_success)
         self.authFailed.connect(self._handle_auth_error)
@@ -364,6 +367,18 @@ class OAuthDialog(BaseAuthDialog):
         reactor_manager.ensure_running()
         reactor.callFromThread(self._service.connect)
 
+    @Slot()
+    def _disconnect_account(self) -> None:
+        """中斷帳戶連線"""
+        if not self._service:
+            self._log_warning("尚未建立 OAuth 服務")
+            return
+
+        self._service.disconnect()
+        self._state.auth_in_progress = False
+        self._state.accounts_in_progress = False
+        self._refresh_controls()
+
     # ─────────────────────────────────────────────────────────────
     # 槽函式
     # ─────────────────────────────────────────────────────────────
@@ -437,6 +452,7 @@ class OAuthDialog(BaseAuthDialog):
         self._btn_exchange_code.setEnabled(enabled)
         self._btn_fetch_accounts.setEnabled(enabled)
         self._btn_connect.setEnabled(enabled)
+        self._btn_disconnect.setEnabled(self._service is not None)
 
     # ─────────────────────────────────────────────────────────────
     # 輔助方法

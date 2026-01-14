@@ -23,6 +23,7 @@ from config.constants import ConnectionStatus
 TClient = TypeVar("TClient")
 TMsg = TypeVar("TMsg")
 TCb = TypeVar("TCb", bound="StatusCallbacks")
+TCallbacks = TypeVar("TCallbacks", bound="BaseCallbacks")
 
 
 # --- Callback Protocols (型別安全的回呼介面) ---
@@ -47,6 +48,10 @@ class BaseCallbacks:
 
 # Backward-compatible alias
 DefaultCallbacks = BaseCallbacks
+
+
+def build_callbacks(callback_cls: type[TCallbacks], **kwargs) -> TCallbacks:
+    return callback_cls(**kwargs)
 
 
 # --- Mixins ---

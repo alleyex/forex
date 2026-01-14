@@ -7,7 +7,7 @@ from dataclasses import dataclass
 from ctrader_open_api import Client, Protobuf, TcpProtocol, EndPoints
 from ctrader_open_api.messages.OpenApiMessages_pb2 import ProtoOAApplicationAuthReq
 
-from broker.base import BaseAuthService, BaseCallbacks
+from broker.base import BaseAuthService, BaseCallbacks, build_callbacks
 from config.constants import MessageType, ConnectionStatus
 from config.settings import AppCredentials
 
@@ -100,7 +100,8 @@ class AppAuthService(BaseAuthService[AppAuthServiceCallbacks, Client, AppAuthMes
         on_status_changed: Optional[Callable[[ConnectionStatus], None]] = None,
     ) -> None:
         """設定回調函式"""
-        self._callbacks = AppAuthServiceCallbacks(
+        self._callbacks = build_callbacks(
+            AppAuthServiceCallbacks,
             on_app_auth_success=on_app_auth_success,
             on_error=on_error,
             on_log=on_log,
@@ -109,6 +110,10 @@ class AppAuthService(BaseAuthService[AppAuthServiceCallbacks, Client, AppAuthMes
 
     def connect(self) -> None:
         """初始化連線並開始認證流程"""
+        if not self._start_operation():
+            self._log("⚠️ 已有連線流程進行中")
+            return
+
         self._set_status(ConnectionStatus.CONNECTING)
         
         self._client = Client(self._host, self._port, TcpProtocol)
@@ -148,6 +153,7 @@ class AppAuthService(BaseAuthService[AppAuthServiceCallbacks, Client, AppAuthMes
     def _handle_disconnected(self, client: Client, reason: str) -> None:
         """斷線後的回調"""
         self._set_status(ConnectionStatus.DISCONNECTED)
+        self._end_operation()
         self.clear_message_handlers()
         self._emit_error(f"已斷線: {reason}")
 
@@ -197,6 +203,7 @@ class AppAuthService(BaseAuthService[AppAuthServiceCallbacks, Client, AppAuthMes
 
     def _handle_app_auth_response(self, client: Client, msg) -> None:
         """處理應用程式認證成功回應"""
+        self._end_operation()
         self._set_status(ConnectionStatus.APP_AUTHENTICATED)
         self._log("✅ 應用程式已授權！")
         
@@ -206,6 +213,7 @@ class AppAuthService(BaseAuthService[AppAuthServiceCallbacks, Client, AppAuthMes
     def _handle_error_response(self, client: Client, msg) -> None:
         """處理錯誤回應"""
         error_msg = f"錯誤 {msg.errorCode}: {msg.description}"
+        self._end_operation()
         self._set_status(ConnectionStatus.DISCONNECTED)
         self._emit_error(error_msg)
 

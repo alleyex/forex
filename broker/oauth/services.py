@@ -12,7 +12,7 @@ from ctrader_open_api.messages.OpenApiMessages_pb2 import (
 )
 from ctrader_open_api.messages.OpenApiModelMessages_pb2 import ProtoOAPayloadType
 
-from broker.base import BaseService, BaseCallbacks, OperationStateMixin, LoggingMixin
+from broker.base import BaseService, BaseCallbacks, OperationStateMixin, LoggingMixin, build_callbacks
 from broker.app_auth import AppAuthService
 from .tokens import TokenExchanger
 from .callback_server import CallbackServer
@@ -70,6 +70,7 @@ class OAuthService(BaseService[OAuthServiceCallbacks]):
         self._app_auth_service = app_auth_service
         self._client = client
         self._tokens = tokens
+        self._timeout_timer: Optional[threading.Timer] = None
 
     @classmethod
     def create(cls, app_auth_service: AppAuthService, token_file: str) -> "OAuthService":
@@ -91,14 +92,15 @@ class OAuthService(BaseService[OAuthServiceCallbacks]):
         on_status_changed: Optional[Callable[[ConnectionStatus], None]] = None,
     ) -> None:
         """設定回調函式"""
-        self._callbacks = OAuthServiceCallbacks(
+        self._callbacks = build_callbacks(
+            OAuthServiceCallbacks,
             on_oauth_success=on_oauth_success,
             on_error=on_error,
             on_log=on_log,
             on_status_changed=on_status_changed,
         )
 
-    def connect(self) -> None:
+    def connect(self, timeout_seconds: Optional[int] = None) -> None:
         """發送帳戶認證請求"""
         self._set_status(ConnectionStatus.CONNECTING)
         self._log("🔐 正在發送帳戶認證...")
@@ -112,7 +114,17 @@ class OAuthService(BaseService[OAuthServiceCallbacks]):
             return
             
         self._app_auth_service.add_message_handler(self._handle_message)
+        self._start_timeout_timer(timeout_seconds)
         self._send_auth_request()
+
+    def disconnect(self) -> None:
+        """中斷帳戶認證流程"""
+        if self._in_progress:
+            self._end_operation()
+        self._cancel_timeout_timer()
+        self._app_auth_service.remove_message_handler(self._handle_message)
+        self._set_status(ConnectionStatus.DISCONNECTED)
+        self._log("🔌 已中斷帳戶連線")
 
     def _validate_tokens(self) -> Optional[str]:
         """驗證 Token，若無效則回傳錯誤訊息"""
@@ -150,6 +162,7 @@ class OAuthService(BaseService[OAuthServiceCallbacks]):
         """認證成功處理"""
         self._end_operation()
         self._app_auth_service.remove_message_handler(self._handle_message)
+        self._cancel_timeout_timer()
         self._set_status(ConnectionStatus.ACCOUNT_AUTHENTICATED)
         self._log("✅ 帳戶已授權！")
         if self._callbacks.on_oauth_success:
@@ -159,7 +172,29 @@ class OAuthService(BaseService[OAuthServiceCallbacks]):
         """認證錯誤處理"""
         self._end_operation()
         self._app_auth_service.remove_message_handler(self._handle_message)
+        self._cancel_timeout_timer()
         self._emit_error(f"錯誤 {msg.errorCode}: {msg.description}")
+        self._set_status(ConnectionStatus.DISCONNECTED)
+
+    def _start_timeout_timer(self, timeout_seconds: Optional[int]) -> None:
+        if not timeout_seconds:
+            return
+        self._cancel_timeout_timer()
+        self._timeout_timer = threading.Timer(timeout_seconds, self._on_timeout)
+        self._timeout_timer.daemon = True
+        self._timeout_timer.start()
+
+    def _cancel_timeout_timer(self) -> None:
+        if self._timeout_timer:
+            self._timeout_timer.cancel()
+            self._timeout_timer = None
+
+    def _on_timeout(self) -> None:
+        if not self._in_progress:
+            return
+        self._end_operation()
+        self._app_auth_service.remove_message_handler(self._handle_message)
+        self._emit_error("帳戶認證逾時")
         self._set_status(ConnectionStatus.DISCONNECTED)
 
 
@@ -208,7 +243,8 @@ class OAuthLoginService(LoggingMixin[OAuthLoginServiceCallbacks], OperationState
         on_log: Optional[Callable[[str], None]] = None,
     ) -> None:
         """設定回調函式"""
-        self._callbacks = OAuthLoginServiceCallbacks(
+        self._callbacks = build_callbacks(
+            OAuthLoginServiceCallbacks,
             on_oauth_login_success=on_oauth_login_success,
             on_error=on_error,
             on_log=on_log,
@@ -216,6 +252,9 @@ class OAuthLoginService(LoggingMixin[OAuthLoginServiceCallbacks], OperationState
 
     def connect(self) -> None:
         """在背景執行緒中啟動 OAuth 流程"""
+        if not self._start_operation():
+            self._log("⚠️ 已有 OAuth 流程進行中")
+            return
         thread = threading.Thread(target=self._run_flow, daemon=True)
         thread.start()
 
@@ -247,6 +286,8 @@ class OAuthLoginService(LoggingMixin[OAuthLoginServiceCallbacks], OperationState
                 self._callbacks.on_oauth_login_success(tokens)
         except Exception as e:
             self._emit_error(str(e))
+        finally:
+            self._end_operation()
 
     def _get_existing_account_id(self) -> Optional[int]:
         """嘗試從 Token 檔案取得現有帳戶 ID"""
@@ -282,6 +323,7 @@ class AccountListService(LoggingMixin[AccountListServiceCallbacks], OperationSta
         self._access_token = access_token
         self._callbacks = AccountListServiceCallbacks()
         self._in_progress = False
+        self._timeout_timer: Optional[threading.Timer] = None
 
     def set_callbacks(
         self,
@@ -290,13 +332,14 @@ class AccountListService(LoggingMixin[AccountListServiceCallbacks], OperationSta
         on_log: Optional[Callable[[str], None]] = None,
     ) -> None:
         """設定回調函式"""
-        self._callbacks = AccountListServiceCallbacks(
+        self._callbacks = build_callbacks(
+            AccountListServiceCallbacks,
             on_accounts_received=on_accounts_received,
             on_error=on_error,
             on_log=on_log,
         )
 
-    def fetch(self) -> None:
+    def fetch(self, timeout_seconds: Optional[int] = None) -> None:
         """取得帳戶列表"""
         if not self._access_token:
             self._emit_error("缺少存取權杖")
@@ -306,6 +349,7 @@ class AccountListService(LoggingMixin[AccountListServiceCallbacks], OperationSta
             return
             
         self._app_auth_service.add_message_handler(self._handle_message)
+        self._start_timeout_timer(timeout_seconds)
         self._send_request()
 
     def _send_request(self) -> None:
@@ -334,6 +378,7 @@ class AccountListService(LoggingMixin[AccountListServiceCallbacks], OperationSta
         """帳戶列表接收成功"""
         self._end_operation()
         self._app_auth_service.remove_message_handler(self._handle_message)
+        self._cancel_timeout_timer()
         accounts = self._parse_accounts(msg.ctidTraderAccount)
         self._log(f"✅ 已接收帳戶: {len(accounts)} 個")
         if self._callbacks.on_accounts_received:
@@ -343,7 +388,28 @@ class AccountListService(LoggingMixin[AccountListServiceCallbacks], OperationSta
         """帳戶列表接收失敗"""
         self._end_operation()
         self._app_auth_service.remove_message_handler(self._handle_message)
+        self._cancel_timeout_timer()
         self._emit_error(f"錯誤 {msg.errorCode}: {msg.description}")
+
+    def _start_timeout_timer(self, timeout_seconds: Optional[int]) -> None:
+        if not timeout_seconds:
+            return
+        self._cancel_timeout_timer()
+        self._timeout_timer = threading.Timer(timeout_seconds, self._on_timeout)
+        self._timeout_timer.daemon = True
+        self._timeout_timer.start()
+
+    def _cancel_timeout_timer(self) -> None:
+        if self._timeout_timer:
+            self._timeout_timer.cancel()
+            self._timeout_timer = None
+
+    def _on_timeout(self) -> None:
+        if not self._in_progress:
+            return
+        self._end_operation()
+        self._app_auth_service.remove_message_handler(self._handle_message)
+        self._emit_error("取得帳戶列表逾時")
 
     @staticmethod
     def _parse_accounts(raw_accounts: Sequence[AccountInfoMessage]) -> list:
