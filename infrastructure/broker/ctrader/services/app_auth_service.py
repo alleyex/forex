@@ -9,6 +9,7 @@ from ctrader_open_api.messages.OpenApiMessages_pb2 import ProtoOAApplicationAuth
 
 from broker.base import BaseAuthService, BaseCallbacks, build_callbacks
 from config.constants import MessageType, ConnectionStatus
+from config.paths import TOKEN_FILE
 from config.settings import AppCredentials
 
 
@@ -30,7 +31,7 @@ class AppAuthService(BaseAuthService[AppAuthServiceCallbacks, Client, AppAuthMes
     處理 cTrader Open API 的應用程式層級認證
 
     使用方式：
-        service = AppAuthService.create("demo", "token.json")
+        service = AppAuthService.create("demo", TOKEN_FILE)
         service.set_callbacks(
             on_app_auth_success=lambda client: print("成功"),
             on_error=lambda err: print(f"錯誤: {err}"),
@@ -56,7 +57,7 @@ class AppAuthService(BaseAuthService[AppAuthServiceCallbacks, Client, AppAuthMes
         self._send_wrapped = False
 
     @classmethod
-    def create(cls, host_type: str, token_file: str) -> "AppAuthService":
+    def create(cls, host_type: str, token_file: str = TOKEN_FILE) -> "AppAuthService":
         """
         工廠方法：從設定檔建立服務實例
 

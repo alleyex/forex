@@ -15,14 +15,19 @@ from ui.widgets.trade_panel import TradePanel
 from ui.widgets.log_panel import LogPanel
 from ui.dialogs.app_auth_dialog import AppAuthDialog
 from ui.dialogs.oauth_dialog import OAuthDialog
-from broker.services.app_auth_service import AppAuthService
-from broker.services.account_list_service import AccountListService
-from broker.services.account_funds_service import AccountFundsService, AccountFunds
-from broker.services.trendbar_service import TrendbarService
-from broker.services.trendbar_history_service import TrendbarHistoryService
-from broker.services.oauth_service import OAuthService
-from broker.account import parse_accounts
+
+from application import (
+    AppState,
+    AppAuthServiceLike,
+    BrokerUseCases,
+    EventBus,
+    OAuthServiceLike,
+    TrendbarHistoryServiceLike,
+    TrendbarServiceLike,
+)
+from domain import AccountFundsSnapshot
 from config.settings import OAuthTokens
+from config.paths import TOKEN_FILE
 from utils.reactor_manager import reactor_manager
 
 from config.constants import ConnectionStatus
@@ -34,20 +39,24 @@ class MainWindow(QMainWindow):
     logRequested = Signal(str)
     accountsReceived = Signal(list, object)
     fundsReceived = Signal(object)
-    
+
     def __init__(
         self,
-        service: Optional[AppAuthService] = None,
-        oauth_service: Optional[OAuthService] = None,
+        service: Optional[AppAuthServiceLike] = None,
+        oauth_service: Optional[OAuthServiceLike] = None,
+        use_cases: Optional[BrokerUseCases] = None,
+        event_bus: Optional[EventBus] = None,
+        app_state: Optional[AppState] = None,
         parent=None,
     ):
         super().__init__(parent)
+        self._use_cases: Optional[BrokerUseCases] = use_cases
+        self._event_bus = event_bus
+        self._app_state = app_state
         self._service = service
         self._oauth_service = oauth_service
-        self._account_list_service: Optional[AccountListService] = None
-        self._account_funds_service: Optional[AccountFundsService] = None
-        self._trendbar_service: Optional[TrendbarService] = None
-        self._trendbar_history_service: Optional[TrendbarHistoryService] = None
+        self._trendbar_service: Optional[TrendbarServiceLike] = None
+        self._trendbar_history_service: Optional[TrendbarHistoryServiceLike] = None
         self._trendbar_active = False
         self._trendbar_symbol_id = 1
         self._price_digits = 5
@@ -57,9 +66,13 @@ class MainWindow(QMainWindow):
         self._reconnect_timer.setInterval(5000)
         self._reconnect_timer.timeout.connect(self._attempt_reconnect)
         self._reconnect_logged = False
-        
+
         self._setup_ui()
         self._connect_signals()
+        if self._app_state:
+            self._app_state.subscribe(self._sync_status_from_state)
+        if self._event_bus:
+            self._event_bus.subscribe("log", self._log_panel.add_log)
         if self._service:
             self.set_service(self._service)
         if self._oauth_service:
@@ -69,18 +82,18 @@ class MainWindow(QMainWindow):
         """Initialize UI components"""
         self.setWindowTitle("外匯交易應用程式")
         self.setMinimumSize(1000, 600)
-        
+
         central = QWidget()
         layout = QHBoxLayout(central)
         layout.setContentsMargins(10, 10, 10, 10)
         layout.setSpacing(10)
-        
+
         self._trade_panel = TradePanel()
         self._log_panel = LogPanel()
-        
+
         layout.addWidget(self._trade_panel, stretch=2)
         layout.addWidget(self._log_panel, stretch=3)
-        
+
         self.setCentralWidget(central)
         self.logRequested.connect(self._handle_log_message)
         self.accountsReceived.connect(self._handle_accounts_received)
@@ -90,6 +103,7 @@ class MainWindow(QMainWindow):
         self._oauth_status_label = QLabel(self._format_oauth_status())
         status_bar.addWidget(self._app_auth_status_label)
         status_bar.addWidget(self._oauth_status_label)
+
         self._setup_menu_toolbar()
 
     def _connect_signals(self) -> None:
@@ -126,14 +140,15 @@ class MainWindow(QMainWindow):
         if not self._service:
             self._log_panel.add_log("⚠️ 尚未完成 App 認證")
             return
-        if not self._service.is_app_authenticated:
+        if not self._is_app_authenticated():
             self._log_panel.add_log("⚠️ App 認證已中斷，請稍候自動重連")
             return
         if not self._oauth_service or self._oauth_service.status != ConnectionStatus.ACCOUNT_AUTHENTICATED:
             self._log_panel.add_log("⚠️ 尚未完成 OAuth 帳戶認證")
             return
+
         try:
-            tokens = OAuthTokens.from_file("token.json")
+            tokens = OAuthTokens.from_file(TOKEN_FILE)
         except Exception as exc:
             self._log_panel.add_log(f"⚠️ 無法讀取 OAuth Token: {exc}")
             return
@@ -142,7 +157,10 @@ class MainWindow(QMainWindow):
             return
 
         if self._trendbar_service is None:
-            self._trendbar_service = TrendbarService(app_auth_service=self._service)
+            if self._use_cases is None:
+                self._log_panel.add_log("⚠️ 缺少 broker 用例配置")
+                return
+            self._trendbar_service = self._use_cases.create_trendbar(app_auth_service=self._service)
 
         self._trendbar_service.clear_log_history()
         self._trendbar_service.set_callbacks(
@@ -185,7 +203,7 @@ class MainWindow(QMainWindow):
         if not self._service:
             self._log_panel.add_log("⚠️ 尚未完成 App 認證")
             return
-        if not self._service.is_app_authenticated:
+        if not self._is_app_authenticated():
             self._log_panel.add_log("⚠️ App 認證已中斷，請稍候自動重連")
             return
         if not self._oauth_service or self._oauth_service.status != ConnectionStatus.ACCOUNT_AUTHENTICATED:
@@ -193,7 +211,7 @@ class MainWindow(QMainWindow):
             return
 
         try:
-            tokens = OAuthTokens.from_file("token.json")
+            tokens = OAuthTokens.from_file(TOKEN_FILE)
         except Exception as exc:
             self._log_panel.add_log(f"⚠️ 無法讀取 OAuth Token: {exc}")
             return
@@ -202,7 +220,12 @@ class MainWindow(QMainWindow):
             return
 
         if self._trendbar_history_service is None:
-            self._trendbar_history_service = TrendbarHistoryService(app_auth_service=self._service)
+            if self._use_cases is None:
+                self._log_panel.add_log("⚠️ 缺少 broker 用例配置")
+                return
+            self._trendbar_history_service = self._use_cases.create_trendbar_history(
+                app_auth_service=self._service
+            )
 
         self._trendbar_history_service.clear_log_history()
         self._trendbar_history_service.set_callbacks(
@@ -243,7 +266,7 @@ class MainWindow(QMainWindow):
         if not self._service:
             self._log_panel.add_log("⚠️ 尚未完成 App 認證")
             return
-        if not self._service.is_app_authenticated:
+        if not self._is_app_authenticated():
             self._log_panel.add_log("⚠️ App 認證已中斷，請稍候自動重連")
             return
         if not self._oauth_service or self._oauth_service.status != ConnectionStatus.ACCOUNT_AUTHENTICATED:
@@ -251,7 +274,7 @@ class MainWindow(QMainWindow):
             self._auto_oauth_connect()
             return
         try:
-            tokens = OAuthTokens.from_file("token.json")
+            tokens = OAuthTokens.from_file(TOKEN_FILE)
         except Exception as exc:
             self._log_panel.add_log(f"⚠️ 無法讀取 OAuth Token: {exc}")
             return
@@ -259,50 +282,38 @@ class MainWindow(QMainWindow):
             self._log_panel.add_log("⚠️ 缺少 Access Token")
             return
 
-        if self._account_list_service is not None and self._account_list_service.in_progress:
+        if self._use_cases is None:
+            self._log_panel.add_log("⚠️ 缺少 broker 用例配置")
+            return
+        if self._use_cases.account_list_in_progress():
             self._log_panel.add_log("⏳ 正在取得帳戶列表，請稍候")
             return
-
-        if self._account_list_service is None:
-            self._account_list_service = AccountListService(
-                app_auth_service=self._service,
-                access_token=tokens.access_token,
-            )
-        else:
-            if self._account_list_service.in_progress:
-                self._log_panel.add_log("⏳ 正在取得帳戶列表，請稍候")
-                return
-            self._account_list_service.set_access_token(tokens.access_token)
-
-        self._account_list_service.clear_log_history()
-        self._account_list_service.set_callbacks(
-            on_accounts_received=lambda accounts: self.accountsReceived.emit(
-                accounts, tokens.account_id
-            ),
-            on_error=lambda e: self.logRequested.emit(f"⚠️ 取得帳戶失敗: {e}"),
-            on_log=self.logRequested.emit,
-        )
-
         reactor_manager.ensure_running()
         from twisted.internet import reactor
-        reactor.callFromThread(self._account_list_service.fetch)
+        reactor.callFromThread(
+            self._use_cases.fetch_accounts,
+            self._service,
+            tokens.access_token,
+            lambda accounts: self.accountsReceived.emit(accounts, tokens.account_id),
+            lambda e: self.logRequested.emit(f"⚠️ 取得帳戶失敗: {e}"),
+            self.logRequested.emit,
+        )
 
     def _handle_accounts_received(self, accounts: list, account_id: Optional[int]) -> None:
         try:
             self.logRequested.emit(f"📄 帳戶數量: {len(accounts)}")
-            parsed = parse_accounts(accounts)
-            if not parsed:
+            if not accounts:
                 self.logRequested.emit("⚠️ 帳戶列表為空")
                 return
 
             selected = None
             if account_id:
-                for item in parsed:
+                for item in accounts:
                     if item.account_id == int(account_id):
                         selected = item
                         break
             if selected is None:
-                selected = parsed[0]
+                selected = accounts[0]
 
             env_text = "真實" if selected.is_live else "模擬"
             login_text = "-" if selected.trader_login is None else str(selected.trader_login)
@@ -319,37 +330,37 @@ class MainWindow(QMainWindow):
             self.logRequested.emit("⚠️ 尚未完成 App 認證")
             return
 
-        if self._account_funds_service is not None and self._account_funds_service.in_progress:
+        if self._use_cases is None:
+            self.logRequested.emit("⚠️ 缺少 broker 用例配置")
+            return
+        if self._use_cases.account_funds_in_progress():
             self.logRequested.emit("⏳ 正在取得帳戶資金，請稍候")
             return
-
-        if self._account_funds_service is None:
-            self._account_funds_service = AccountFundsService(app_auth_service=self._service)
-
-        self._account_funds_service.clear_log_history()
-        self._account_funds_service.set_callbacks(
-            on_funds_received=lambda funds: self.fundsReceived.emit(funds),
-            on_error=lambda e: self.logRequested.emit(f"⚠️ 取得帳戶資金失敗: {e}"),
-            on_log=self.logRequested.emit,
-        )
-
         reactor_manager.ensure_running()
         from twisted.internet import reactor
-        reactor.callFromThread(self._account_funds_service.fetch, account_id)
+        reactor.callFromThread(
+            self._use_cases.fetch_account_funds,
+            self._service,
+            account_id,
+            lambda funds: self.fundsReceived.emit(funds),
+            lambda e: self.logRequested.emit(f"⚠️ 取得帳戶資金失敗: {e}"),
+            self.logRequested.emit,
+        )
 
-    def _handle_funds_received(self, funds: AccountFunds) -> None:
+    def _handle_funds_received(self, funds: AccountFundsSnapshot) -> None:
+        snapshot = funds
         self.logRequested.emit("📄 帳戶資金狀態")
-        money_digits = funds.money_digits if funds.money_digits is not None else 2
-        self.logRequested.emit(f"餘額: {self._format_money(funds.balance, money_digits)}")
-        self.logRequested.emit(f"淨值: {self._format_money(funds.equity, money_digits)}")
-        self.logRequested.emit(f"可用資金: {self._format_money(funds.free_margin, money_digits)}")
-        self.logRequested.emit(f"已用保證金: {self._format_money(funds.used_margin, money_digits)}")
-        if funds.margin_level is None:
+        money_digits = snapshot.money_digits if snapshot.money_digits is not None else 2
+        self.logRequested.emit(f"餘額: {self._format_money(snapshot.balance, money_digits)}")
+        self.logRequested.emit(f"淨值: {self._format_money(snapshot.equity, money_digits)}")
+        self.logRequested.emit(f"可用資金: {self._format_money(snapshot.free_margin, money_digits)}")
+        self.logRequested.emit(f"已用保證金: {self._format_money(snapshot.used_margin, money_digits)}")
+        if snapshot.margin_level is None:
             margin_text = "-"
         else:
-            margin_text = f"{funds.margin_level:.2f}%"
+            margin_text = f"{snapshot.margin_level:.2f}%"
         self.logRequested.emit(f"保證金比例: {margin_text}")
-        self.logRequested.emit(f"帳戶幣別: {funds.currency or '-'}")
+        self.logRequested.emit(f"帳戶幣別: {snapshot.currency or '-'}")
 
     @staticmethod
     def _format_money(value: Optional[float], digits: int) -> str:
@@ -365,7 +376,7 @@ class MainWindow(QMainWindow):
         scale = 10 ** self._price_digits
         return f"{value / scale:.{self._price_digits}f}"
 
-    def set_service(self, service: AppAuthService) -> None:
+    def set_service(self, service: AppAuthServiceLike) -> None:
         """Set the authenticated service"""
         self._service = service
         self._trendbar_service = None
@@ -378,10 +389,12 @@ class MainWindow(QMainWindow):
             on_status_changed=self._handle_app_auth_status_changed,
         )
         self._app_auth_status_label.setText(self._format_app_auth_status())
-        if self._service.is_app_authenticated:
+        if self._app_state:
+            self._app_state.update_app_status(int(service.status))
+        if self._is_app_authenticated():
             self._auto_oauth_connect()
 
-    def set_oauth_service(self, service: OAuthService) -> None:
+    def set_oauth_service(self, service: OAuthServiceLike) -> None:
         """Set the OAuth service"""
         self._oauth_service = service
         self._oauth_service.set_callbacks(
@@ -390,15 +403,20 @@ class MainWindow(QMainWindow):
             on_status_changed=self._handle_oauth_status_changed,
         )
         self._oauth_status_label.setText(self._format_oauth_status())
+        if self._app_state:
+            self._app_state.update_oauth_status(int(service.status))
 
     def _open_app_auth_dialog(self, auto_connect: bool = False) -> None:
         if self._app_auth_dialog_open:
             return
         self._app_auth_dialog_open = True
         dialog = AppAuthDialog(
-            token_file="token.json",
+            token_file=TOKEN_FILE,
             auto_connect=auto_connect,
             app_auth_service=self._service,
+            use_cases=self._use_cases,
+            event_bus=self._event_bus,
+            app_state=self._app_state,
             parent=self,
         )
         if dialog.exec() == AppAuthDialog.Accepted:
@@ -417,10 +435,13 @@ class MainWindow(QMainWindow):
             auto_connect = False
         self._oauth_dialog_open = True
         dialog = OAuthDialog(
-            token_file="token.json",
+            token_file=TOKEN_FILE,
             auto_connect=auto_connect,
             app_auth_service=self._service,
             oauth_service=self._oauth_service,
+            use_cases=self._use_cases,
+            event_bus=self._event_bus,
+            app_state=self._app_state,
             parent=self,
         )
         if dialog.exec() == OAuthDialog.Accepted:
@@ -469,10 +490,14 @@ class MainWindow(QMainWindow):
     def _handle_app_auth_success(self, _client) -> None:
         self._app_auth_status_label.setText(self._format_app_auth_status())
         self._log_panel.add_log("✅ 服務已連線")
+        if self._app_state:
+            self._app_state.update_app_status(int(self._service.status))
         self._auto_oauth_connect()
 
     def _handle_app_auth_status_changed(self, status: ConnectionStatus) -> None:
         self._app_auth_status_label.setText(self._format_app_auth_status())
+        if self._app_state:
+            self._app_state.update_app_status(int(status))
         if status == ConnectionStatus.DISCONNECTED and self._oauth_service:
             self._oauth_service.disconnect()
             self._oauth_status_label.setText(self._format_oauth_status())
@@ -493,9 +518,13 @@ class MainWindow(QMainWindow):
     def _handle_oauth_success(self, _tokens) -> None:
         self._oauth_status_label.setText(self._format_oauth_status())
         self._log_panel.add_log("✅ OAuth 已連線")
+        if self._app_state:
+            self._app_state.update_oauth_status(int(self._oauth_service.status))
 
-    def _handle_oauth_status_changed(self, _status: ConnectionStatus) -> None:
+    def _handle_oauth_status_changed(self, status: ConnectionStatus) -> None:
         self._oauth_status_label.setText(self._format_oauth_status())
+        if self._app_state:
+            self._app_state.update_oauth_status(int(status))
 
     def _auto_oauth_connect(self) -> None:
         if not self._service:
@@ -503,8 +532,11 @@ class MainWindow(QMainWindow):
         if self._oauth_service and self._oauth_service.status == ConnectionStatus.ACCOUNT_AUTHENTICATED:
             return
         if not self._oauth_service:
+            if self._use_cases is None:
+                self.logRequested.emit("⚠️ 缺少 broker 用例配置")
+                return
             try:
-                self._oauth_service = OAuthService.create(self._service, "token.json")
+                self._oauth_service = self._use_cases.create_oauth(self._service, TOKEN_FILE)
             except Exception as exc:
                 self.logRequested.emit(f"⚠️ 無法建立 OAuth 服務: {exc}")
                 return
@@ -517,7 +549,7 @@ class MainWindow(QMainWindow):
     def _attempt_reconnect(self) -> None:
         if not self._service:
             return
-        if self._service.is_app_authenticated:
+        if self._is_app_authenticated():
             self._reconnect_timer.stop()
             self._reconnect_logged = False
             return
@@ -527,5 +559,16 @@ class MainWindow(QMainWindow):
         from twisted.internet import reactor
         reactor.callFromThread(self._service.connect)
 
+    def _is_app_authenticated(self) -> bool:
+        if not self._service:
+            return False
+        is_auth = getattr(self._service, "is_app_authenticated", None)
+        if isinstance(is_auth, bool):
+            return is_auth
+        return self._service.status >= ConnectionStatus.APP_AUTHENTICATED
 
-    # Heartbeat display removed.
+    def _sync_status_from_state(self, state: AppState) -> None:
+        if state.app_status is not None:
+            self._app_auth_status_label.setText(self._format_app_auth_status())
+        if state.oauth_status is not None:
+            self._oauth_status_label.setText(self._format_oauth_status())

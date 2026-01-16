@@ -1,4 +1,4 @@
-from broker.core import (
+from broker.core.provider import (
     BrokerProvider,
     DEFAULT_PROVIDER,
     available_providers,

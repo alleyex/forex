@@ -47,7 +47,3 @@ class StatusWidget(QLabel):
         self.setText(f"狀態: {text}")
         self.setStyleSheet(style)
     
-    def set_custom_status(self, text: str, style: str = "") -> None:
-        """設定自訂狀態文字和樣式"""
-        self.setText(f"狀態: {text}")
-        self.setStyleSheet(style)

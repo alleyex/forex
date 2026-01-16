@@ -8,6 +8,7 @@ from typing import Callable, Optional
 from broker.base import BaseCallbacks, LogHistoryMixin, OperationStateMixin, build_callbacks
 from broker.oauth.tokens import TokenExchanger
 from broker.oauth.callback_server import CallbackServer
+from config.paths import TOKEN_FILE
 from config.settings import OAuthTokens, AppCredentials
 
 
@@ -22,7 +23,7 @@ class OAuthLoginService(LogHistoryMixin[OAuthLoginServiceCallbacks], OperationSt
     處理瀏覽器式 OAuth 授權碼流程
 
     使用方式：
-        service = OAuthLoginService.create("token.json", "http://127.0.0.1:8765/callback")
+        service = OAuthLoginService.create(TOKEN_FILE, "http://127.0.0.1:8765/callback")
         service.set_callbacks(on_oauth_login_success=..., on_error=...)
         service.connect()
     """
@@ -41,7 +42,7 @@ class OAuthLoginService(LogHistoryMixin[OAuthLoginServiceCallbacks], OperationSt
         self._log_history = []
 
     @classmethod
-    def create(cls, token_file: str, redirect_uri: str) -> "OAuthLoginService":
+    def create(cls, token_file: str = TOKEN_FILE, redirect_uri: str = "http://127.0.0.1:8765/callback") -> "OAuthLoginService":
         """工廠方法：從設定檔建立服務實例"""
         credentials = AppCredentials.from_file(token_file)
         return cls(credentials=credentials, redirect_uri=redirect_uri, token_file=token_file)

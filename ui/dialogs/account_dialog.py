@@ -14,16 +14,16 @@ from PySide6.QtWidgets import (
 )
 from PySide6.QtCore import Qt
 
-from broker.account import AccountInfo
+from domain import Account
 
 
 class AccountDialog(QDialog):
     """帳戶選擇對話框"""
 
-    def __init__(self, accounts: List[AccountInfo], parent=None):
+    def __init__(self, accounts: List[Account], parent=None):
         super().__init__(parent)
         self._accounts = accounts
-        self._selected: Optional[AccountInfo] = None
+        self._selected: Optional[Account] = None
         self._setup_ui()
 
     def _setup_ui(self) -> None:
@@ -80,5 +80,5 @@ class AccountDialog(QDialog):
         self._selected = self._accounts[row]
         self.accept()
 
-    def get_selected_account(self) -> Optional[AccountInfo]:
+    def get_selected_account(self) -> Optional[Account]:
         return self._selected

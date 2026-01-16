@@ -15,7 +15,7 @@ from ctrader_open_api.messages.OpenApiMessages_pb2 import (
 from ctrader_open_api.messages.OpenApiModelMessages_pb2 import ProtoOAPayloadType
 
 from broker.base import BaseCallbacks, LogHistoryMixin, OperationStateMixin, build_callbacks
-from broker.services.app_auth_service import AppAuthService
+from infrastructure.broker.ctrader.services.app_auth_service import AppAuthService
 
 
 class TraderMessage(Protocol):

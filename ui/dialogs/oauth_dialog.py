@@ -11,12 +11,17 @@ from PySide6.QtWidgets import (
 from PySide6.QtCore import Signal, Slot, Qt
 
 from ui.dialogs.base_auth_dialog import BaseAuthDialog, DialogState
-from broker.account import AccountInfo, parse_accounts
-from broker.services.oauth_service import OAuthService
-from broker.services.oauth_login_service import OAuthLoginService
-from broker.services.account_list_service import AccountListService
-from broker.services.app_auth_service import AppAuthService
+from domain import Account
+from application import (
+    AppState,
+    AppAuthServiceLike,
+    BrokerUseCases,
+    EventBus,
+    OAuthLoginServiceLike,
+    OAuthServiceLike,
+)
 from config.constants import ConnectionStatus
+from config.paths import TOKEN_FILE
 from config.settings import OAuthTokens
 from ui.dialogs.account_dialog import AccountDialog
 
@@ -131,21 +136,26 @@ class OAuthDialog(BaseAuthDialog):
 
     def __init__(
         self,
-        token_file: str = "token.json",
+        token_file: str = TOKEN_FILE,
         parent=None,
         auto_connect: bool = False,
-        app_auth_service: Optional[AppAuthService] = None,
-        oauth_service: Optional[OAuthService] = None,
+        app_auth_service: Optional[AppAuthServiceLike] = None,
+        oauth_service: Optional[OAuthServiceLike] = None,
+        use_cases: Optional[BrokerUseCases] = None,
+        event_bus: Optional[EventBus] = None,
+        app_state: Optional[AppState] = None,
     ):
-        super().__init__(token_file, parent, auto_connect)
+        super().__init__(token_file, parent, auto_connect, event_bus)
         self._app_auth_service = app_auth_service
+        self._use_cases: Optional[BrokerUseCases] = use_cases
+        self._event_bus = event_bus
+        self._app_state = app_state
         self._state = OAuthDialogState()
         self._accept_after_accounts = False
 
-        self._service: Optional[OAuthService] = oauth_service
-        self._login_service: Optional[OAuthLoginService] = None
-        self._account_list_service: Optional[AccountListService] = None
-        self._selected_account: Optional[AccountInfo] = None
+        self._service: Optional[OAuthServiceLike] = oauth_service
+        self._login_service: Optional[OAuthLoginServiceLike] = None
+        self._selected_account: Optional[Account] = None
 
         self._setup_ui()
         self._connect_signals()
@@ -221,6 +231,7 @@ class OAuthDialog(BaseAuthDialog):
         self.loginFailed.connect(self._handle_login_error)
         self.accountsReceived.connect(self._handle_accounts_received)
         self.accountsFailed.connect(self._handle_accounts_error)
+        self.statusChanged.connect(self._handle_status_changed)
 
     def _load_initial_data(self) -> None:
         """載入初始資料"""
@@ -228,7 +239,7 @@ class OAuthDialog(BaseAuthDialog):
             tokens = OAuthTokens.from_file(self._token_file)
             self._form.load_tokens(tokens)
             if tokens.account_id and self._selected_account is None:
-                self._selected_account = AccountInfo(
+                self._selected_account = Account(
                     account_id=int(tokens.account_id),
                     is_live=None,
                     trader_login=None,
@@ -258,7 +269,10 @@ class OAuthDialog(BaseAuthDialog):
         redirect_uri = self._form.redirect_uri.text().strip()
 
         try:
-            self._login_service = OAuthLoginService.create(
+            if self._use_cases is None:
+                self._log_error("缺少 broker 用例配置")
+                return
+            self._login_service = self._use_cases.create_oauth_login(
                 token_file=self._token_file,
                 redirect_uri=redirect_uri,
             )
@@ -293,7 +307,10 @@ class OAuthDialog(BaseAuthDialog):
 
         redirect_uri = self._form.redirect_uri.text().strip()
         try:
-            service = OAuthLoginService.create(
+            if self._use_cases is None:
+                self._log_error("缺少 broker 用例配置")
+                return
+            service = self._use_cases.create_oauth_login(
                 token_file=self._token_file,
                 redirect_uri=redirect_uri,
             )
@@ -330,15 +347,13 @@ class OAuthDialog(BaseAuthDialog):
             self._log_error("Access Token 為必填")
             return
 
-        self._account_list_service = AccountListService(
-            app_auth_service=self._app_auth_service,
-            access_token=access_token,
-        )
-        self._account_list_service.set_callbacks(
-            on_accounts_received=lambda a: self.accountsReceived.emit(a),
-            on_error=lambda e: self.accountsFailed.emit(e),
-            on_log=lambda m: self.logReceived.emit(m),
-        )
+        if self._use_cases is None:
+            self._log_error("缺少 broker 用例配置")
+            return
+
+        if self._use_cases.account_list_in_progress():
+            self._log_info("⏳ 正在取得帳戶列表，請稍候")
+            return
 
         self._state.accounts_in_progress = True
         self._refresh_controls()
@@ -346,7 +361,14 @@ class OAuthDialog(BaseAuthDialog):
         from twisted.internet import reactor
         from utils.reactor_manager import reactor_manager
         reactor_manager.ensure_running()
-        reactor.callFromThread(self._account_list_service.fetch)
+        reactor.callFromThread(
+            self._use_cases.fetch_accounts,
+            self._app_auth_service,
+            access_token,
+            lambda a: self.accountsReceived.emit(a),
+            lambda e: self.accountsFailed.emit(e),
+            lambda m: self.logReceived.emit(m),
+        )
 
     @Slot()
     def _start_auth(self) -> None:
@@ -373,7 +395,10 @@ class OAuthDialog(BaseAuthDialog):
             return
 
         try:
-            self._service = OAuthService.create(self._app_auth_service, self._token_file)
+            if self._use_cases is None:
+                self._log_error("缺少 broker 用例配置")
+                return
+            self._service = self._use_cases.create_oauth(self._app_auth_service, self._token_file)
         except Exception as exc:
             self._log_error(str(exc))
             return
@@ -432,15 +457,21 @@ class OAuthDialog(BaseAuthDialog):
         self._state.login_in_progress = False
         self._refresh_controls()
 
+    @Slot(int)
+    def _handle_status_changed(self, status: int) -> None:
+        if self._app_state:
+            self._app_state.update_oauth_status(status)
+        if self._event_bus:
+            self._event_bus.publish("oauth_status", status)
+
     @Slot(list)
     def _handle_accounts_received(self, accounts: list) -> None:
-        parsed_accounts = parse_accounts(accounts)
-        self._log_success(f"取得帳戶數: {len(parsed_accounts)}")
-        if len(parsed_accounts) == 1:
-            self._selected_account = parsed_accounts[0]
-            self._form.account_id.setText(str(parsed_accounts[0].account_id))
-        elif len(parsed_accounts) > 1:
-            dialog = AccountDialog(parsed_accounts, self)
+        self._log_success(f"取得帳戶數: {len(accounts)}")
+        if len(accounts) == 1:
+            self._selected_account = accounts[0]
+            self._form.account_id.setText(str(accounts[0].account_id))
+        elif len(accounts) > 1:
+            dialog = AccountDialog(accounts, self)
             if dialog.exec() == dialog.Accepted:
                 selected = dialog.get_selected_account()
                 if selected:
@@ -450,6 +481,9 @@ class OAuthDialog(BaseAuthDialog):
                 self._log_warning("已取消帳戶選擇")
         self._state.accounts_in_progress = False
         self._refresh_controls()
+        if self._app_state:
+            account_id = None if self._selected_account is None else self._selected_account.account_id
+            self._app_state.update_selected_account(account_id)
         if self._accept_after_accounts and self._selected_account:
             self._accept_after_accounts = False
             self.accept()
@@ -512,10 +546,10 @@ class OAuthDialog(BaseAuthDialog):
     # 公開 API
     # ─────────────────────────────────────────────────────────────
 
-    def get_service(self) -> Optional[OAuthService]:
+    def get_service(self) -> Optional[OAuthServiceLike]:
         """取得認證後的服務實例"""
         return self._service
 
-    def get_selected_account(self) -> Optional[AccountInfo]:
+    def get_selected_account(self) -> Optional[Account]:
         """取得已選擇的帳戶資訊"""
         return self._selected_account

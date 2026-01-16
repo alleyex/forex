@@ -6,6 +6,8 @@ import json
 import os
 from typing import Optional
 
+from application import EventBus
+
 from PySide6.QtWidgets import QDialog
 from PySide6.QtCore import Slot, QTimer
 
@@ -22,11 +24,18 @@ class DialogState:
 class BaseAuthDialog(QDialog):
     """提供共用 UI 與日誌/狀態功能的基底對話框"""
 
-    def __init__(self, token_file: str, parent=None, auto_connect: bool = False):
+    def __init__(
+        self,
+        token_file: str,
+        parent=None,
+        auto_connect: bool = False,
+        event_bus: Optional[EventBus] = None,
+    ):
         super().__init__(parent)
         self._token_file = token_file
         self._auto_connect = auto_connect
         self._state = DialogState()
+        self._event_bus = event_bus
 
         self._log_widget: Optional[LogWidget] = None
         self._status_widget: Optional[StatusWidget] = None
@@ -55,6 +64,8 @@ class BaseAuthDialog(QDialog):
     def _append_log(self, message: str) -> None:
         if self._log_widget is not None:
             self._log_widget.append(message)
+        if self._event_bus:
+            self._event_bus.publish("log", message)
 
     def _log_info(self, message: str) -> None:
         self._append_log(f"[INFO] {message}")

@@ -1,0 +1,35 @@
+"""
+Application bootstrap: set up logging and resolve the broker provider.
+"""
+from typing import Optional, Tuple
+
+from application import AppState, BrokerUseCases, EventBus
+from broker.core import get_provider, register_provider
+from broker.providers import CTraderProvider
+from config import load_config, setup_logging
+from infrastructure.broker.fake import FakeProvider
+
+
+def bootstrap(provider_name: Optional[str] = None) -> Tuple[BrokerUseCases, str, EventBus, AppState]:
+    """
+    Initialize shared infrastructure and return broker use-cases facade.
+
+    Args:
+        provider_name: Optional provider name; defaults to DEFAULT_PROVIDER.
+
+    Returns:
+        (use_cases, provider_name)
+    """
+    config = load_config()
+    setup_logging(level_name=config.log_level)
+    name = provider_name or config.provider
+    register_provider(CTraderProvider())
+    register_provider(FakeProvider())
+    provider = get_provider(name)
+    use_cases = BrokerUseCases(provider)
+    event_bus = EventBus()
+    app_state = AppState()
+    return use_cases, name, event_bus, app_state
+
+
+__all__ = ["bootstrap"]

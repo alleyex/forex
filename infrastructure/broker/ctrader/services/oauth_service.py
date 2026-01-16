@@ -9,8 +9,9 @@ from ctrader_open_api import Client
 from ctrader_open_api.messages.OpenApiMessages_pb2 import ProtoOAAccountAuthReq
 
 from broker.base import BaseCallbacks, BaseService, build_callbacks
-from broker.services.app_auth_service import AppAuthService
+from infrastructure.broker.ctrader.services.app_auth_service import AppAuthService
 from config.constants import ConnectionStatus, MessageType
+from config.paths import TOKEN_FILE
 from config.settings import OAuthTokens
 
 
@@ -32,7 +33,7 @@ class OAuthService(BaseService[OAuthServiceCallbacks]):
     處理 OAuth 帳戶認證流程
 
     使用方式：
-        service = OAuthService.create(app_auth_service, "token.json")
+        service = OAuthService.create(app_auth_service, TOKEN_FILE)
         service.set_callbacks(on_oauth_success=..., on_error=...)
         service.connect()
     """
@@ -50,7 +51,7 @@ class OAuthService(BaseService[OAuthServiceCallbacks]):
         self._timeout_timer: Optional[threading.Timer] = None
 
     @classmethod
-    def create(cls, app_auth_service: AppAuthService, token_file: str) -> "OAuthService":
+    def create(cls, app_auth_service: AppAuthService, token_file: str = TOKEN_FILE) -> "OAuthService":
         """工廠方法：從設定檔建立服務實例"""
         tokens = OAuthTokens.from_file(token_file)
         client = app_auth_service.get_client()

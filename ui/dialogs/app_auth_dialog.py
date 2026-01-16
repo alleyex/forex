@@ -10,8 +10,9 @@ from PySide6.QtWidgets import (
 from PySide6.QtCore import Signal, Slot, Qt
 
 from ui.dialogs.base_auth_dialog import BaseAuthDialog
-from broker.services.app_auth_service import AppAuthService
+from application import AppState, AppAuthServiceLike, BrokerUseCases, EventBus
 from config.constants import ConnectionStatus
+from config.paths import TOKEN_FILE
 from config.settings import AppCredentials
 from utils.reactor_manager import reactor_manager
 
@@ -88,13 +89,19 @@ class AppAuthDialog(BaseAuthDialog):
 
     def __init__(
         self, 
-        token_file: str = "token.json", 
+        token_file: str = TOKEN_FILE, 
         parent=None, 
         auto_connect: bool = False,
-        app_auth_service: Optional[AppAuthService] = None,
+        app_auth_service: Optional[AppAuthServiceLike] = None,
+        use_cases: Optional[BrokerUseCases] = None,
+        event_bus: Optional[EventBus] = None,
+        app_state: Optional[AppState] = None,
     ):
-        super().__init__(token_file, parent, auto_connect)
-        self._service: Optional[AppAuthService] = app_auth_service
+        super().__init__(token_file, parent, auto_connect, event_bus)
+        self._service: Optional[AppAuthServiceLike] = app_auth_service
+        self._use_cases: Optional[BrokerUseCases] = use_cases
+        self._event_bus = event_bus
+        self._app_state = app_state
         
         self._setup_ui()
         self._connect_signals()
@@ -166,7 +173,11 @@ class AppAuthDialog(BaseAuthDialog):
         
         # 建立服務
         try:
-            self._service = AppAuthService.create(data["host_type"], self._token_file)
+            use_cases = self._use_cases
+            if use_cases is None:
+                self._log_error("缺少 broker 用例配置")
+                return
+            self._service = use_cases.create_app_auth(data["host_type"], self._token_file)
         except (FileNotFoundError, ValueError) as e:
             self._log_error(str(e))
             return
@@ -208,6 +219,10 @@ class AppAuthDialog(BaseAuthDialog):
     @Slot(int)
     def _handle_status_changed(self, status: int) -> None:
         """同步按鈕狀態與認證狀態"""
+        if self._app_state:
+            self._app_state.update_app_status(status)
+        if self._event_bus:
+            self._event_bus.publish("app_status", status)
         if status >= ConnectionStatus.APP_AUTHENTICATED:
             self._set_controls_enabled(False)
             return
@@ -263,6 +278,6 @@ class AppAuthDialog(BaseAuthDialog):
     # 公開 API
     # ─────────────────────────────────────────────────────────────
 
-    def get_service(self) -> Optional[AppAuthService]:
+    def get_service(self) -> Optional[AppAuthServiceLike]:
         """取得認證後的服務實例"""
         return self._service

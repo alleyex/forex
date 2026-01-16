@@ -38,11 +38,3 @@ class LogWidget(QWidget):
         self._text_edit.append(message)
         scrollbar = self._text_edit.verticalScrollBar()
         scrollbar.setValue(scrollbar.maximum())
-    
-    def clear(self) -> None:
-        """清除所有訊息"""
-        self._text_edit.clear()
-    
-    def get_text(self) -> str:
-        """取得所有訊息文字"""
-        return self._text_edit.toPlainText()

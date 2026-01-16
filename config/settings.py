@@ -96,11 +96,3 @@ class OAuthTokens:
 
         with open(filepath, "w", encoding="utf-8") as file:
             json.dump(data, file, indent=2, ensure_ascii=False)
-
-
-@dataclass 
-class ConnectionConfig:
-    """Connection configuration"""
-    token_file: str = "token.json"
-
-        

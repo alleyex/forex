@@ -4,6 +4,7 @@ V2: 共用基礎類別與協定定義（Protocol + Generic + 型別安全）
 from __future__ import annotations
 
 from dataclasses import dataclass
+import logging
 from typing import (
     Callable,
     Generic,
@@ -24,6 +25,8 @@ TClient = TypeVar("TClient")
 TMsg = TypeVar("TMsg")
 TCb = TypeVar("TCb", bound="StatusCallbacks")
 TCallbacks = TypeVar("TCallbacks", bound="BaseCallbacks")
+
+logger = logging.getLogger(__name__)
 
 
 # --- Callback Protocols (型別安全的回呼介面) ---
@@ -68,7 +71,7 @@ class LoggingMixin(Generic[TCb]):
         if cb and cb.on_log:
             cb.on_log(message)
         else:
-            print(message)
+            logger.info(message)
 
     def _emit_error(self, error: str) -> None:
         self._log(f"❌ {error}")
@@ -91,9 +94,6 @@ class LogHistoryMixin(LoggingMixin[TCb], Generic[TCb]):
         if cb and cb.on_log:
             for message in self._log_history:
                 cb.on_log(message)
-
-    def get_log_history(self) -> list[str]:
-        return list(self._log_history)
 
     def clear_log_history(self) -> None:
         self._log_history.clear()
@@ -133,16 +133,6 @@ class OperationStateMixin:
 
     def _end_operation(self) -> None:
         self._in_progress = False
-
-    # 可選：提供一個安全的 helper，避免忘記 end_operation
-    def _run_guarded(self, fn: Callable[[], None]) -> bool:
-        if not self._start_operation():
-            return False
-        try:
-            fn()
-            return True
-        finally:
-            self._end_operation()
 
 
 class BaseService(LogHistoryMixin[TCb], StatusMixin[TCb], OperationStateMixin, ABC, Generic[TCb]):

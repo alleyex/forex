@@ -45,10 +45,5 @@ class ReactorManager:
             self._thread.start()
             self._running = True
 
-    @property
-    def is_running(self) -> bool:
-        return self._running
-
-
 # Global instance
 reactor_manager = ReactorManager()
