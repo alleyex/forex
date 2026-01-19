@@ -1,5 +1,6 @@
 # ui/main_window.py
 from typing import Optional
+import sys
 
 from PySide6.QtWidgets import (
     QMainWindow,
@@ -7,11 +8,15 @@ from PySide6.QtWidgets import (
     QHBoxLayout,
     QLabel,
     QMessageBox,
+    QDockWidget,
+    QStackedWidget,
 )
-from PySide6.QtCore import Slot, Signal, QTimer
+from PySide6.QtCore import Slot, Signal, QTimer, QProcess, QProcessEnvironment, Qt
 from PySide6.QtGui import QAction, QFont
+from PySide6.QtWidgets import QStyle
 
 from ui.widgets.trade_panel import TradePanel
+from ui.widgets.training_panel import TrainingPanel
 from ui.widgets.log_panel import LogPanel
 from ui.dialogs.app_auth_dialog import AppAuthDialog
 from ui.dialogs.oauth_dialog import OAuthDialog
@@ -72,6 +77,7 @@ class MainWindow(QMainWindow):
         self._reconnect_timer.setInterval(5000)
         self._reconnect_timer.timeout.connect(self._attempt_reconnect)
         self._reconnect_logged = False
+        self._ppo_process: Optional[QProcess] = None
 
         self._setup_ui()
         self._connect_signals()
@@ -87,20 +93,30 @@ class MainWindow(QMainWindow):
     def _setup_ui(self) -> None:
         """Initialize UI components"""
         self.setWindowTitle("外匯交易應用程式")
-        self.setMinimumSize(1000, 600)
-
-        central = QWidget()
-        layout = QHBoxLayout(central)
-        layout.setContentsMargins(10, 10, 10, 10)
-        layout.setSpacing(10)
+        self.setMinimumSize(1280, 720)
+        self.resize(1280, 720)
 
         self._trade_panel = TradePanel()
+        self._training_panel = TrainingPanel()
+        self._stack = QStackedWidget()
+
+        trade_container = QWidget()
+        trade_layout = QHBoxLayout(trade_container)
+        trade_layout.setContentsMargins(10, 10, 10, 10)
+        trade_layout.setSpacing(10)
+        trade_layout.addWidget(self._trade_panel)
+
+        self._stack.addWidget(trade_container)
+        self._stack.addWidget(self._training_panel)
+
         self._log_panel = LogPanel()
+        self._log_dock = QDockWidget("日誌面板", self)
+        self._log_dock.setObjectName("log_dock")
+        self._log_dock.setWidget(self._log_panel)
+        self._log_dock.setAllowedAreas(Qt.BottomDockWidgetArea | Qt.RightDockWidgetArea)
 
-        layout.addWidget(self._trade_panel, stretch=2)
-        layout.addWidget(self._log_panel, stretch=3)
-
-        self.setCentralWidget(central)
+        self.setCentralWidget(self._stack)
+        self.addDockWidget(Qt.BottomDockWidgetArea, self._log_dock)
         self.logRequested.connect(self._handle_log_message)
         self.accountsReceived.connect(self._handle_accounts_received)
         self.fundsReceived.connect(self._handle_funds_received)
@@ -121,6 +137,9 @@ class MainWindow(QMainWindow):
         self._trade_panel.trendbar_toggle_clicked.connect(self._on_trendbar_toggle_clicked)
         self._trade_panel.trendbar_history_clicked.connect(self._on_trendbar_history_clicked)
         self._action_fetch_account_info.triggered.connect(self._on_fetch_account_info)
+        self._action_train_ppo.triggered.connect(self._on_train_ppo_clicked)
+        self._training_panel.start_requested.connect(self._start_ppo_training)
+        self._action_toggle_log.toggled.connect(self._toggle_log_dock)
 
     def _setup_menu_toolbar(self) -> None:
         """Create menu and toolbar actions"""
@@ -130,7 +149,7 @@ class MainWindow(QMainWindow):
         self._action_oauth = auth_menu.addAction("OAuth 認證")
 
         toolbar = self.addToolBar("認證")
-        toolbar.addAction(self._action_oauth)
+        toolbar.setToolButtonStyle(Qt.ToolButtonTextBesideIcon)
         toolbar.setFont(QFont("", 12))
 
         self._action_app_auth.triggered.connect(self._open_app_auth_dialog)
@@ -138,6 +157,13 @@ class MainWindow(QMainWindow):
 
         self._action_fetch_account_info = QAction("基本資料", self)
         toolbar.addAction(self._action_fetch_account_info)
+        self._action_train_ppo = QAction("PPO訓練", self)
+        toolbar.addAction(self._action_train_ppo)
+        self._action_toggle_log = QAction("日誌面板", self)
+        self._action_toggle_log.setCheckable(True)
+        self._action_toggle_log.setChecked(True)
+        self._action_toggle_log.setText("日誌")
+        toolbar.addAction(self._action_toggle_log)
 
     @Slot()
     def _on_trendbar_toggle_clicked(self) -> None:
@@ -145,6 +171,10 @@ class MainWindow(QMainWindow):
             self._stop_trendbar()
         else:
             self._start_trendbar()
+
+    @Slot(bool)
+    def _toggle_log_dock(self, visible: bool) -> None:
+        self._log_dock.setVisible(visible)
 
     def _start_trendbar(self) -> None:
         if not self._service:
@@ -207,6 +237,78 @@ class MainWindow(QMainWindow):
         reactor.callFromThread(self._trendbar_service.unsubscribe)
         self._trendbar_active = False
         self._trade_panel.set_trendbar_active(False)
+
+    @Slot()
+    def _on_train_ppo_clicked(self) -> None:
+        self._stack.setCurrentWidget(self._training_panel)
+
+    @Slot(dict)
+    def _start_ppo_training(self, params: dict) -> None:
+        if self._ppo_process and self._ppo_process.state() != QProcess.NotRunning:
+            self._log_panel.add_log("ℹ️ PPO 訓練仍在進行中")
+            return
+
+        self._training_panel.reset_metrics()
+        self._ppo_process = QProcess(self)
+        env = QProcessEnvironment.systemEnvironment()
+        env.insert("PYTHONPATH", ".")
+        self._ppo_process.setProcessEnvironment(env)
+
+        self._ppo_process.readyReadStandardOutput.connect(self._on_ppo_stdout)
+        self._ppo_process.readyReadStandardError.connect(self._on_ppo_stderr)
+        self._ppo_process.finished.connect(self._on_ppo_finished)
+
+        self._log_panel.add_log("▶️ 開始 PPO 訓練")
+        data_path = "data/raw_history/1_M5_2024-01-21_2205-2026-01-19_0215.csv"
+        self._ppo_process.start(
+            sys.executable,
+            [
+                "ml/rl/train/train_ppo.py",
+                "--data",
+                data_path,
+                "--total-steps",
+                str(params["total_steps"]),
+                "--learning-rate",
+                str(params["learning_rate"]),
+                "--gamma",
+                str(params["gamma"]),
+                "--n-steps",
+                str(params["n_steps"]),
+                "--batch-size",
+                str(params["batch_size"]),
+                "--ent-coef",
+                str(params["ent_coef"]),
+                "--episode-length",
+                str(params["episode_length"]),
+                "--eval-split",
+                str(params["eval_split"]),
+            ],
+        )
+
+    @Slot()
+    def _on_ppo_stdout(self) -> None:
+        if not self._ppo_process:
+            return
+        output = bytes(self._ppo_process.readAllStandardOutput()).decode(errors="replace")
+        for line in output.splitlines():
+            if line.strip():
+                self._log_panel.add_log(line)
+                self._training_panel.ingest_log_line(line)
+
+    @Slot()
+    def _on_ppo_stderr(self) -> None:
+        if not self._ppo_process:
+            return
+        output = bytes(self._ppo_process.readAllStandardError()).decode(errors="replace")
+        for line in output.splitlines():
+            if line.strip():
+                self._log_panel.add_log(f"⚠️ {line}")
+
+    @Slot(int, QProcess.ExitStatus)
+    def _on_ppo_finished(self, exit_code: int, exit_status: QProcess.ExitStatus) -> None:
+        status = "完成" if exit_status == QProcess.NormalExit else "異常結束"
+        self._log_panel.add_log(f"⏹️ PPO 訓練{status} (exit={exit_code})")
+        self._ppo_process = None
 
     @Slot()
     def _on_trendbar_history_clicked(self) -> None:
