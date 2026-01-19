@@ -25,6 +25,7 @@ from application import (
     TrendbarHistoryServiceLike,
     TrendbarServiceLike,
 )
+from application.broker.history_pipeline import HistoryPipeline
 from domain import AccountFundsSnapshot
 from config.settings import OAuthTokens
 from config.paths import TOKEN_FILE
@@ -39,6 +40,10 @@ class MainWindow(QMainWindow):
     logRequested = Signal(str)
     accountsReceived = Signal(list, object)
     fundsReceived = Signal(object)
+    appAuthStatusChanged = Signal(int)
+    oauthStatusChanged = Signal(int)
+    appAuthSucceeded = Signal(object)
+    oauthSucceeded = Signal(object)
 
     def __init__(
         self,
@@ -57,6 +62,7 @@ class MainWindow(QMainWindow):
         self._oauth_service = oauth_service
         self._trendbar_service: Optional[TrendbarServiceLike] = None
         self._trendbar_history_service: Optional[TrendbarHistoryServiceLike] = None
+        self._history_pipeline: Optional[HistoryPipeline] = None
         self._trendbar_active = False
         self._trendbar_symbol_id = 1
         self._price_digits = 5
@@ -98,6 +104,10 @@ class MainWindow(QMainWindow):
         self.logRequested.connect(self._handle_log_message)
         self.accountsReceived.connect(self._handle_accounts_received)
         self.fundsReceived.connect(self._handle_funds_received)
+        self.appAuthStatusChanged.connect(self._handle_app_auth_status_changed)
+        self.oauthStatusChanged.connect(self._handle_oauth_status_changed)
+        self.appAuthSucceeded.connect(self._handle_app_auth_success)
+        self.oauthSucceeded.connect(self._handle_oauth_success)
         status_bar = self.statusBar()
         self._app_auth_status_label = QLabel(self._format_app_auth_status())
         self._oauth_status_label = QLabel(self._format_oauth_status())
@@ -219,30 +229,28 @@ class MainWindow(QMainWindow):
             self._log_panel.add_log("⚠️ 缺少帳戶 ID")
             return
 
-        if self._trendbar_history_service is None:
+        if self._history_pipeline is None:
             if self._use_cases is None:
                 self._log_panel.add_log("⚠️ 缺少 broker 用例配置")
                 return
-            self._trendbar_history_service = self._use_cases.create_trendbar_history(
-                app_auth_service=self._service
+            self._history_pipeline = HistoryPipeline(
+                broker_use_cases=self._use_cases,
+                app_auth_service=self._service,
             )
-
-        self._trendbar_history_service.clear_log_history()
-        self._trendbar_history_service.set_callbacks(
-            on_history_received=self._handle_trendbar_history,
-            on_error=lambda e: self.logRequested.emit(f"⚠️ 歷史資料錯誤: {e}"),
-            on_log=self.logRequested.emit,
-        )
 
         reactor_manager.ensure_running()
         from twisted.internet import reactor
         bars_per_day = 24 * 12
         two_years_bars = 365 * 2 * bars_per_day
         reactor.callFromThread(
-            self._trendbar_history_service.fetch,
+            self._history_pipeline.fetch_to_raw,
             tokens.account_id,
             self._trendbar_symbol_id,
             two_years_bars,
+            timeframe="M5",
+            on_saved=lambda path: self.logRequested.emit(f"✅ 已儲存歷史資料：{path}"),
+            on_error=lambda e: self.logRequested.emit(f"⚠️ 歷史資料錯誤: {e}"),
+            on_log=self.logRequested.emit,
         )
 
     def _handle_trendbar_history(self, bars: list) -> None:
@@ -384,9 +392,9 @@ class MainWindow(QMainWindow):
         self._trendbar_active = False
         self._trade_panel.set_trendbar_active(False)
         self._service.set_callbacks(
-            on_app_auth_success=self._handle_app_auth_success,
+            on_app_auth_success=lambda c: self.appAuthSucceeded.emit(c),
             on_log=self.logRequested.emit,
-            on_status_changed=self._handle_app_auth_status_changed,
+            on_status_changed=lambda s: self.appAuthStatusChanged.emit(int(s)),
         )
         self._app_auth_status_label.setText(self._format_app_auth_status())
         if self._app_state:
@@ -398,9 +406,9 @@ class MainWindow(QMainWindow):
         """Set the OAuth service"""
         self._oauth_service = service
         self._oauth_service.set_callbacks(
-            on_oauth_success=self._handle_oauth_success,
+            on_oauth_success=lambda t: self.oauthSucceeded.emit(t),
             on_log=self.logRequested.emit,
-            on_status_changed=self._handle_oauth_status_changed,
+            on_status_changed=lambda s: self.oauthStatusChanged.emit(int(s)),
         )
         self._oauth_status_label.setText(self._format_oauth_status())
         if self._app_state:

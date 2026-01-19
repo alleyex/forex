@@ -100,7 +100,6 @@ class TrendbarHistoryService(LogHistoryMixin[TrendbarHistoryCallbacks], Operatio
         self._period = ProtoOATrendbarPeriod.M5
         self._prepare_request(count, use_seconds=False, window_minutes=count * 5)
         self._ensure_spot_subscription()
-        self._await_spot_subscribe = False
         self._maybe_send_request()
 
     def _prepare_request(self, count: int, *, use_seconds: bool, window_minutes: int) -> None:
@@ -190,14 +189,18 @@ class TrendbarHistoryService(LogHistoryMixin[TrendbarHistoryCallbacks], Operatio
         open_price = low + int(bar.deltaOpen)
         close_price = low + int(bar.deltaClose)
         high = low + int(bar.deltaHigh)
-        ts = int(bar.utcTimestampInMinutes) * 60
+        ts_minutes = int(bar.utcTimestampInMinutes)
+        ts = ts_minutes * 60
         ts_text = datetime.fromtimestamp(ts, tz=timezone.utc).strftime("%Y-%m-%d %H:%M")
         return {
+            "utc_timestamp_minutes": ts_minutes,
             "timestamp": ts_text,
             "open": open_price,
             "high": high,
             "low": low,
             "close": close_price,
+            "volume": int(getattr(bar, "volume", 0)),
+            "period": int(getattr(bar, "period", 0)),
         }
 
     def _on_error(self, msg: ErrorMessage) -> None:

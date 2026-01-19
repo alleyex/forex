@@ -1,6 +1,8 @@
 # main.py
 import sys
 from PySide6.QtWidgets import QApplication
+from PySide6.QtCore import qInstallMessageHandler
+import traceback
 
 from bootstrap import bootstrap
 from ui.dialogs.app_auth_dialog import AppAuthDialog
@@ -9,10 +11,19 @@ from ui.main_window import MainWindow
 from config import load_config
 
 
+def _qt_message_handler(mode, context, message) -> None:
+    location = f"{context.file}:{context.line}" if context.file else "<unknown>"
+    print(f"Qt[{mode}] {message} ({location})")
+    if "QObject::startTimer" in message:
+        print("Python stack (most recent call last):")
+        print("".join(traceback.format_stack()))
+
+
 def main() -> int:
     """Application entry point"""
     use_cases, _, event_bus, app_state = bootstrap()
     config = load_config()
+    qInstallMessageHandler(_qt_message_handler)
     app = QApplication(sys.argv)
     app.setStyle("Fusion")  # Consistent cross-platform look
     
