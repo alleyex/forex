@@ -8,3 +8,7 @@ __pycache__/
 .ruff_cache/
 *.csv
 ml/rl/models/
+data/raw_history/
+token.json
+__pycache__/
+*.pyc
