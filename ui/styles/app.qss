@@ -1,0 +1,33 @@
+QDialog {
+    background-color: #2f2f2f;
+    color: #e6e6e6;
+}
+
+QGroupBox {
+    font-weight: 600;
+    margin-top: 12px;
+}
+
+QGroupBox::title {
+    subcontrol-origin: margin;
+    left: 10px;
+    padding: 0 6px;
+}
+
+QLabel[class="dialog_hint"] {
+    color: #b3b3b3;
+    font-size: 12px;
+}
+
+QDialog QLineEdit,
+QDialog QComboBox,
+QDialog QDateTimeEdit {
+    padding: 6px 8px;
+    min-height: 28px;
+}
+
+QDialog QDialogButtonBox QPushButton {
+    min-width: 96px;
+    min-height: 30px;
+    padding: 6px 14px;
+}

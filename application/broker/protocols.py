@@ -97,6 +97,24 @@ class AccountFundsUseCaseLike(Protocol):
         ...
 
 
+class SymbolListUseCaseLike(Protocol):
+    in_progress: bool
+
+    def set_callbacks(self, on_symbols_received=None, on_error=None, on_log=None) -> None:
+        ...
+
+    def clear_log_history(self) -> None:
+        ...
+
+    def fetch(
+        self,
+        account_id: int,
+        include_archived: bool = False,
+        timeout_seconds: Optional[int] = None,
+    ) -> None:
+        ...
+
+
 class TrendbarServiceLike(Protocol):
     in_progress: bool
 
@@ -120,7 +138,15 @@ class TrendbarHistoryServiceLike(Protocol):
     def clear_log_history(self) -> None:
         ...
 
-    def fetch(self, account_id: int, symbol_id: int, count: int = 100) -> None:
+    def fetch(
+        self,
+        account_id: int,
+        symbol_id: int,
+        count: int = 100,
+        timeframe: str = "M5",
+        from_ts: Optional[int] = None,
+        to_ts: Optional[int] = None,
+    ) -> None:
         ...
 
 
@@ -154,6 +180,11 @@ class BrokerUseCaseFactory(Protocol):
         ...
 
     def create_account_funds_service(self, app_auth_service: AppAuthServiceLike) -> AccountFundsUseCaseLike:
+        ...
+
+    def create_symbol_list_service(
+        self, app_auth_service: AppAuthServiceLike
+    ) -> SymbolListUseCaseLike:
         ...
 
     def create_trendbar_service(self, app_auth_service: AppAuthServiceLike) -> TrendbarServiceLike:

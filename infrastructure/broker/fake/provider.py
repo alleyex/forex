@@ -151,9 +151,40 @@ class FakeTrendbarHistoryService:
     def clear_log_history(self) -> None:
         pass
 
-    def fetch(self, account_id: int, symbol_id: int, count: int = 100) -> None:
+    def fetch(
+        self,
+        account_id: int,
+        symbol_id: int,
+        count: int = 100,
+        timeframe: str = "M5",
+        from_ts: Optional[int] = None,
+        to_ts: Optional[int] = None,
+    ) -> None:
         if self._on_history_received:
             self._on_history_received([])
+
+
+@dataclass
+class FakeSymbolListService:
+    app_auth_service: FakeAppAuthService
+    in_progress: bool = False
+
+    def set_callbacks(self, on_symbols_received=None, on_error=None, on_log=None) -> None:
+        self._on_symbols_received = on_symbols_received
+        self._on_error = on_error
+        self._on_log = on_log
+
+    def clear_log_history(self) -> None:
+        pass
+
+    def fetch(
+        self,
+        account_id: int,
+        include_archived: bool = False,
+        timeout_seconds: Optional[int] = None,
+    ) -> None:
+        if self._on_symbols_received:
+            self._on_symbols_received([])
 
 
 class FakeProvider(BrokerProvider):
@@ -175,6 +206,9 @@ class FakeProvider(BrokerProvider):
 
     def create_account_funds_service(self, app_auth_service):
         return FakeAccountFundsService(app_auth_service=app_auth_service)
+
+    def create_symbol_list_service(self, app_auth_service):
+        return FakeSymbolListService(app_auth_service=app_auth_service)
 
     def create_trendbar_service(self, app_auth_service):
         return FakeTrendbarService(app_auth_service=app_auth_service)

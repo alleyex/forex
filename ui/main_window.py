@@ -11,7 +11,7 @@ from PySide6.QtWidgets import (
     QDockWidget,
     QStackedWidget,
 )
-from PySide6.QtCore import Slot, Signal, QTimer, QProcess, QProcessEnvironment, Qt
+from PySide6.QtCore import Slot, Signal, QTimer, Qt
 from PySide6.QtGui import QAction, QFont
 from PySide6.QtWidgets import QStyle
 
@@ -19,7 +19,9 @@ from ui.widgets.trade_panel import TradePanel
 from ui.widgets.simulation_panel import SimulationPanel
 from ui.widgets.training_panel import TrainingPanel
 from ui.widgets.log_panel import LogPanel
+from ui.controllers import PPOTrainingController, SimulationController, TrendbarController
 from ui.dialogs.app_auth_dialog import AppAuthDialog
+from ui.controllers import HistoryDownloadController
 from ui.dialogs.oauth_dialog import OAuthDialog
 
 from application import (
@@ -29,9 +31,7 @@ from application import (
     EventBus,
     OAuthServiceLike,
     TrendbarHistoryServiceLike,
-    TrendbarServiceLike,
 )
-from application.broker.history_pipeline import HistoryPipeline
 from domain import AccountFundsSnapshot
 from config.settings import OAuthTokens
 from config.paths import TOKEN_FILE
@@ -66,10 +66,9 @@ class MainWindow(QMainWindow):
         self._app_state = app_state
         self._service = service
         self._oauth_service = oauth_service
-        self._trendbar_service: Optional[TrendbarServiceLike] = None
         self._trendbar_history_service: Optional[TrendbarHistoryServiceLike] = None
-        self._history_pipeline: Optional[HistoryPipeline] = None
-        self._trendbar_active = False
+        self._history_download_controller: Optional[HistoryDownloadController] = None
+        self._trendbar_controller: Optional[TrendbarController] = None
         self._trendbar_symbol_id = 1
         self._price_digits = 5
         self._app_auth_dialog_open = False
@@ -78,8 +77,8 @@ class MainWindow(QMainWindow):
         self._reconnect_timer.setInterval(5000)
         self._reconnect_timer.timeout.connect(self._attempt_reconnect)
         self._reconnect_logged = False
-        self._ppo_process: Optional[QProcess] = None
-        self._sim_process: Optional[QProcess] = None
+        self._ppo_controller: Optional[PPOTrainingController] = None
+        self._simulation_controller: Optional[SimulationController] = None
 
         self._setup_ui()
         self._connect_signals()
@@ -138,26 +137,32 @@ class MainWindow(QMainWindow):
 
     def _connect_signals(self) -> None:
         """Connect panel signals"""
-        self._trade_panel.trendbar_toggle_clicked.connect(self._on_trendbar_toggle_clicked)
-        self._trade_panel.trendbar_history_clicked.connect(self._on_trendbar_history_clicked)
-        self._trade_panel.basic_info_clicked.connect(self._on_fetch_account_info)
+        self._trade_panel.trendbar_toggle_requested.connect(self._on_trendbar_toggle_requested)
+        self._trade_panel.history_download_requested.connect(self._on_history_download_requested)
+        self._trade_panel.account_info_requested.connect(self._on_fetch_account_info)
+        self._trade_panel.symbol_list_requested.connect(self._on_symbol_list_requested)
         self._action_fetch_account_info.triggered.connect(self._on_fetch_account_info)
         self._action_train_ppo.triggered.connect(self._on_train_ppo_clicked)
         self._training_panel.start_requested.connect(self._start_ppo_training)
         self._action_toggle_log.toggled.connect(self._toggle_log_dock)
         self._action_simulation.triggered.connect(self._on_simulation_clicked)
         self._simulation_panel.start_requested.connect(self._start_simulation)
+        self._action_history_download.triggered.connect(self._open_history_download_dialog)
 
     def _setup_menu_toolbar(self) -> None:
         """Create menu and toolbar actions"""
         auth_menu = self.menuBar().addMenu("認證")
+        style = self.style()
 
         self._action_app_auth = auth_menu.addAction("App 認證")
         self._action_oauth = auth_menu.addAction("OAuth 認證")
 
         toolbar = self.addToolBar("認證")
         toolbar.setToolButtonStyle(Qt.ToolButtonTextBesideIcon)
-        toolbar.setFont(QFont("", 12))
+        toolbar.setFont(QFont("", 14))
+        toolbar.setStyleSheet(
+            "QToolButton { font-size: 14px; padding: 4px 12px; min-height: 28px; }"
+        )
 
         self._action_app_auth.triggered.connect(self._open_app_auth_dialog)
         self._action_oauth.triggered.connect(self._open_oauth_dialog)
@@ -168,6 +173,8 @@ class MainWindow(QMainWindow):
         toolbar.addAction(self._action_train_ppo)
         self._action_simulation = QAction("回放", self)
         toolbar.addAction(self._action_simulation)
+        self._action_history_download = QAction("歷史資料", self)
+        toolbar.addAction(self._action_history_download)
         self._action_toggle_log = QAction("日誌面板", self)
         self._action_toggle_log.setCheckable(True)
         self._action_toggle_log.setChecked(True)
@@ -175,77 +182,15 @@ class MainWindow(QMainWindow):
         toolbar.addAction(self._action_toggle_log)
 
     @Slot()
-    def _on_trendbar_toggle_clicked(self) -> None:
-        if self._trendbar_active:
-            self._stop_trendbar()
-        else:
-            self._start_trendbar()
+    def _on_trendbar_toggle_requested(self) -> None:
+        controller = self._get_trendbar_controller()
+        if controller is None:
+            return
+        controller.toggle(self._trendbar_symbol_id)
 
     @Slot(bool)
     def _toggle_log_dock(self, visible: bool) -> None:
         self._log_dock.setVisible(visible)
-
-    def _start_trendbar(self) -> None:
-        if not self._service:
-            self._log_panel.add_log("⚠️ 尚未完成 App 認證")
-            return
-        if not self._is_app_authenticated():
-            self._log_panel.add_log("⚠️ App 認證已中斷，請稍候自動重連")
-            return
-        if not self._oauth_service or self._oauth_service.status != ConnectionStatus.ACCOUNT_AUTHENTICATED:
-            self._log_panel.add_log("⚠️ 尚未完成 OAuth 帳戶認證")
-            return
-
-        try:
-            tokens = OAuthTokens.from_file(TOKEN_FILE)
-        except Exception as exc:
-            self._log_panel.add_log(f"⚠️ 無法讀取 OAuth Token: {exc}")
-            return
-        if not tokens.account_id:
-            self._log_panel.add_log("⚠️ 缺少帳戶 ID")
-            return
-
-        if self._trendbar_service is None:
-            if self._use_cases is None:
-                self._log_panel.add_log("⚠️ 缺少 broker 用例配置")
-                return
-            self._trendbar_service = self._use_cases.create_trendbar(app_auth_service=self._service)
-
-        self._trendbar_service.clear_log_history()
-        self._trendbar_service.set_callbacks(
-            on_trendbar=lambda data: self.logRequested.emit(
-                f"📊 M1 {data['timestamp']} "
-                f"O={self._format_price(data['open'])} "
-                f"H={self._format_price(data['high'])} "
-                f"L={self._format_price(data['low'])} "
-                f"C={self._format_price(data['close'])}"
-            ),
-            on_error=lambda e: self.logRequested.emit(f"⚠️ 趨勢棒錯誤: {e}"),
-            on_log=self.logRequested.emit,
-        )
-
-        reactor_manager.ensure_running()
-        from twisted.internet import reactor
-        reactor.callFromThread(
-            self._trendbar_service.subscribe,
-            tokens.account_id,
-            self._trendbar_symbol_id,
-        )
-        self._trendbar_active = True
-        self._trade_panel.set_trendbar_active(True)
-        self._log_panel.add_log(f"📈 已開始 M1 趨勢棒：symbol {self._trendbar_symbol_id}")
-
-    def _stop_trendbar(self) -> None:
-        if not self._trendbar_service or not self._trendbar_service.in_progress:
-            self._log_panel.add_log("ℹ️ 目前沒有趨勢棒訂閱")
-            self._trendbar_active = False
-            self._trade_panel.set_trendbar_active(False)
-            return
-        reactor_manager.ensure_running()
-        from twisted.internet import reactor
-        reactor.callFromThread(self._trendbar_service.unsubscribe)
-        self._trendbar_active = False
-        self._trade_panel.set_trendbar_active(False)
 
     @Slot()
     def _on_train_ppo_clicked(self) -> None:
@@ -257,235 +202,110 @@ class MainWindow(QMainWindow):
 
     @Slot(dict)
     def _start_ppo_training(self, params: dict) -> None:
-        if self._ppo_process and self._ppo_process.state() != QProcess.NotRunning:
-            self._log_panel.add_log("ℹ️ PPO 訓練仍在進行中")
-            return
-
         self._training_panel.reset_metrics()
-        self._ppo_process = QProcess(self)
-        env = QProcessEnvironment.systemEnvironment()
-        env.insert("PYTHONPATH", ".")
-        self._ppo_process.setProcessEnvironment(env)
-
-        self._ppo_process.readyReadStandardOutput.connect(self._on_ppo_stdout)
-        self._ppo_process.readyReadStandardError.connect(self._on_ppo_stderr)
-        self._ppo_process.finished.connect(self._on_ppo_finished)
-
-        self._log_panel.add_log("▶️ 開始 PPO 訓練")
         data_path = "data/raw_history/1_M5_2024-01-21_2205-2026-01-19_0215.csv"
-        args = [
-            "ml/rl/train/train_ppo.py",
-            "--data",
-            data_path,
-            "--total-steps",
-            str(params["total_steps"]),
-            "--learning-rate",
-            str(params["learning_rate"]),
-            "--gamma",
-            str(params["gamma"]),
-            "--n-steps",
-            str(params["n_steps"]),
-            "--batch-size",
-            str(params["batch_size"]),
-            "--ent-coef",
-            str(params["ent_coef"]),
-            "--episode-length",
-            str(params["episode_length"]),
-            "--eval-split",
-            str(params["eval_split"]),
-        ]
-        if params.get("resume"):
-            args.append("--resume")
-        self._ppo_process.start(sys.executable, args)
+        controller = self._get_ppo_controller()
+        if controller is None:
+            return
+        controller.start(params, data_path)
 
     @Slot(dict)
     def _start_simulation(self, params: dict) -> None:
-        if self._sim_process and self._sim_process.state() != QProcess.NotRunning:
-            self._log_panel.add_log("ℹ️ 回放模擬仍在進行中")
+        controller = self._get_simulation_controller()
+        if controller is None:
             return
-
-        self._simulation_panel.reset_plot()
-        self._sim_process = QProcess(self)
-        env = QProcessEnvironment.systemEnvironment()
-        env.insert("PYTHONPATH", ".")
-        self._sim_process.setProcessEnvironment(env)
-
-        self._sim_process.readyReadStandardOutput.connect(self._on_sim_stdout)
-        self._sim_process.readyReadStandardError.connect(self._on_sim_stderr)
-        self._sim_process.finished.connect(self._on_sim_finished)
-
-        args = [
-            "ml/rl/sim/run_live_sim.py",
-            "--data",
-            params["data"],
-            "--model",
-            params["model"],
-            "--log-every",
-            str(params["log_every"]),
-            "--max-steps",
-            str(params["max_steps"]),
-            "--transaction-cost-bps",
-            str(params["transaction_cost_bps"]),
-            "--slippage-bps",
-            str(params["slippage_bps"]),
-        ]
-        self._log_panel.add_log("▶️ 開始回放模擬")
-        self._sim_process.start(sys.executable, args)
+        controller.start(params)
 
     @Slot()
-    def _on_ppo_stdout(self) -> None:
-        if not self._ppo_process:
+    def _on_history_download_requested(self) -> None:
+        controller = self._get_history_download_controller()
+        if controller is None:
             return
-        output = bytes(self._ppo_process.readAllStandardOutput()).decode(errors="replace")
-        for line in output.splitlines():
-            if line.strip():
-                self._log_panel.add_log(line)
-                self._training_panel.ingest_log_line(line)
+        controller.request_quick_download(self._trendbar_symbol_id, timeframe="M5")
 
     @Slot()
-    def _on_ppo_stderr(self) -> None:
-        if not self._ppo_process:
+    def _open_history_download_dialog(self) -> None:
+        controller = self._get_history_download_controller()
+        if controller is None:
             return
-        output = bytes(self._ppo_process.readAllStandardError()).decode(errors="replace")
-        for line in output.splitlines():
-            if line.strip():
-                self._log_panel.add_log(f"⚠️ {line}")
+        controller.open_download_dialog(self._trendbar_symbol_id)
 
-    @Slot()
-    def _on_sim_stdout(self) -> None:
-        if not self._sim_process:
+    def _on_symbol_list_requested(self) -> None:
+        controller = self._get_history_download_controller()
+        if controller is None:
             return
-        output = bytes(self._sim_process.readAllStandardOutput()).decode(errors="replace")
-        for line in output.splitlines():
-            if line.strip():
-                self._log_panel.add_log(line)
-                self._maybe_update_sim_plot(line)
+        controller.request_symbol_list()
 
-    @Slot()
-    def _on_sim_stderr(self) -> None:
-        if not self._sim_process:
-            return
-        output = bytes(self._sim_process.readAllStandardError()).decode(errors="replace")
-        for line in output.splitlines():
-            if line.strip():
-                self._log_panel.add_log(f"⚠️ {line}")
-
-    @Slot(int, QProcess.ExitStatus)
-    def _on_sim_finished(self, exit_code: int, exit_status: QProcess.ExitStatus) -> None:
-        status = "完成" if exit_status == QProcess.NormalExit else "異常結束"
-        self._log_panel.add_log(f"⏹️ 回放模擬{status} (exit={exit_code})")
-        self._sim_process = None
-
-    def _maybe_update_sim_plot(self, line: str) -> None:
-        if "step=" in line and "equity=" in line:
-            parts = line.split()
-            step = None
-            equity = None
-            for part in parts:
-                if part.startswith("step="):
-                    try:
-                        step = int(part.split("=")[1])
-                    except ValueError:
-                        pass
-                if part.startswith("equity="):
-                    try:
-                        equity = float(part.split("=")[1])
-                    except ValueError:
-                        pass
-            if step is not None and equity is not None:
-                self._simulation_panel.ingest_equity(step, equity)
-                return
-        if line.startswith("Done."):
-            tokens = line.replace("Done.", "").split()
-            data = {}
-            for token in tokens:
-                if "=" in token:
-                    key, value = token.split("=", 1)
-                    data[key] = value
-            try:
-                trades = int(data.get("trades", "0"))
-                equity = float(data.get("equity", "0"))
-                total_return = float(data.get("return", "0"))
-            except ValueError:
-                return
-            self._simulation_panel.update_summary(
-                total_return=total_return,
-                trades=trades,
-                equity=equity,
-            )
-        if line.startswith("Max drawdown:"):
-            try:
-                max_dd = float(line.split(":", 1)[1].strip())
-            except ValueError:
-                return
-            self._simulation_panel.update_summary(max_drawdown=max_dd)
-        if line.startswith("Sharpe:"):
-            try:
-                sharpe = float(line.split(":", 1)[1].strip())
-            except ValueError:
-                return
-            self._simulation_panel.update_summary(sharpe=sharpe)
-        if line.startswith("Trade stats:"):
-            self._simulation_panel.update_trade_stats(line.replace("Trade stats:", "").strip())
-        if line.startswith("Streak stats:"):
-            self._simulation_panel.update_streak_stats(line.replace("Streak stats:", "").strip())
-        if line.startswith("Holding stats:"):
-            self._simulation_panel.update_holding_stats(line.replace("Holding stats:", "").strip())
-        if line.startswith("Action distribution:"):
-            self._simulation_panel.update_action_distribution(line.replace("Action distribution:", "").strip())
-        if line.startswith("Playback range:"):
-            self._simulation_panel.update_playback_range(line.replace("Playback range:", "").strip())
-
-    @Slot(int, QProcess.ExitStatus)
-    def _on_ppo_finished(self, exit_code: int, exit_status: QProcess.ExitStatus) -> None:
-        status = "完成" if exit_status == QProcess.NormalExit else "異常結束"
-        self._log_panel.add_log(f"⏹️ PPO 訓練{status} (exit={exit_code})")
-        self._ppo_process = None
-
-    @Slot()
-    def _on_trendbar_history_clicked(self) -> None:
+    def _get_history_download_controller(self) -> Optional[HistoryDownloadController]:
+        if not self._use_cases:
+            self._log_panel.add_log("⚠️ 缺少 broker 用例配置")
+            return None
         if not self._service:
             self._log_panel.add_log("⚠️ 尚未完成 App 認證")
-            return
-        if not self._is_app_authenticated():
-            self._log_panel.add_log("⚠️ App 認證已中斷，請稍候自動重連")
-            return
-        if not self._oauth_service or self._oauth_service.status != ConnectionStatus.ACCOUNT_AUTHENTICATED:
+            return None
+        if not self._oauth_service:
             self._log_panel.add_log("⚠️ 尚未完成 OAuth 帳戶認證")
-            return
+            return None
 
-        try:
-            tokens = OAuthTokens.from_file(TOKEN_FILE)
-        except Exception as exc:
-            self._log_panel.add_log(f"⚠️ 無法讀取 OAuth Token: {exc}")
-            return
-        if not tokens.account_id:
-            self._log_panel.add_log("⚠️ 缺少帳戶 ID")
-            return
-
-        if self._history_pipeline is None:
-            if self._use_cases is None:
-                self._log_panel.add_log("⚠️ 缺少 broker 用例配置")
-                return
-            self._history_pipeline = HistoryPipeline(
-                broker_use_cases=self._use_cases,
+        if self._history_download_controller is None:
+            self._history_download_controller = HistoryDownloadController(
+                use_cases=self._use_cases,
                 app_auth_service=self._service,
+                oauth_service=self._oauth_service,
+                parent=self,
+                log=self._log_panel.add_log,
+                log_async=self.logRequested.emit,
             )
+        return self._history_download_controller
 
-        reactor_manager.ensure_running()
-        from twisted.internet import reactor
-        bars_per_day = 24 * 12
-        two_years_bars = 365 * 2 * bars_per_day
-        reactor.callFromThread(
-            self._history_pipeline.fetch_to_raw,
-            tokens.account_id,
-            self._trendbar_symbol_id,
-            two_years_bars,
-            timeframe="M5",
-            on_saved=lambda path: self.logRequested.emit(f"✅ 已儲存歷史資料：{path}"),
-            on_error=lambda e: self.logRequested.emit(f"⚠️ 歷史資料錯誤: {e}"),
-            on_log=self.logRequested.emit,
-        )
+    def _get_trendbar_controller(self) -> Optional[TrendbarController]:
+        if not self._use_cases:
+            self._log_panel.add_log("⚠️ 缺少 broker 用例配置")
+            return None
+        if not self._service:
+            self._log_panel.add_log("⚠️ 尚未完成 App 認證")
+            return None
+        if not self._oauth_service:
+            self._log_panel.add_log("⚠️ 尚未完成 OAuth 帳戶認證")
+            return None
+
+        if self._trendbar_controller is None:
+            self._trendbar_controller = TrendbarController(
+                use_cases=self._use_cases,
+                app_auth_service=self._service,
+                oauth_service=self._oauth_service,
+                parent=self,
+                log=self._log_panel.add_log,
+                log_async=self.logRequested.emit,
+                set_active=self._trade_panel.set_trendbar_active,
+                format_price=self._format_price,
+            )
+        return self._trendbar_controller
+
+    def _get_ppo_controller(self) -> Optional[PPOTrainingController]:
+        if self._ppo_controller is None:
+            self._ppo_controller = PPOTrainingController(
+                parent=self,
+                log=self._log_panel.add_log,
+                ingest_log=self._training_panel.ingest_log_line,
+            )
+        return self._ppo_controller
+
+    def _get_simulation_controller(self) -> Optional[SimulationController]:
+        if self._simulation_controller is None:
+            self._simulation_controller = SimulationController(
+                parent=self,
+                log=self._log_panel.add_log,
+                reset_plot=self._simulation_panel.reset_plot,
+                ingest_equity=self._simulation_panel.ingest_equity,
+                update_summary=self._simulation_panel.update_summary,
+                update_trade_stats=self._simulation_panel.update_trade_stats,
+                update_streak_stats=self._simulation_panel.update_streak_stats,
+                update_holding_stats=self._simulation_panel.update_holding_stats,
+                update_action_distribution=self._simulation_panel.update_action_distribution,
+                update_playback_range=self._simulation_panel.update_playback_range,
+            )
+        return self._simulation_controller
 
     def _handle_trendbar_history(self, bars: list) -> None:
         self.logRequested.emit("📚 M5 歷史資料（最近 2 年）")
@@ -505,42 +325,6 @@ class MainWindow(QMainWindow):
     def _on_fetch_account_info(self) -> None:
         """Handle fetch account info click"""
         self._stack.setCurrentWidget(self._trade_container)
-        self._log_panel.add_log("📄 已送出取得基本資料請求")
-        if not self._service:
-            self._log_panel.add_log("⚠️ 尚未完成 App 認證")
-            return
-        if not self._is_app_authenticated():
-            self._log_panel.add_log("⚠️ App 認證已中斷，請稍候自動重連")
-            return
-        if not self._oauth_service or self._oauth_service.status != ConnectionStatus.ACCOUNT_AUTHENTICATED:
-            self._log_panel.add_log("⚠️ OAuth 尚未完成認證，將自動重新認證")
-            self._auto_oauth_connect()
-            return
-        try:
-            tokens = OAuthTokens.from_file(TOKEN_FILE)
-        except Exception as exc:
-            self._log_panel.add_log(f"⚠️ 無法讀取 OAuth Token: {exc}")
-            return
-        if not tokens.access_token:
-            self._log_panel.add_log("⚠️ 缺少 Access Token")
-            return
-
-        if self._use_cases is None:
-            self._log_panel.add_log("⚠️ 缺少 broker 用例配置")
-            return
-        if self._use_cases.account_list_in_progress():
-            self._log_panel.add_log("⏳ 正在取得帳戶列表，請稍候")
-            return
-        reactor_manager.ensure_running()
-        from twisted.internet import reactor
-        reactor.callFromThread(
-            self._use_cases.fetch_accounts,
-            self._service,
-            tokens.access_token,
-            lambda accounts: self.accountsReceived.emit(accounts, tokens.account_id),
-            lambda e: self.logRequested.emit(f"⚠️ 取得帳戶失敗: {e}"),
-            self.logRequested.emit,
-        )
 
     def _handle_accounts_received(self, accounts: list, account_id: Optional[int]) -> None:
         try:
@@ -622,10 +406,9 @@ class MainWindow(QMainWindow):
     def set_service(self, service: AppAuthServiceLike) -> None:
         """Set the authenticated service"""
         self._service = service
-        self._trendbar_service = None
         self._trendbar_history_service = None
-        self._trendbar_active = False
-        self._trade_panel.set_trendbar_active(False)
+        if self._trendbar_controller:
+            self._trendbar_controller.reset()
         self._service.set_callbacks(
             on_app_auth_success=lambda c: self.appAuthSucceeded.emit(c),
             on_log=self.logRequested.emit,
@@ -744,10 +527,9 @@ class MainWindow(QMainWindow):
         if status == ConnectionStatus.DISCONNECTED and self._oauth_service:
             self._oauth_service.disconnect()
             self._oauth_status_label.setText(self._format_oauth_status())
-            self._trendbar_service = None
             self._trendbar_history_service = None
-            self._trendbar_active = False
-            self._trade_panel.set_trendbar_active(False)
+            if self._trendbar_controller:
+                self._trendbar_controller.reset()
             if not self._reconnect_timer.isActive():
                 self._reconnect_timer.start()
                 if not self._reconnect_logged:

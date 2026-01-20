@@ -4,9 +4,10 @@ from PySide6.QtWidgets import QLabel, QPushButton, QVBoxLayout, QWidget
 
 
 class TradePanel(QWidget):
-    trendbar_toggle_clicked = Signal()
-    trendbar_history_clicked = Signal()
-    basic_info_clicked = Signal()
+    trendbar_toggle_requested = Signal()
+    history_download_requested = Signal()
+    account_info_requested = Signal()
+    symbol_list_requested = Signal()
 
     def __init__(self) -> None:
         super().__init__()
@@ -19,21 +20,25 @@ class TradePanel(QWidget):
 
         title = QLabel("交易面板")
         title.setAlignment(Qt.AlignLeft | Qt.AlignVCenter)
-        self.btn_basic_info = QPushButton("基本資料")
-        self.btn_basic_info.setToolTip("取得帳戶基本資料")
+        self.btn_account_info = QPushButton("基本資料")
+        self.btn_account_info.setToolTip("取得帳戶基本資料")
         self.btn_trendbar_toggle = QPushButton("開始趨勢棒")
         self.btn_trendbar_toggle.setToolTip("開始或停止即時趨勢棒")
-        self.btn_trendbar_history = QPushButton("M5 歷史(2年)")
-        self.btn_trendbar_history.setToolTip("下載最近 2 年 M5 歷史資料")
+        self.btn_history_download = QPushButton("M5 歷史(2年)")
+        self.btn_history_download.setToolTip("下載最近 2 年 M5 歷史資料")
+        self.btn_symbol_list = QPushButton("Get Symbol List")
+        self.btn_symbol_list.setToolTip("取得並保存 cTrader symbol list")
 
-        self.btn_basic_info.clicked.connect(self.basic_info_clicked.emit)
-        self.btn_trendbar_toggle.clicked.connect(self.trendbar_toggle_clicked.emit)
-        self.btn_trendbar_history.clicked.connect(self.trendbar_history_clicked.emit)
+        self.btn_account_info.clicked.connect(self.account_info_requested.emit)
+        self.btn_trendbar_toggle.clicked.connect(self.trendbar_toggle_requested.emit)
+        self.btn_history_download.clicked.connect(self.history_download_requested.emit)
+        self.btn_symbol_list.clicked.connect(self.symbol_list_requested.emit)
 
         layout.addWidget(title)
-        layout.addWidget(self.btn_basic_info)
+        layout.addWidget(self.btn_account_info)
         layout.addWidget(self.btn_trendbar_toggle)
-        layout.addWidget(self.btn_trendbar_history)
+        layout.addWidget(self.btn_history_download)
+        layout.addWidget(self.btn_symbol_list)
         layout.addStretch(1)
 
     def set_trendbar_active(self, active: bool) -> None:

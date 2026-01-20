@@ -82,7 +82,15 @@ class TrendbarHistoryService(LogHistoryMixin[TrendbarHistoryCallbacks], Operatio
         )
         self._replay_log_history()
 
-    def fetch(self, account_id: int, symbol_id: int, count: int = 100) -> None:
+    def fetch(
+        self,
+        account_id: int,
+        symbol_id: int,
+        count: int = 100,
+        timeframe: str = "M5",
+        from_ts: Optional[int] = None,
+        to_ts: Optional[int] = None,
+    ) -> None:
         if not self._start_operation():
             self._log("⚠️ 歷史資料查詢進行中")
             return
@@ -97,25 +105,53 @@ class TrendbarHistoryService(LogHistoryMixin[TrendbarHistoryCallbacks], Operatio
             return
         self._retried_wide = False
         self._retried_m1 = False
-        self._period = ProtoOATrendbarPeriod.M5
-        self._prepare_request(count, use_seconds=False, window_minutes=count * 5)
+        self._period = self._resolve_period(timeframe)
+        self._prepare_request(count, use_seconds=False, window_minutes=count * 5, from_ts=from_ts, to_ts=to_ts)
         self._ensure_spot_subscription()
         self._maybe_send_request()
 
-    def _prepare_request(self, count: int, *, use_seconds: bool, window_minutes: int) -> None:
+    def _prepare_request(
+        self,
+        count: int,
+        *,
+        use_seconds: bool,
+        window_minutes: int,
+        from_ts: Optional[int] = None,
+        to_ts: Optional[int] = None,
+    ) -> None:
         request = ProtoOAGetTrendbarsReq()
         request.ctidTraderAccountId = self._account_id
         request.symbolId = self._symbol_id
         request.period = self._period
-        now_ms = int(time.time() * 1000)
-        aligned_to = (now_ms // (5 * 60 * 1000)) * (5 * 60 * 1000)
-        request.toTimestamp = aligned_to
-        request.fromTimestamp = max(0, request.toTimestamp - (window_minutes * 60 * 1000))
+        if to_ts is None:
+            now_ms = int(time.time() * 1000)
+            aligned_to = (now_ms // (5 * 60 * 1000)) * (5 * 60 * 1000)
+            request.toTimestamp = aligned_to
+        else:
+            request.toTimestamp = int(to_ts)
+        if from_ts is None:
+            request.fromTimestamp = max(0, request.toTimestamp - (window_minutes * 60 * 1000))
+        else:
+            request.fromTimestamp = int(from_ts)
         self._last_request_mode = "milliseconds"
         request.count = int(count)
         self._last_request_count = int(count)
         self._last_request_window = int(window_minutes)
         self._pending_request = request
+
+    @staticmethod
+    def _resolve_period(timeframe: str) -> int:
+        mapping = {
+            "M1": "M1",
+            "M5": "M5",
+            "M10": "M10",
+            "M15": "M15",
+            "H1": "H1",
+            "H4": "H4",
+            "D1": "D1",
+        }
+        name = mapping.get(timeframe.upper(), "M5")
+        return getattr(ProtoOATrendbarPeriod, name, ProtoOATrendbarPeriod.M5)
 
     def _maybe_send_request(self) -> None:
         if not hasattr(self, "_pending_request"):
@@ -160,6 +196,8 @@ class TrendbarHistoryService(LogHistoryMixin[TrendbarHistoryCallbacks], Operatio
                 self._last_request_count,
                 use_seconds=False,
                 window_minutes=wide_window,
+                from_ts=getattr(self._pending_request, "fromTimestamp", None),
+                to_ts=getattr(self._pending_request, "toTimestamp", None),
             )
             self._maybe_send_request()
             return
@@ -171,6 +209,8 @@ class TrendbarHistoryService(LogHistoryMixin[TrendbarHistoryCallbacks], Operatio
                 self._last_request_count,
                 use_seconds=False,
                 window_minutes=self._last_request_count,
+                from_ts=getattr(self._pending_request, "fromTimestamp", None),
+                to_ts=getattr(self._pending_request, "toTimestamp", None),
             )
             self._maybe_send_request()
             return

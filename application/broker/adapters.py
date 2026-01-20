@@ -2,14 +2,23 @@ from __future__ import annotations
 
 from typing import Iterable, Optional, Protocol
 
-from application.broker.protocols import AccountFundsLike, AccountFundsUseCaseLike, AccountListUseCaseLike
-from domain import Account, AccountFundsSnapshot
+from application.broker.protocols import (
+    AccountFundsLike,
+    AccountFundsUseCaseLike,
+    AccountListUseCaseLike,
+    SymbolListUseCaseLike,
+)
+from domain import Account, AccountFundsSnapshot, Symbol
 
 
 class AccountInfoLike(Protocol):
     account_id: int
     is_live: Optional[bool]
     trader_login: Optional[int]
+
+class SymbolInfoLike(Protocol):
+    symbol_id: int
+    symbol_name: str
 
 
 def to_account(info: AccountInfoLike) -> Account:
@@ -50,6 +59,29 @@ def to_funds_snapshot(funds: AccountFundsLike) -> AccountFundsSnapshot:
         currency=funds.currency,
         money_digits=funds.money_digits,
     )
+
+
+def to_symbol(info: SymbolInfoLike) -> Symbol:
+    return Symbol(symbol_id=int(info.symbol_id), name=str(info.symbol_name))
+
+
+def to_symbols(infos: Iterable[SymbolInfoLike]) -> list[Symbol]:
+    return [to_symbol(info) for info in infos]
+
+
+def to_symbols_from_dicts(raw_symbols: Iterable[dict]) -> list[Symbol]:
+    symbols: list[Symbol] = []
+    for item in raw_symbols:
+        try:
+            symbols.append(
+                Symbol(
+                    symbol_id=int(item.get("symbol_id", 0)),
+                    name=str(item.get("symbol_name", "")),
+                )
+            )
+        except Exception:
+            continue
+    return symbols
 
 
 class AccountListServiceAdapter:
@@ -107,3 +139,39 @@ class AccountFundsServiceAdapter:
 
     def fetch(self, account_id: int, timeout_seconds: Optional[int] = None) -> None:
         self._service.fetch(account_id, timeout_seconds)
+
+
+class SymbolListServiceAdapter:
+    def __init__(self, service: SymbolListUseCaseLike):
+        self._service = service
+
+    @property
+    def in_progress(self) -> bool:
+        return self._service.in_progress
+
+    def set_callbacks(self, on_symbols_received=None, on_error=None, on_log=None) -> None:
+        def handle_symbols(raw_symbols) -> None:
+            domain_symbols = to_symbols_from_dicts(raw_symbols)
+            if on_symbols_received:
+                on_symbols_received(domain_symbols)
+
+        self._service.set_callbacks(
+            on_symbols_received=handle_symbols,
+            on_error=on_error,
+            on_log=on_log,
+        )
+
+    def clear_log_history(self) -> None:
+        self._service.clear_log_history()
+
+    def fetch(
+        self,
+        account_id: int,
+        include_archived: bool = False,
+        timeout_seconds: Optional[int] = None,
+    ) -> None:
+        self._service.fetch(
+            account_id=account_id,
+            include_archived=include_archived,
+            timeout_seconds=timeout_seconds,
+        )

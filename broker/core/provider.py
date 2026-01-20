@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
-from typing import List
+from typing import List, Optional
 
 from application.broker.protocols import BrokerUseCaseFactory
 from config.paths import TOKEN_FILE
@@ -21,7 +21,7 @@ class BrokerProvider(BrokerUseCaseFactory, ABC):
         ...
 
     @abstractmethod
-    def create_oauth_login(self, token_file: str = TOKEN_FILE, redirect_uri: str | None = None):
+    def create_oauth_login(self, token_file: str = TOKEN_FILE, redirect_uri: Optional[str] = None):
         ...
 
     @abstractmethod
@@ -30,6 +30,10 @@ class BrokerProvider(BrokerUseCaseFactory, ABC):
 
     @abstractmethod
     def create_account_funds_service(self, app_auth_service):
+        ...
+
+    @abstractmethod
+    def create_symbol_list_service(self, app_auth_service):
         ...
 
     @abstractmethod

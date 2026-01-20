@@ -1,0 +1,152 @@
+"""
+Symbol list service
+"""
+from dataclasses import dataclass
+import threading
+from typing import Callable, Optional, Protocol, Sequence
+
+from ctrader_open_api import Client
+from ctrader_open_api.messages.OpenApiMessages_pb2 import ProtoOASymbolsListReq
+from ctrader_open_api.messages.OpenApiModelMessages_pb2 import ProtoOAPayloadType
+
+from broker.base import BaseCallbacks, LogHistoryMixin, OperationStateMixin, build_callbacks
+from infrastructure.broker.ctrader.services.app_auth_service import AppAuthService
+
+
+class LightSymbolMessage(Protocol):
+    symbolId: int
+    symbolName: str
+
+
+class SymbolListMessage(Protocol):
+    payloadType: int
+    errorCode: int
+    description: str
+    symbol: Sequence[LightSymbolMessage]
+
+
+@dataclass
+class SymbolListServiceCallbacks(BaseCallbacks):
+    on_symbols_received: Optional[Callable[[list], None]] = None
+
+
+class SymbolListService(LogHistoryMixin[SymbolListServiceCallbacks], OperationStateMixin):
+    """
+    Fetch symbol list for a given account.
+    """
+
+    def __init__(self, app_auth_service: AppAuthService):
+        self._app_auth_service = app_auth_service
+        self._callbacks = SymbolListServiceCallbacks()
+        self._in_progress = False
+        self._timeout_timer: Optional[threading.Timer] = None
+        self._log_history = []
+        self._account_id: Optional[int] = None
+        self._include_archived = False
+
+    def set_callbacks(
+        self,
+        on_symbols_received: Optional[Callable[[list], None]] = None,
+        on_error: Optional[Callable[[str], None]] = None,
+        on_log: Optional[Callable[[str], None]] = None,
+    ) -> None:
+        self._callbacks = build_callbacks(
+            SymbolListServiceCallbacks,
+            on_symbols_received=on_symbols_received,
+            on_error=on_error,
+            on_log=on_log,
+        )
+        self._replay_log_history()
+
+    def fetch(
+        self,
+        account_id: int,
+        include_archived: bool = False,
+        timeout_seconds: Optional[int] = None,
+    ) -> None:
+        if not account_id:
+            self._emit_error("缺少帳戶 ID")
+            return
+
+        if not self._start_operation():
+            return
+
+        self._account_id = int(account_id)
+        self._include_archived = bool(include_archived)
+        self._app_auth_service.add_message_handler(self._handle_message)
+        self._start_timeout_timer(timeout_seconds)
+        self._send_request()
+
+    def _send_request(self) -> None:
+        request = ProtoOASymbolsListReq()
+        request.ctidTraderAccountId = int(self._account_id or 0)
+        request.includeArchivedSymbols = bool(self._include_archived)
+        self._log("📥 正在取得 symbol list...")
+        try:
+            client = self._app_auth_service.get_client()
+        except Exception as exc:
+            self._emit_error(str(exc))
+            self._end_operation()
+            self._app_auth_service.remove_message_handler(self._handle_message)
+            self._cancel_timeout_timer()
+            return
+        client.send(request)
+
+    def _handle_message(self, client: Client, msg: SymbolListMessage) -> bool:
+        if not self._in_progress:
+            return False
+
+        if msg.payloadType == ProtoOAPayloadType.PROTO_OA_SYMBOLS_LIST_RES:
+            self._on_symbols_received(msg)
+            return True
+
+        if msg.payloadType == ProtoOAPayloadType.PROTO_OA_ERROR_RES:
+            self._on_error(msg)
+            return True
+
+        return False
+
+    def _on_symbols_received(self, msg: SymbolListMessage) -> None:
+        self._end_operation()
+        self._app_auth_service.remove_message_handler(self._handle_message)
+        self._cancel_timeout_timer()
+        symbols = self._parse_symbols(msg.symbol)
+        self._log(f"✅ 已接收 symbol: {len(symbols)} 筆")
+        if self._callbacks.on_symbols_received:
+            self._callbacks.on_symbols_received(symbols)
+
+    def _on_error(self, msg: SymbolListMessage) -> None:
+        self._end_operation()
+        self._app_auth_service.remove_message_handler(self._handle_message)
+        self._cancel_timeout_timer()
+        self._emit_error(f"錯誤 {msg.errorCode}: {msg.description}")
+
+    def _start_timeout_timer(self, timeout_seconds: Optional[int]) -> None:
+        if not timeout_seconds:
+            return
+        self._cancel_timeout_timer()
+        self._timeout_timer = threading.Timer(timeout_seconds, self._on_timeout)
+        self._timeout_timer.daemon = True
+        self._timeout_timer.start()
+
+    def _cancel_timeout_timer(self) -> None:
+        if self._timeout_timer:
+            self._timeout_timer.cancel()
+            self._timeout_timer = None
+
+    def _on_timeout(self) -> None:
+        if not self._in_progress:
+            return
+        self._end_operation()
+        self._app_auth_service.remove_message_handler(self._handle_message)
+        self._emit_error("取得 symbol list 逾時")
+
+    @staticmethod
+    def _parse_symbols(raw_symbols: Sequence[LightSymbolMessage]) -> list:
+        return [
+            {
+                "symbol_id": int(symbol.symbolId),
+                "symbol_name": str(symbol.symbolName),
+            }
+            for symbol in raw_symbols
+        ]

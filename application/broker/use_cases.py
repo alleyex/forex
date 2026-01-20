@@ -2,7 +2,11 @@ from __future__ import annotations
 
 from typing import Optional
 
-from application.broker.adapters import AccountFundsServiceAdapter, AccountListServiceAdapter
+from application.broker.adapters import (
+    AccountFundsServiceAdapter,
+    AccountListServiceAdapter,
+    SymbolListServiceAdapter,
+)
 from application.broker.protocols import (
     AccountFundsUseCaseLike,
     AccountListUseCaseLike,
@@ -10,6 +14,7 @@ from application.broker.protocols import (
     BrokerUseCaseFactory,
     OAuthLoginServiceLike,
     OAuthServiceLike,
+    SymbolListUseCaseLike,
     TrendbarHistoryServiceLike,
     TrendbarServiceLike,
 )
@@ -28,6 +33,7 @@ class BrokerUseCases:
         self._provider = provider
         self._account_list_uc: Optional[AccountListUseCase] = None
         self._account_funds_uc: Optional[AccountFundsUseCase] = None
+        self._symbol_list_uc: Optional[SymbolListUseCase] = None
 
     def create_app_auth(self, host_type: str, token_file: str = TOKEN_FILE) -> AppAuthServiceLike:
         return self._provider.create_app_auth(host_type, token_file)
@@ -54,6 +60,10 @@ class BrokerUseCases:
         service = self._provider.create_account_funds_service(app_auth_service=app_auth_service)
         return AccountFundsUseCase(AccountFundsServiceAdapter(service))
 
+    def create_symbol_list(self, app_auth_service: AppAuthServiceLike) -> SymbolListUseCaseLike:
+        service = self._provider.create_symbol_list_service(app_auth_service=app_auth_service)
+        return SymbolListUseCase(SymbolListServiceAdapter(service))
+
     def create_trendbar(self, app_auth_service: AppAuthServiceLike) -> TrendbarServiceLike:
         return self._provider.create_trendbar_service(app_auth_service=app_auth_service)
 
@@ -65,6 +75,9 @@ class BrokerUseCases:
 
     def account_funds_in_progress(self) -> bool:
         return bool(self._account_funds_uc and self._account_funds_uc.in_progress)
+
+    def symbol_list_in_progress(self) -> bool:
+        return bool(self._symbol_list_uc and self._symbol_list_uc.in_progress)
 
     def fetch_accounts(
         self,
@@ -116,6 +129,35 @@ class BrokerUseCases:
         self._account_funds_uc.fetch(account_id, timeout_seconds)
         return True
 
+    def fetch_symbols(
+        self,
+        app_auth_service: AppAuthServiceLike,
+        account_id: int,
+        include_archived: bool = False,
+        on_symbols_received=None,
+        on_error=None,
+        on_log=None,
+        timeout_seconds: Optional[int] = None,
+    ) -> bool:
+        if self._symbol_list_uc is None:
+            self._symbol_list_uc = self.create_symbol_list(app_auth_service)
+
+        if self._symbol_list_uc.in_progress:
+            return False
+
+        self._symbol_list_uc.clear_log_history()
+        self._symbol_list_uc.set_callbacks(
+            on_symbols_received=on_symbols_received,
+            on_error=on_error,
+            on_log=on_log,
+        )
+        self._symbol_list_uc.fetch(
+            account_id=account_id,
+            include_archived=include_archived,
+            timeout_seconds=timeout_seconds,
+        )
+        return True
+
 
 class AccountListUseCase:
     def __init__(self, adapter: AccountListServiceAdapter):
@@ -162,3 +204,34 @@ class AccountFundsUseCase:
 
     def fetch(self, account_id: int, timeout_seconds: Optional[int] = None) -> None:
         self._adapter.fetch(account_id, timeout_seconds)
+
+
+class SymbolListUseCase:
+    def __init__(self, adapter: SymbolListServiceAdapter):
+        self._adapter = adapter
+
+    @property
+    def in_progress(self) -> bool:
+        return self._adapter.in_progress
+
+    def set_callbacks(self, on_symbols_received=None, on_error=None, on_log=None) -> None:
+        self._adapter.set_callbacks(
+            on_symbols_received=on_symbols_received,
+            on_error=on_error,
+            on_log=on_log,
+        )
+
+    def clear_log_history(self) -> None:
+        self._adapter.clear_log_history()
+
+    def fetch(
+        self,
+        account_id: int,
+        include_archived: bool = False,
+        timeout_seconds: Optional[int] = None,
+    ) -> None:
+        self._adapter.fetch(
+            account_id=account_id,
+            include_archived=include_archived,
+            timeout_seconds=timeout_seconds,
+        )

@@ -1,5 +1,6 @@
 # main.py
 import sys
+from pathlib import Path
 from PySide6.QtWidgets import QApplication
 from PySide6.QtCore import qInstallMessageHandler
 import traceback
@@ -26,6 +27,9 @@ def main() -> int:
     qInstallMessageHandler(_qt_message_handler)
     app = QApplication(sys.argv)
     app.setStyle("Fusion")  # Consistent cross-platform look
+    style_path = Path("ui/styles/app.qss")
+    if style_path.exists():
+        app.setStyleSheet(style_path.read_text())
     
     # Show authentication dialog
     auth_dialog = AppAuthDialog(

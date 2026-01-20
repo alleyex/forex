@@ -12,3 +12,5 @@ data/raw_history/
 token.json
 __pycache__/
 *.pyc
+symbol.json
+timeframes.json

@@ -7,6 +7,7 @@ from application.broker.protocols import (
     BrokerUseCaseFactory,
     OAuthLoginServiceLike,
     OAuthServiceLike,
+    SymbolListUseCaseLike,
     TrendbarHistoryServiceLike,
     TrendbarServiceLike,
 )
@@ -28,6 +29,7 @@ __all__ = [
     "OAuthLoginServiceLike",
     "AccountListUseCaseLike",
     "AccountFundsUseCaseLike",
+    "SymbolListUseCaseLike",
     "TrendbarServiceLike",
     "TrendbarHistoryServiceLike",
     "AccountFundsLike",
