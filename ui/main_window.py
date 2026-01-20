@@ -103,13 +103,13 @@ class MainWindow(QMainWindow):
         self._simulation_panel = SimulationPanel()
         self._stack = QStackedWidget()
 
-        trade_container = QWidget()
-        trade_layout = QHBoxLayout(trade_container)
+        self._trade_container = QWidget()
+        trade_layout = QHBoxLayout(self._trade_container)
         trade_layout.setContentsMargins(10, 10, 10, 10)
         trade_layout.setSpacing(10)
         trade_layout.addWidget(self._trade_panel)
 
-        self._stack.addWidget(trade_container)
+        self._stack.addWidget(self._trade_container)
         self._stack.addWidget(self._training_panel)
         self._stack.addWidget(self._simulation_panel)
 
@@ -140,6 +140,7 @@ class MainWindow(QMainWindow):
         """Connect panel signals"""
         self._trade_panel.trendbar_toggle_clicked.connect(self._on_trendbar_toggle_clicked)
         self._trade_panel.trendbar_history_clicked.connect(self._on_trendbar_history_clicked)
+        self._trade_panel.basic_info_clicked.connect(self._on_fetch_account_info)
         self._action_fetch_account_info.triggered.connect(self._on_fetch_account_info)
         self._action_train_ppo.triggered.connect(self._on_train_ppo_clicked)
         self._training_panel.start_requested.connect(self._start_ppo_training)
@@ -503,6 +504,7 @@ class MainWindow(QMainWindow):
     @Slot()
     def _on_fetch_account_info(self) -> None:
         """Handle fetch account info click"""
+        self._stack.setCurrentWidget(self._trade_container)
         self._log_panel.add_log("📄 已送出取得基本資料請求")
         if not self._service:
             self._log_panel.add_log("⚠️ 尚未完成 App 認證")
