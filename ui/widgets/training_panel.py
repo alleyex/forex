@@ -114,6 +114,9 @@ class TrainingPanel(QWidget):
         form.addRow("eval_split", self._eval_split)
 
         left_layout.addLayout(form)
+        self._resume_training = QCheckBox("接續訓練")
+        self._resume_training.setChecked(False)
+        left_layout.addWidget(self._resume_training)
         left_layout.addSpacing(8)
 
         layout.addWidget(left, stretch=1)
@@ -191,6 +194,7 @@ class TrainingPanel(QWidget):
             "ent_coef": float(self._ent_coef.value()),
             "episode_length": int(self._episode_length.value()),
             "eval_split": float(self._eval_split.value()),
+            "resume": bool(self._resume_training.isChecked()),
         }
 
     def reset_metrics(self) -> None:

@@ -16,6 +16,7 @@ from PySide6.QtGui import QAction, QFont
 from PySide6.QtWidgets import QStyle
 
 from ui.widgets.trade_panel import TradePanel
+from ui.widgets.simulation_panel import SimulationPanel
 from ui.widgets.training_panel import TrainingPanel
 from ui.widgets.log_panel import LogPanel
 from ui.dialogs.app_auth_dialog import AppAuthDialog
@@ -78,6 +79,7 @@ class MainWindow(QMainWindow):
         self._reconnect_timer.timeout.connect(self._attempt_reconnect)
         self._reconnect_logged = False
         self._ppo_process: Optional[QProcess] = None
+        self._sim_process: Optional[QProcess] = None
 
         self._setup_ui()
         self._connect_signals()
@@ -98,6 +100,7 @@ class MainWindow(QMainWindow):
 
         self._trade_panel = TradePanel()
         self._training_panel = TrainingPanel()
+        self._simulation_panel = SimulationPanel()
         self._stack = QStackedWidget()
 
         trade_container = QWidget()
@@ -108,6 +111,7 @@ class MainWindow(QMainWindow):
 
         self._stack.addWidget(trade_container)
         self._stack.addWidget(self._training_panel)
+        self._stack.addWidget(self._simulation_panel)
 
         self._log_panel = LogPanel()
         self._log_dock = QDockWidget("日誌面板", self)
@@ -140,6 +144,8 @@ class MainWindow(QMainWindow):
         self._action_train_ppo.triggered.connect(self._on_train_ppo_clicked)
         self._training_panel.start_requested.connect(self._start_ppo_training)
         self._action_toggle_log.toggled.connect(self._toggle_log_dock)
+        self._action_simulation.triggered.connect(self._on_simulation_clicked)
+        self._simulation_panel.start_requested.connect(self._start_simulation)
 
     def _setup_menu_toolbar(self) -> None:
         """Create menu and toolbar actions"""
@@ -159,6 +165,8 @@ class MainWindow(QMainWindow):
         toolbar.addAction(self._action_fetch_account_info)
         self._action_train_ppo = QAction("PPO訓練", self)
         toolbar.addAction(self._action_train_ppo)
+        self._action_simulation = QAction("回放", self)
+        toolbar.addAction(self._action_simulation)
         self._action_toggle_log = QAction("日誌面板", self)
         self._action_toggle_log.setCheckable(True)
         self._action_toggle_log.setChecked(True)
@@ -242,6 +250,10 @@ class MainWindow(QMainWindow):
     def _on_train_ppo_clicked(self) -> None:
         self._stack.setCurrentWidget(self._training_panel)
 
+    @Slot()
+    def _on_simulation_clicked(self) -> None:
+        self._stack.setCurrentWidget(self._simulation_panel)
+
     @Slot(dict)
     def _start_ppo_training(self, params: dict) -> None:
         if self._ppo_process and self._ppo_process.state() != QProcess.NotRunning:
@@ -260,30 +272,64 @@ class MainWindow(QMainWindow):
 
         self._log_panel.add_log("▶️ 開始 PPO 訓練")
         data_path = "data/raw_history/1_M5_2024-01-21_2205-2026-01-19_0215.csv"
-        self._ppo_process.start(
-            sys.executable,
-            [
-                "ml/rl/train/train_ppo.py",
-                "--data",
-                data_path,
-                "--total-steps",
-                str(params["total_steps"]),
-                "--learning-rate",
-                str(params["learning_rate"]),
-                "--gamma",
-                str(params["gamma"]),
-                "--n-steps",
-                str(params["n_steps"]),
-                "--batch-size",
-                str(params["batch_size"]),
-                "--ent-coef",
-                str(params["ent_coef"]),
-                "--episode-length",
-                str(params["episode_length"]),
-                "--eval-split",
-                str(params["eval_split"]),
-            ],
-        )
+        args = [
+            "ml/rl/train/train_ppo.py",
+            "--data",
+            data_path,
+            "--total-steps",
+            str(params["total_steps"]),
+            "--learning-rate",
+            str(params["learning_rate"]),
+            "--gamma",
+            str(params["gamma"]),
+            "--n-steps",
+            str(params["n_steps"]),
+            "--batch-size",
+            str(params["batch_size"]),
+            "--ent-coef",
+            str(params["ent_coef"]),
+            "--episode-length",
+            str(params["episode_length"]),
+            "--eval-split",
+            str(params["eval_split"]),
+        ]
+        if params.get("resume"):
+            args.append("--resume")
+        self._ppo_process.start(sys.executable, args)
+
+    @Slot(dict)
+    def _start_simulation(self, params: dict) -> None:
+        if self._sim_process and self._sim_process.state() != QProcess.NotRunning:
+            self._log_panel.add_log("ℹ️ 回放模擬仍在進行中")
+            return
+
+        self._simulation_panel.reset_plot()
+        self._sim_process = QProcess(self)
+        env = QProcessEnvironment.systemEnvironment()
+        env.insert("PYTHONPATH", ".")
+        self._sim_process.setProcessEnvironment(env)
+
+        self._sim_process.readyReadStandardOutput.connect(self._on_sim_stdout)
+        self._sim_process.readyReadStandardError.connect(self._on_sim_stderr)
+        self._sim_process.finished.connect(self._on_sim_finished)
+
+        args = [
+            "ml/rl/sim/run_live_sim.py",
+            "--data",
+            params["data"],
+            "--model",
+            params["model"],
+            "--log-every",
+            str(params["log_every"]),
+            "--max-steps",
+            str(params["max_steps"]),
+            "--transaction-cost-bps",
+            str(params["transaction_cost_bps"]),
+            "--slippage-bps",
+            str(params["slippage_bps"]),
+        ]
+        self._log_panel.add_log("▶️ 開始回放模擬")
+        self._sim_process.start(sys.executable, args)
 
     @Slot()
     def _on_ppo_stdout(self) -> None:
@@ -303,6 +349,91 @@ class MainWindow(QMainWindow):
         for line in output.splitlines():
             if line.strip():
                 self._log_panel.add_log(f"⚠️ {line}")
+
+    @Slot()
+    def _on_sim_stdout(self) -> None:
+        if not self._sim_process:
+            return
+        output = bytes(self._sim_process.readAllStandardOutput()).decode(errors="replace")
+        for line in output.splitlines():
+            if line.strip():
+                self._log_panel.add_log(line)
+                self._maybe_update_sim_plot(line)
+
+    @Slot()
+    def _on_sim_stderr(self) -> None:
+        if not self._sim_process:
+            return
+        output = bytes(self._sim_process.readAllStandardError()).decode(errors="replace")
+        for line in output.splitlines():
+            if line.strip():
+                self._log_panel.add_log(f"⚠️ {line}")
+
+    @Slot(int, QProcess.ExitStatus)
+    def _on_sim_finished(self, exit_code: int, exit_status: QProcess.ExitStatus) -> None:
+        status = "完成" if exit_status == QProcess.NormalExit else "異常結束"
+        self._log_panel.add_log(f"⏹️ 回放模擬{status} (exit={exit_code})")
+        self._sim_process = None
+
+    def _maybe_update_sim_plot(self, line: str) -> None:
+        if "step=" in line and "equity=" in line:
+            parts = line.split()
+            step = None
+            equity = None
+            for part in parts:
+                if part.startswith("step="):
+                    try:
+                        step = int(part.split("=")[1])
+                    except ValueError:
+                        pass
+                if part.startswith("equity="):
+                    try:
+                        equity = float(part.split("=")[1])
+                    except ValueError:
+                        pass
+            if step is not None and equity is not None:
+                self._simulation_panel.ingest_equity(step, equity)
+                return
+        if line.startswith("Done."):
+            tokens = line.replace("Done.", "").split()
+            data = {}
+            for token in tokens:
+                if "=" in token:
+                    key, value = token.split("=", 1)
+                    data[key] = value
+            try:
+                trades = int(data.get("trades", "0"))
+                equity = float(data.get("equity", "0"))
+                total_return = float(data.get("return", "0"))
+            except ValueError:
+                return
+            self._simulation_panel.update_summary(
+                total_return=total_return,
+                trades=trades,
+                equity=equity,
+            )
+        if line.startswith("Max drawdown:"):
+            try:
+                max_dd = float(line.split(":", 1)[1].strip())
+            except ValueError:
+                return
+            self._simulation_panel.update_summary(max_drawdown=max_dd)
+        if line.startswith("Sharpe:"):
+            try:
+                sharpe = float(line.split(":", 1)[1].strip())
+            except ValueError:
+                return
+            self._simulation_panel.update_summary(sharpe=sharpe)
+        if line.startswith("Trade stats:"):
+            self._simulation_panel.update_trade_stats(line.replace("Trade stats:", "").strip())
+        if line.startswith("Streak stats:"):
+            self._simulation_panel.update_streak_stats(line.replace("Streak stats:", "").strip())
+        if line.startswith("Holding stats:"):
+            self._simulation_panel.update_holding_stats(line.replace("Holding stats:", "").strip())
+        if line.startswith("Action distribution:"):
+            self._simulation_panel.update_action_distribution(line.replace("Action distribution:", "").strip())
+        if line.startswith("Playback range:"):
+            self._simulation_panel.update_playback_range(line.replace("Playback range:", "").strip())
 
     @Slot(int, QProcess.ExitStatus)
     def _on_ppo_finished(self, exit_code: int, exit_status: QProcess.ExitStatus) -> None:

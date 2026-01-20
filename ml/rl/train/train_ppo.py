@@ -26,6 +26,7 @@ def main() -> None:
     parser.add_argument("--eval-freq", type=int, default=10_000, help="Eval frequency in timesteps.")
     parser.add_argument("--eval-episodes", type=int, default=5, help="Eval episodes per evaluation.")
     parser.add_argument("--model-out", default="ml/rl/models/ppo_forex.zip", help="Output model path.")
+    parser.add_argument("--resume", action="store_true", help="Resume training from existing model.")
     args = parser.parse_args()
 
     df = load_csv(args.data)
@@ -47,16 +48,22 @@ def main() -> None:
     env = DummyVecEnv([lambda: Monitor(TradingEnv(train_features, train_closes, train_config))])
     eval_env = DummyVecEnv([lambda: Monitor(TradingEnv(eval_features, eval_closes, eval_config))])
 
-    model = PPO(
-        "MlpPolicy",
-        env,
-        verbose=1,
-        learning_rate=args.learning_rate,
-        n_steps=args.n_steps,
-        batch_size=args.batch_size,
-        gamma=args.gamma,
-        ent_coef=args.ent_coef,
-    )
+    model_path = Path(args.model_out)
+    if args.resume:
+        if not model_path.exists():
+            raise FileNotFoundError(f"Resume requested but model not found: {model_path}")
+        model = PPO.load(str(model_path), env=env)
+    else:
+        model = PPO(
+            "MlpPolicy",
+            env,
+            verbose=1,
+            learning_rate=args.learning_rate,
+            n_steps=args.n_steps,
+            batch_size=args.batch_size,
+            gamma=args.gamma,
+            ent_coef=args.ent_coef,
+        )
     eval_callback = EvalCallback(
         eval_env,
         eval_freq=args.eval_freq,
@@ -65,7 +72,6 @@ def main() -> None:
     )
     model.learn(total_timesteps=args.total_steps, callback=eval_callback)
 
-    model_path = Path(args.model_out)
     model_path.parent.mkdir(parents=True, exist_ok=True)
     model.save(str(model_path))
 

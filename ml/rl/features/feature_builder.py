@@ -26,7 +26,13 @@ def build_features(df: pd.DataFrame) -> FeatureSet:
     close = df["close"].astype(float)
     high = df["high"].astype(float)
     low = df["low"].astype(float)
-    volume = df["volume"].astype(float)
+    if "volume" in df.columns:
+        volume = df["volume"].astype(float)
+        vol_mean = volume.rolling(20).mean()
+        vol_std = volume.rolling(20).std().replace(0, np.nan)
+        vol_z = (volume - vol_mean) / vol_std
+    else:
+        vol_z = pd.Series(0.0, index=df.index)
 
     returns_1 = close.pct_change(1)
     returns_5 = close.pct_change(5)
@@ -35,10 +41,6 @@ def build_features(df: pd.DataFrame) -> FeatureSet:
 
     rsi_14 = _rsi(close, period=14)
     atr_14 = _atr(high, low, close, period=14) / close
-
-    vol_mean = volume.rolling(20).mean()
-    vol_std = volume.rolling(20).std().replace(0, np.nan)
-    vol_z = (volume - vol_mean) / vol_std
 
     features = pd.DataFrame(
         {
