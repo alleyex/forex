@@ -30,7 +30,6 @@ from application import (
     BrokerUseCases,
     EventBus,
     OAuthServiceLike,
-    TrendbarHistoryServiceLike,
 )
 from domain import AccountFundsSnapshot
 from config.settings import OAuthTokens
@@ -66,7 +65,6 @@ class MainWindow(QMainWindow):
         self._app_state = app_state
         self._service = service
         self._oauth_service = oauth_service
-        self._trendbar_history_service: Optional[TrendbarHistoryServiceLike] = None
         self._history_download_controller: Optional[HistoryDownloadController] = None
         self._trendbar_controller: Optional[TrendbarController] = None
         self._trendbar_symbol_id = 1
@@ -203,11 +201,10 @@ class MainWindow(QMainWindow):
     @Slot(dict)
     def _start_ppo_training(self, params: dict) -> None:
         self._training_panel.reset_metrics()
-        data_path = "data/raw_history/1_M5_2024-01-21_2205-2026-01-19_0215.csv"
         controller = self._get_ppo_controller()
         if controller is None:
             return
-        controller.start(params, data_path)
+        controller.start(params, params.get("data_path", ""))
 
     @Slot(dict)
     def _start_simulation(self, params: dict) -> None:
@@ -307,20 +304,6 @@ class MainWindow(QMainWindow):
             )
         return self._simulation_controller
 
-    def _handle_trendbar_history(self, bars: list) -> None:
-        self.logRequested.emit("📚 M5 歷史資料（最近 2 年）")
-        if not bars:
-            self.logRequested.emit("⚠️ 歷史資料為空")
-            return
-        for bar in bars:
-            self.logRequested.emit(
-                f"🕒 {bar['timestamp']} "
-                f"O={self._format_price(bar['open'])} "
-                f"H={self._format_price(bar['high'])} "
-                f"L={self._format_price(bar['low'])} "
-                f"C={self._format_price(bar['close'])}"
-            )
-
     @Slot()
     def _on_fetch_account_info(self) -> None:
         """Handle fetch account info click"""
@@ -406,7 +389,6 @@ class MainWindow(QMainWindow):
     def set_service(self, service: AppAuthServiceLike) -> None:
         """Set the authenticated service"""
         self._service = service
-        self._trendbar_history_service = None
         if self._trendbar_controller:
             self._trendbar_controller.reset()
         self._service.set_callbacks(
@@ -527,7 +509,6 @@ class MainWindow(QMainWindow):
         if status == ConnectionStatus.DISCONNECTED and self._oauth_service:
             self._oauth_service.disconnect()
             self._oauth_status_label.setText(self._format_oauth_status())
-            self._trendbar_history_service = None
             if self._trendbar_controller:
                 self._trendbar_controller.reset()
             if not self._reconnect_timer.isActive():

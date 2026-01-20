@@ -17,6 +17,9 @@ from PySide6.QtWidgets import (
     QDoubleSpinBox,
     QPushButton,
     QCheckBox,
+    QLineEdit,
+    QFileDialog,
+    QWidget,
 )
 
 
@@ -64,6 +67,17 @@ class TrainingPanel(QWidget):
         form = QFormLayout()
         form.setLabelAlignment(Qt.AlignLeft)
         form.setFormAlignment(Qt.AlignTop)
+
+        self._data_path = QLineEdit("data/raw_history/1_M5_2024-01-21_2205-2026-01-19_0215.csv")
+        browse = QPushButton("選擇")
+        browse.clicked.connect(self._browse_data)
+        data_row = QWidget()
+        data_layout = QHBoxLayout(data_row)
+        data_layout.setContentsMargins(0, 0, 0, 0)
+        data_layout.setSpacing(6)
+        data_layout.addWidget(self._data_path, stretch=1)
+        data_layout.addWidget(browse)
+        form.addRow("data_path", data_row)
 
         self._total_steps = QSpinBox()
         self._total_steps.setRange(1, 10_000_000)
@@ -186,6 +200,7 @@ class TrainingPanel(QWidget):
 
     def get_params(self) -> dict:
         return {
+            "data_path": self._data_path.text().strip(),
             "total_steps": int(self._total_steps.value()),
             "learning_rate": float(self._learning_rate.value()),
             "gamma": float(self._gamma.value()),
@@ -196,6 +211,13 @@ class TrainingPanel(QWidget):
             "eval_split": float(self._eval_split.value()),
             "resume": bool(self._resume_training.isChecked()),
         }
+
+    def _browse_data(self) -> None:
+        path, _ = QFileDialog.getOpenFileName(
+            self, "選擇訓練資料", self._data_path.text(), "CSV (*.csv)"
+        )
+        if path:
+            self._data_path.setText(path)
 
     def reset_metrics(self) -> None:
         if not self._charts_available:

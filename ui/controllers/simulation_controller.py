@@ -1,9 +1,11 @@
 from __future__ import annotations
 
 import sys
+from pathlib import Path
 from typing import Callable, Optional
 
 from PySide6.QtCore import QObject, QProcess, QProcessEnvironment
+from PySide6.QtWidgets import QMessageBox, QWidget
 
 
 class SimulationController(QObject):
@@ -40,6 +42,15 @@ class SimulationController(QObject):
             self._log("ℹ️ 回放模擬仍在進行中")
             return
 
+        data_path = params.get("data", "").strip()
+        model_path = params.get("model", "").strip()
+        if not data_path or not Path(data_path).exists():
+            self._show_error("資料檔案不存在，請選擇有效的 CSV 檔案。")
+            return
+        if not model_path or not Path(model_path).exists():
+            self._show_error("模型檔案不存在，請選擇有效的 ZIP 檔案。")
+            return
+
         self._reset_plot()
         self._process = QProcess(self)
         env = QProcessEnvironment.systemEnvironment()
@@ -53,9 +64,9 @@ class SimulationController(QObject):
         args = [
             "ml/rl/sim/run_live_sim.py",
             "--data",
-            params["data"],
+            data_path,
             "--model",
-            params["model"],
+            model_path,
             "--log-every",
             str(params["log_every"]),
             "--max-steps",
@@ -67,6 +78,12 @@ class SimulationController(QObject):
         ]
         self._log("▶️ 開始回放模擬")
         self._process.start(sys.executable, args)
+
+    def _show_error(self, message: str) -> None:
+        self._log(f"⚠️ {message}")
+        parent = self.parent()
+        if isinstance(parent, QWidget):
+            QMessageBox.warning(parent, "回放參數錯誤", message)
 
     def _on_stdout(self) -> None:
         if not self._process:
