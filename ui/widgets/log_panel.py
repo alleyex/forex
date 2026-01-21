@@ -1,23 +1,15 @@
 # ui/widgets/log_panel.py
-from datetime import datetime
-from PySide6.QtGui import QFontDatabase
-from PySide6.QtWidgets import QWidget, QVBoxLayout, QTextEdit
+from ui.widgets.log_widget import LogWidget
 
-class LogPanel(QWidget):
+
+class LogPanel(LogWidget):
     def __init__(self):
-        super().__init__()
+        super().__init__(
+            title="",
+            with_timestamp=True,
+            monospace=True,
+            font_point_delta=2,
+        )
 
-        layout = QVBoxLayout()
-        self.text = QTextEdit()
-        self.text.setReadOnly(True)
-        font = QFontDatabase.systemFont(QFontDatabase.FixedFont)
-        font.setPointSize(font.pointSize() + 2)
-        self.text.setFont(font)
-        layout.addWidget(self.text)
-        self.setLayout(layout)
-
-    def add_log(self, msg: str):
-        ts = datetime.now().strftime("%H:%M:%S")
-        self.text.append(f"[{ts}] {msg}")
-        scrollbar = self.text.verticalScrollBar()
-        scrollbar.setValue(scrollbar.maximum())
+    def add_log(self, msg: str) -> None:
+        self.append(msg)

@@ -2,7 +2,6 @@
 帳戶列表服務
 """
 from dataclasses import dataclass
-import threading
 from typing import Callable, Optional, Protocol, Sequence
 
 from ctrader_open_api import Client
@@ -11,6 +10,12 @@ from ctrader_open_api.messages.OpenApiModelMessages_pb2 import ProtoOAPayloadTyp
 
 from broker.base import BaseCallbacks, LogHistoryMixin, OperationStateMixin, build_callbacks
 from infrastructure.broker.ctrader.services.app_auth_service import AppAuthService
+from infrastructure.broker.ctrader.services.message_helpers import (
+    dispatch_payload,
+    format_error,
+    format_success,
+)
+from infrastructure.broker.ctrader.services.timeout_tracker import TimeoutTracker
 
 
 class AccountInfoMessage(Protocol):
@@ -47,7 +52,7 @@ class AccountListService(LogHistoryMixin[AccountListServiceCallbacks], Operation
         self._access_token = access_token
         self._callbacks = AccountListServiceCallbacks()
         self._in_progress = False
-        self._timeout_timer: Optional[threading.Timer] = None
+        self._timeout_tracker = TimeoutTracker(self._on_timeout)
         self._log_history = []
 
     def set_access_token(self, access_token: str) -> None:
@@ -78,7 +83,7 @@ class AccountListService(LogHistoryMixin[AccountListServiceCallbacks], Operation
             return
 
         self._app_auth_service.add_message_handler(self._handle_message)
-        self._start_timeout_timer(timeout_seconds)
+        self._timeout_tracker.start(timeout_seconds)
         self._send_request()
 
     def _send_request(self) -> None:
@@ -92,7 +97,7 @@ class AccountListService(LogHistoryMixin[AccountListServiceCallbacks], Operation
             self._emit_error(str(exc))
             self._end_operation()
             self._app_auth_service.remove_message_handler(self._handle_message)
-            self._cancel_timeout_timer()
+            self._timeout_tracker.cancel()
             return
         client.send(request)
 
@@ -100,24 +105,21 @@ class AccountListService(LogHistoryMixin[AccountListServiceCallbacks], Operation
         """處理帳戶列表回應"""
         if not self._in_progress:
             return False
-
-        if msg.payloadType == ProtoOAPayloadType.PROTO_OA_GET_ACCOUNTS_BY_ACCESS_TOKEN_RES:
-            self._on_accounts_received(msg)
-            return True
-
-        if msg.payloadType == ProtoOAPayloadType.PROTO_OA_ERROR_RES:
-            self._on_error(msg)
-            return True
-
-        return False
+        return dispatch_payload(
+            msg,
+            {
+                ProtoOAPayloadType.PROTO_OA_GET_ACCOUNTS_BY_ACCESS_TOKEN_RES: self._on_accounts_received,
+                ProtoOAPayloadType.PROTO_OA_ERROR_RES: self._on_error,
+            },
+        )
 
     def _on_accounts_received(self, msg: AccountListMessage) -> None:
         """帳戶列表接收成功"""
         self._end_operation()
         self._app_auth_service.remove_message_handler(self._handle_message)
-        self._cancel_timeout_timer()
+        self._timeout_tracker.cancel()
         accounts = self._parse_accounts(msg.ctidTraderAccount)
-        self._log(f"✅ 已接收帳戶: {len(accounts)} 個")
+        self._log(format_success(f"已接收帳戶: {len(accounts)} 個"))
         if self._callbacks.on_accounts_received:
             self._callbacks.on_accounts_received(accounts)
 
@@ -125,21 +127,8 @@ class AccountListService(LogHistoryMixin[AccountListServiceCallbacks], Operation
         """帳戶列表接收失敗"""
         self._end_operation()
         self._app_auth_service.remove_message_handler(self._handle_message)
-        self._cancel_timeout_timer()
-        self._emit_error(f"錯誤 {msg.errorCode}: {msg.description}")
-
-    def _start_timeout_timer(self, timeout_seconds: Optional[int]) -> None:
-        if not timeout_seconds:
-            return
-        self._cancel_timeout_timer()
-        self._timeout_timer = threading.Timer(timeout_seconds, self._on_timeout)
-        self._timeout_timer.daemon = True
-        self._timeout_timer.start()
-
-    def _cancel_timeout_timer(self) -> None:
-        if self._timeout_timer:
-            self._timeout_timer.cancel()
-            self._timeout_timer = None
+        self._timeout_tracker.cancel()
+        self._emit_error(format_error(msg.errorCode, msg.description))
 
     def _on_timeout(self) -> None:
         if not self._in_progress:

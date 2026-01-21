@@ -73,7 +73,7 @@ class TrendbarController(QObject):
                 f"L={self._format_price(data['low'])} "
                 f"C={self._format_price(data['close'])}"
             ),
-            on_error=lambda e: self._log_async(f"⚠️ 趨勢棒錯誤: {e}"),
+            on_error=lambda e: self._log_async(f"⚠️ K 線錯誤: {e}"),
             on_log=self._log_async,
         )
 
@@ -86,11 +86,11 @@ class TrendbarController(QObject):
         )
         self._active = True
         self._set_active(True)
-        self._log(f"📈 已開始 M1 趨勢棒：symbol {symbol_id}")
+        self._log(f"📈 已開始 M1 K 線：symbol {symbol_id}")
 
     def stop(self) -> None:
         if not self._trendbar_service or not self._trendbar_service.in_progress:
-            self._log("ℹ️ 目前沒有趨勢棒訂閱")
+            self._log("ℹ️ 目前沒有 K 線訂閱")
             self._active = False
             self._set_active(False)
             return

@@ -2,7 +2,6 @@
 OAuth 帳戶認證服務
 """
 from dataclasses import dataclass
-import threading
 from typing import Callable, Optional, Protocol
 
 from ctrader_open_api import Client
@@ -10,6 +9,12 @@ from ctrader_open_api.messages.OpenApiMessages_pb2 import ProtoOAAccountAuthReq
 
 from broker.base import BaseCallbacks, BaseService, build_callbacks
 from infrastructure.broker.ctrader.services.app_auth_service import AppAuthService
+from infrastructure.broker.ctrader.services.message_helpers import (
+    dispatch_payload,
+    format_error,
+    format_success,
+)
+from infrastructure.broker.ctrader.services.timeout_tracker import TimeoutTracker
 from config.constants import ConnectionStatus, MessageType
 from config.paths import TOKEN_FILE
 from config.settings import OAuthTokens
@@ -48,7 +53,7 @@ class OAuthService(BaseService[OAuthServiceCallbacks]):
         self._app_auth_service = app_auth_service
         self._client = client
         self._tokens = tokens
-        self._timeout_timer: Optional[threading.Timer] = None
+        self._timeout_tracker = TimeoutTracker(self._on_timeout)
 
     @classmethod
     def create(cls, app_auth_service: AppAuthService, token_file: str = TOKEN_FILE) -> "OAuthService":
@@ -104,14 +109,14 @@ class OAuthService(BaseService[OAuthServiceCallbacks]):
             return
 
         self._app_auth_service.add_message_handler(self._handle_message)
-        self._start_timeout_timer(timeout_seconds)
+        self._timeout_tracker.start(timeout_seconds)
         self._send_auth_request()
 
     def disconnect(self) -> None:
         """中斷帳戶認證流程"""
         if self._in_progress:
             self._end_operation()
-        self._cancel_timeout_timer()
+        self._timeout_tracker.cancel()
         self._app_auth_service.remove_message_handler(self._handle_message)
         self._set_status(ConnectionStatus.DISCONNECTED)
         self._log("🔌 已中斷帳戶連線")
@@ -135,26 +140,21 @@ class OAuthService(BaseService[OAuthServiceCallbacks]):
         """處理帳戶認證回應"""
         if not self._in_progress:
             return False
-
-        msg_type = msg.payloadType
-
-        if msg_type == MessageType.ACCOUNT_AUTH_RESPONSE:
-            self._on_auth_success()
-            return True
-
-        if msg_type == MessageType.ERROR_RESPONSE:
-            self._on_auth_error(msg)
-            return True
-
-        return False
+        return dispatch_payload(
+            msg,
+            {
+                MessageType.ACCOUNT_AUTH_RESPONSE: lambda _msg: self._on_auth_success(),
+                MessageType.ERROR_RESPONSE: self._on_auth_error,
+            },
+        )
 
     def _on_auth_success(self) -> None:
         """認證成功處理"""
         self._end_operation()
         self._app_auth_service.remove_message_handler(self._handle_message)
-        self._cancel_timeout_timer()
+        self._timeout_tracker.cancel()
         self._set_status(ConnectionStatus.ACCOUNT_AUTHENTICATED)
-        self._log("✅ 帳戶已授權！")
+        self._log(format_success("帳戶已授權！"))
         if self._callbacks.on_oauth_success:
             self._callbacks.on_oauth_success(self._tokens)
 
@@ -162,22 +162,9 @@ class OAuthService(BaseService[OAuthServiceCallbacks]):
         """認證錯誤處理"""
         self._end_operation()
         self._app_auth_service.remove_message_handler(self._handle_message)
-        self._cancel_timeout_timer()
-        self._emit_error(f"錯誤 {msg.errorCode}: {msg.description}")
+        self._timeout_tracker.cancel()
+        self._emit_error(format_error(msg.errorCode, msg.description))
         self._set_status(ConnectionStatus.DISCONNECTED)
-
-    def _start_timeout_timer(self, timeout_seconds: Optional[int]) -> None:
-        if not timeout_seconds:
-            return
-        self._cancel_timeout_timer()
-        self._timeout_timer = threading.Timer(timeout_seconds, self._on_timeout)
-        self._timeout_timer.daemon = True
-        self._timeout_timer.start()
-
-    def _cancel_timeout_timer(self) -> None:
-        if self._timeout_timer:
-            self._timeout_timer.cancel()
-            self._timeout_timer = None
 
     def _on_timeout(self) -> None:
         if not self._in_progress:

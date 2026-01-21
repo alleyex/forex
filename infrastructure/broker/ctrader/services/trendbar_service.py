@@ -1,5 +1,5 @@
 """
-即時趨勢棒推播服務
+即時 K 線推播服務
 """
 from dataclasses import dataclass
 from datetime import datetime, timezone
@@ -9,13 +9,21 @@ from ctrader_open_api import Client
 from ctrader_open_api.messages.OpenApiMessages_pb2 import (
     ProtoOASubscribeLiveTrendbarReq,
     ProtoOAUnsubscribeLiveTrendbarReq,
-    ProtoOASubscribeSpotsReq,
-    ProtoOAUnsubscribeSpotsReq,
 )
 from ctrader_open_api.messages.OpenApiModelMessages_pb2 import ProtoOAPayloadType, ProtoOATrendbarPeriod
 
 from broker.base import BaseCallbacks, LogHistoryMixin, OperationStateMixin, build_callbacks
 from infrastructure.broker.ctrader.services.app_auth_service import AppAuthService
+from infrastructure.broker.ctrader.services.message_helpers import (
+    dispatch_payload,
+    format_confirm,
+    format_error,
+    is_already_subscribed,
+)
+from infrastructure.broker.ctrader.services.spot_subscription import (
+    send_spot_subscribe,
+    send_spot_unsubscribe,
+)
 
 
 class TrendbarMessage(Protocol):
@@ -48,7 +56,7 @@ class TrendbarServiceCallbacks(BaseCallbacks):
 
 class TrendbarService(LogHistoryMixin[TrendbarServiceCallbacks], OperationStateMixin):
     """
-    訂閱即時趨勢棒推播
+    訂閱即時 K 線推播
     """
 
     def __init__(self, app_auth_service: AppAuthService):
@@ -79,7 +87,7 @@ class TrendbarService(LogHistoryMixin[TrendbarServiceCallbacks], OperationStateM
         self._replay_log_history()
 
     def subscribe(self, account_id: int, symbol_id: int) -> None:
-        """訂閱即時趨勢棒"""
+        """訂閱即時 K 線"""
         if self._in_progress:
             self.unsubscribe()
 
@@ -101,11 +109,11 @@ class TrendbarService(LogHistoryMixin[TrendbarServiceCallbacks], OperationStateM
         request.symbolId = self._symbol_id
         request.period = self._period
         self._client.send(request)
-        self._log(f"📡 已送出趨勢棒訂閱：{self._symbol_id} (M1)")
+        self._log(f"📡 已送出 K 線訂閱：{self._symbol_id} (M1)")
         self._start_operation()
 
     def unsubscribe(self) -> None:
-        """取消訂閱即時趨勢棒"""
+        """取消訂閱即時 K 線"""
         if not self._in_progress or self._account_id is None or self._symbol_id is None:
             return
         request = ProtoOAUnsubscribeLiveTrendbarReq()
@@ -124,23 +132,55 @@ class TrendbarService(LogHistoryMixin[TrendbarServiceCallbacks], OperationStateM
             self._unsubscribe_spot()
         self._app_auth_service.remove_message_handler(self._handle_message)
         self._end_operation()
-        self._log(f"🔕 已取消趨勢棒訂閱：{self._symbol_id} (M1)")
+        self._log(f"🔕 已取消 K 線訂閱：{self._symbol_id} (M1)")
 
     def _handle_message(self, client: Client, msg: object) -> bool:
         if not self._in_progress:
             return False
 
-        payload = getattr(msg, "payloadType", None)
+        return dispatch_payload(
+            msg,
+            {
+                ProtoOAPayloadType.PROTO_OA_SPOT_EVENT: self._on_spot_event,
+                ProtoOAPayloadType.PROTO_OA_SUBSCRIBE_SPOTS_RES: self._on_spot_subscribe_confirmed,
+                ProtoOAPayloadType.PROTO_OA_UNSUBSCRIBE_SPOTS_RES: self._on_spot_unsubscribe_confirmed,
+                ProtoOAPayloadType.PROTO_OA_SUBSCRIBE_LIVE_TRENDBAR_RES: self._on_trendbar_subscribe_confirmed,
+                ProtoOAPayloadType.PROTO_OA_UNSUBSCRIBE_LIVE_TRENDBAR_RES: self._on_trendbar_unsubscribe_confirmed,
+                ProtoOAPayloadType.PROTO_OA_ERROR_RES: self._on_error,
+            },
+        )
 
-        if payload == ProtoOAPayloadType.PROTO_OA_SPOT_EVENT:
-            self._on_spot_event(msg)
-            return True
+    def _on_spot_subscribe_confirmed(self, _msg: object) -> None:
+        self._log(
+            format_confirm(
+                "報價訂閱已確認",
+                ProtoOAPayloadType.PROTO_OA_SUBSCRIBE_SPOTS_RES,
+            )
+        )
 
-        if payload == ProtoOAPayloadType.PROTO_OA_ERROR_RES:
-            self._on_error(msg)
-            return True
+    def _on_spot_unsubscribe_confirmed(self, _msg: object) -> None:
+        self._log(
+            format_confirm(
+                "報價退訂已確認",
+                ProtoOAPayloadType.PROTO_OA_UNSUBSCRIBE_SPOTS_RES,
+            )
+        )
 
-        return False
+    def _on_trendbar_subscribe_confirmed(self, _msg: object) -> None:
+        self._log(
+            format_confirm(
+                "K 線訂閱已確認",
+                ProtoOAPayloadType.PROTO_OA_SUBSCRIBE_LIVE_TRENDBAR_RES,
+            )
+        )
+
+    def _on_trendbar_unsubscribe_confirmed(self, _msg: object) -> None:
+        self._log(
+            format_confirm(
+                "K 線退訂已確認",
+                ProtoOAPayloadType.PROTO_OA_UNSUBSCRIBE_LIVE_TRENDBAR_RES,
+            )
+        )
 
     def _on_spot_event(self, msg: SpotEventMessage) -> None:
         if self._account_id and msg.ctidTraderAccountId != self._account_id:
@@ -178,24 +218,27 @@ class TrendbarService(LogHistoryMixin[TrendbarServiceCallbacks], OperationStateM
             self._callbacks.on_trendbar(data)
 
     def _on_error(self, msg: ErrorMessage) -> None:
-        if "ALREADY_SUBSCRIBED" in f"{msg.errorCode}" or "ALREADY_SUBSCRIBED" in msg.description:
+        if is_already_subscribed(msg.errorCode, msg.description):
             return
-        self._emit_error(f"錯誤 {msg.errorCode}: {msg.description}")
+        self._emit_error(format_error(msg.errorCode, msg.description))
 
     def _ensure_spot_subscription(self) -> None:
         if self._account_id is None or self._symbol_id is None:
             return
-        request = ProtoOASubscribeSpotsReq()
-        request.ctidTraderAccountId = self._account_id
-        request.symbolId.append(self._symbol_id)
-        request.subscribeToSpotTimestamp = True
-        self._client.send(request)
+        send_spot_subscribe(
+            self._client,
+            account_id=self._account_id,
+            symbol_id=self._symbol_id,
+            log=self._log,
+            subscribe_to_spot_timestamp=True,
+        )
         self._spot_subscribed = True
-        self._log(f"📡 已送出報價訂閱：{self._symbol_id}")
 
     def _unsubscribe_spot(self) -> None:
-        request = ProtoOAUnsubscribeSpotsReq()
-        request.ctidTraderAccountId = self._account_id
-        request.symbolId.append(self._symbol_id)
-        self._client.send(request)
+        send_spot_unsubscribe(
+            self._client,
+            account_id=self._account_id,
+            symbol_id=self._symbol_id,
+            log=self._log,
+        )
         self._spot_subscribed = False

@@ -2,7 +2,6 @@
 帳戶資金狀態服務
 """
 from dataclasses import dataclass
-import threading
 from typing import Callable, Optional, Protocol, Sequence
 
 from ctrader_open_api import Client
@@ -16,6 +15,8 @@ from ctrader_open_api.messages.OpenApiModelMessages_pb2 import ProtoOAPayloadTyp
 
 from broker.base import BaseCallbacks, LogHistoryMixin, OperationStateMixin, build_callbacks
 from infrastructure.broker.ctrader.services.app_auth_service import AppAuthService
+from infrastructure.broker.ctrader.services.message_helpers import format_error
+from infrastructure.broker.ctrader.services.timeout_tracker import TimeoutTracker
 
 
 class TraderMessage(Protocol):
@@ -88,7 +89,7 @@ class AccountFundsService(LogHistoryMixin[AccountFundsServiceCallbacks], Operati
         self._app_auth_service = app_auth_service
         self._callbacks = AccountFundsServiceCallbacks()
         self._in_progress = False
-        self._timeout_timer: Optional[threading.Timer] = None
+        self._timeout_tracker = TimeoutTracker(self._on_timeout)
         self._log_history = []
         self._reset_state()
 
@@ -127,7 +128,7 @@ class AccountFundsService(LogHistoryMixin[AccountFundsServiceCallbacks], Operati
             return
 
         self._app_auth_service.add_message_handler(self._handle_message)
-        self._start_timeout_timer(timeout_seconds)
+        self._timeout_tracker.start(timeout_seconds)
 
         self._send_trader_request()
         self._send_reconcile_request()
@@ -248,7 +249,7 @@ class AccountFundsService(LogHistoryMixin[AccountFundsServiceCallbacks], Operati
         self._maybe_finish()
 
     def _on_error(self, msg: ErrorMessage) -> None:
-        self._emit_error(f"錯誤 {msg.errorCode}: {msg.description}")
+        self._emit_error(format_error(msg.errorCode, msg.description))
         self._cleanup()
 
     def _maybe_finish(self) -> None:
@@ -283,20 +284,7 @@ class AccountFundsService(LogHistoryMixin[AccountFundsServiceCallbacks], Operati
     def _cleanup(self) -> None:
         self._end_operation()
         self._app_auth_service.remove_message_handler(self._handle_message)
-        self._cancel_timeout_timer()
-
-    def _start_timeout_timer(self, timeout_seconds: Optional[int]) -> None:
-        if not timeout_seconds:
-            return
-        self._cancel_timeout_timer()
-        self._timeout_timer = threading.Timer(timeout_seconds, self._on_timeout)
-        self._timeout_timer.daemon = True
-        self._timeout_timer.start()
-
-    def _cancel_timeout_timer(self) -> None:
-        if self._timeout_timer:
-            self._timeout_timer.cancel()
-            self._timeout_timer = None
+        self._timeout_tracker.cancel()
 
     def _on_timeout(self) -> None:
         if not self._in_progress:
