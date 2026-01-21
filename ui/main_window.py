@@ -11,7 +11,7 @@ from PySide6.QtWidgets import (
     QDockWidget,
     QStackedWidget,
 )
-from PySide6.QtCore import Slot, Signal, QTimer, Qt
+from PySide6.QtCore import Slot, Signal, Qt
 from PySide6.QtGui import QAction, QFont
 from PySide6.QtWidgets import QStyle
 
@@ -71,10 +71,6 @@ class MainWindow(QMainWindow):
         self._price_digits = 5
         self._app_auth_dialog_open = False
         self._oauth_dialog_open = False
-        self._reconnect_timer = QTimer(self)
-        self._reconnect_timer.setInterval(5000)
-        self._reconnect_timer.timeout.connect(self._attempt_reconnect)
-        self._reconnect_logged = False
         self._ppo_controller: Optional[PPOTrainingController] = None
         self._simulation_controller: Optional[SimulationController] = None
 
@@ -511,15 +507,8 @@ class MainWindow(QMainWindow):
             self._oauth_status_label.setText(self._format_oauth_status())
             if self._trendbar_controller:
                 self._trendbar_controller.reset()
-            if not self._reconnect_timer.isActive():
-                self._reconnect_timer.start()
-                if not self._reconnect_logged:
-                    self._log_panel.add_log("🔄 偵測到斷線，將自動嘗試重新連線")
-                    self._reconnect_logged = True
         if status >= ConnectionStatus.APP_AUTHENTICATED:
-            if self._reconnect_timer.isActive():
-                self._reconnect_timer.stop()
-            self._reconnect_logged = False
+            pass
 
     def _handle_oauth_success(self, _tokens) -> None:
         self._oauth_status_label.setText(self._format_oauth_status())
@@ -551,19 +540,6 @@ class MainWindow(QMainWindow):
         reactor_manager.ensure_running()
         from twisted.internet import reactor
         reactor.callFromThread(self._oauth_service.connect)
-
-    def _attempt_reconnect(self) -> None:
-        if not self._service:
-            return
-        if self._is_app_authenticated():
-            self._reconnect_timer.stop()
-            self._reconnect_logged = False
-            return
-        if self._service.status == ConnectionStatus.CONNECTING:
-            return
-        reactor_manager.ensure_running()
-        from twisted.internet import reactor
-        reactor.callFromThread(self._service.connect)
 
     def _is_app_authenticated(self) -> bool:
         if not self._service:

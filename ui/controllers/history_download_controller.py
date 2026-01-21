@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import time
 from pathlib import Path
 from typing import Callable, Optional
 
@@ -17,6 +18,7 @@ from utils.reactor_manager import reactor_manager
 
 
 class HistoryDownloadController(QObject):
+    DEFAULT_HISTORY_COUNT = 100000
     def __init__(
         self,
         *,
@@ -44,6 +46,8 @@ class HistoryDownloadController(QObject):
         pipeline = self._ensure_pipeline()
         bars_per_day = 24 * 12
         two_years_bars = 365 * 2 * bars_per_day
+        now_ms = int(time.time() * 1000)
+        from_ts = now_ms - int(two_years_bars * 5 * 60 * 1000)
 
         reactor_manager.ensure_running()
         from twisted.internet import reactor
@@ -51,8 +55,10 @@ class HistoryDownloadController(QObject):
             pipeline.fetch_to_raw,
             account_id,
             symbol_id,
-            two_years_bars,
+            self.DEFAULT_HISTORY_COUNT,
             timeframe=timeframe,
+            from_ts=from_ts,
+            to_ts=now_ms,
             on_saved=lambda path: self._log_async(f"✅ 已儲存歷史資料：{path}"),
             on_error=lambda e: self._log_async(f"⚠️ 歷史資料錯誤: {e}"),
             on_log=self._log_async,
@@ -97,6 +103,7 @@ class HistoryDownloadController(QObject):
         pipeline = self._ensure_pipeline()
         minutes = self._timeframe_minutes(params["timeframe"])
         window_minutes = max(1, int((params["to_ts"] - params["from_ts"]) / (60_000 * minutes)))
+        count = min(window_minutes, self.DEFAULT_HISTORY_COUNT)
 
         reactor_manager.ensure_running()
         from twisted.internet import reactor
@@ -104,7 +111,7 @@ class HistoryDownloadController(QObject):
             pipeline.fetch_to_raw,
             account_id,
             params["symbol_id"],
-            window_minutes,
+            count,
             timeframe=params["timeframe"],
             from_ts=params["from_ts"],
             to_ts=params["to_ts"],

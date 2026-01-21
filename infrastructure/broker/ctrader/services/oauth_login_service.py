@@ -10,6 +10,7 @@ from broker.oauth.tokens import TokenExchanger
 from broker.oauth.callback_server import CallbackServer
 from config.paths import TOKEN_FILE
 from config.settings import OAuthTokens, AppCredentials
+from infrastructure.broker.ctrader.services.message_helpers import format_success
 
 
 @dataclass
@@ -92,7 +93,7 @@ class OAuthLoginService(LogHistoryMixin[OAuthLoginServiceCallbacks], OperationSt
                 return
 
             tokens = self.exchange_code(code)
-            self._log("✅ OAuth Token 已儲存")
+            self._log(format_success("OAuth Token 已儲存"))
 
             if self._callbacks.on_oauth_login_success:
                 self._callbacks.on_oauth_login_success(tokens)

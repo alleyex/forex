@@ -2,7 +2,6 @@
 Symbol list service
 """
 from dataclasses import dataclass
-import threading
 from typing import Callable, Optional, Protocol, Sequence
 
 from ctrader_open_api import Client
@@ -11,6 +10,12 @@ from ctrader_open_api.messages.OpenApiModelMessages_pb2 import ProtoOAPayloadTyp
 
 from broker.base import BaseCallbacks, LogHistoryMixin, OperationStateMixin, build_callbacks
 from infrastructure.broker.ctrader.services.app_auth_service import AppAuthService
+from infrastructure.broker.ctrader.services.message_helpers import (
+    dispatch_payload,
+    format_error,
+    format_success,
+)
+from infrastructure.broker.ctrader.services.timeout_tracker import TimeoutTracker
 
 
 class LightSymbolMessage(Protocol):
@@ -39,7 +44,7 @@ class SymbolListService(LogHistoryMixin[SymbolListServiceCallbacks], OperationSt
         self._app_auth_service = app_auth_service
         self._callbacks = SymbolListServiceCallbacks()
         self._in_progress = False
-        self._timeout_timer: Optional[threading.Timer] = None
+        self._timeout_tracker = TimeoutTracker(self._on_timeout)
         self._log_history = []
         self._account_id: Optional[int] = None
         self._include_archived = False
@@ -74,7 +79,7 @@ class SymbolListService(LogHistoryMixin[SymbolListServiceCallbacks], OperationSt
         self._account_id = int(account_id)
         self._include_archived = bool(include_archived)
         self._app_auth_service.add_message_handler(self._handle_message)
-        self._start_timeout_timer(timeout_seconds)
+        self._timeout_tracker.start(timeout_seconds)
         self._send_request()
 
     def _send_request(self) -> None:
@@ -88,51 +93,35 @@ class SymbolListService(LogHistoryMixin[SymbolListServiceCallbacks], OperationSt
             self._emit_error(str(exc))
             self._end_operation()
             self._app_auth_service.remove_message_handler(self._handle_message)
-            self._cancel_timeout_timer()
+            self._timeout_tracker.cancel()
             return
         client.send(request)
 
     def _handle_message(self, client: Client, msg: SymbolListMessage) -> bool:
         if not self._in_progress:
             return False
-
-        if msg.payloadType == ProtoOAPayloadType.PROTO_OA_SYMBOLS_LIST_RES:
-            self._on_symbols_received(msg)
-            return True
-
-        if msg.payloadType == ProtoOAPayloadType.PROTO_OA_ERROR_RES:
-            self._on_error(msg)
-            return True
-
-        return False
+        return dispatch_payload(
+            msg,
+            {
+                ProtoOAPayloadType.PROTO_OA_SYMBOLS_LIST_RES: self._on_symbols_received,
+                ProtoOAPayloadType.PROTO_OA_ERROR_RES: self._on_error,
+            },
+        )
 
     def _on_symbols_received(self, msg: SymbolListMessage) -> None:
         self._end_operation()
         self._app_auth_service.remove_message_handler(self._handle_message)
-        self._cancel_timeout_timer()
+        self._timeout_tracker.cancel()
         symbols = self._parse_symbols(msg.symbol)
-        self._log(f"✅ 已接收 symbol: {len(symbols)} 筆")
+        self._log(format_success(f"已接收 symbol: {len(symbols)} 筆"))
         if self._callbacks.on_symbols_received:
             self._callbacks.on_symbols_received(symbols)
 
     def _on_error(self, msg: SymbolListMessage) -> None:
         self._end_operation()
         self._app_auth_service.remove_message_handler(self._handle_message)
-        self._cancel_timeout_timer()
-        self._emit_error(f"錯誤 {msg.errorCode}: {msg.description}")
-
-    def _start_timeout_timer(self, timeout_seconds: Optional[int]) -> None:
-        if not timeout_seconds:
-            return
-        self._cancel_timeout_timer()
-        self._timeout_timer = threading.Timer(timeout_seconds, self._on_timeout)
-        self._timeout_timer.daemon = True
-        self._timeout_timer.start()
-
-    def _cancel_timeout_timer(self) -> None:
-        if self._timeout_timer:
-            self._timeout_timer.cancel()
-            self._timeout_timer = None
+        self._timeout_tracker.cancel()
+        self._emit_error(format_error(msg.errorCode, msg.description))
 
     def _on_timeout(self) -> None:
         if not self._in_progress:

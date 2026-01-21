@@ -2,15 +2,26 @@
 cTrader 應用程式層級認證服務
 """
 from dataclasses import dataclass
+import threading
+import time
 from typing import Callable, Optional, Protocol
 
 from ctrader_open_api import Client, Protobuf, TcpProtocol, EndPoints
+from ctrader_open_api.messages.OpenApiCommonMessages_pb2 import ProtoHeartbeatEvent
 from ctrader_open_api.messages.OpenApiMessages_pb2 import ProtoOAApplicationAuthReq
+from ctrader_open_api.messages.OpenApiModelMessages_pb2 import ProtoOAPayloadType
 
 from broker.base import BaseAuthService, BaseCallbacks, build_callbacks
 from config.constants import MessageType, ConnectionStatus
 from config.paths import TOKEN_FILE
+from config.runtime import load_config
 from config.settings import AppCredentials
+from infrastructure.broker.ctrader.services.message_helpers import (
+    format_confirm,
+    format_error,
+    format_success,
+    is_already_subscribed,
+)
 
 
 @dataclass
@@ -48,6 +59,11 @@ class AppAuthService(BaseAuthService[AppAuthServiceCallbacks, Client, AppAuthMes
         credentials: AppCredentials,
         host: str,
         port: int,
+        heartbeat_interval: float = 10.0,
+        heartbeat_timeout: float = 30.0,
+        reconnect_delay: float = 3.0,
+        auto_reconnect: bool = True,
+        heartbeat_log_interval: float = 60.0,
     ):
         super().__init__(callbacks=AppAuthServiceCallbacks())
         self._credentials = credentials
@@ -55,6 +71,17 @@ class AppAuthService(BaseAuthService[AppAuthServiceCallbacks, Client, AppAuthMes
         self._port = port
         self._client: Optional[Client] = None
         self._send_wrapped = False
+        self._raw_client_send = None
+        self._heartbeat_interval = heartbeat_interval
+        self._heartbeat_timeout = heartbeat_timeout
+        self._heartbeat_stop = threading.Event()
+        self._heartbeat_thread: Optional[threading.Thread] = None
+        self._last_message_ts: Optional[float] = None
+        self._last_heartbeat_log_ts: Optional[float] = None
+        self._heartbeat_log_interval = heartbeat_log_interval
+        self._reconnect_delay = reconnect_delay
+        self._reconnect_timer: Optional[threading.Timer] = None
+        self._auto_reconnect = auto_reconnect
 
     @classmethod
     def create(cls, host_type: str, token_file: str = TOKEN_FILE) -> "AppAuthService":
@@ -73,11 +100,17 @@ class AppAuthService(BaseAuthService[AppAuthServiceCallbacks, Client, AppAuthMes
             ValueError: 憑證格式錯誤
         """
         credentials = AppCredentials.from_file(token_file)
+        runtime = load_config()
         host = cls._resolve_host(host_type)
         return cls(
             credentials=credentials,
             host=host,
             port=EndPoints.PROTOBUF_PORT,
+            heartbeat_interval=runtime.heartbeat_interval,
+            heartbeat_timeout=runtime.heartbeat_timeout,
+            reconnect_delay=runtime.reconnect_delay,
+            auto_reconnect=runtime.auto_reconnect,
+            heartbeat_log_interval=runtime.heartbeat_log_interval,
         )
 
     @staticmethod
@@ -128,6 +161,7 @@ class AppAuthService(BaseAuthService[AppAuthServiceCallbacks, Client, AppAuthMes
         self._client.setConnectedCallback(self._handle_connected)
         self._client.setDisconnectedCallback(self._handle_disconnected)
         self._client.setMessageReceivedCallback(self._handle_message)
+        self._last_message_ts = time.time()
 
         self._log("🚀 正在連線到 cTrader...")
         self._client.startService()
@@ -157,7 +191,9 @@ class AppAuthService(BaseAuthService[AppAuthServiceCallbacks, Client, AppAuthMes
         if self._client is not client:
             self._client = client
         self._set_status(ConnectionStatus.CONNECTED)
-        self._log("✅ 已連線！")
+        self._last_message_ts = time.time()
+        self._start_heartbeat_loop()
+        self._log(format_success("已連線！"))
         self._send_app_auth(client)
 
     def _handle_disconnected(self, client: Client, reason: str) -> None:
@@ -165,11 +201,15 @@ class AppAuthService(BaseAuthService[AppAuthServiceCallbacks, Client, AppAuthMes
         if self._client is not client:
             return
         self._set_status(ConnectionStatus.DISCONNECTED)
+        self._stop_heartbeat_loop()
         self._end_operation()
         self.clear_message_handlers()
         self._client = None
         self._send_wrapped = False
         self._emit_error(f"已斷線: {reason}")
+        if self._auto_reconnect:
+            self._log("🔄 偵測到斷線，將自動嘗試重新連線")
+            self._schedule_reconnect("連線中斷")
 
     def _send_app_auth(self, client: Client) -> None:
         """發送應用程式認證請求"""
@@ -190,6 +230,7 @@ class AppAuthService(BaseAuthService[AppAuthServiceCallbacks, Client, AppAuthMes
             return
         msg = Protobuf.extract(message)
         msg_type = msg.payloadType
+        self._last_message_ts = time.time()
 
         # 內建處理器
         handled = self._handle_internal_message(client, msg, msg_type)
@@ -208,6 +249,9 @@ class AppAuthService(BaseAuthService[AppAuthServiceCallbacks, Client, AppAuthMes
         handlers = {
             MessageType.APP_AUTH_RESPONSE: self._handle_app_auth_response,
             MessageType.ERROR_RESPONSE: self._handle_error_response,
+            MessageType.HEARTBEAT: self._handle_heartbeat_event,
+            ProtoOAPayloadType.PROTO_OA_SPOT_EVENT: self._handle_spot_event,
+            ProtoOAPayloadType.PROTO_OA_UNSUBSCRIBE_SPOTS_RES: self._handle_unsubscribe_spots,
         }
 
         handler = handlers.get(msg_type)
@@ -216,30 +260,47 @@ class AppAuthService(BaseAuthService[AppAuthServiceCallbacks, Client, AppAuthMes
             return True
         return False
 
+    def _handle_heartbeat_event(self, client: Client, msg) -> None:
+        """處理心跳事件（僅更新活躍時間）"""
+        self._last_message_ts = time.time()
+
+    def _handle_spot_event(self, client: Client, msg) -> None:
+        """處理報價事件（避免未處理訊息噪音）"""
+        self._log(format_confirm("收到報價事件", ProtoOAPayloadType.PROTO_OA_SPOT_EVENT))
+
+    def _handle_unsubscribe_spots(self, client: Client, msg) -> None:
+        """處理報價退訂回應"""
+        self._log(
+            format_confirm(
+                "報價退訂已確認",
+                ProtoOAPayloadType.PROTO_OA_UNSUBSCRIBE_SPOTS_RES,
+            )
+        )
+
     def _handle_app_auth_response(self, client: Client, msg) -> None:
         """處理應用程式認證成功回應"""
         if self._client is None:
             self._client = client
         self._end_operation()
         self._set_status(ConnectionStatus.APP_AUTHENTICATED)
-        self._log("✅ 應用程式已授權！")
+        self._log(format_success("應用程式已授權！"))
 
         if self._callbacks.on_app_auth_success:
             self._callbacks.on_app_auth_success(client)
 
     def _handle_error_response(self, client: Client, msg) -> None:
         """處理錯誤回應"""
-        if "ALREADY_SUBSCRIBED" in f"{msg.errorCode}" or "ALREADY_SUBSCRIBED" in msg.description:
+        if is_already_subscribed(msg.errorCode, msg.description):
             return
-        error_msg = f"錯誤 {msg.errorCode}: {msg.description}"
         self._end_operation()
         self._set_status(ConnectionStatus.DISCONNECTED)
-        self._emit_error(error_msg)
+        self._emit_error(format_error(msg.errorCode, msg.description))
 
     def _wrap_client_send(self) -> None:
         if not self._client or self._send_wrapped:
             return
         original_send = self._client.send
+        self._raw_client_send = original_send
 
         def _send_with_errback(message, *args, **kwargs):
             deferred = original_send(message, *args, **kwargs)
@@ -254,3 +315,69 @@ class AppAuthService(BaseAuthService[AppAuthServiceCallbacks, Client, AppAuthMes
         message = getattr(failure, "getErrorMessage", lambda: str(failure))()
         self._log(f"⚠️ 請求逾時或失敗: {message}")
         return None
+
+    def _start_heartbeat_loop(self) -> None:
+        if self._heartbeat_thread and self._heartbeat_thread.is_alive():
+            return
+        self._heartbeat_stop.clear()
+        self._heartbeat_thread = threading.Thread(
+            target=self._heartbeat_loop,
+            name="ctrader-heartbeat",
+            daemon=True,
+        )
+        self._heartbeat_thread.start()
+
+    def _stop_heartbeat_loop(self) -> None:
+        self._heartbeat_stop.set()
+        self._heartbeat_thread = None
+
+    def _heartbeat_loop(self) -> None:
+        while not self._heartbeat_stop.wait(self._heartbeat_interval):
+            if not self._client or self._status < ConnectionStatus.CONNECTED:
+                continue
+            if self._last_message_ts is not None:
+                idle_seconds = time.time() - self._last_message_ts
+                if idle_seconds > self._heartbeat_timeout:
+                    self._log(f"⚠️ 超過 {self._heartbeat_timeout:.0f}s 未收到訊息，準備重連")
+                    try:
+                        self._client.stopService()
+                    except Exception as exc:
+                        self._log(f"⚠️ 停止連線失敗: {exc}")
+                    continue
+            self._send_heartbeat()
+
+    def _send_heartbeat(self) -> None:
+        if not self._client:
+            return
+        now = time.time()
+        if (
+            self._last_heartbeat_log_ts is None
+            or now - self._last_heartbeat_log_ts >= self._heartbeat_log_interval
+        ):
+            self._log("💓 發送 heartbeat")
+            self._last_heartbeat_log_ts = now
+        send_fn = self._raw_client_send or self._client.send
+        try:
+            deferred = send_fn(ProtoHeartbeatEvent(), responseTimeoutInSeconds=2)
+            if hasattr(deferred, "addErrback"):
+                deferred.addErrback(lambda failure: None)
+        except Exception as exc:
+            self._log(f"⚠️ 心跳發送失敗: {exc}")
+
+    def _schedule_reconnect(self, reason: str) -> None:
+        if self._reconnect_timer and self._reconnect_timer.is_alive():
+            return
+        self._log(f"🔄 {reason}，{self._reconnect_delay:.0f}s 後重連")
+        self._reconnect_timer = threading.Timer(self._reconnect_delay, self._reconnect)
+        self._reconnect_timer.daemon = True
+        self._reconnect_timer.start()
+
+    def _reconnect(self) -> None:
+        if self._status == ConnectionStatus.CONNECTING:
+            return
+        if self._client is not None:
+            try:
+                self._client.stopService()
+            except Exception:
+                pass
+        self.connect()

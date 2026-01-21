@@ -155,7 +155,7 @@ class FakeTrendbarHistoryService:
         self,
         account_id: int,
         symbol_id: int,
-        count: int = 100,
+        count: int = 100000,
         timeframe: str = "M5",
         from_ts: Optional[int] = None,
         to_ts: Optional[int] = None,
