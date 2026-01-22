@@ -10,7 +10,6 @@ except ImportError:  # pragma: no cover - optional dependency
 from PySide6.QtCore import Qt, Signal
 from PySide6.QtWidgets import (
     QWidget,
-    QHBoxLayout,
     QVBoxLayout,
     QFormLayout,
     QLabel,
@@ -19,17 +18,15 @@ from PySide6.QtWidgets import (
     QSpinBox,
     QDoubleSpinBox,
     QFileDialog,
+    QHBoxLayout,
 )
 
 
-class SimulationPanel(QWidget):
+class SimulationParamsPanel(QWidget):
     start_requested = Signal(dict)
 
     def __init__(self, parent: Optional[QWidget] = None) -> None:
         super().__init__(parent)
-        self._charts_available = pg is not None
-        self._steps: list[int] = []
-        self._equity: list[float] = []
         self._summary_state = {
             "total_return": None,
             "max_drawdown": None,
@@ -40,22 +37,15 @@ class SimulationPanel(QWidget):
         self._setup_ui()
 
     def _setup_ui(self) -> None:
-        layout = QHBoxLayout(self)
-        layout.setContentsMargins(10, 10, 10, 10)
-        layout.setSpacing(10)
-
-        left = QWidget()
-        left_layout = QVBoxLayout(left)
-        left_layout.setContentsMargins(0, 0, 0, 0)
-        left_layout.setSpacing(10)
-
-        title = QLabel("回放模擬")
-        title.setAlignment(Qt.AlignLeft | Qt.AlignVCenter)
-        left_layout.addWidget(title)
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(12, 12, 12, 12)
+        layout.setSpacing(12)
 
         form = QFormLayout()
-        form.setLabelAlignment(Qt.AlignLeft)
+        form.setLabelAlignment(Qt.AlignLeft | Qt.AlignVCenter)
         form.setFormAlignment(Qt.AlignTop)
+        form.setHorizontalSpacing(12)
+        form.setVerticalSpacing(10)
 
         self._data_path = QLineEdit("data/raw_history/1_M5_2024-01-21_2205-2026-01-19_0210.csv")
         browse_data = QPushButton("選擇")
@@ -101,53 +91,37 @@ class SimulationPanel(QWidget):
         self._slippage.setValue(0.5)
         form.addRow("slippage_bps", self._slippage)
 
-        left_layout.addLayout(form)
+        layout.addLayout(form)
 
         self._summary = QLabel("總報酬: -\n最大回撤: -\n夏普比率: -\n交易次數: -\n最終權益: -")
         self._summary.setAlignment(Qt.AlignLeft | Qt.AlignTop)
-        left_layout.addWidget(self._summary)
+        layout.addWidget(self._summary)
 
         self._trade_stats = QLabel("交易統計: -")
         self._trade_stats.setAlignment(Qt.AlignLeft | Qt.AlignTop)
-        left_layout.addWidget(self._trade_stats)
+        layout.addWidget(self._trade_stats)
 
         self._streak_stats = QLabel("連勝/連敗: -")
         self._streak_stats.setAlignment(Qt.AlignLeft | Qt.AlignTop)
-        left_layout.addWidget(self._streak_stats)
+        layout.addWidget(self._streak_stats)
 
         self._holding_stats = QLabel("持倉時間: -")
         self._holding_stats.setAlignment(Qt.AlignLeft | Qt.AlignTop)
-        left_layout.addWidget(self._holding_stats)
+        layout.addWidget(self._holding_stats)
 
         self._action_dist = QLabel("行動分布: -")
         self._action_dist.setAlignment(Qt.AlignLeft | Qt.AlignTop)
-        left_layout.addWidget(self._action_dist)
+        layout.addWidget(self._action_dist)
 
         self._playback_range = QLabel("回放區間: -")
         self._playback_range.setAlignment(Qt.AlignLeft | Qt.AlignTop)
-        left_layout.addWidget(self._playback_range)
+        layout.addWidget(self._playback_range)
 
-        left_layout.addStretch(1)
+        layout.addStretch(1)
 
         self._start_button = QPushButton("開始回放")
         self._start_button.clicked.connect(self._emit_start)
-        left_layout.addWidget(self._start_button)
-
-        layout.addWidget(left, stretch=1)
-
-        if self._charts_available:
-            plot = pg.PlotWidget()
-            plot.setTitle("回放權益曲線")
-            plot.setLabel("bottom", "timesteps")
-            plot.setLabel("left", "equity")
-            plot.showGrid(x=True, y=True, alpha=0.3)
-            self._plot = plot
-            self._curve = plot.plot(pen=pg.mkPen("#F58518", width=2), name="equity")
-            layout.addWidget(plot, stretch=2)
-        else:
-            notice = QLabel("PyQtGraph 未安裝，無法顯示曲線圖。請安裝 pyqtgraph。")
-            notice.setWordWrap(True)
-            layout.addWidget(notice, stretch=2)
+        layout.addWidget(self._start_button)
 
     def _browse_data(self) -> None:
         path, _ = QFileDialog.getOpenFileName(self, "選擇資料檔", "", "CSV (*.csv)")
@@ -172,11 +146,7 @@ class SimulationPanel(QWidget):
             "slippage_bps": float(self._slippage.value()),
         }
 
-    def reset_plot(self) -> None:
-        self._steps.clear()
-        self._equity.clear()
-        if self._charts_available:
-            self._curve.setData([], [])
+    def reset_summary(self) -> None:
         self._summary_state = {
             "total_return": None,
             "max_drawdown": None,
@@ -190,12 +160,6 @@ class SimulationPanel(QWidget):
         self._holding_stats.setText("持倉時間: -")
         self._action_dist.setText("行動分布: -")
         self._playback_range.setText("回放區間: -")
-
-    def ingest_equity(self, step: int, equity: float) -> None:
-        self._steps.append(step)
-        self._equity.append(equity)
-        if self._charts_available:
-            self._curve.setData(self._steps, self._equity)
 
     def update_summary(
         self,
@@ -245,3 +209,43 @@ class SimulationPanel(QWidget):
 
     def update_playback_range(self, text: str) -> None:
         self._playback_range.setText(f"回放區間: {text}")
+
+
+class SimulationPanel(QWidget):
+    def __init__(self, parent: Optional[QWidget] = None) -> None:
+        super().__init__(parent)
+        self._charts_available = pg is not None
+        self._steps: list[int] = []
+        self._equity: list[float] = []
+        self._setup_ui()
+
+    def _setup_ui(self) -> None:
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(10, 10, 10, 10)
+        layout.setSpacing(10)
+
+        if self._charts_available:
+            plot = pg.PlotWidget()
+            plot.setTitle("回放權益曲線")
+            plot.setLabel("bottom", "timesteps")
+            plot.setLabel("left", "equity")
+            plot.showGrid(x=True, y=True, alpha=0.3)
+            self._plot = plot
+            self._curve = plot.plot(pen=pg.mkPen("#F58518", width=2), name="equity")
+            layout.addWidget(plot, stretch=1)
+        else:
+            notice = QLabel("PyQtGraph 未安裝，無法顯示曲線圖。請安裝 pyqtgraph。")
+            notice.setWordWrap(True)
+            layout.addWidget(notice)
+
+    def reset_plot(self) -> None:
+        self._steps.clear()
+        self._equity.clear()
+        if self._charts_available:
+            self._curve.setData([], [])
+
+    def ingest_equity(self, step: int, equity: float) -> None:
+        self._steps.append(step)
+        self._equity.append(equity)
+        if self._charts_available:
+            self._curve.setData(self._steps, self._equity)

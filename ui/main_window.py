@@ -16,8 +16,8 @@ from PySide6.QtGui import QAction, QFont
 from PySide6.QtWidgets import QStyle
 
 from ui.widgets.trade_panel import TradePanel
-from ui.widgets.simulation_panel import SimulationPanel
-from ui.widgets.training_panel import TrainingPanel
+from ui.widgets.simulation_panel import SimulationPanel, SimulationParamsPanel
+from ui.widgets.training_panel import TrainingPanel, TrainingParamsPanel
 from ui.widgets.log_panel import LogPanel
 from ui.controllers import PPOTrainingController, SimulationController, TrendbarController
 from ui.dialogs.app_auth_dialog import AppAuthDialog
@@ -73,6 +73,8 @@ class MainWindow(QMainWindow):
         self._oauth_dialog_open = False
         self._ppo_controller: Optional[PPOTrainingController] = None
         self._simulation_controller: Optional[SimulationController] = None
+        self._log_collapsed = False
+        self._log_maximized = False
 
         self._setup_ui()
         self._connect_signals()
@@ -93,7 +95,9 @@ class MainWindow(QMainWindow):
 
         self._trade_panel = TradePanel()
         self._training_panel = TrainingPanel()
+        self._training_params_panel = TrainingParamsPanel()
         self._simulation_panel = SimulationPanel()
+        self._simulation_params_panel = SimulationParamsPanel()
         self._stack = QStackedWidget()
 
         self._trade_container = QWidget()
@@ -110,10 +114,36 @@ class MainWindow(QMainWindow):
         self._log_dock = QDockWidget("日誌面板", self)
         self._log_dock.setObjectName("log_dock")
         self._log_dock.setWidget(self._log_panel)
-        self._log_dock.setAllowedAreas(Qt.BottomDockWidgetArea | Qt.RightDockWidgetArea)
+        self._log_dock.setAllowedAreas(Qt.BottomDockWidgetArea)
+        self._log_dock.setFeatures(QDockWidget.NoDockWidgetFeatures)
+        self._log_dock.setMinimumHeight(180)
 
         self.setCentralWidget(self._stack)
         self.addDockWidget(Qt.BottomDockWidgetArea, self._log_dock)
+
+        self._training_params_dock = QDockWidget("PPO 參數設定", self)
+        self._training_params_dock.setObjectName("training_params_dock")
+        self._training_params_dock.setWidget(self._training_params_panel)
+        self._training_params_dock.setAllowedAreas(Qt.LeftDockWidgetArea)
+        self._training_params_dock.setStyleSheet(
+            "QDockWidget::title { padding: 8px 12px; font-weight: 600; }"
+            "QDockWidget::contents { margin: 12px; }"
+        )
+        self.addDockWidget(Qt.LeftDockWidgetArea, self._training_params_dock)
+        self._training_params_dock.setVisible(False)
+
+        self._simulation_params_dock = QDockWidget("回放參數", self)
+        self._simulation_params_dock.setObjectName("simulation_params_dock")
+        self._simulation_params_dock.setWidget(self._simulation_params_panel)
+        self._simulation_params_dock.setAllowedAreas(Qt.LeftDockWidgetArea)
+        self._simulation_params_dock.setStyleSheet(
+            "QDockWidget::title { padding: 8px 12px; font-weight: 600; }"
+            "QDockWidget::contents { margin: 12px; }"
+        )
+        self.addDockWidget(Qt.LeftDockWidgetArea, self._simulation_params_dock)
+        self._simulation_params_dock.setVisible(False)
+        self.setCorner(Qt.BottomLeftCorner, Qt.LeftDockWidgetArea)
+        self.setCorner(Qt.BottomRightCorner, Qt.BottomDockWidgetArea)
         self.logRequested.connect(self._handle_log_message)
         self.accountsReceived.connect(self._handle_accounts_received)
         self.fundsReceived.connect(self._handle_funds_received)
@@ -121,6 +151,8 @@ class MainWindow(QMainWindow):
         self.oauthStatusChanged.connect(self._handle_oauth_status_changed)
         self.appAuthSucceeded.connect(self._handle_app_auth_success)
         self.oauthSucceeded.connect(self._handle_oauth_success)
+        self._log_panel.hide_requested.connect(lambda: self._set_log_collapsed(True))
+        self._log_panel.maximize_requested.connect(self._set_log_maximized)
         status_bar = self.statusBar()
         self._app_auth_status_label = QLabel(self._format_app_auth_status())
         self._oauth_status_label = QLabel(self._format_oauth_status())
@@ -137,10 +169,10 @@ class MainWindow(QMainWindow):
         self._trade_panel.symbol_list_requested.connect(self._on_symbol_list_requested)
         self._action_fetch_account_info.triggered.connect(self._on_fetch_account_info)
         self._action_train_ppo.triggered.connect(self._on_train_ppo_clicked)
-        self._training_panel.start_requested.connect(self._start_ppo_training)
+        self._training_params_panel.start_requested.connect(self._start_ppo_training)
+        self._simulation_params_panel.start_requested.connect(self._start_simulation)
         self._action_toggle_log.toggled.connect(self._toggle_log_dock)
         self._action_simulation.triggered.connect(self._on_simulation_clicked)
-        self._simulation_panel.start_requested.connect(self._start_simulation)
         self._action_history_download.triggered.connect(self._open_history_download_dialog)
 
     def _setup_menu_toolbar(self) -> None:
@@ -184,15 +216,22 @@ class MainWindow(QMainWindow):
 
     @Slot(bool)
     def _toggle_log_dock(self, visible: bool) -> None:
-        self._log_dock.setVisible(visible)
+        self._set_log_collapsed(not visible)
+        self._log_dock.setVisible(True)
 
     @Slot()
     def _on_train_ppo_clicked(self) -> None:
         self._stack.setCurrentWidget(self._training_panel)
+        self._training_params_dock.setVisible(True)
+        self._simulation_params_dock.setVisible(False)
+        self._set_log_collapsed(False)
+        self._action_toggle_log.setChecked(True)
 
     @Slot()
     def _on_simulation_clicked(self) -> None:
         self._stack.setCurrentWidget(self._simulation_panel)
+        self._training_params_dock.setVisible(False)
+        self._simulation_params_dock.setVisible(True)
 
     @Slot(dict)
     def _start_ppo_training(self, params: dict) -> None:
@@ -207,6 +246,7 @@ class MainWindow(QMainWindow):
         controller = self._get_simulation_controller()
         if controller is None:
             return
+        self._simulation_params_panel.reset_summary()
         controller.start(params)
 
     @Slot()
@@ -291,12 +331,12 @@ class MainWindow(QMainWindow):
                 log=self._log_panel.add_log,
                 reset_plot=self._simulation_panel.reset_plot,
                 ingest_equity=self._simulation_panel.ingest_equity,
-                update_summary=self._simulation_panel.update_summary,
-                update_trade_stats=self._simulation_panel.update_trade_stats,
-                update_streak_stats=self._simulation_panel.update_streak_stats,
-                update_holding_stats=self._simulation_panel.update_holding_stats,
-                update_action_distribution=self._simulation_panel.update_action_distribution,
-                update_playback_range=self._simulation_panel.update_playback_range,
+                update_summary=self._simulation_params_panel.update_summary,
+                update_trade_stats=self._simulation_params_panel.update_trade_stats,
+                update_streak_stats=self._simulation_params_panel.update_streak_stats,
+                update_holding_stats=self._simulation_params_panel.update_holding_stats,
+                update_action_distribution=self._simulation_params_panel.update_action_distribution,
+                update_playback_range=self._simulation_params_panel.update_playback_range,
             )
         return self._simulation_controller
 
@@ -304,6 +344,31 @@ class MainWindow(QMainWindow):
     def _on_fetch_account_info(self) -> None:
         """Handle fetch account info click"""
         self._stack.setCurrentWidget(self._trade_container)
+        self._training_params_dock.setVisible(False)
+        self._simulation_params_dock.setVisible(False)
+
+    def _set_log_collapsed(self, collapsed: bool) -> None:
+        self._log_collapsed = collapsed
+        self._log_panel.setVisible(not collapsed)
+        self._action_toggle_log.blockSignals(True)
+        self._action_toggle_log.setChecked(not collapsed)
+        self._action_toggle_log.blockSignals(False)
+        if collapsed:
+            self._set_log_maximized(False)
+        if collapsed:
+            self._log_dock.setMinimumHeight(28)
+            self._log_dock.setMaximumHeight(32)
+        else:
+            self._log_dock.setMinimumHeight(180)
+            self._log_dock.setMaximumHeight(16777215)
+
+    def _set_log_maximized(self, maximized: bool) -> None:
+        if self._log_collapsed and maximized:
+            self._set_log_collapsed(False)
+        self._log_maximized = maximized
+        self._log_panel.set_maximized(maximized)
+        target = int(self.height() * (0.55 if maximized else 0.25))
+        self.resizeDocks([self._log_dock], [max(120, target)], Qt.Vertical)
 
     def _handle_accounts_received(self, accounts: list, account_id: Optional[int]) -> None:
         try:

@@ -23,50 +23,23 @@ from PySide6.QtWidgets import (
 )
 
 
-class TrainingPanel(QWidget):
+class TrainingParamsPanel(QWidget):
     start_requested = Signal(dict)
 
     def __init__(self, parent: Optional[QWidget] = None) -> None:
         super().__init__(parent)
-        self._current_step = 0
-        self._charts_available = pg is not None
-        self._metrics = [
-            ("ep_rew_mean", "ep_rew_mean"),
-            ("eval/mean_reward", "mean_reward"),
-            ("value_loss", "value_loss"),
-            ("explained_variance", "explained_variance"),
-            ("approx_kl", "approx_kl"),
-            ("clip_fraction", "clip_fraction"),
-            ("entropy_loss", "entropy_loss"),
-            ("policy_gradient_loss", "policy_gradient_loss"),
-            ("loss", "loss"),
-            ("std", "std"),
-            ("fps", "fps"),
-        ]
-        self._metric_data: dict[str, dict[str, list[float]]] = {}
-        self._curves: dict[str, object] = {}
-        self._checkboxes: dict[str, QCheckBox] = {}
-        self._metric_labels = {key: label for label, key in self._metrics}
-        self._legend_keys: set[str] = set()
         self._setup_ui()
 
     def _setup_ui(self) -> None:
-        layout = QHBoxLayout(self)
-        layout.setContentsMargins(10, 10, 10, 10)
-        layout.setSpacing(10)
-
-        left = QWidget()
-        left_layout = QVBoxLayout(left)
-        left_layout.setContentsMargins(0, 0, 0, 0)
-        left_layout.setSpacing(10)
-
-        title = QLabel("PPO 參數設定")
-        title.setAlignment(Qt.AlignLeft | Qt.AlignVCenter)
-        left_layout.addWidget(title)
+        left_layout = QVBoxLayout(self)
+        left_layout.setContentsMargins(12, 12, 12, 12)
+        left_layout.setSpacing(12)
 
         form = QFormLayout()
-        form.setLabelAlignment(Qt.AlignLeft)
+        form.setLabelAlignment(Qt.AlignLeft | Qt.AlignVCenter)
         form.setFormAlignment(Qt.AlignTop)
+        form.setHorizontalSpacing(12)
+        form.setVerticalSpacing(10)
 
         self._data_path = QLineEdit("data/raw_history/1_M5_2024-01-21_2205-2026-01-19_0215.csv")
         browse = QPushButton("選擇")
@@ -133,7 +106,67 @@ class TrainingPanel(QWidget):
         left_layout.addWidget(self._resume_training)
         left_layout.addSpacing(8)
 
-        layout.addWidget(left, stretch=1)
+        left_layout.addStretch(1)
+
+        self._start_button = QPushButton("開始訓練")
+        self._start_button.clicked.connect(self._emit_start)
+        left_layout.addWidget(self._start_button)
+
+    def _emit_start(self) -> None:
+        self.start_requested.emit(self.get_params())
+
+    def get_params(self) -> dict:
+        return {
+            "data_path": self._data_path.text().strip(),
+            "total_steps": int(self._total_steps.value()),
+            "learning_rate": float(self._learning_rate.value()),
+            "gamma": float(self._gamma.value()),
+            "n_steps": int(self._n_steps.value()),
+            "batch_size": int(self._batch_size.value()),
+            "ent_coef": float(self._ent_coef.value()),
+            "episode_length": int(self._episode_length.value()),
+            "eval_split": float(self._eval_split.value()),
+            "resume": bool(self._resume_training.isChecked()),
+        }
+
+    def _browse_data(self) -> None:
+        path, _ = QFileDialog.getOpenFileName(
+            self, "選擇訓練資料", self._data_path.text(), "CSV (*.csv)"
+        )
+        if path:
+            self._data_path.setText(path)
+
+
+class TrainingPanel(QWidget):
+    def __init__(self, parent: Optional[QWidget] = None) -> None:
+        super().__init__(parent)
+        self._current_step = 0
+        self._charts_available = pg is not None
+        self._metrics = [
+            ("ep_rew_mean", "ep_rew_mean"),
+            ("eval/mean_reward", "mean_reward"),
+            ("value_loss", "value_loss"),
+            ("explained_variance", "explained_variance"),
+            ("approx_kl", "approx_kl"),
+            ("clip_fraction", "clip_fraction"),
+            ("entropy_loss", "entropy_loss"),
+            ("policy_gradient_loss", "policy_gradient_loss"),
+            ("loss", "loss"),
+            ("std", "std"),
+            ("fps", "fps"),
+        ]
+        self._metric_data: dict[str, dict[str, list[float]]] = {}
+        self._curves: dict[str, object] = {}
+        self._checkboxes: dict[str, QCheckBox] = {}
+        self._metric_labels = {key: label for label, key in self._metrics}
+        self._legend_keys: set[str] = set()
+        self._setup_ui()
+
+    def _setup_ui(self) -> None:
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(10, 10, 10, 10)
+        layout.setSpacing(10)
+
         if self._charts_available:
             plot = pg.PlotWidget()
             plot.setTitle("PPO 訓練曲線")
@@ -177,47 +210,13 @@ class TrainingPanel(QWidget):
                 col = idx % 2
                 chooser_layout.addWidget(checkbox, row, col)
 
-            left_layout.addWidget(chooser)
-            left_layout.addStretch(1)
-
-            self._start_button = QPushButton("開始訓練")
-            self._start_button.clicked.connect(self._emit_start)
-            left_layout.addWidget(self._start_button)
-
-            layout.addWidget(plot, stretch=2)
+            layout.addWidget(plot, stretch=1)
+            layout.addWidget(chooser)
             self._sync_curve_visibility()
         else:
             notice = QLabel("PyQtGraph 未安裝，無法顯示曲線圖。請安裝 pyqtgraph。")
             notice.setWordWrap(True)
-            left_layout.addStretch(1)
-            self._start_button = QPushButton("開始訓練")
-            self._start_button.clicked.connect(self._emit_start)
-            left_layout.addWidget(self._start_button)
-            layout.addWidget(notice, stretch=2)
-
-    def _emit_start(self) -> None:
-        self.start_requested.emit(self.get_params())
-
-    def get_params(self) -> dict:
-        return {
-            "data_path": self._data_path.text().strip(),
-            "total_steps": int(self._total_steps.value()),
-            "learning_rate": float(self._learning_rate.value()),
-            "gamma": float(self._gamma.value()),
-            "n_steps": int(self._n_steps.value()),
-            "batch_size": int(self._batch_size.value()),
-            "ent_coef": float(self._ent_coef.value()),
-            "episode_length": int(self._episode_length.value()),
-            "eval_split": float(self._eval_split.value()),
-            "resume": bool(self._resume_training.isChecked()),
-        }
-
-    def _browse_data(self) -> None:
-        path, _ = QFileDialog.getOpenFileName(
-            self, "選擇訓練資料", self._data_path.text(), "CSV (*.csv)"
-        )
-        if path:
-            self._data_path.setText(path)
+            layout.addWidget(notice)
 
     def reset_metrics(self) -> None:
         if not self._charts_available:

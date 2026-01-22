@@ -59,3 +59,7 @@ class LogWidget(QWidget):
         self._text_edit.append(message)
         scrollbar = self._text_edit.verticalScrollBar()
         scrollbar.setValue(scrollbar.maximum())
+
+    def clear_logs(self) -> None:
+        """清除所有日誌"""
+        self._text_edit.clear()
