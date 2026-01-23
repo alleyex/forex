@@ -58,6 +58,20 @@ QDateTimeEdit {
     min-height: 20px;
 }
 
+QComboBox {
+    padding-right: 18px;
+}
+
+QComboBox::drop-down {
+    width: 18px;
+    border: none;
+}
+
+QToolButton {
+    padding: 4px 10px;
+    min-height: 20px;
+}
+
 QDockWidget::title {
     padding: 8px 12px;
     font-weight: 600;

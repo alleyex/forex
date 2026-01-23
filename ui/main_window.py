@@ -8,11 +8,14 @@ from PySide6.QtWidgets import (
     QHBoxLayout,
     QLabel,
     QMessageBox,
-    QDockWidget,
     QStackedWidget,
 )
 from PySide6.QtCore import Slot, Signal, Qt
 from PySide6.QtGui import QAction
+
+from ui.layout.dock_manager import DockManager
+from ui.layout.panel_switcher import PanelSet, PanelSwitcher
+from ui.layout.toolbar_actions import build_toolbar_actions, ToolbarActions
 
 from ui.widgets.trade_panel import TradePanel
 from ui.widgets.simulation_panel import SimulationPanel, SimulationParamsPanel
@@ -77,6 +80,9 @@ class MainWindow(QMainWindow):
         self._connection_in_progress = False
         self._trendbar_controller = None
         self._history_download_controller = None
+        self._dock_manager: Optional[DockManager] = None
+        self._panel_switcher: Optional[PanelSwitcher] = None
+        self._toolbar_actions: Optional[ToolbarActions] = None
 
         self._setup_ui()
         self._connect_signals()
@@ -91,17 +97,35 @@ class MainWindow(QMainWindow):
 
     def _setup_ui(self) -> None:
         """Initialize UI components"""
+        self._setup_window()
+        self._setup_panels()
+        self._setup_stack()
+        self._setup_docks()
+        self._setup_panel_switcher()
+        self._setup_status_bar()
+        self._setup_menu_toolbar()
+
+    def _setup_window(self) -> None:
         self.setWindowTitle("外匯交易應用程式")
         self.setMinimumSize(1280, 720)
         self.resize(1280, 720)
 
+    def _setup_panels(self) -> None:
         self._trade_panel = TradePanel()
         self._training_panel = TrainingPanel()
         self._training_params_panel = TrainingParamsPanel()
         self._simulation_panel = SimulationPanel()
         self._simulation_params_panel = SimulationParamsPanel()
-        self._stack = QStackedWidget()
 
+        self._log_panel = LogWidget(
+            title="",
+            with_timestamp=True,
+            monospace=True,
+            font_point_delta=2,
+        )
+
+    def _setup_stack(self) -> None:
+        self._stack = QStackedWidget()
         self._trade_container = QWidget()
         trade_layout = QHBoxLayout(self._trade_container)
         trade_layout.setContentsMargins(10, 10, 10, 10)
@@ -111,37 +135,45 @@ class MainWindow(QMainWindow):
         self._stack.addWidget(self._trade_container)
         self._stack.addWidget(self._training_panel)
         self._stack.addWidget(self._simulation_panel)
-
-        self._log_panel = LogWidget(
-            title="",
-            with_timestamp=True,
-            monospace=True,
-            font_point_delta=2,
-        )
-        self._log_dock = QDockWidget("", self)
-        self._log_dock.setObjectName("log_dock")
-        self._log_dock.setWidget(self._log_panel)
-        self._log_dock.setAllowedAreas(Qt.BottomDockWidgetArea)
-        self._log_dock.setMinimumHeight(180)
-
         self.setCentralWidget(self._stack)
-        self.addDockWidget(Qt.BottomDockWidgetArea, self._log_dock)
 
-        self._training_params_dock = QDockWidget("PPO 參數設定", self)
-        self._training_params_dock.setObjectName("training_params_dock")
-        self._training_params_dock.setWidget(self._training_params_panel)
-        self._training_params_dock.setAllowedAreas(Qt.LeftDockWidgetArea)
-        self.addDockWidget(Qt.LeftDockWidgetArea, self._training_params_dock)
-        self._training_params_dock.setVisible(False)
+    def _setup_docks(self) -> None:
+        self._dock_manager = DockManager(
+            self,
+            log_panel=self._log_panel,
+            training_params_panel=self._training_params_panel,
+            simulation_params_panel=self._simulation_params_panel,
+        )
+        self._dock_manager.add_docks()
+        self._log_dock = self._dock_manager.docks.log
+        self._training_params_dock = self._dock_manager.docks.training_params
+        self._simulation_params_dock = self._dock_manager.docks.simulation_params
 
-        self._simulation_params_dock = QDockWidget("回放參數", self)
-        self._simulation_params_dock.setObjectName("simulation_params_dock")
-        self._simulation_params_dock.setWidget(self._simulation_params_panel)
-        self._simulation_params_dock.setAllowedAreas(Qt.LeftDockWidgetArea)
-        self.addDockWidget(Qt.LeftDockWidgetArea, self._simulation_params_dock)
-        self._simulation_params_dock.setVisible(False)
-        self.setCorner(Qt.BottomLeftCorner, Qt.LeftDockWidgetArea)
-        self.setCorner(Qt.BottomRightCorner, Qt.BottomDockWidgetArea)
+    def _setup_panel_switcher(self) -> None:
+        self._panel_switcher = PanelSwitcher(
+            stack=self._stack,
+            panels=PanelSet(
+                trade=self._trade_container,
+                training=self._training_panel,
+                simulation=self._simulation_panel,
+            ),
+            dock_manager=self._dock_manager,
+        )
+
+    def _setup_status_bar(self) -> None:
+        status_bar = self.statusBar()
+        self._app_auth_status_label = QLabel(self._format_app_auth_status())
+        self._oauth_status_label = QLabel(self._format_oauth_status())
+        status_bar.addWidget(self._app_auth_status_label)
+        status_bar.addWidget(self._oauth_status_label)
+
+    def _connect_signals(self) -> None:
+        """Connect panel signals"""
+        self._connect_core_signals()
+        self._connect_panel_signals()
+        self._connect_toolbar_signals()
+
+    def _connect_core_signals(self) -> None:
         self.logRequested.connect(self._handle_log_message)
         self.accountsReceived.connect(self._handle_accounts_received)
         self.fundsReceived.connect(self._handle_funds_received)
@@ -149,60 +181,38 @@ class MainWindow(QMainWindow):
         self.oauthStatusChanged.connect(self._handle_oauth_status_changed)
         self.appAuthSucceeded.connect(self._handle_app_auth_success)
         self.oauthSucceeded.connect(self._handle_oauth_success)
-        status_bar = self.statusBar()
-        self._app_auth_status_label = QLabel(self._format_app_auth_status())
-        self._oauth_status_label = QLabel(self._format_oauth_status())
-        status_bar.addWidget(self._app_auth_status_label)
-        status_bar.addWidget(self._oauth_status_label)
 
-        self._setup_menu_toolbar()
-
-    def _connect_signals(self) -> None:
-        """Connect panel signals"""
+    def _connect_panel_signals(self) -> None:
         self._trade_panel.trendbar_toggle_requested.connect(self._on_trendbar_toggle_requested)
         self._trade_panel.history_download_requested.connect(self._on_history_download_requested)
         self._trade_panel.account_info_requested.connect(self._on_fetch_account_info)
         self._trade_panel.symbol_list_requested.connect(self._on_symbol_list_requested)
-        self._action_fetch_account_info.triggered.connect(self._on_fetch_account_info)
-        self._action_train_ppo.triggered.connect(self._on_train_ppo_clicked)
         self._training_params_panel.start_requested.connect(self._start_ppo_training)
         self._simulation_params_panel.start_requested.connect(self._start_simulation)
-        self._action_toggle_log.toggled.connect(self._toggle_log_dock)
         self._log_dock.visibilityChanged.connect(self._sync_log_toggle_action)
+
+    def _connect_toolbar_signals(self) -> None:
+        self._action_fetch_account_info.triggered.connect(self._on_fetch_account_info)
+        self._action_train_ppo.triggered.connect(self._on_train_ppo_clicked)
         self._action_simulation.triggered.connect(self._on_simulation_clicked)
         self._action_history_download.triggered.connect(self._open_history_download_dialog)
+        self._action_toggle_log.toggled.connect(self._toggle_log_dock)
 
     def _setup_menu_toolbar(self) -> None:
         """Create menu and toolbar actions"""
-        auth_menu = self.menuBar().addMenu("認證")
-
-        self._action_app_auth = auth_menu.addAction("App 認證")
-        self._action_oauth = auth_menu.addAction("OAuth 認證")
-
-        toolbar = self.addToolBar("認證")
-        toolbar.setToolButtonStyle(Qt.ToolButtonTextBesideIcon)
+        self._toolbar_actions = build_toolbar_actions(self, self._log_dock.isVisible())
+        self._action_app_auth = self._toolbar_actions.action_app_auth
+        self._action_oauth = self._toolbar_actions.action_oauth
+        self._action_toggle_connection = self._toolbar_actions.action_toggle_connection
+        self._action_fetch_account_info = self._toolbar_actions.action_fetch_account_info
+        self._action_train_ppo = self._toolbar_actions.action_train_ppo
+        self._action_simulation = self._toolbar_actions.action_simulation
+        self._action_history_download = self._toolbar_actions.action_history_download
+        self._action_toggle_log = self._toolbar_actions.action_toggle_log
 
         self._action_app_auth.triggered.connect(self._open_app_auth_dialog)
         self._action_oauth.triggered.connect(self._open_oauth_dialog)
-
-        self._action_toggle_connection = QAction("連線", self)
         self._action_toggle_connection.triggered.connect(self._toggle_connection)
-        toolbar.addAction(self._action_toggle_connection)
-
-        self._action_fetch_account_info = QAction("基本資料", self)
-        toolbar.addAction(self._action_fetch_account_info)
-        self._action_train_ppo = QAction("PPO訓練", self)
-        toolbar.addAction(self._action_train_ppo)
-        self._action_simulation = QAction("回放", self)
-        toolbar.addAction(self._action_simulation)
-        self._action_history_download = QAction("歷史資料", self)
-        toolbar.addAction(self._action_history_download)
-        self._action_toggle_log = QAction("日誌面板", self)
-        self._action_toggle_log.setCheckable(True)
-        self._action_toggle_log.setChecked(True)
-        self._action_toggle_log.setText("日誌")
-        toolbar.addAction(self._action_toggle_log)
-        self._action_toggle_log.setVisible(not self._log_dock.isVisible())
 
     @Slot()
     def _on_trendbar_toggle_requested(self) -> None:
@@ -213,8 +223,9 @@ class MainWindow(QMainWindow):
 
     @Slot(bool)
     def _toggle_log_dock(self, visible: bool) -> None:
-        self._set_log_collapsed(not visible)
-        self._log_dock.setVisible(True)
+        if self._dock_manager is None:
+            return
+        self._dock_manager.toggle_log(visible)
 
     @Slot(bool)
     def _sync_log_toggle_action(self, visible: bool) -> None:
@@ -346,40 +357,18 @@ class MainWindow(QMainWindow):
         self._show_panel("trade", show_log=None)
 
     def _show_panel(self, panel: str, *, show_log: Optional[bool]) -> None:
-        if panel == "training":
-            self._stack.setCurrentWidget(self._training_panel)
-            self._training_params_dock.setVisible(True)
-            self._simulation_params_dock.setVisible(False)
-        elif panel == "simulation":
-            self._stack.setCurrentWidget(self._simulation_panel)
-            self._training_params_dock.setVisible(False)
-            self._simulation_params_dock.setVisible(True)
-        else:
-            self._stack.setCurrentWidget(self._trade_container)
-            self._training_params_dock.setVisible(False)
-            self._simulation_params_dock.setVisible(False)
-
-        if show_log is None:
+        if self._panel_switcher is None:
             return
-
-        if show_log:
-            self._log_dock.setVisible(True)
-            self._set_log_collapsed(False)
-        else:
-            self._log_dock.setVisible(False)
+        self._panel_switcher.show(panel, show_log)
 
     def _set_log_collapsed(self, collapsed: bool) -> None:
         self._log_collapsed = collapsed
-        self._log_panel.setVisible(not collapsed)
+        if self._dock_manager is None:
+            return
+        self._dock_manager.set_log_collapsed(collapsed)
         self._action_toggle_log.blockSignals(True)
         self._action_toggle_log.setChecked(not collapsed)
         self._action_toggle_log.blockSignals(False)
-        if collapsed:
-            self._log_dock.setMinimumHeight(28)
-            self._log_dock.setMaximumHeight(32)
-        else:
-            self._log_dock.setMinimumHeight(180)
-            self._log_dock.setMaximumHeight(16777215)
 
     def _handle_accounts_received(self, accounts: list, account_id: Optional[int]) -> None:
         try:

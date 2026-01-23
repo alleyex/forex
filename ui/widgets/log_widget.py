@@ -2,9 +2,19 @@
 可重用的日誌顯示元件
 """
 from datetime import datetime
+import re
 from PySide6.QtCore import Slot
 from PySide6.QtGui import QFontDatabase
-from PySide6.QtWidgets import QLabel, QTextEdit, QVBoxLayout, QWidget
+from PySide6.QtWidgets import (
+    QApplication,
+    QComboBox,
+    QLabel,
+    QHBoxLayout,
+    QTextEdit,
+    QToolButton,
+    QVBoxLayout,
+    QWidget,
+)
 
 from ui.utils.formatters import format_timestamped_message
 
@@ -32,6 +42,8 @@ class LogWidget(QWidget):
         self._with_timestamp = with_timestamp
         self._monospace = monospace
         self._font_point_delta = font_point_delta
+        self._entries: list[tuple[str, str]] = []
+        self._level_pattern = re.compile(r"\[(INFO|OK|WARN|ERROR)\]")
         self._setup_ui(title)
     
     def _setup_ui(self, title: str) -> None:
@@ -39,9 +51,32 @@ class LogWidget(QWidget):
         layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(4)
         
+        header = QHBoxLayout()
+        header.setContentsMargins(0, 0, 0, 0)
+        header.setSpacing(8)
+
         if title:
             self._title_label = QLabel(title)
-            layout.addWidget(self._title_label)
+            header.addWidget(self._title_label)
+
+        header.addStretch(1)
+
+        self._level_filter = QComboBox()
+        self._level_filter.addItems(["全部", "INFO", "OK", "WARN", "ERROR", "其他"])
+        self._level_filter.currentTextChanged.connect(self._apply_filter)
+        header.addWidget(self._level_filter)
+
+        self._btn_copy = QToolButton()
+        self._btn_copy.setText("複製")
+        self._btn_copy.clicked.connect(self._copy_logs)
+        header.addWidget(self._btn_copy)
+
+        self._btn_clear = QToolButton()
+        self._btn_clear.setText("清除")
+        self._btn_clear.clicked.connect(self.clear_logs)
+        header.addWidget(self._btn_clear)
+
+        layout.addLayout(header)
         
         self._text_edit = QTextEdit()
         self._text_edit.setReadOnly(True)
@@ -58,10 +93,30 @@ class LogWidget(QWidget):
         if self._with_timestamp:
             ts = datetime.now().strftime("%H:%M:%S")
             message = format_timestamped_message(message, ts)
-        self._text_edit.append(message)
-        scrollbar = self._text_edit.verticalScrollBar()
-        scrollbar.setValue(scrollbar.maximum())
+        level = self._extract_level(message)
+        self._entries.append((level, message))
+        self._apply_filter(self._level_filter.currentText())
 
     def clear_logs(self) -> None:
         """清除所有日誌"""
+        self._entries.clear()
         self._text_edit.clear()
+
+    def _extract_level(self, message: str) -> str:
+        match = self._level_pattern.search(message)
+        if match:
+            return match.group(1)
+        return "其他"
+
+    def _apply_filter(self, level: str) -> None:
+        if level == "全部":
+            items = [entry for _, entry in self._entries]
+        else:
+            items = [entry for entry_level, entry in self._entries if entry_level == level]
+        self._text_edit.setPlainText("\n".join(items))
+        scrollbar = self._text_edit.verticalScrollBar()
+        scrollbar.setValue(scrollbar.maximum())
+
+    def _copy_logs(self) -> None:
+        clipboard = QApplication.clipboard()
+        clipboard.setText(self._text_edit.toPlainText())

@@ -22,8 +22,14 @@ from PySide6.QtWidgets import (
     QGroupBox,
 )
 
-from ui.widgets.form_helpers import build_browse_row, configure_form_layout
+from ui.widgets.form_helpers import (
+    apply_form_label_width,
+    align_form_fields,
+    build_browse_row,
+    configure_form_layout,
+)
 from ui.utils.path_utils import latest_file_in_dir
+from ui.styles.tokens import FORM_LABEL_WIDTH_COMPACT, PRIMARY, TRAINING_PARAMS
 from config.paths import RAW_HISTORY_DIR
 
 
@@ -35,7 +41,7 @@ class TrainingParamsPanel(QWidget):
         self._setup_ui()
 
     def _setup_ui(self) -> None:
-        self.setProperty("class", "training_params")
+        self.setProperty("class", TRAINING_PARAMS)
         left_layout = QVBoxLayout(self)
         left_layout.setContentsMargins(14, 14, 14, 14)
         left_layout.setSpacing(14)
@@ -47,6 +53,8 @@ class TrainingParamsPanel(QWidget):
             label_alignment=Qt.AlignLeft | Qt.AlignVCenter,
             field_growth_policy=QFormLayout.FieldsStayAtSizeHint,
         )
+        apply_form_label_width(file_layout, FORM_LABEL_WIDTH_COMPACT)
+        align_form_fields(file_layout, Qt.AlignLeft | Qt.AlignVCenter)
 
         field_width = 240
         spin_width = 140
@@ -70,6 +78,8 @@ class TrainingParamsPanel(QWidget):
             label_alignment=Qt.AlignLeft | Qt.AlignVCenter,
             field_growth_policy=QFormLayout.FieldsStayAtSizeHint,
         )
+        apply_form_label_width(params_layout, FORM_LABEL_WIDTH_COMPACT)
+        align_form_fields(params_layout, Qt.AlignLeft | Qt.AlignVCenter)
 
         self._total_steps = QSpinBox()
         self._total_steps.setRange(1, 10_000_000)
@@ -140,7 +150,7 @@ class TrainingParamsPanel(QWidget):
         left_layout.addStretch(1)
 
         self._start_button = QPushButton("開始訓練")
-        self._start_button.setProperty("class", "primary")
+        self._start_button.setProperty("class", PRIMARY)
         self._start_button.clicked.connect(self._emit_start)
         left_layout.addWidget(self._start_button)
 

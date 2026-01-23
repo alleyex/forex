@@ -31,6 +31,40 @@ def configure_form_layout(
         form.setFieldGrowthPolicy(field_growth_policy)
 
 
+def apply_form_label_width(
+    form: QFormLayout,
+    width: int,
+    *,
+    alignment: Optional[Qt.AlignmentFlag] = None,
+) -> None:
+    for row in range(form.rowCount()):
+        item = form.itemAt(row, QFormLayout.LabelRole)
+        if not item:
+            continue
+        widget = item.widget()
+        if widget is None:
+            continue
+        widget.setFixedWidth(width)
+        if alignment is not None and hasattr(widget, "setAlignment"):
+            widget.setAlignment(alignment)
+
+
+def align_form_fields(form: QFormLayout, alignment: Qt.AlignmentFlag) -> None:
+    for row in range(form.rowCount()):
+        item = form.itemAt(row, QFormLayout.FieldRole)
+        if not item:
+            continue
+        widget = item.widget()
+        if widget is not None:
+            if hasattr(widget, "setAlignment"):
+                widget.setAlignment(alignment)
+            form.setAlignment(widget, alignment)
+            continue
+        layout = item.layout()
+        if layout is not None:
+            form.setAlignment(layout, alignment)
+
+
 def build_browse_row(
     line_edit: QLineEdit,
     on_clicked: Callable[[], None],

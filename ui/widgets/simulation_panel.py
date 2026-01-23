@@ -23,9 +23,21 @@ from PySide6.QtWidgets import (
     QGroupBox,
 )
 
-from ui.widgets.form_helpers import build_browse_row, configure_form_layout
+from ui.widgets.form_helpers import (
+    apply_form_label_width,
+    align_form_fields,
+    build_browse_row,
+    configure_form_layout,
+)
 from ui.utils.path_utils import latest_file_in_dir
 from ui.utils.formatters import format_kv_lines
+from ui.styles.tokens import (
+    FORM_LABEL_WIDTH_COMPACT,
+    PRIMARY,
+    SIMULATION_PARAMS,
+    STAT_LABEL,
+    STAT_VALUE,
+)
 from config.paths import RAW_HISTORY_DIR
 
 class SimulationParamsPanel(QWidget):
@@ -43,7 +55,7 @@ class SimulationParamsPanel(QWidget):
         self._setup_ui()
 
     def _setup_ui(self) -> None:
-        self.setProperty("class", "simulation_params")
+        self.setProperty("class", SIMULATION_PARAMS)
         layout = QVBoxLayout(self)
         layout.setContentsMargins(14, 14, 14, 14)
         layout.setSpacing(14)
@@ -55,6 +67,8 @@ class SimulationParamsPanel(QWidget):
             label_alignment=Qt.AlignLeft | Qt.AlignVCenter,
             field_growth_policy=QFormLayout.FieldsStayAtSizeHint,
         )
+        apply_form_label_width(file_layout, FORM_LABEL_WIDTH_COMPACT)
+        align_form_fields(file_layout, Qt.AlignLeft | Qt.AlignVCenter)
 
         field_width = 240
         spin_width = 140
@@ -90,6 +104,8 @@ class SimulationParamsPanel(QWidget):
             label_alignment=Qt.AlignLeft | Qt.AlignVCenter,
             field_growth_policy=QFormLayout.FieldsStayAtSizeHint,
         )
+        apply_form_label_width(params_layout, FORM_LABEL_WIDTH_COMPACT)
+        align_form_fields(params_layout, Qt.AlignLeft | Qt.AlignVCenter)
 
         self._log_every = QSpinBox()
         self._log_every.setRange(1, 100_000)
@@ -134,9 +150,9 @@ class SimulationParamsPanel(QWidget):
         ]
         for row, (label_text, key) in enumerate(summary_rows):
             label = QLabel(label_text)
-            label.setProperty("class", "stat_label")
+            label.setProperty("class", STAT_LABEL)
             value = QLabel("-")
-            value.setProperty("class", "stat_value")
+            value.setProperty("class", STAT_VALUE)
             value.setAlignment(Qt.AlignRight | Qt.AlignVCenter)
             summary_layout.addWidget(label, row, 0)
             summary_layout.addWidget(value, row, 1)
@@ -150,16 +166,16 @@ class SimulationParamsPanel(QWidget):
         details_layout.setVerticalSpacing(6)
 
         self._trade_stats = QLabel("-")
-        self._trade_stats.setProperty("class", "stat_value")
+        self._trade_stats.setProperty("class", STAT_VALUE)
         self._trade_stats.setWordWrap(True)
         self._streak_stats = QLabel("-")
-        self._streak_stats.setProperty("class", "stat_value")
+        self._streak_stats.setProperty("class", STAT_VALUE)
         self._streak_stats.setWordWrap(True)
         self._holding_stats = QLabel("-")
-        self._holding_stats.setProperty("class", "stat_value")
+        self._holding_stats.setProperty("class", STAT_VALUE)
         self._holding_stats.setWordWrap(True)
         self._action_dist = QLabel("-")
-        self._action_dist.setProperty("class", "stat_value")
+        self._action_dist.setProperty("class", STAT_VALUE)
         self._action_dist.setWordWrap(True)
 
         detail_rows = [
@@ -170,7 +186,7 @@ class SimulationParamsPanel(QWidget):
         ]
         for row, (label_text, value) in enumerate(detail_rows):
             label = QLabel(label_text)
-            label.setProperty("class", "stat_label")
+            label.setProperty("class", STAT_LABEL)
             details_layout.addWidget(label, row, 0)
             details_layout.addWidget(value, row, 1)
 
@@ -181,9 +197,9 @@ class SimulationParamsPanel(QWidget):
         playback_layout.setHorizontalSpacing(10)
         playback_layout.setVerticalSpacing(6)
         playback_label = QLabel("時間範圍")
-        playback_label.setProperty("class", "stat_label")
+        playback_label.setProperty("class", STAT_LABEL)
         self._playback_range = QLabel("-")
-        self._playback_range.setProperty("class", "stat_value")
+        self._playback_range.setProperty("class", STAT_VALUE)
         self._playback_range.setWordWrap(True)
         playback_layout.addWidget(playback_label, 0, 0)
         playback_layout.addWidget(self._playback_range, 0, 1)
@@ -197,7 +213,7 @@ class SimulationParamsPanel(QWidget):
         layout.addStretch(1)
 
         self._start_button = QPushButton("開始回放")
-        self._start_button.setProperty("class", "primary")
+        self._start_button.setProperty("class", PRIMARY)
         self._start_button.clicked.connect(self._emit_start)
         layout.addWidget(self._start_button)
 

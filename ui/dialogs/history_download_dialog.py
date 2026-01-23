@@ -22,7 +22,13 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from ui.widgets.form_helpers import build_browse_row, configure_form_layout
+from ui.widgets.form_helpers import (
+    apply_form_label_width,
+    align_form_fields,
+    build_browse_row,
+    configure_form_layout,
+)
+from ui.styles.tokens import DIALOG_HINT, FORM_LABEL_WIDTH_WIDE, HISTORY_DIALOG
 
 class HistoryDownloadDialog(QDialog):
     def __init__(self, symbol_id: int, parent: Optional[QWidget] = None) -> None:
@@ -33,7 +39,7 @@ class HistoryDownloadDialog(QDialog):
     def _setup_ui(self) -> None:
         self.setWindowTitle("歷史資料下載")
         self.setMinimumWidth(680)
-        self.setProperty("class", "history_dialog")
+        self.setProperty("class", HISTORY_DIALOG)
 
         layout = QVBoxLayout(self)
         layout.setContentsMargins(32, 32, 32, 32)
@@ -47,6 +53,12 @@ class HistoryDownloadDialog(QDialog):
             vertical_spacing=10,
             field_growth_policy=QFormLayout.AllNonFixedFieldsGrow,
         )
+        apply_form_label_width(
+            form_layout,
+            FORM_LABEL_WIDTH_WIDE,
+            alignment=Qt.AlignRight | Qt.AlignVCenter,
+        )
+        align_form_fields(form_layout, Qt.AlignLeft | Qt.AlignVCenter)
 
         self._range_group = QButtonGroup(self)
         range_row = QWidget()
@@ -99,6 +111,12 @@ class HistoryDownloadDialog(QDialog):
             vertical_spacing=10,
             field_growth_policy=QFormLayout.AllNonFixedFieldsGrow,
         )
+        apply_form_label_width(
+            output_layout,
+            FORM_LABEL_WIDTH_WIDE,
+            alignment=Qt.AlignRight | Qt.AlignVCenter,
+        )
+        align_form_fields(output_layout, Qt.AlignLeft | Qt.AlignVCenter)
 
         self._output_path = QLineEdit("data/raw_history/history.csv")
         self._output_path.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
@@ -107,7 +125,7 @@ class HistoryDownloadDialog(QDialog):
 
         self._info = QLabel("提示：請先載入 cTrader symbol list。")
         self._info.setAlignment(Qt.AlignLeft | Qt.AlignVCenter)
-        self._info.setProperty("class", "dialog_hint")
+        self._info.setProperty("class", DIALOG_HINT)
         output_layout.addRow(self._info)
 
         layout.addWidget(output_box)
