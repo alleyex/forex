@@ -13,7 +13,6 @@ from PySide6.QtWidgets import (
     QHBoxLayout,
     QLabel,
     QLineEdit,
-    QPushButton,
     QSizePolicy,
     QVBoxLayout,
     QButtonGroup,
@@ -23,6 +22,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
+from ui.widgets.form_helpers import build_browse_row, configure_form_layout
 
 class HistoryDownloadDialog(QDialog):
     def __init__(self, symbol_id: int, parent: Optional[QWidget] = None) -> None:
@@ -33,6 +33,7 @@ class HistoryDownloadDialog(QDialog):
     def _setup_ui(self) -> None:
         self.setWindowTitle("歷史資料下載")
         self.setMinimumWidth(680)
+        self.setProperty("class", "history_dialog")
 
         layout = QVBoxLayout(self)
         layout.setContentsMargins(32, 32, 32, 32)
@@ -40,10 +41,12 @@ class HistoryDownloadDialog(QDialog):
 
         form_box = QGroupBox("資料設定")
         form_layout = QFormLayout(form_box)
-        form_layout.setLabelAlignment(Qt.AlignRight | Qt.AlignVCenter)
-        form_layout.setHorizontalSpacing(16)
-        form_layout.setVerticalSpacing(12)
-        form_layout.setFieldGrowthPolicy(QFormLayout.AllNonFixedFieldsGrow)
+        configure_form_layout(
+            form_layout,
+            horizontal_spacing=12,
+            vertical_spacing=10,
+            field_growth_policy=QFormLayout.AllNonFixedFieldsGrow,
+        )
 
         self._range_group = QButtonGroup(self)
         range_row = QWidget()
@@ -90,21 +93,16 @@ class HistoryDownloadDialog(QDialog):
 
         output_box = QGroupBox("輸出")
         output_layout = QFormLayout(output_box)
-        output_layout.setLabelAlignment(Qt.AlignRight | Qt.AlignVCenter)
-        output_layout.setHorizontalSpacing(16)
-        output_layout.setVerticalSpacing(12)
-        output_layout.setFieldGrowthPolicy(QFormLayout.AllNonFixedFieldsGrow)
+        configure_form_layout(
+            output_layout,
+            horizontal_spacing=12,
+            vertical_spacing=10,
+            field_growth_policy=QFormLayout.AllNonFixedFieldsGrow,
+        )
 
         self._output_path = QLineEdit("data/raw_history/history.csv")
         self._output_path.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
-        browse = QPushButton("選擇")
-        browse.clicked.connect(self._browse_path)
-        output_row = QWidget()
-        output_row_layout = QHBoxLayout(output_row)
-        output_row_layout.setContentsMargins(0, 0, 0, 0)
-        output_row_layout.setSpacing(8)
-        output_row_layout.addWidget(self._output_path, stretch=1)
-        output_row_layout.addWidget(browse)
+        output_row = build_browse_row(self._output_path, self._browse_path, spacing=8)
         output_layout.addRow("儲存檔案", output_row)
 
         self._info = QLabel("提示：請先載入 cTrader symbol list。")

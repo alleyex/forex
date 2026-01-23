@@ -11,6 +11,7 @@ from PySide6.QtWidgets import (
 from PySide6.QtCore import Signal, Slot, Qt
 
 from ui.dialogs.base_auth_dialog import BaseAuthDialog, DialogState
+from ui.widgets.form_helpers import configure_form_layout
 from domain import Account
 from application import (
     AppState,
@@ -43,10 +44,7 @@ class TokenFormWidget(QWidget):
     
     def _setup_ui(self) -> None:
         layout = QFormLayout(self)
-        layout.setLabelAlignment(Qt.AlignRight)
-        layout.setHorizontalSpacing(12)
-        layout.setVerticalSpacing(8)
-        layout.setContentsMargins(0, 0, 0, 0)
+        configure_form_layout(layout, horizontal_spacing=12, vertical_spacing=10)
         
         self.access_token = QLineEdit()
         self.access_token.setPlaceholderText("輸入存取權杖")
@@ -208,7 +206,6 @@ class OAuthDialog(BaseAuthDialog):
             self._btn_fetch_accounts,
             self._btn_connect,
         ]:
-            btn.setMinimumHeight(40)
             btn.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
 
         layout.addWidget(self._btn_authorize)

@@ -4,12 +4,13 @@ cTrader 應用程式認證對話框
 from typing import Optional
 
 from PySide6.QtWidgets import (
-    QVBoxLayout, QHBoxLayout, QLabel, QLineEdit, 
+    QVBoxLayout, QLabel, QLineEdit,
     QPushButton, QComboBox, QFormLayout, QWidget,
 )
 from PySide6.QtCore import Signal, Slot, Qt
 
 from ui.dialogs.base_auth_dialog import BaseAuthDialog
+from ui.widgets.form_helpers import configure_form_layout
 from application import AppState, AppAuthServiceLike, BrokerUseCases, EventBus
 from config.constants import ConnectionStatus
 from config.paths import TOKEN_FILE
@@ -26,11 +27,7 @@ class CredentialsFormWidget(QWidget):
     
     def _setup_ui(self) -> None:
         layout = QFormLayout(self)
-        layout.setLabelAlignment(Qt.AlignRight)
-        layout.setFormAlignment(Qt.AlignTop)
-        layout.setHorizontalSpacing(12)
-        layout.setVerticalSpacing(8)
-        layout.setContentsMargins(0, 0, 0, 0)
+        configure_form_layout(layout, horizontal_spacing=12, vertical_spacing=10)
         
         # 環境選擇
         self.host_combo = QComboBox()
@@ -129,7 +126,6 @@ class AppAuthDialog(BaseAuthDialog):
         
         # 連線按鈕
         self._btn_connect = QPushButton("🔗 連線")
-        self._btn_connect.setMinimumHeight(40)
         layout.addWidget(self._btn_connect)
         
         # 日誌區域

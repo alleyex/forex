@@ -8,7 +8,6 @@ except ImportError:  # pragma: no cover - optional dependency
 from PySide6.QtCore import Qt, Signal
 from PySide6.QtWidgets import (
     QWidget,
-    QHBoxLayout,
     QVBoxLayout,
     QFormLayout,
     QGridLayout,
@@ -19,8 +18,12 @@ from PySide6.QtWidgets import (
     QCheckBox,
     QLineEdit,
     QFileDialog,
-    QWidget,
+    QSizePolicy,
 )
+
+from ui.widgets.form_helpers import build_browse_row, configure_form_layout
+from ui.utils.path_utils import latest_file_in_dir
+from config.paths import RAW_HISTORY_DIR
 
 
 class TrainingParamsPanel(QWidget):
@@ -36,25 +39,31 @@ class TrainingParamsPanel(QWidget):
         left_layout.setSpacing(12)
 
         form = QFormLayout()
-        form.setLabelAlignment(Qt.AlignLeft | Qt.AlignVCenter)
-        form.setFormAlignment(Qt.AlignTop)
-        form.setHorizontalSpacing(12)
-        form.setVerticalSpacing(10)
+        configure_form_layout(
+            form,
+            label_alignment=Qt.AlignLeft | Qt.AlignVCenter,
+            field_growth_policy=QFormLayout.FieldsStayAtSizeHint,
+        )
 
-        self._data_path = QLineEdit("data/raw_history/1_M5_2024-01-21_2205-2026-01-19_0215.csv")
-        browse = QPushButton("選擇")
-        browse.clicked.connect(self._browse_data)
-        data_row = QWidget()
-        data_layout = QHBoxLayout(data_row)
-        data_layout.setContentsMargins(0, 0, 0, 0)
-        data_layout.setSpacing(6)
-        data_layout.addWidget(self._data_path, stretch=1)
-        data_layout.addWidget(browse)
+        field_width = 240
+        spin_width = 140
+
+        default_data = latest_file_in_dir(
+            RAW_HISTORY_DIR,
+            (".csv",),
+            "data/raw_history/history.csv",
+        )
+        self._data_path = QLineEdit(default_data)
+        self._data_path.setFixedWidth(field_width)
+        self._data_path.setToolTip(default_data)
+        data_row = build_browse_row(self._data_path, self._browse_data)
+        data_row.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)
         form.addRow("data_path", data_row)
 
         self._total_steps = QSpinBox()
         self._total_steps.setRange(1, 10_000_000)
         self._total_steps.setValue(200_000)
+        self._total_steps.setFixedWidth(spin_width)
         form.addRow("total_steps", self._total_steps)
 
         self._learning_rate = QDoubleSpinBox()
@@ -62,6 +71,7 @@ class TrainingParamsPanel(QWidget):
         self._learning_rate.setDecimals(6)
         self._learning_rate.setSingleStep(1e-4)
         self._learning_rate.setValue(3e-4)
+        self._learning_rate.setFixedWidth(spin_width)
         form.addRow("learning_rate", self._learning_rate)
 
         self._gamma = QDoubleSpinBox()
@@ -69,16 +79,19 @@ class TrainingParamsPanel(QWidget):
         self._gamma.setDecimals(4)
         self._gamma.setSingleStep(0.001)
         self._gamma.setValue(0.99)
+        self._gamma.setFixedWidth(spin_width)
         form.addRow("gamma", self._gamma)
 
         self._n_steps = QSpinBox()
         self._n_steps.setRange(1, 8192)
         self._n_steps.setValue(2048)
+        self._n_steps.setFixedWidth(spin_width)
         form.addRow("n_steps", self._n_steps)
 
         self._batch_size = QSpinBox()
         self._batch_size.setRange(1, 4096)
         self._batch_size.setValue(64)
+        self._batch_size.setFixedWidth(spin_width)
         form.addRow("batch_size", self._batch_size)
 
         self._ent_coef = QDoubleSpinBox()
@@ -86,11 +99,13 @@ class TrainingParamsPanel(QWidget):
         self._ent_coef.setDecimals(4)
         self._ent_coef.setSingleStep(0.001)
         self._ent_coef.setValue(0.0)
+        self._ent_coef.setFixedWidth(spin_width)
         form.addRow("ent_coef", self._ent_coef)
 
         self._episode_length = QSpinBox()
         self._episode_length.setRange(1, 20_000)
         self._episode_length.setValue(2048)
+        self._episode_length.setFixedWidth(spin_width)
         form.addRow("episode_length", self._episode_length)
 
         self._eval_split = QDoubleSpinBox()
@@ -98,6 +113,7 @@ class TrainingParamsPanel(QWidget):
         self._eval_split.setDecimals(3)
         self._eval_split.setSingleStep(0.01)
         self._eval_split.setValue(0.2)
+        self._eval_split.setFixedWidth(spin_width)
         form.addRow("eval_split", self._eval_split)
 
         left_layout.addLayout(form)
@@ -135,6 +151,7 @@ class TrainingParamsPanel(QWidget):
         )
         if path:
             self._data_path.setText(path)
+            self._data_path.setToolTip(path)
 
 
 class TrainingPanel(QWidget):
@@ -206,8 +223,8 @@ class TrainingPanel(QWidget):
                 checkbox.setChecked(checked)
                 checkbox.toggled.connect(lambda checked_state, k=key: self._toggle_curve(k, checked_state))
                 self._checkboxes[key] = checkbox
-                row = idx // 2
-                col = idx % 2
+                row = idx // 4
+                col = idx % 4
                 chooser_layout.addWidget(checkbox, row, col)
 
             layout.addWidget(plot, stretch=1)

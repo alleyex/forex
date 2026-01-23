@@ -18,9 +18,12 @@ from PySide6.QtWidgets import (
     QSpinBox,
     QDoubleSpinBox,
     QFileDialog,
-    QHBoxLayout,
+    QSizePolicy,
 )
 
+from ui.widgets.form_helpers import build_browse_row, configure_form_layout
+from ui.utils.path_utils import latest_file_in_dir
+from config.paths import RAW_HISTORY_DIR
 
 class SimulationParamsPanel(QWidget):
     start_requested = Signal(dict)
@@ -42,53 +45,63 @@ class SimulationParamsPanel(QWidget):
         layout.setSpacing(12)
 
         form = QFormLayout()
-        form.setLabelAlignment(Qt.AlignLeft | Qt.AlignVCenter)
-        form.setFormAlignment(Qt.AlignTop)
-        form.setHorizontalSpacing(12)
-        form.setVerticalSpacing(10)
+        configure_form_layout(
+            form,
+            label_alignment=Qt.AlignLeft | Qt.AlignVCenter,
+            field_growth_policy=QFormLayout.FieldsStayAtSizeHint,
+        )
 
-        self._data_path = QLineEdit("data/raw_history/1_M5_2024-01-21_2205-2026-01-19_0210.csv")
-        browse_data = QPushButton("選擇")
-        browse_data.clicked.connect(self._browse_data)
-        data_row = QWidget()
-        data_layout = QHBoxLayout(data_row)
-        data_layout.setContentsMargins(0, 0, 0, 0)
-        data_layout.setSpacing(6)
-        data_layout.addWidget(self._data_path, stretch=1)
-        data_layout.addWidget(browse_data)
+        field_width = 240
+        spin_width = 140
+
+        default_data = latest_file_in_dir(
+            RAW_HISTORY_DIR,
+            (".csv",),
+            "data/raw_history/history.csv",
+        )
+        self._data_path = QLineEdit(default_data)
+        self._data_path.setFixedWidth(field_width)
+        self._data_path.setToolTip(default_data)
+        data_row = build_browse_row(self._data_path, self._browse_data)
+        data_row.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)
         form.addRow("data", data_row)
 
-        self._model_path = QLineEdit("ml/rl/models/ppo_forex.zip")
-        browse_model = QPushButton("選擇")
-        browse_model.clicked.connect(self._browse_model)
-        model_row = QWidget()
-        model_layout = QHBoxLayout(model_row)
-        model_layout.setContentsMargins(0, 0, 0, 0)
-        model_layout.setSpacing(6)
-        model_layout.addWidget(self._model_path, stretch=1)
-        model_layout.addWidget(browse_model)
+        default_model = latest_file_in_dir(
+            "ml/rl/models",
+            (".zip",),
+            "ml/rl/models/ppo_forex.zip",
+        )
+        self._model_path = QLineEdit(default_model)
+        self._model_path.setFixedWidth(field_width)
+        self._model_path.setToolTip(default_model)
+        model_row = build_browse_row(self._model_path, self._browse_model)
+        model_row.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)
         form.addRow("model", model_row)
 
         self._log_every = QSpinBox()
         self._log_every.setRange(1, 100_000)
         self._log_every.setValue(200)
+        self._log_every.setFixedWidth(spin_width)
         form.addRow("log_every", self._log_every)
 
         self._max_steps = QSpinBox()
         self._max_steps.setRange(0, 10_000_000)
         self._max_steps.setValue(0)
+        self._max_steps.setFixedWidth(spin_width)
         form.addRow("max_steps", self._max_steps)
 
         self._transaction_cost = QDoubleSpinBox()
         self._transaction_cost.setRange(0.0, 100.0)
         self._transaction_cost.setDecimals(3)
         self._transaction_cost.setValue(1.0)
+        self._transaction_cost.setFixedWidth(spin_width)
         form.addRow("transaction_cost_bps", self._transaction_cost)
 
         self._slippage = QDoubleSpinBox()
         self._slippage.setRange(0.0, 100.0)
         self._slippage.setDecimals(3)
         self._slippage.setValue(0.5)
+        self._slippage.setFixedWidth(spin_width)
         form.addRow("slippage_bps", self._slippage)
 
         layout.addLayout(form)
@@ -127,11 +140,13 @@ class SimulationParamsPanel(QWidget):
         path, _ = QFileDialog.getOpenFileName(self, "選擇資料檔", "", "CSV (*.csv)")
         if path:
             self._data_path.setText(path)
+            self._data_path.setToolTip(path)
 
     def _browse_model(self) -> None:
         path, _ = QFileDialog.getOpenFileName(self, "選擇模型檔", "", "ZIP (*.zip)")
         if path:
             self._model_path.setText(path)
+            self._model_path.setToolTip(path)
 
     def _emit_start(self) -> None:
         self.start_requested.emit(self.get_params())

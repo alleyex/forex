@@ -12,13 +12,12 @@ from PySide6.QtWidgets import (
     QStackedWidget,
 )
 from PySide6.QtCore import Slot, Signal, Qt
-from PySide6.QtGui import QAction, QFont
-from PySide6.QtWidgets import QStyle
+from PySide6.QtGui import QAction
 
 from ui.widgets.trade_panel import TradePanel
 from ui.widgets.simulation_panel import SimulationPanel, SimulationParamsPanel
 from ui.widgets.training_panel import TrainingPanel, TrainingParamsPanel
-from ui.widgets.log_panel import LogPanel
+from ui.widgets.log_widget import LogWidget
 from ui.controllers import PPOTrainingController, SimulationController, TrendbarController
 from ui.dialogs.app_auth_dialog import AppAuthDialog
 from ui.controllers import HistoryDownloadController
@@ -74,14 +73,13 @@ class MainWindow(QMainWindow):
         self._ppo_controller: Optional[PPOTrainingController] = None
         self._simulation_controller: Optional[SimulationController] = None
         self._log_collapsed = False
-        self._log_maximized = False
 
         self._setup_ui()
         self._connect_signals()
         if self._app_state:
             self._app_state.subscribe(self._sync_status_from_state)
         if self._event_bus:
-            self._event_bus.subscribe("log", self._log_panel.add_log)
+            self._event_bus.subscribe("log", self._log_panel.append)
         if self._service:
             self.set_service(self._service)
         if self._oauth_service:
@@ -110,12 +108,16 @@ class MainWindow(QMainWindow):
         self._stack.addWidget(self._training_panel)
         self._stack.addWidget(self._simulation_panel)
 
-        self._log_panel = LogPanel()
-        self._log_dock = QDockWidget("日誌面板", self)
+        self._log_panel = LogWidget(
+            title="",
+            with_timestamp=True,
+            monospace=True,
+            font_point_delta=2,
+        )
+        self._log_dock = QDockWidget("", self)
         self._log_dock.setObjectName("log_dock")
         self._log_dock.setWidget(self._log_panel)
         self._log_dock.setAllowedAreas(Qt.BottomDockWidgetArea)
-        self._log_dock.setFeatures(QDockWidget.NoDockWidgetFeatures)
         self._log_dock.setMinimumHeight(180)
 
         self.setCentralWidget(self._stack)
@@ -125,10 +127,6 @@ class MainWindow(QMainWindow):
         self._training_params_dock.setObjectName("training_params_dock")
         self._training_params_dock.setWidget(self._training_params_panel)
         self._training_params_dock.setAllowedAreas(Qt.LeftDockWidgetArea)
-        self._training_params_dock.setStyleSheet(
-            "QDockWidget::title { padding: 8px 12px; font-weight: 600; }"
-            "QDockWidget::contents { margin: 12px; }"
-        )
         self.addDockWidget(Qt.LeftDockWidgetArea, self._training_params_dock)
         self._training_params_dock.setVisible(False)
 
@@ -136,10 +134,6 @@ class MainWindow(QMainWindow):
         self._simulation_params_dock.setObjectName("simulation_params_dock")
         self._simulation_params_dock.setWidget(self._simulation_params_panel)
         self._simulation_params_dock.setAllowedAreas(Qt.LeftDockWidgetArea)
-        self._simulation_params_dock.setStyleSheet(
-            "QDockWidget::title { padding: 8px 12px; font-weight: 600; }"
-            "QDockWidget::contents { margin: 12px; }"
-        )
         self.addDockWidget(Qt.LeftDockWidgetArea, self._simulation_params_dock)
         self._simulation_params_dock.setVisible(False)
         self.setCorner(Qt.BottomLeftCorner, Qt.LeftDockWidgetArea)
@@ -151,8 +145,6 @@ class MainWindow(QMainWindow):
         self.oauthStatusChanged.connect(self._handle_oauth_status_changed)
         self.appAuthSucceeded.connect(self._handle_app_auth_success)
         self.oauthSucceeded.connect(self._handle_oauth_success)
-        self._log_panel.hide_requested.connect(lambda: self._set_log_collapsed(True))
-        self._log_panel.maximize_requested.connect(self._set_log_maximized)
         status_bar = self.statusBar()
         self._app_auth_status_label = QLabel(self._format_app_auth_status())
         self._oauth_status_label = QLabel(self._format_oauth_status())
@@ -172,6 +164,7 @@ class MainWindow(QMainWindow):
         self._training_params_panel.start_requested.connect(self._start_ppo_training)
         self._simulation_params_panel.start_requested.connect(self._start_simulation)
         self._action_toggle_log.toggled.connect(self._toggle_log_dock)
+        self._log_dock.visibilityChanged.connect(self._sync_log_toggle_action)
         self._action_simulation.triggered.connect(self._on_simulation_clicked)
         self._action_history_download.triggered.connect(self._open_history_download_dialog)
 
@@ -185,10 +178,6 @@ class MainWindow(QMainWindow):
 
         toolbar = self.addToolBar("認證")
         toolbar.setToolButtonStyle(Qt.ToolButtonTextBesideIcon)
-        toolbar.setFont(QFont("", 14))
-        toolbar.setStyleSheet(
-            "QToolButton { font-size: 14px; padding: 4px 12px; min-height: 28px; }"
-        )
 
         self._action_app_auth.triggered.connect(self._open_app_auth_dialog)
         self._action_oauth.triggered.connect(self._open_oauth_dialog)
@@ -206,6 +195,7 @@ class MainWindow(QMainWindow):
         self._action_toggle_log.setChecked(True)
         self._action_toggle_log.setText("日誌")
         toolbar.addAction(self._action_toggle_log)
+        self._action_toggle_log.setVisible(not self._log_dock.isVisible())
 
     @Slot()
     def _on_trendbar_toggle_requested(self) -> None:
@@ -219,19 +209,22 @@ class MainWindow(QMainWindow):
         self._set_log_collapsed(not visible)
         self._log_dock.setVisible(True)
 
+    @Slot(bool)
+    def _sync_log_toggle_action(self, visible: bool) -> None:
+        self._action_toggle_log.blockSignals(True)
+        try:
+            self._action_toggle_log.setChecked(visible)
+            self._action_toggle_log.setVisible(not visible)
+        finally:
+            self._action_toggle_log.blockSignals(False)
+
     @Slot()
     def _on_train_ppo_clicked(self) -> None:
-        self._stack.setCurrentWidget(self._training_panel)
-        self._training_params_dock.setVisible(True)
-        self._simulation_params_dock.setVisible(False)
-        self._set_log_collapsed(False)
-        self._action_toggle_log.setChecked(True)
+        self._show_panel("training", show_log=True)
 
     @Slot()
     def _on_simulation_clicked(self) -> None:
-        self._stack.setCurrentWidget(self._simulation_panel)
-        self._training_params_dock.setVisible(False)
-        self._simulation_params_dock.setVisible(True)
+        self._show_panel("simulation", show_log=None)
 
     @Slot(dict)
     def _start_ppo_training(self, params: dict) -> None:
@@ -271,13 +264,13 @@ class MainWindow(QMainWindow):
 
     def _get_history_download_controller(self) -> Optional[HistoryDownloadController]:
         if not self._use_cases:
-            self._log_panel.add_log("⚠️ 缺少 broker 用例配置")
+            self._log_panel.append("⚠️ 缺少 broker 用例配置")
             return None
         if not self._service:
-            self._log_panel.add_log("⚠️ 尚未完成 App 認證")
+            self._log_panel.append("⚠️ 尚未完成 App 認證")
             return None
         if not self._oauth_service:
-            self._log_panel.add_log("⚠️ 尚未完成 OAuth 帳戶認證")
+            self._log_panel.append("⚠️ 尚未完成 OAuth 帳戶認證")
             return None
 
         if self._history_download_controller is None:
@@ -286,20 +279,20 @@ class MainWindow(QMainWindow):
                 app_auth_service=self._service,
                 oauth_service=self._oauth_service,
                 parent=self,
-                log=self._log_panel.add_log,
+                log=self._log_panel.append,
                 log_async=self.logRequested.emit,
             )
         return self._history_download_controller
 
     def _get_trendbar_controller(self) -> Optional[TrendbarController]:
         if not self._use_cases:
-            self._log_panel.add_log("⚠️ 缺少 broker 用例配置")
+            self._log_panel.append("⚠️ 缺少 broker 用例配置")
             return None
         if not self._service:
-            self._log_panel.add_log("⚠️ 尚未完成 App 認證")
+            self._log_panel.append("⚠️ 尚未完成 App 認證")
             return None
         if not self._oauth_service:
-            self._log_panel.add_log("⚠️ 尚未完成 OAuth 帳戶認證")
+            self._log_panel.append("⚠️ 尚未完成 OAuth 帳戶認證")
             return None
 
         if self._trendbar_controller is None:
@@ -308,7 +301,7 @@ class MainWindow(QMainWindow):
                 app_auth_service=self._service,
                 oauth_service=self._oauth_service,
                 parent=self,
-                log=self._log_panel.add_log,
+                log=self._log_panel.append,
                 log_async=self.logRequested.emit,
                 set_active=self._trade_panel.set_trendbar_active,
                 format_price=self._format_price,
@@ -319,7 +312,7 @@ class MainWindow(QMainWindow):
         if self._ppo_controller is None:
             self._ppo_controller = PPOTrainingController(
                 parent=self,
-                log=self._log_panel.add_log,
+                log=self._log_panel.append,
                 ingest_log=self._training_panel.ingest_log_line,
             )
         return self._ppo_controller
@@ -328,7 +321,7 @@ class MainWindow(QMainWindow):
         if self._simulation_controller is None:
             self._simulation_controller = SimulationController(
                 parent=self,
-                log=self._log_panel.add_log,
+                log=self._log_panel.append,
                 reset_plot=self._simulation_panel.reset_plot,
                 ingest_equity=self._simulation_panel.ingest_equity,
                 update_summary=self._simulation_params_panel.update_summary,
@@ -343,9 +336,30 @@ class MainWindow(QMainWindow):
     @Slot()
     def _on_fetch_account_info(self) -> None:
         """Handle fetch account info click"""
-        self._stack.setCurrentWidget(self._trade_container)
-        self._training_params_dock.setVisible(False)
-        self._simulation_params_dock.setVisible(False)
+        self._show_panel("trade", show_log=None)
+
+    def _show_panel(self, panel: str, *, show_log: Optional[bool]) -> None:
+        if panel == "training":
+            self._stack.setCurrentWidget(self._training_panel)
+            self._training_params_dock.setVisible(True)
+            self._simulation_params_dock.setVisible(False)
+        elif panel == "simulation":
+            self._stack.setCurrentWidget(self._simulation_panel)
+            self._training_params_dock.setVisible(False)
+            self._simulation_params_dock.setVisible(True)
+        else:
+            self._stack.setCurrentWidget(self._trade_container)
+            self._training_params_dock.setVisible(False)
+            self._simulation_params_dock.setVisible(False)
+
+        if show_log is None:
+            return
+
+        if show_log:
+            self._log_dock.setVisible(True)
+            self._set_log_collapsed(False)
+        else:
+            self._log_dock.setVisible(False)
 
     def _set_log_collapsed(self, collapsed: bool) -> None:
         self._log_collapsed = collapsed
@@ -354,21 +368,11 @@ class MainWindow(QMainWindow):
         self._action_toggle_log.setChecked(not collapsed)
         self._action_toggle_log.blockSignals(False)
         if collapsed:
-            self._set_log_maximized(False)
-        if collapsed:
             self._log_dock.setMinimumHeight(28)
             self._log_dock.setMaximumHeight(32)
         else:
             self._log_dock.setMinimumHeight(180)
             self._log_dock.setMaximumHeight(16777215)
-
-    def _set_log_maximized(self, maximized: bool) -> None:
-        if self._log_collapsed and maximized:
-            self._set_log_collapsed(False)
-        self._log_maximized = maximized
-        self._log_panel.set_maximized(maximized)
-        target = int(self.height() * (0.55 if maximized else 0.25))
-        self.resizeDocks([self._log_dock], [max(120, target)], Qt.Vertical)
 
     def _handle_accounts_received(self, accounts: list, account_id: Optional[int]) -> None:
         try:
@@ -554,11 +558,11 @@ class MainWindow(QMainWindow):
 
     @Slot(str)
     def _handle_log_message(self, message: str) -> None:
-        self._log_panel.add_log(message)
+        self._log_panel.append(message)
 
     def _handle_app_auth_success(self, _client) -> None:
         self._app_auth_status_label.setText(self._format_app_auth_status())
-        self._log_panel.add_log("✅ 服務已連線")
+        self._log_panel.append("✅ 服務已連線")
         if self._app_state:
             self._app_state.update_app_status(int(self._service.status))
         self._auto_oauth_connect()
@@ -577,7 +581,7 @@ class MainWindow(QMainWindow):
 
     def _handle_oauth_success(self, _tokens) -> None:
         self._oauth_status_label.setText(self._format_oauth_status())
-        self._log_panel.add_log("✅ OAuth 已連線")
+        self._log_panel.append("✅ OAuth 已連線")
         if self._app_state:
             self._app_state.update_oauth_status(int(self._oauth_service.status))
 
