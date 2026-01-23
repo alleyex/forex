@@ -24,6 +24,9 @@ class FakeAppAuthService:
         if self._on_app_auth_success:
             self._on_app_auth_success(self)
 
+    def disconnect(self) -> None:
+        self.is_app_authenticated = False
+
     def add_message_handler(self, handler) -> None:
         pass
 

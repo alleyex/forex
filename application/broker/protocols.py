@@ -21,6 +21,9 @@ class AppAuthServiceLike(Protocol):
     def connect(self) -> None:
         ...
 
+    def disconnect(self) -> None:
+        ...
+
     def add_message_handler(self, handler) -> None:
         ...
 

@@ -82,6 +82,7 @@ class AppAuthService(BaseAuthService[AppAuthServiceCallbacks, Client, AppAuthMes
         self._reconnect_delay = reconnect_delay
         self._reconnect_timer: Optional[threading.Timer] = None
         self._auto_reconnect = auto_reconnect
+        self._manual_disconnect = False
 
     @classmethod
     def create(cls, host_type: str, token_file: str = TOKEN_FILE) -> "AppAuthService":
@@ -146,6 +147,7 @@ class AppAuthService(BaseAuthService[AppAuthServiceCallbacks, Client, AppAuthMes
 
     def connect(self) -> None:
         """初始化連線並開始認證流程"""
+        self._manual_disconnect = False
         if self._status >= ConnectionStatus.APP_AUTHENTICATED and self._client is not None:
             self._log("ℹ️ 應用程式已認證，略過重複連線")
             return
@@ -165,6 +167,23 @@ class AppAuthService(BaseAuthService[AppAuthServiceCallbacks, Client, AppAuthMes
 
         self._log("🚀 正在連線到 cTrader...")
         self._client.startService()
+
+    def disconnect(self) -> None:
+        """手動中斷連線"""
+        self._manual_disconnect = True
+        self._stop_heartbeat_loop()
+        self._end_operation()
+        self.clear_message_handlers()
+        self._cancel_reconnect_timer()
+        if self._client is not None:
+            try:
+                self._client.stopService()
+            except Exception as exc:  # pragma: no cover - best effort
+                self._log(f"⚠️ 斷線失敗: {exc}")
+        self._client = None
+        self._send_wrapped = False
+        self._set_status(ConnectionStatus.DISCONNECTED)
+        self._log("🔌 已手動斷線")
 
     def get_client(self) -> Client:
         """
@@ -204,9 +223,13 @@ class AppAuthService(BaseAuthService[AppAuthServiceCallbacks, Client, AppAuthMes
         self._stop_heartbeat_loop()
         self._end_operation()
         self.clear_message_handlers()
+        self._cancel_reconnect_timer()
         self._client = None
         self._send_wrapped = False
         self._emit_error(f"已斷線: {reason}")
+        if self._manual_disconnect:
+            self._manual_disconnect = False
+            return
         if self._auto_reconnect:
             self._log("🔄 偵測到斷線，將自動嘗試重新連線")
             self._schedule_reconnect("連線中斷")
@@ -371,6 +394,14 @@ class AppAuthService(BaseAuthService[AppAuthServiceCallbacks, Client, AppAuthMes
         self._reconnect_timer = threading.Timer(self._reconnect_delay, self._reconnect)
         self._reconnect_timer.daemon = True
         self._reconnect_timer.start()
+
+    def _cancel_reconnect_timer(self) -> None:
+        if self._reconnect_timer and self._reconnect_timer.is_alive():
+            try:
+                self._reconnect_timer.cancel()
+            except Exception:
+                pass
+        self._reconnect_timer = None
 
     def _reconnect(self) -> None:
         if self._status == ConnectionStatus.CONNECTING:

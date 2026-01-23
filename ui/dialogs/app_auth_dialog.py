@@ -155,7 +155,15 @@ class AppAuthDialog(BaseAuthDialog):
         """開始認證流程"""
         if self._state.in_progress:
             return
-        
+        if self._service:
+            if getattr(self._service, "status", None) == ConnectionStatus.CONNECTING:
+                self._log_info("⏳ 正在連線，請稍候")
+                return
+            if getattr(self._service, "is_app_authenticated", False):
+                self._log_info("應用程式已認證，無需重新連線")
+                self.accept()
+                return
+
         # 驗證表單
         if error := self._form.validate():
             self._log_error(error)
@@ -167,17 +175,18 @@ class AppAuthDialog(BaseAuthDialog):
         if not self._save_credentials(data):
             return
         
-        # 建立服務
-        try:
-            use_cases = self._use_cases
-            if use_cases is None:
-                self._log_error("缺少 broker 用例配置")
+        # 建立或重用服務
+        if self._service is None:
+            try:
+                use_cases = self._use_cases
+                if use_cases is None:
+                    self._log_error("缺少 broker 用例配置")
+                    return
+                self._service = use_cases.create_app_auth(data["host_type"], self._token_file)
+            except (FileNotFoundError, ValueError) as e:
+                self._log_error(str(e))
                 return
-            self._service = use_cases.create_app_auth(data["host_type"], self._token_file)
-        except (FileNotFoundError, ValueError) as e:
-            self._log_error(str(e))
-            return
-        
+
         self._state.in_progress = True
         self._set_controls_enabled(False)
         

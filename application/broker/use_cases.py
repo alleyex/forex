@@ -34,6 +34,9 @@ class BrokerUseCases:
         self._account_list_uc: Optional[AccountListUseCase] = None
         self._account_funds_uc: Optional[AccountFundsUseCase] = None
         self._symbol_list_uc: Optional[SymbolListUseCase] = None
+        self._account_list_owner: Optional[AppAuthServiceLike] = None
+        self._account_funds_owner: Optional[AppAuthServiceLike] = None
+        self._symbol_list_owner: Optional[AppAuthServiceLike] = None
 
     def create_app_auth(self, host_type: str, token_file: str = TOKEN_FILE) -> AppAuthServiceLike:
         return self._provider.create_app_auth(host_type, token_file)
@@ -88,8 +91,9 @@ class BrokerUseCases:
         on_log=None,
         timeout_seconds: Optional[int] = None,
     ) -> bool:
-        if self._account_list_uc is None:
+        if self._account_list_uc is None or self._account_list_owner is not app_auth_service:
             self._account_list_uc = self.create_account_list(app_auth_service, access_token)
+            self._account_list_owner = app_auth_service
         else:
             self._account_list_uc.set_access_token(access_token)
 
@@ -114,8 +118,9 @@ class BrokerUseCases:
         on_log=None,
         timeout_seconds: Optional[int] = None,
     ) -> bool:
-        if self._account_funds_uc is None:
+        if self._account_funds_uc is None or self._account_funds_owner is not app_auth_service:
             self._account_funds_uc = self.create_account_funds(app_auth_service)
+            self._account_funds_owner = app_auth_service
 
         if self._account_funds_uc.in_progress:
             return False
@@ -139,8 +144,9 @@ class BrokerUseCases:
         on_log=None,
         timeout_seconds: Optional[int] = None,
     ) -> bool:
-        if self._symbol_list_uc is None:
+        if self._symbol_list_uc is None or self._symbol_list_owner is not app_auth_service:
             self._symbol_list_uc = self.create_symbol_list(app_auth_service)
+            self._symbol_list_owner = app_auth_service
 
         if self._symbol_list_uc.in_progress:
             return False
