@@ -6,6 +6,8 @@ from PySide6.QtCore import Slot
 from PySide6.QtGui import QFontDatabase
 from PySide6.QtWidgets import QLabel, QTextEdit, QVBoxLayout, QWidget
 
+from ui.utils.formatters import format_timestamped_message
+
 
 class LogWidget(QWidget):
     """
@@ -55,7 +57,7 @@ class LogWidget(QWidget):
         """新增訊息並捲動到底部"""
         if self._with_timestamp:
             ts = datetime.now().strftime("%H:%M:%S")
-            message = f"[{ts}] {message}"
+            message = format_timestamped_message(message, ts)
         self._text_edit.append(message)
         scrollbar = self._text_edit.verticalScrollBar()
         scrollbar.setValue(scrollbar.maximum())

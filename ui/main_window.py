@@ -36,6 +36,7 @@ from config.paths import TOKEN_FILE
 from utils.reactor_manager import reactor_manager
 
 from config.constants import ConnectionStatus
+from ui.utils.formatters import format_app_auth_status, format_oauth_status
 
 
 class MainWindow(QMainWindow):
@@ -543,35 +544,13 @@ class MainWindow(QMainWindow):
 
     def _format_app_auth_status(self) -> str:
         """Format app auth status for display"""
-        if not self._service:
-            return "App 認證狀態: ⛔ 未連線"
-
-        status_map = {
-            ConnectionStatus.DISCONNECTED: "⛔ 已斷線",
-            ConnectionStatus.CONNECTING: "⏳ 連線中...",
-            ConnectionStatus.CONNECTED: "🔗 已連線",
-            ConnectionStatus.APP_AUTHENTICATED: "✅ 已認證",
-            ConnectionStatus.ACCOUNT_AUTHENTICATED: "✅ 帳戶已認證",
-        }
-
-        text = status_map.get(self._service.status, "❓ 未知")
-        return f"App 認證狀態: {text}"
+        status = None if not self._service else self._service.status
+        return format_app_auth_status(status)
 
     def _format_oauth_status(self) -> str:
         """Format OAuth status for display"""
-        if not self._oauth_service:
-            return "OAuth 狀態: ⛔ 未連線"
-
-        status_map = {
-            ConnectionStatus.DISCONNECTED: "⛔ 已斷線",
-            ConnectionStatus.CONNECTING: "⏳ 連線中...",
-            ConnectionStatus.CONNECTED: "🔗 已連線",
-            ConnectionStatus.APP_AUTHENTICATED: "✅ 已認證",
-            ConnectionStatus.ACCOUNT_AUTHENTICATED: "🔐 帳戶已授權",
-        }
-
-        text = status_map.get(self._oauth_service.status, "❓ 未知")
-        return f"OAuth 狀態: {text}"
+        status = None if not self._oauth_service else self._oauth_service.status
+        return format_oauth_status(status)
 
     @Slot(str)
     def _handle_log_message(self, message: str) -> None:

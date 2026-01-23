@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 from typing import Optional
-import re
 
 try:
     import pyqtgraph as pg
@@ -26,6 +25,7 @@ from PySide6.QtWidgets import (
 
 from ui.widgets.form_helpers import build_browse_row, configure_form_layout
 from ui.utils.path_utils import latest_file_in_dir
+from ui.utils.formatters import format_kv_lines
 from config.paths import RAW_HISTORY_DIR
 
 class SimulationParamsPanel(QWidget):
@@ -285,21 +285,21 @@ class SimulationParamsPanel(QWidget):
             "avg_pnl": "平均盈虧",
             "avg_cost": "平均成本",
         }
-        self._trade_stats.setText(self._format_kv_lines(text, label_map))
+        self._trade_stats.setText(format_kv_lines(text, label_map))
 
     def update_streak_stats(self, text: str) -> None:
         label_map = {
             "max_win": "最大連勝",
             "max_loss": "最大連敗",
         }
-        self._streak_stats.setText(self._format_kv_lines(text, label_map))
+        self._streak_stats.setText(format_kv_lines(text, label_map))
 
     def update_holding_stats(self, text: str) -> None:
         label_map = {
             "max_steps": "最長持倉",
             "avg_steps": "平均持倉",
         }
-        self._holding_stats.setText(self._format_kv_lines(text, label_map))
+        self._holding_stats.setText(format_kv_lines(text, label_map))
 
     def update_action_distribution(self, text: str) -> None:
         label_map = {
@@ -308,7 +308,7 @@ class SimulationParamsPanel(QWidget):
             "flat": "空手比例",
             "avg": "平均持倉",
         }
-        self._action_dist.setText(self._format_kv_lines(text, label_map))
+        self._action_dist.setText(format_kv_lines(text, label_map))
 
     def update_playback_range(self, text: str) -> None:
         label_map = {
@@ -316,22 +316,7 @@ class SimulationParamsPanel(QWidget):
             "end": "結束",
             "steps": "步數",
         }
-        self._playback_range.setText(self._format_kv_lines(text, label_map))
-
-    def _format_kv_lines(self, text: str, label_map: Optional[dict] = None) -> str:
-        if not text or text.strip() == "-":
-            return "-"
-        pattern = re.compile(r"(\\w+)=([^=]+?)(?=\\s+\\w+=|$)")
-        matches = pattern.findall(text)
-        if not matches:
-            return text
-        lines = []
-        for key, value in matches:
-            label = label_map.get(key, key) if label_map else key
-            label = label.replace("_", " ")
-            lines.append(f"{label}: {value.strip()}")
-        return "\n".join(lines)
-
+        self._playback_range.setText(format_kv_lines(text, label_map))
 
 class SimulationPanel(QWidget):
     def __init__(self, parent: Optional[QWidget] = None) -> None:

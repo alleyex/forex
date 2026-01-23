@@ -6,6 +6,7 @@ from PySide6.QtWidgets import QLabel
 from PySide6.QtCore import Qt, Slot
 
 from config.constants import ConnectionStatus
+from ui.utils.formatters import format_status_label
 
 
 class StatusWidget(QLabel):
@@ -44,6 +45,6 @@ class StatusWidget(QLabel):
         """
         status_enum = ConnectionStatus(status) if isinstance(status, int) else status
         text, style = self._status_map.get(status_enum, ("未知", ""))
-        self.setText(f"狀態: {text}")
+        self.setText(format_status_label(text))
         self.setStyleSheet(style)
     

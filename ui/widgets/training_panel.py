@@ -40,7 +40,7 @@ class TrainingParamsPanel(QWidget):
         left_layout.setContentsMargins(14, 14, 14, 14)
         left_layout.setSpacing(14)
 
-        file_group = QGroupBox("檔案")
+        file_group = QGroupBox("Files")
         file_layout = QFormLayout(file_group)
         configure_form_layout(
             file_layout,
@@ -61,9 +61,9 @@ class TrainingParamsPanel(QWidget):
         self._data_path.setToolTip(default_data)
         data_row = build_browse_row(self._data_path, self._browse_data)
         data_row.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)
-        file_layout.addRow("資料檔案", data_row)
+        file_layout.addRow("data_path", data_row)
 
-        params_group = QGroupBox("訓練參數")
+        params_group = QGroupBox("Training Params")
         params_layout = QFormLayout(params_group)
         configure_form_layout(
             params_layout,
@@ -75,7 +75,7 @@ class TrainingParamsPanel(QWidget):
         self._total_steps.setRange(1, 10_000_000)
         self._total_steps.setValue(200_000)
         self._total_steps.setFixedWidth(spin_width)
-        params_layout.addRow("總步數", self._total_steps)
+        params_layout.addRow("total_steps", self._total_steps)
 
         self._learning_rate = QDoubleSpinBox()
         self._learning_rate.setRange(1e-6, 1.0)
@@ -83,7 +83,7 @@ class TrainingParamsPanel(QWidget):
         self._learning_rate.setSingleStep(1e-4)
         self._learning_rate.setValue(3e-4)
         self._learning_rate.setFixedWidth(spin_width)
-        params_layout.addRow("學習率", self._learning_rate)
+        params_layout.addRow("learning_rate", self._learning_rate)
 
         self._gamma = QDoubleSpinBox()
         self._gamma.setRange(0.0, 0.9999)
@@ -91,19 +91,19 @@ class TrainingParamsPanel(QWidget):
         self._gamma.setSingleStep(0.001)
         self._gamma.setValue(0.99)
         self._gamma.setFixedWidth(spin_width)
-        params_layout.addRow("折扣因子", self._gamma)
+        params_layout.addRow("gamma", self._gamma)
 
         self._n_steps = QSpinBox()
         self._n_steps.setRange(1, 8192)
         self._n_steps.setValue(2048)
         self._n_steps.setFixedWidth(spin_width)
-        params_layout.addRow("N Steps", self._n_steps)
+        params_layout.addRow("n_steps", self._n_steps)
 
         self._batch_size = QSpinBox()
         self._batch_size.setRange(1, 4096)
         self._batch_size.setValue(64)
         self._batch_size.setFixedWidth(spin_width)
-        params_layout.addRow("Batch Size", self._batch_size)
+        params_layout.addRow("batch_size", self._batch_size)
 
         self._ent_coef = QDoubleSpinBox()
         self._ent_coef.setRange(0.0, 1.0)
@@ -111,13 +111,13 @@ class TrainingParamsPanel(QWidget):
         self._ent_coef.setSingleStep(0.001)
         self._ent_coef.setValue(0.0)
         self._ent_coef.setFixedWidth(spin_width)
-        params_layout.addRow("Entropy Coef", self._ent_coef)
+        params_layout.addRow("ent_coef", self._ent_coef)
 
         self._episode_length = QSpinBox()
         self._episode_length.setRange(1, 20_000)
         self._episode_length.setValue(2048)
         self._episode_length.setFixedWidth(spin_width)
-        params_layout.addRow("Episode 長度", self._episode_length)
+        params_layout.addRow("episode_length", self._episode_length)
 
         self._eval_split = QDoubleSpinBox()
         self._eval_split.setRange(0.05, 0.5)
@@ -125,11 +125,11 @@ class TrainingParamsPanel(QWidget):
         self._eval_split.setSingleStep(0.01)
         self._eval_split.setValue(0.2)
         self._eval_split.setFixedWidth(spin_width)
-        params_layout.addRow("Eval Split", self._eval_split)
+        params_layout.addRow("eval_split", self._eval_split)
 
-        options_group = QGroupBox("訓練選項")
+        options_group = QGroupBox("Options")
         options_layout = QVBoxLayout(options_group)
-        self._resume_training = QCheckBox("接續訓練")
+        self._resume_training = QCheckBox("Resume training")
         self._resume_training.setChecked(False)
         options_layout.addWidget(self._resume_training)
 

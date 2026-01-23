@@ -13,6 +13,12 @@ from PySide6.QtCore import Slot, QTimer
 
 from ui.widgets.log_widget import LogWidget
 from ui.widgets.status_widget import StatusWidget
+from ui.utils.formatters import (
+    format_log_error,
+    format_log_info,
+    format_log_ok,
+    format_log_warn,
+)
 
 
 @dataclass
@@ -68,16 +74,16 @@ class BaseAuthDialog(QDialog):
             self._event_bus.publish("log", message)
 
     def _log_info(self, message: str) -> None:
-        self._append_log(f"[INFO] {message}")
+        self._append_log(format_log_info(message))
 
     def _log_success(self, message: str) -> None:
-        self._append_log(f"[OK] {message}")
+        self._append_log(format_log_ok(message))
 
     def _log_warning(self, message: str) -> None:
-        self._append_log(f"[WARN] {message}")
+        self._append_log(format_log_warn(message))
 
     def _log_error(self, message: str) -> None:
-        self._append_log(f"[ERROR] {message}")
+        self._append_log(format_log_error(message))
 
     # ─────────────────────────────────────────────────────────────
     # 狀態處理
