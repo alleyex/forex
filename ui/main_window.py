@@ -539,7 +539,6 @@ class MainWindow(QMainWindow):
                 self.set_oauth_service(oauth_service)
             else:
                 self._log_panel.append("⚠️ OAuth 服務建立失敗")
-            self._on_fetch_account_info()
         self._oauth_dialog_open = False
 
     def _format_app_auth_status(self) -> str:

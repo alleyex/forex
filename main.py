@@ -32,7 +32,7 @@ def main() -> int:
         event_bus=event_bus,
         app_state=app_state,
     )
-    main_window.show()
+    main_window.showMaximized()
     
     return app.exec()
 
