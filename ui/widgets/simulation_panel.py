@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from typing import Optional
+import re
 
 try:
     import pyqtgraph as pg
@@ -12,6 +13,7 @@ from PySide6.QtWidgets import (
     QWidget,
     QVBoxLayout,
     QFormLayout,
+    QGridLayout,
     QLabel,
     QLineEdit,
     QPushButton,
@@ -19,6 +21,7 @@ from PySide6.QtWidgets import (
     QDoubleSpinBox,
     QFileDialog,
     QSizePolicy,
+    QGroupBox,
 )
 
 from ui.widgets.form_helpers import build_browse_row, configure_form_layout
@@ -40,13 +43,15 @@ class SimulationParamsPanel(QWidget):
         self._setup_ui()
 
     def _setup_ui(self) -> None:
+        self.setProperty("class", "simulation_params")
         layout = QVBoxLayout(self)
-        layout.setContentsMargins(12, 12, 12, 12)
-        layout.setSpacing(12)
+        layout.setContentsMargins(14, 14, 14, 14)
+        layout.setSpacing(14)
 
-        form = QFormLayout()
+        file_group = QGroupBox("檔案")
+        file_layout = QFormLayout(file_group)
         configure_form_layout(
-            form,
+            file_layout,
             label_alignment=Qt.AlignLeft | Qt.AlignVCenter,
             field_growth_policy=QFormLayout.FieldsStayAtSizeHint,
         )
@@ -64,7 +69,7 @@ class SimulationParamsPanel(QWidget):
         self._data_path.setToolTip(default_data)
         data_row = build_browse_row(self._data_path, self._browse_data)
         data_row.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)
-        form.addRow("data", data_row)
+        file_layout.addRow("資料檔案", data_row)
 
         default_model = latest_file_in_dir(
             "ml/rl/models",
@@ -76,63 +81,123 @@ class SimulationParamsPanel(QWidget):
         self._model_path.setToolTip(default_model)
         model_row = build_browse_row(self._model_path, self._browse_model)
         model_row.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)
-        form.addRow("model", model_row)
+        file_layout.addRow("模型檔案", model_row)
+
+        params_group = QGroupBox("模擬參數")
+        params_layout = QFormLayout(params_group)
+        configure_form_layout(
+            params_layout,
+            label_alignment=Qt.AlignLeft | Qt.AlignVCenter,
+            field_growth_policy=QFormLayout.FieldsStayAtSizeHint,
+        )
 
         self._log_every = QSpinBox()
         self._log_every.setRange(1, 100_000)
         self._log_every.setValue(200)
         self._log_every.setFixedWidth(spin_width)
-        form.addRow("log_every", self._log_every)
+        params_layout.addRow("輸出間隔", self._log_every)
 
         self._max_steps = QSpinBox()
         self._max_steps.setRange(0, 10_000_000)
         self._max_steps.setValue(0)
         self._max_steps.setFixedWidth(spin_width)
-        form.addRow("max_steps", self._max_steps)
+        params_layout.addRow("最大步數", self._max_steps)
 
         self._transaction_cost = QDoubleSpinBox()
         self._transaction_cost.setRange(0.0, 100.0)
         self._transaction_cost.setDecimals(3)
         self._transaction_cost.setValue(1.0)
         self._transaction_cost.setFixedWidth(spin_width)
-        form.addRow("transaction_cost_bps", self._transaction_cost)
+        params_layout.addRow("手續費(bps)", self._transaction_cost)
 
         self._slippage = QDoubleSpinBox()
         self._slippage.setRange(0.0, 100.0)
         self._slippage.setDecimals(3)
         self._slippage.setValue(0.5)
         self._slippage.setFixedWidth(spin_width)
-        form.addRow("slippage_bps", self._slippage)
+        params_layout.addRow("滑價(bps)", self._slippage)
 
-        layout.addLayout(form)
+        summary_group = QGroupBox("績效摘要")
+        summary_layout = QGridLayout(summary_group)
+        summary_layout.setColumnStretch(0, 0)
+        summary_layout.setColumnStretch(1, 1)
+        summary_layout.setHorizontalSpacing(10)
+        summary_layout.setVerticalSpacing(6)
 
-        self._summary = QLabel("總報酬: -\n最大回撤: -\n夏普比率: -\n交易次數: -\n最終權益: -")
-        self._summary.setAlignment(Qt.AlignLeft | Qt.AlignTop)
-        layout.addWidget(self._summary)
+        self._summary_fields = {}
+        summary_rows = [
+            ("總報酬", "total_return"),
+            ("最大回撤", "max_drawdown"),
+            ("夏普比率", "sharpe"),
+            ("交易次數", "trades"),
+            ("最終權益", "equity"),
+        ]
+        for row, (label_text, key) in enumerate(summary_rows):
+            label = QLabel(label_text)
+            label.setProperty("class", "stat_label")
+            value = QLabel("-")
+            value.setProperty("class", "stat_value")
+            value.setAlignment(Qt.AlignRight | Qt.AlignVCenter)
+            summary_layout.addWidget(label, row, 0)
+            summary_layout.addWidget(value, row, 1)
+            self._summary_fields[key] = value
 
-        self._trade_stats = QLabel("交易統計: -")
-        self._trade_stats.setAlignment(Qt.AlignLeft | Qt.AlignTop)
-        layout.addWidget(self._trade_stats)
+        details_group = QGroupBox("交易與持倉")
+        details_layout = QGridLayout(details_group)
+        details_layout.setColumnStretch(0, 0)
+        details_layout.setColumnStretch(1, 1)
+        details_layout.setHorizontalSpacing(10)
+        details_layout.setVerticalSpacing(6)
 
-        self._streak_stats = QLabel("連勝/連敗: -")
-        self._streak_stats.setAlignment(Qt.AlignLeft | Qt.AlignTop)
-        layout.addWidget(self._streak_stats)
+        self._trade_stats = QLabel("-")
+        self._trade_stats.setProperty("class", "stat_value")
+        self._trade_stats.setWordWrap(True)
+        self._streak_stats = QLabel("-")
+        self._streak_stats.setProperty("class", "stat_value")
+        self._streak_stats.setWordWrap(True)
+        self._holding_stats = QLabel("-")
+        self._holding_stats.setProperty("class", "stat_value")
+        self._holding_stats.setWordWrap(True)
+        self._action_dist = QLabel("-")
+        self._action_dist.setProperty("class", "stat_value")
+        self._action_dist.setWordWrap(True)
 
-        self._holding_stats = QLabel("持倉時間: -")
-        self._holding_stats.setAlignment(Qt.AlignLeft | Qt.AlignTop)
-        layout.addWidget(self._holding_stats)
+        detail_rows = [
+            ("交易統計", self._trade_stats),
+            ("連勝/連敗", self._streak_stats),
+            ("持倉時間", self._holding_stats),
+            ("行動分布", self._action_dist),
+        ]
+        for row, (label_text, value) in enumerate(detail_rows):
+            label = QLabel(label_text)
+            label.setProperty("class", "stat_label")
+            details_layout.addWidget(label, row, 0)
+            details_layout.addWidget(value, row, 1)
 
-        self._action_dist = QLabel("行動分布: -")
-        self._action_dist.setAlignment(Qt.AlignLeft | Qt.AlignTop)
-        layout.addWidget(self._action_dist)
+        playback_group = QGroupBox("回放區間")
+        playback_layout = QGridLayout(playback_group)
+        playback_layout.setColumnStretch(0, 0)
+        playback_layout.setColumnStretch(1, 1)
+        playback_layout.setHorizontalSpacing(10)
+        playback_layout.setVerticalSpacing(6)
+        playback_label = QLabel("時間範圍")
+        playback_label.setProperty("class", "stat_label")
+        self._playback_range = QLabel("-")
+        self._playback_range.setProperty("class", "stat_value")
+        self._playback_range.setWordWrap(True)
+        playback_layout.addWidget(playback_label, 0, 0)
+        playback_layout.addWidget(self._playback_range, 0, 1)
 
-        self._playback_range = QLabel("回放區間: -")
-        self._playback_range.setAlignment(Qt.AlignLeft | Qt.AlignTop)
-        layout.addWidget(self._playback_range)
+        layout.addWidget(file_group)
+        layout.addWidget(params_group)
+        layout.addWidget(summary_group)
+        layout.addWidget(details_group)
+        layout.addWidget(playback_group)
 
         layout.addStretch(1)
 
         self._start_button = QPushButton("開始回放")
+        self._start_button.setProperty("class", "primary")
         self._start_button.clicked.connect(self._emit_start)
         layout.addWidget(self._start_button)
 
@@ -169,12 +234,13 @@ class SimulationParamsPanel(QWidget):
             "trades": None,
             "equity": None,
         }
-        self._summary.setText("總報酬: -\n最大回撤: -\n夏普比率: -\n交易次數: -\n最終權益: -")
-        self._trade_stats.setText("交易統計: -")
-        self._streak_stats.setText("連勝/連敗: -")
-        self._holding_stats.setText("持倉時間: -")
-        self._action_dist.setText("行動分布: -")
-        self._playback_range.setText("回放區間: -")
+        for key in self._summary_fields:
+            self._summary_fields[key].setText("-")
+        self._trade_stats.setText("-")
+        self._streak_stats.setText("-")
+        self._holding_stats.setText("-")
+        self._action_dist.setText("-")
+        self._playback_range.setText("-")
 
     def update_summary(
         self,
@@ -201,29 +267,70 @@ class SimulationParamsPanel(QWidget):
         trades = self._summary_state["trades"]
         equity = self._summary_state["equity"]
 
-        total_text = "-" if total_return is None else f"{total_return:.6f}"
-        dd_text = "-" if max_drawdown is None else f"{max_drawdown:.6f}"
-        sharpe_text = "-" if sharpe is None else f"{sharpe:.6f}"
-        trades_text = "-" if trades is None else str(trades)
-        equity_text = "-" if equity is None else f"{equity:.6f}"
-        self._summary.setText(
-            f"總報酬: {total_text}\n最大回撤: {dd_text}\n夏普比率: {sharpe_text}\n交易次數: {trades_text}\n最終權益: {equity_text}"
+        self._summary_fields["total_return"].setText(
+            "-" if total_return is None else f"{total_return:.6f}"
         )
+        self._summary_fields["max_drawdown"].setText(
+            "-" if max_drawdown is None else f"{max_drawdown:.6f}"
+        )
+        self._summary_fields["sharpe"].setText("-" if sharpe is None else f"{sharpe:.6f}")
+        self._summary_fields["trades"].setText("-" if trades is None else str(trades))
+        self._summary_fields["equity"].setText("-" if equity is None else f"{equity:.6f}")
 
     def update_trade_stats(self, text: str) -> None:
-        self._trade_stats.setText(f"交易統計: {text}")
+        label_map = {
+            "count": "交易次數",
+            "wins": "獲利筆數",
+            "win_rate": "勝率",
+            "avg_pnl": "平均盈虧",
+            "avg_cost": "平均成本",
+        }
+        self._trade_stats.setText(self._format_kv_lines(text, label_map))
 
     def update_streak_stats(self, text: str) -> None:
-        self._streak_stats.setText(f"連勝/連敗: {text}")
+        label_map = {
+            "max_win": "最大連勝",
+            "max_loss": "最大連敗",
+        }
+        self._streak_stats.setText(self._format_kv_lines(text, label_map))
 
     def update_holding_stats(self, text: str) -> None:
-        self._holding_stats.setText(f"持倉時間: {text}")
+        label_map = {
+            "max_steps": "最長持倉",
+            "avg_steps": "平均持倉",
+        }
+        self._holding_stats.setText(self._format_kv_lines(text, label_map))
 
     def update_action_distribution(self, text: str) -> None:
-        self._action_dist.setText(f"行動分布: {text}")
+        label_map = {
+            "long": "多單比例",
+            "short": "空單比例",
+            "flat": "空手比例",
+            "avg": "平均持倉",
+        }
+        self._action_dist.setText(self._format_kv_lines(text, label_map))
 
     def update_playback_range(self, text: str) -> None:
-        self._playback_range.setText(f"回放區間: {text}")
+        label_map = {
+            "start": "開始",
+            "end": "結束",
+            "steps": "步數",
+        }
+        self._playback_range.setText(self._format_kv_lines(text, label_map))
+
+    def _format_kv_lines(self, text: str, label_map: Optional[dict] = None) -> str:
+        if not text or text.strip() == "-":
+            return "-"
+        pattern = re.compile(r"(\\w+)=([^=]+?)(?=\\s+\\w+=|$)")
+        matches = pattern.findall(text)
+        if not matches:
+            return text
+        lines = []
+        for key, value in matches:
+            label = label_map.get(key, key) if label_map else key
+            label = label.replace("_", " ")
+            lines.append(f"{label}: {value.strip()}")
+        return "\n".join(lines)
 
 
 class SimulationPanel(QWidget):

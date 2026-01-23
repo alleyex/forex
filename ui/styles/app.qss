@@ -67,6 +67,68 @@ QDockWidget::contents {
     margin: 12px;
 }
 
+QWidget[class="simulation_params"] QGroupBox {
+    background-color: #2b2b2b;
+    border: 1px solid #3a3a3a;
+    border-radius: 8px;
+    margin-top: 18px;
+    padding: 10px;
+}
+
+QWidget[class="simulation_params"] QGroupBox::title {
+    subcontrol-origin: margin;
+    left: 12px;
+    padding: 0 8px;
+    color: #d9d9d9;
+}
+
+QWidget[class="simulation_params"] QLabel[class="stat_label"] {
+    color: #bdbdbd;
+    font-size: 12px;
+}
+
+QWidget[class="simulation_params"] QLabel[class="stat_value"] {
+    color: #f0f0f0;
+    font-size: 13px;
+}
+
+QWidget[class="simulation_params"] QPushButton[class="primary"] {
+    background-color: #3c5a74;
+    border: 1px solid #4c6a84;
+    border-radius: 6px;
+    padding: 6px 12px;
+}
+
+QWidget[class="simulation_params"] QPushButton[class="primary"]:hover {
+    background-color: #4a6a86;
+}
+
+QWidget[class="training_params"] QGroupBox {
+    background-color: #2b2b2b;
+    border: 1px solid #3a3a3a;
+    border-radius: 8px;
+    margin-top: 18px;
+    padding: 10px;
+}
+
+QWidget[class="training_params"] QGroupBox::title {
+    subcontrol-origin: margin;
+    left: 12px;
+    padding: 0 8px;
+    color: #d9d9d9;
+}
+
+QWidget[class="training_params"] QPushButton[class="primary"] {
+    background-color: #3c5a74;
+    border: 1px solid #4c6a84;
+    border-radius: 6px;
+    padding: 6px 12px;
+}
+
+QWidget[class="training_params"] QPushButton[class="primary"]:hover {
+    background-color: #4a6a86;
+}
+
 QGroupBox {
     font-weight: 600;
     margin-top: 18px;
