@@ -20,6 +20,7 @@ from infrastructure.broker.ctrader.services.message_helpers import (
     format_confirm,
     format_error,
     format_success,
+    format_unhandled,
     is_already_subscribed,
 )
 
@@ -263,7 +264,7 @@ class AppAuthService(BaseAuthService[AppAuthServiceCallbacks, Client, AppAuthMes
             handled = True
 
         if not handled:
-            self._log(f"📩 未處理的訊息類型: {msg_type}")
+            self._log(format_unhandled(msg_type))
 
     def _handle_internal_message(
         self, client: Client, msg: object, msg_type: int

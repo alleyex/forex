@@ -1,7 +1,9 @@
 from __future__ import annotations
 
 import argparse
+import signal
 from dataclasses import dataclass
+from pathlib import Path
 
 import numpy as np
 from stable_baselines3 import PPO
@@ -50,6 +52,9 @@ def main() -> None:
     parser.add_argument("--max-steps", type=int, default=0, help="Limit steps (0 = full length).")
     parser.add_argument("--transaction-cost-bps", type=float, default=1.0, help="Transaction cost in bps.")
     parser.add_argument("--slippage-bps", type=float, default=0.5, help="Slippage in bps.")
+    parser.add_argument("--quiet", action="store_true", help="Suppress per-step logs; print summary only.")
+    parser.add_argument("--equity-log", default="", help="Optional CSV path to append step,equity.")
+    parser.add_argument("--equity-log-every", type=int, default=200, help="Write equity log every N steps.")
     parser.add_argument(
         "--baseline",
         choices=("none", "flat", "long", "short", "all"),
@@ -82,10 +87,28 @@ def main() -> None:
         print("Not enough rows after feature building; check data columns.")
         return
 
-    def simulate_fixed(position: float) -> tuple[float, float]:
+    stop_requested = False
+    equity_log_path = args.equity_log.strip()
+    equity_log_every = max(1, int(args.equity_log_every))
+    equity_log_fh = None
+
+    def _request_stop(*_args) -> None:
+        nonlocal stop_requested
+        stop_requested = True
+
+    signal.signal(signal.SIGTERM, _request_stop)
+    signal.signal(signal.SIGINT, _request_stop)
+
+    if equity_log_path:
+        log_path = Path(equity_log_path)
+        log_path.parent.mkdir(parents=True, exist_ok=True)
+        equity_log_fh = log_path.open("w", encoding="utf-8")
+        equity_log_fh.write("step,equity\n")
+
+    def simulate_fixed(position: float, steps: int) -> tuple[float, float]:
         equity = 1.0
         current = 0.0
-        for idx in range(max_steps):
+        for idx in range(steps):
             delta = position - current
             cost = abs(delta) * cost_rate
             price_return = (closes[idx + 1] - closes[idx]) / closes[idx]
@@ -109,7 +132,11 @@ def main() -> None:
     trade_costs: list[float] = []
     holding_steps: list[int] = []
 
+    last_idx = -1
     for idx in range(max_steps):
+        if stop_requested:
+            break
+        last_idx = idx
         obs = _build_obs(features, idx, state.position)
         action, _ = model.predict(obs, deterministic=True)
         target_position = float(np.clip(action[0], -1.0, 1.0))
@@ -139,10 +166,11 @@ def main() -> None:
                 trade_pnl = state.position * (current_price - last_trade_price) / last_trade_price
                 trade_pnls.append(float(trade_pnl))
                 trade_costs.append(float(cost))
-                print(
-                    f"Trade @ {current_time} pos={state.position:.3f} -> {target_position:.3f} "
-                    f"pnl={trade_pnl:.6g} cost={cost:.6g}"
-                )
+                if not args.quiet:
+                    print(
+                        f"Trade @ {current_time} pos={state.position:.3f} -> {target_position:.3f} "
+                        f"pnl={trade_pnl:.6g} cost={cost:.6g}"
+                    )
             last_trade_price = current_price
 
         price_return = (closes[idx + 1] - closes[idx]) / closes[idx]
@@ -157,15 +185,25 @@ def main() -> None:
             if drawdown > max_drawdown:
                 max_drawdown = drawdown
 
-        if args.log_every and (idx + 1) % args.log_every == 0:
+        if equity_log_fh and (idx + 1) % equity_log_every == 0:
+            equity_log_fh.write(f"{idx + 1},{state.equity:.6f}\n")
+            if (idx + 1) % (equity_log_every * 5) == 0:
+                equity_log_fh.flush()
+        if not args.quiet and args.log_every and (idx + 1) % args.log_every == 0:
             ts = timestamps[idx + 1] if idx + 1 < len(timestamps) else "-"
             print(
                 f"[{ts}] step={idx + 1} equity={state.equity:.6f} "
                 f"pos={state.position:.3f} reward={reward:.6g}"
             )
 
-    if max_steps > last_change_idx:
-        holding_steps.append(max_steps - last_change_idx)
+    processed_steps = last_idx + 1
+    if equity_log_fh:
+        equity_log_fh.flush()
+        equity_log_fh.close()
+    if stop_requested and not args.quiet:
+        print("Stopped early.")
+    if processed_steps > last_change_idx:
+        holding_steps.append(processed_steps - last_change_idx)
 
     total_return = state.equity - 1.0
     returns = np.diff(np.array(equity_series, dtype=np.float32))
@@ -177,7 +215,7 @@ def main() -> None:
             sharpe = mean_ret / std_ret
 
     print(
-        f"Done. steps={max_steps} trades={state.trades} "
+        f"Done. steps={processed_steps} trades={state.trades} "
         f"equity={state.equity:.6f} return={total_return:.6f}"
     )
     print(f"Sharpe: {sharpe:.6f}")
@@ -199,7 +237,7 @@ def main() -> None:
         max_hold = max(holding_steps)
         print(f"Holding stats: max_steps={max_hold} avg_steps={avg_hold:.2f}")
 
-    action_avg = action_sum / max_steps if max_steps > 0 else 0.0
+    action_avg = action_sum / processed_steps if processed_steps > 0 else 0.0
     total_actions = action_long + action_short + action_flat
     if total_actions > 0:
         long_ratio = action_long / total_actions
@@ -215,14 +253,14 @@ def main() -> None:
         )
 
     start_ts = timestamps[0] if timestamps else "-"
-    end_ts = timestamps[max_steps] if max_steps < len(timestamps) else "-"
-    print(f"Playback range: start={start_ts} end={end_ts} steps={max_steps}")
+    end_ts = timestamps[processed_steps] if processed_steps < len(timestamps) else "-"
+    print(f"Playback range: start={start_ts} end={end_ts} steps={processed_steps}")
 
     if args.baseline != "none":
         modes = {"flat": 0.0, "long": 1.0, "short": -1.0}
         selected = modes if args.baseline == "all" else {args.baseline: modes[args.baseline]}
         for name, pos in selected.items():
-            equity, ret = simulate_fixed(pos)
+            equity, ret = simulate_fixed(pos, processed_steps)
             print(f"Baseline {name}: equity={equity:.6f} return={ret:.6f}")
 
 

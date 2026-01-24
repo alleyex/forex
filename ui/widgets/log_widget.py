@@ -4,7 +4,7 @@
 from datetime import datetime
 import re
 from PySide6.QtCore import Slot
-from PySide6.QtGui import QFontDatabase
+from PySide6.QtGui import QFontDatabase, QTextCursor
 from PySide6.QtWidgets import (
     QApplication,
     QComboBox,
@@ -43,6 +43,7 @@ class LogWidget(QWidget):
         self._monospace = monospace
         self._font_point_delta = font_point_delta
         self._entries: list[tuple[str, str]] = []
+        self._max_entries = 2000
         self._level_pattern = re.compile(r"\[(INFO|OK|WARN|ERROR)\]")
         self._setup_ui(title)
     
@@ -95,7 +96,16 @@ class LogWidget(QWidget):
             message = format_timestamped_message(message, ts)
         level = self._extract_level(message)
         self._entries.append((level, message))
-        self._apply_filter(self._level_filter.currentText())
+        refresh_required = False
+        if len(self._entries) > self._max_entries:
+            self._entries = self._entries[-self._max_entries :]
+            refresh_required = True
+        current_filter = self._level_filter.currentText()
+        if refresh_required:
+            self._apply_filter(current_filter)
+            return
+        if current_filter == "全部" or current_filter == level:
+            self._append_to_view(message)
 
     def clear_logs(self) -> None:
         """清除所有日誌"""
@@ -114,6 +124,16 @@ class LogWidget(QWidget):
         else:
             items = [entry for entry_level, entry in self._entries if entry_level == level]
         self._text_edit.setPlainText("\n".join(items))
+        scrollbar = self._text_edit.verticalScrollBar()
+        scrollbar.setValue(scrollbar.maximum())
+
+    def _append_to_view(self, message: str) -> None:
+        cursor = self._text_edit.textCursor()
+        cursor.movePosition(QTextCursor.End)
+        if self._text_edit.toPlainText():
+            cursor.insertText("\n")
+        cursor.insertText(message)
+        self._text_edit.setTextCursor(cursor)
         scrollbar = self._text_edit.verticalScrollBar()
         scrollbar.setValue(scrollbar.maximum())
 

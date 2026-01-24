@@ -13,6 +13,7 @@ from infrastructure.broker.ctrader.services.app_auth_service import AppAuthServi
 from infrastructure.broker.ctrader.services.message_helpers import (
     dispatch_payload,
     format_error,
+    format_request,
     format_success,
 )
 from infrastructure.broker.ctrader.services.timeout_tracker import TimeoutTracker
@@ -86,7 +87,7 @@ class SymbolListService(LogHistoryMixin[SymbolListServiceCallbacks], OperationSt
         request = ProtoOASymbolsListReq()
         request.ctidTraderAccountId = int(self._account_id or 0)
         request.includeArchivedSymbols = bool(self._include_archived)
-        self._log("📥 正在取得 symbol list...")
+        self._log(format_request("正在取得 symbol list..."))
         try:
             client = self._app_auth_service.get_client()
         except Exception as exc:

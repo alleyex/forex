@@ -20,6 +20,26 @@ def format_success(message: str) -> str:
     return f"✅ {message}"
 
 
+def format_warning(message: str) -> str:
+    return f"⚠️ {message}"
+
+
+def format_request(message: str) -> str:
+    return f"📥 {message}"
+
+
+def format_sent_subscribe(message: str) -> str:
+    return f"📡 {message}"
+
+
+def format_sent_unsubscribe(message: str) -> str:
+    return f"🔕 {message}"
+
+
+def format_unhandled(payload_type: int) -> str:
+    return f"📩 未處理的訊息類型: {int(payload_type)}"
+
+
 def dispatch_payload(msg: Any, handlers: Mapping[int, Callable[[Any], None]]) -> bool:
     payload = getattr(msg, "payloadType", None)
     handler = handlers.get(payload)

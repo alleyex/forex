@@ -18,6 +18,8 @@ from infrastructure.broker.ctrader.services.message_helpers import (
     dispatch_payload,
     format_confirm,
     format_error,
+    format_sent_subscribe,
+    format_sent_unsubscribe,
     is_already_subscribed,
 )
 from infrastructure.broker.ctrader.services.spot_subscription import (
@@ -109,7 +111,7 @@ class TrendbarService(LogHistoryMixin[TrendbarServiceCallbacks], OperationStateM
         request.symbolId = self._symbol_id
         request.period = self._period
         self._client.send(request)
-        self._log(f"📡 已送出 K 線訂閱：{self._symbol_id} (M1)")
+        self._log(format_sent_subscribe(f"已送出 K 線訂閱：{self._symbol_id} (M1)"))
         self._start_operation()
 
     def unsubscribe(self) -> None:
@@ -132,7 +134,7 @@ class TrendbarService(LogHistoryMixin[TrendbarServiceCallbacks], OperationStateM
             self._unsubscribe_spot()
         self._app_auth_service.remove_message_handler(self._handle_message)
         self._end_operation()
-        self._log(f"🔕 已取消 K 線訂閱：{self._symbol_id} (M1)")
+        self._log(format_sent_unsubscribe(f"已取消 K 線訂閱：{self._symbol_id} (M1)"))
 
     def _handle_message(self, client: Client, msg: object) -> bool:
         if not self._in_progress:

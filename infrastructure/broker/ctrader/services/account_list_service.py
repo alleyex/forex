@@ -13,6 +13,7 @@ from infrastructure.broker.ctrader.services.app_auth_service import AppAuthServi
 from infrastructure.broker.ctrader.services.message_helpers import (
     dispatch_payload,
     format_error,
+    format_request,
     format_success,
 )
 from infrastructure.broker.ctrader.services.timeout_tracker import TimeoutTracker
@@ -90,7 +91,7 @@ class AccountListService(LogHistoryMixin[AccountListServiceCallbacks], Operation
         """發送帳戶列表請求"""
         request = ProtoOAGetAccountListByAccessTokenReq()
         request.accessToken = self._access_token
-        self._log("📥 正在取得帳戶列表...")
+        self._log(format_request("正在取得帳戶列表..."))
         try:
             client = self._app_auth_service.get_client()
         except Exception as exc:

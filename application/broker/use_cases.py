@@ -1,6 +1,7 @@
 from __future__ import annotations
 
-from typing import Optional
+from dataclasses import dataclass
+from typing import Callable, Generic, Optional, TypeVar
 
 from application.broker.adapters import (
     AccountFundsServiceAdapter,
@@ -21,6 +22,28 @@ from application.broker.protocols import (
 from config.paths import TOKEN_FILE
 
 
+TUseCase = TypeVar("TUseCase")
+
+
+@dataclass
+class _UseCaseCache(Generic[TUseCase]):
+    use_case: Optional[TUseCase] = None
+    owner: Optional[AppAuthServiceLike] = None
+
+    def get(
+        self,
+        owner: AppAuthServiceLike,
+        create: Callable[[], TUseCase],
+        update: Optional[Callable[[TUseCase], None]] = None,
+    ) -> TUseCase:
+        if self.use_case is None or self.owner is not owner:
+            self.use_case = create()
+            self.owner = owner
+        elif update:
+            update(self.use_case)
+        return self.use_case
+
+
 class BrokerUseCases:
     """
     Facade over broker provider for application/UI layer.
@@ -31,12 +54,9 @@ class BrokerUseCases:
 
     def __init__(self, provider: BrokerUseCaseFactory):
         self._provider = provider
-        self._account_list_uc: Optional[AccountListUseCase] = None
-        self._account_funds_uc: Optional[AccountFundsUseCase] = None
-        self._symbol_list_uc: Optional[SymbolListUseCase] = None
-        self._account_list_owner: Optional[AppAuthServiceLike] = None
-        self._account_funds_owner: Optional[AppAuthServiceLike] = None
-        self._symbol_list_owner: Optional[AppAuthServiceLike] = None
+        self._account_list_cache: _UseCaseCache[AccountListUseCase] = _UseCaseCache()
+        self._account_funds_cache: _UseCaseCache[AccountFundsUseCase] = _UseCaseCache()
+        self._symbol_list_cache: _UseCaseCache[SymbolListUseCase] = _UseCaseCache()
 
     def create_app_auth(self, host_type: str, token_file: str = TOKEN_FILE) -> AppAuthServiceLike:
         return self._provider.create_app_auth(host_type, token_file)
@@ -74,13 +94,13 @@ class BrokerUseCases:
         return self._provider.create_trendbar_history_service(app_auth_service=app_auth_service)
 
     def account_list_in_progress(self) -> bool:
-        return bool(self._account_list_uc and self._account_list_uc.in_progress)
+        return bool(self._account_list_cache.use_case and self._account_list_cache.use_case.in_progress)
 
     def account_funds_in_progress(self) -> bool:
-        return bool(self._account_funds_uc and self._account_funds_uc.in_progress)
+        return bool(self._account_funds_cache.use_case and self._account_funds_cache.use_case.in_progress)
 
     def symbol_list_in_progress(self) -> bool:
-        return bool(self._symbol_list_uc and self._symbol_list_uc.in_progress)
+        return bool(self._symbol_list_cache.use_case and self._symbol_list_cache.use_case.in_progress)
 
     def fetch_accounts(
         self,
@@ -91,22 +111,22 @@ class BrokerUseCases:
         on_log=None,
         timeout_seconds: Optional[int] = None,
     ) -> bool:
-        if self._account_list_uc is None or self._account_list_owner is not app_auth_service:
-            self._account_list_uc = self.create_account_list(app_auth_service, access_token)
-            self._account_list_owner = app_auth_service
-        else:
-            self._account_list_uc.set_access_token(access_token)
+        account_list_uc = self._account_list_cache.get(
+            app_auth_service,
+            lambda: self.create_account_list(app_auth_service, access_token),
+            update=lambda uc: uc.set_access_token(access_token),
+        )
 
-        if self._account_list_uc.in_progress:
+        if account_list_uc.in_progress:
             return False
 
-        self._account_list_uc.clear_log_history()
-        self._account_list_uc.set_callbacks(
+        account_list_uc.clear_log_history()
+        account_list_uc.set_callbacks(
             on_accounts_received=on_accounts_received,
             on_error=on_error,
             on_log=on_log,
         )
-        self._account_list_uc.fetch(timeout_seconds)
+        account_list_uc.fetch(timeout_seconds)
         return True
 
     def fetch_account_funds(
@@ -118,20 +138,21 @@ class BrokerUseCases:
         on_log=None,
         timeout_seconds: Optional[int] = None,
     ) -> bool:
-        if self._account_funds_uc is None or self._account_funds_owner is not app_auth_service:
-            self._account_funds_uc = self.create_account_funds(app_auth_service)
-            self._account_funds_owner = app_auth_service
+        account_funds_uc = self._account_funds_cache.get(
+            app_auth_service,
+            lambda: self.create_account_funds(app_auth_service),
+        )
 
-        if self._account_funds_uc.in_progress:
+        if account_funds_uc.in_progress:
             return False
 
-        self._account_funds_uc.clear_log_history()
-        self._account_funds_uc.set_callbacks(
+        account_funds_uc.clear_log_history()
+        account_funds_uc.set_callbacks(
             on_funds_received=on_funds_received,
             on_error=on_error,
             on_log=on_log,
         )
-        self._account_funds_uc.fetch(account_id, timeout_seconds)
+        account_funds_uc.fetch(account_id, timeout_seconds)
         return True
 
     def fetch_symbols(
@@ -144,20 +165,21 @@ class BrokerUseCases:
         on_log=None,
         timeout_seconds: Optional[int] = None,
     ) -> bool:
-        if self._symbol_list_uc is None or self._symbol_list_owner is not app_auth_service:
-            self._symbol_list_uc = self.create_symbol_list(app_auth_service)
-            self._symbol_list_owner = app_auth_service
+        symbol_list_uc = self._symbol_list_cache.get(
+            app_auth_service,
+            lambda: self.create_symbol_list(app_auth_service),
+        )
 
-        if self._symbol_list_uc.in_progress:
+        if symbol_list_uc.in_progress:
             return False
 
-        self._symbol_list_uc.clear_log_history()
-        self._symbol_list_uc.set_callbacks(
+        symbol_list_uc.clear_log_history()
+        symbol_list_uc.set_callbacks(
             on_symbols_received=on_symbols_received,
             on_error=on_error,
             on_log=on_log,
         )
-        self._symbol_list_uc.fetch(
+        symbol_list_uc.fetch(
             account_id=account_id,
             include_archived=include_archived,
             timeout_seconds=timeout_seconds,

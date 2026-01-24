@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import json
 import time
 from pathlib import Path
 from typing import Callable, Optional
@@ -13,6 +12,7 @@ from application.broker.history_download_pipeline import HistoryDownloadPipeline
 from config.constants import ConnectionStatus
 from config.paths import SYMBOL_LIST_FILE, TIMEFRAMES_FILE, TOKEN_FILE
 from config.settings import OAuthTokens
+from infrastructure.storage.json_store import read_json, write_json
 from ui.dialogs.history_download_dialog import HistoryDownloadDialog
 from utils.reactor_manager import reactor_manager
 
@@ -189,7 +189,7 @@ class HistoryDownloadController(QObject):
         path = self._symbol_list_path()
         self._log(f"📦 正在寫入 symbol list：{path.resolve()} ({len(payload)} 筆)")
         try:
-            path.write_text(json.dumps(payload, ensure_ascii=True, indent=2))
+            write_json(path, payload)
         except Exception as exc:
             self._log(f"⚠️ 無法寫入 symbol list: {exc}")
             return
@@ -205,10 +205,7 @@ class HistoryDownloadController(QObject):
             path = fallback
         if not path.exists():
             return []
-        try:
-            raw = json.loads(path.read_text()) or []
-        except Exception:
-            return []
+        raw = read_json(path, []) or []
         if not isinstance(raw, list):
             return []
         symbols: list[dict] = []
@@ -234,14 +231,7 @@ class HistoryDownloadController(QObject):
 
     def _ensure_timeframes_list(self) -> list[str]:
         path = self._timeframes_path()
-        if path.exists():
-            try:
-                raw = json.loads(path.read_text()) or []
-            except Exception:
-                raw = []
-        else:
-            raw = []
-
+        raw = read_json(path, [])
         timeframes = [item for item in raw if isinstance(item, str) and item.strip()]
         if not timeframes:
             timeframes = [
@@ -261,7 +251,7 @@ class HistoryDownloadController(QObject):
                 "MN1",
             ]
             try:
-                path.write_text(json.dumps(timeframes, ensure_ascii=True, indent=2))
+                write_json(path, timeframes)
             except Exception as exc:
                 self._log(f"⚠️ 無法寫入 timeframes.json: {exc}")
         return timeframes

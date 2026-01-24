@@ -7,7 +7,7 @@ try:
 except ImportError:  # pragma: no cover - optional dependency
     pg = None
 
-from PySide6.QtCore import Qt, Signal
+from PySide6.QtCore import Qt, Signal, QElapsedTimer
 from PySide6.QtWidgets import (
     QWidget,
     QVBoxLayout,
@@ -42,6 +42,7 @@ from config.paths import RAW_HISTORY_DIR
 
 class SimulationParamsPanel(QWidget):
     start_requested = Signal(dict)
+    stop_requested = Signal()
 
     def __init__(self, parent: Optional[QWidget] = None) -> None:
         super().__init__(parent)
@@ -109,7 +110,7 @@ class SimulationParamsPanel(QWidget):
 
         self._log_every = QSpinBox()
         self._log_every.setRange(1, 100_000)
-        self._log_every.setValue(200)
+        self._log_every.setValue(1000)
         self._log_every.setFixedWidth(spin_width)
         params_layout.addRow("輸出間隔", self._log_every)
 
@@ -212,10 +213,20 @@ class SimulationParamsPanel(QWidget):
 
         layout.addStretch(1)
 
+        controls = QGridLayout()
+        controls.setHorizontalSpacing(10)
+        controls.setContentsMargins(0, 0, 0, 0)
+
         self._start_button = QPushButton("開始回放")
         self._start_button.setProperty("class", PRIMARY)
         self._start_button.clicked.connect(self._emit_start)
-        layout.addWidget(self._start_button)
+        controls.addWidget(self._start_button, 0, 0)
+
+        self._stop_button = QPushButton("停止回放")
+        self._stop_button.clicked.connect(self.stop_requested.emit)
+        controls.addWidget(self._stop_button, 0, 1)
+
+        layout.addLayout(controls)
 
     def _browse_data(self) -> None:
         path, _ = QFileDialog.getOpenFileName(self, "選擇資料檔", "", "CSV (*.csv)")
@@ -340,6 +351,10 @@ class SimulationPanel(QWidget):
         self._charts_available = pg is not None
         self._steps: list[int] = []
         self._equity: list[float] = []
+        self._plot_timer = QElapsedTimer()
+        self._plot_interval_ms = 400
+        self._max_points = 2000
+        self._last_point: Optional[tuple[int, float]] = None
         self._setup_ui()
 
     def _setup_ui(self) -> None:
@@ -364,11 +379,39 @@ class SimulationPanel(QWidget):
     def reset_plot(self) -> None:
         self._steps.clear()
         self._equity.clear()
+        self._last_point = None
+        self._plot_timer.restart()
         if self._charts_available:
             self._curve.setData([], [])
 
+    def reset_stream(self) -> None:
+        self.reset_plot()
+
     def ingest_equity(self, step: int, equity: float) -> None:
+        self._last_point = (step, equity)
         self._steps.append(step)
         self._equity.append(equity)
-        if self._charts_available:
-            self._curve.setData(self._steps, self._equity)
+        if len(self._steps) > self._max_points:
+            self._steps = self._steps[-self._max_points :]
+            self._equity = self._equity[-self._max_points :]
+        if not self._charts_available:
+            return
+        if not self._plot_timer.isValid():
+            self._plot_timer.start()
+        if self._plot_timer.elapsed() < self._plot_interval_ms:
+            return
+        self._curve.setData(self._steps, self._equity)
+        self._plot_timer.restart()
+
+    def flush_plot(self) -> None:
+        if not self._charts_available:
+            return
+        if self._last_point:
+            last_step, last_equity = self._last_point
+            if not self._steps or self._steps[-1] != last_step:
+                self._steps.append(last_step)
+                self._equity.append(last_equity)
+                if len(self._steps) > self._max_points:
+                    self._steps = self._steps[-self._max_points :]
+                    self._equity = self._equity[-self._max_points :]
+        self._curve.setData(self._steps, self._equity)
