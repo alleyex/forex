@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
+import re
 from typing import Optional
 try:
     import pyqtgraph as pg
@@ -24,6 +25,7 @@ from PySide6.QtWidgets import (
     QSizePolicy,
     QGroupBox,
     QTabWidget,
+    QStackedWidget,
 )
 
 from ui.widgets.form_helpers import (
@@ -40,9 +42,16 @@ from config.paths import RAW_HISTORY_DIR
 class TrainingParamsPanel(QWidget):
     start_requested = Signal(dict)
     optuna_requested = Signal(dict)
+    tab_changed = Signal(str)
 
     def __init__(self, parent: Optional[QWidget] = None) -> None:
         super().__init__(parent)
+        self._optuna_metrics = [
+            ("trial_value", "trial value"),
+            ("best_value", "best so far"),
+            ("duration_sec", "duration (s)"),
+        ]
+        self._optuna_checkboxes: dict[str, QCheckBox] = {}
         self._setup_ui()
 
     def _setup_ui(self) -> None:
@@ -392,11 +401,37 @@ class TrainingParamsPanel(QWidget):
         self._optuna_search_button.clicked.connect(self._emit_optuna)
         optuna_layout_wrap.addWidget(self._optuna_search_button)
 
+        optuna_results = QGroupBox("Optuna Results")
+        optuna_results_layout = QGridLayout(optuna_results)
+        optuna_results_layout.setContentsMargins(12, 10, 12, 12)
+        optuna_results_layout.setHorizontalSpacing(12)
+        optuna_results_layout.setVerticalSpacing(8)
+        optuna_results_layout.setColumnStretch(1, 1)
+
+        trial_title = QLabel("Latest trial")
+        trial_title.setProperty("class", "result_label")
+        self._optuna_trial_summary = QLabel("尚未完成試驗")
+        self._optuna_trial_summary.setWordWrap(True)
+        self._optuna_trial_summary.setProperty("class", "result_value")
+        optuna_results_layout.addWidget(trial_title, 0, 0, Qt.AlignTop)
+        optuna_results_layout.addWidget(self._optuna_trial_summary, 0, 1)
+
+        best_title = QLabel("Best params")
+        best_title.setProperty("class", "result_label")
+        self._optuna_best_summary = QLabel("最佳參數：—")
+        self._optuna_best_summary.setWordWrap(True)
+        self._optuna_best_summary.setProperty("class", "result_value")
+        optuna_results_layout.addWidget(best_title, 1, 0, Qt.AlignTop)
+        optuna_results_layout.addWidget(self._optuna_best_summary, 1, 1)
+        optuna_layout_wrap.addWidget(optuna_results)
+
         optuna_layout_wrap.addStretch(1)
 
         tabs.addTab(training_tab, "Training")
         tabs.addTab(env_tab, "Environment")
         tabs.addTab(optuna_tab, "Optuna")
+        self._tabs = tabs
+        tabs.currentChanged.connect(self._on_tab_changed)
         left_layout.addWidget(tabs)
 
         self._load_params()
@@ -424,6 +459,49 @@ class TrainingParamsPanel(QWidget):
             self._batch_size.setValue(int(params["batch_size"]))
         if "ent_coef" in params:
             self._ent_coef.setValue(float(params["ent_coef"]))
+
+    def reset_optuna_results(self) -> None:
+        self._optuna_trial_summary.setText("尚未完成試驗")
+        self._optuna_best_summary.setText("最佳參數：—")
+
+    def update_optuna_trial_summary(self, text: str) -> None:
+        formatted = self._format_optuna_trial(text)
+        self._optuna_trial_summary.setText(formatted)
+
+    def update_optuna_best_params(self, params: dict) -> None:
+        if not params:
+            return
+        summary = self._format_best_params(params)
+        self._optuna_best_summary.setText(summary)
+
+    @staticmethod
+    def _format_best_params(params: dict) -> str:
+        order = ["n_steps", "batch_size", "learning_rate", "gamma", "ent_coef"]
+        items = []
+        for key in order:
+            if key not in params:
+                continue
+            value = params[key]
+            if isinstance(value, float):
+                formatted = f"{value:.6g}"
+            else:
+                formatted = str(value)
+            items.append(f"{key}={formatted}")
+        return "\n".join(items) if items else "—"
+
+    @staticmethod
+    def _format_optuna_trial(text: str) -> str:
+        match = re.search(
+            r"Trial\s+(?P<trial>\d+):\s+value=(?P<value>[-+0-9.eE]+)\s+\|\s+best=(?P<best>[-+0-9.eE]+)\s+\(trial\s+(?P<best_trial>\d+)\)",
+            text,
+        )
+        if not match:
+            return text
+        trial = match.group("trial")
+        value = match.group("value")
+        best = match.group("best")
+        best_trial = match.group("best_trial")
+        return f"Trial {trial}\nValue: {value}\nBest so far: {best} (trial {best_trial})"
 
     def get_params(self) -> dict:
         return {
@@ -477,6 +555,16 @@ class TrainingParamsPanel(QWidget):
         params["optuna_train_best"] = False
         self._save_params(params)
         self.optuna_requested.emit(params)
+        self.reset_optuna_results()
+
+    def _on_tab_changed(self, index: int) -> None:
+        if index == 0:
+            self.tab_changed.emit("training")
+        elif index == 1:
+            self.tab_changed.emit("environment")
+        else:
+            self.tab_changed.emit("optuna")
+
 
     def _load_optuna_defaults(self) -> None:
         path = Path("data/optuna/best_params.json")
@@ -592,6 +680,16 @@ class TrainingPanel(QWidget):
         self._checkboxes: dict[str, QCheckBox] = {}
         self._metric_labels = {key: label for label, key in self._metrics}
         self._legend_keys: set[str] = set()
+        self._optuna_metrics = [
+            ("trial_value", "trial value"),
+            ("best_value", "best so far"),
+            ("duration_sec", "duration (s)"),
+        ]
+        self._optuna_data: dict[str, dict[str, deque[float]]] = {}
+        self._optuna_curves: dict[str, object] = {}
+        self._optuna_legend_keys: set[str] = set()
+        self._optuna_checkboxes: dict[str, QCheckBox] = {}
+        self._optuna_visible: set[str] = set()
         self._setup_ui()
 
     def _setup_ui(self) -> None:
@@ -630,6 +728,43 @@ class TrainingPanel(QWidget):
                     "y": deque(maxlen=self._max_points),
                 }
 
+            optuna_plot = pg.PlotWidget()
+            optuna_plot.setTitle("Optuna trials")
+            optuna_plot.setLabel("bottom", "trial")
+            optuna_plot.setLabel("left", "value")
+            optuna_plot.showGrid(x=True, y=True, alpha=0.3)
+            self._optuna_legend = optuna_plot.addLegend()
+            self._optuna_plot = optuna_plot
+            optuna_colors = ["#4C78A8", "#F58518", "#54A24B"]
+            for index, (key, _) in enumerate(self._optuna_metrics):
+                curve = optuna_plot.plot(
+                    pen=pg.mkPen(optuna_colors[index % len(optuna_colors)], width=2)
+                )
+                self._optuna_curves[key] = curve
+                self._optuna_data[key] = {
+                    "x": deque(maxlen=self._max_points),
+                    "y": deque(maxlen=self._max_points),
+                }
+                if key in {"trial_value", "best_value"}:
+                    self._optuna_visible.add(key)
+                else:
+                    self._optuna_curves[key].setData([], [])
+
+            optuna_selector = QWidget()
+            optuna_selector_layout = QGridLayout(optuna_selector)
+            optuna_selector_layout.setContentsMargins(0, 0, 0, 0)
+            optuna_selector_layout.setHorizontalSpacing(10)
+            optuna_selector_layout.setVerticalSpacing(4)
+            for idx, (key, label) in enumerate(self._optuna_metrics):
+                checkbox = QCheckBox(label)
+                checked = key in {"trial_value", "best_value"}
+                checkbox.setChecked(checked)
+                checkbox.toggled.connect(
+                    lambda checked_state, k=key: self._toggle_optuna_curve(k, checked_state)
+                )
+                self._optuna_checkboxes[key] = checkbox
+                optuna_selector_layout.addWidget(checkbox, idx // 3, idx % 3)
+
             chooser = QWidget()
             chooser_layout = QGridLayout(chooser)
             chooser_layout.setContentsMargins(0, 0, 0, 0)
@@ -645,9 +780,18 @@ class TrainingPanel(QWidget):
                 col = idx % 4
                 chooser_layout.addWidget(checkbox, row, col)
 
-            layout.addWidget(plot, stretch=1)
+            self._chart_stack = QStackedWidget()
+            self._chart_stack.addWidget(plot)
+            self._chart_stack.addWidget(optuna_plot)
+            self._chart_stack.setCurrentWidget(plot)
+            self._metrics_selector = chooser
+            self._optuna_selector = optuna_selector
+            layout.addWidget(self._chart_stack, stretch=1)
             layout.addWidget(chooser)
+            layout.addWidget(optuna_selector)
+            optuna_selector.setVisible(False)
             self._sync_curve_visibility()
+            self._sync_optuna_curve_visibility()
         else:
             notice = QLabel("PyQtGraph 未安裝，無法顯示曲線圖。請安裝 pyqtgraph。")
             notice.setWordWrap(True)
@@ -664,6 +808,16 @@ class TrainingPanel(QWidget):
             self._curves[key].setData([])
         self._sync_curve_visibility()
 
+    def reset_optuna_metrics(self) -> None:
+        if not self._charts_available:
+            return
+        for key in self._optuna_data:
+            self._optuna_data[key]["x"].clear()
+            self._optuna_data[key]["y"].clear()
+            self._optuna_curves[key].setData([])
+        for key in self._optuna_visible:
+            self._optuna_curves[key].setData([])
+
     def flush_plot(self) -> None:
         if not self._charts_available:
             return
@@ -672,6 +826,20 @@ class TrainingPanel(QWidget):
                 continue
             data = self._metric_data[key]
             self._curves[key].setData(list(data["x"]), list(data["y"]))
+
+    def show_training_plot(self) -> None:
+        if not self._charts_available:
+            return
+        self._chart_stack.setCurrentWidget(self._plot)
+        self._metrics_selector.setVisible(True)
+        self._optuna_selector.setVisible(False)
+
+    def show_optuna_plot(self) -> None:
+        if not self._charts_available:
+            return
+        self._chart_stack.setCurrentWidget(self._optuna_plot)
+        self._metrics_selector.setVisible(False)
+        self._optuna_selector.setVisible(True)
 
     def ingest_log_line(self, line: str) -> None:
         if not self._charts_available:
@@ -695,6 +863,17 @@ class TrainingPanel(QWidget):
         if key in self._metric_labels:
             self._append_point(key, float(self._current_step), value)
 
+    def ingest_optuna_log_line(self, line: str) -> None:
+        if not self._charts_available:
+            return
+        parsed = self._parse_optuna_csv_line(line)
+        if not parsed:
+            return
+        trial, trial_value, best_value, duration = parsed
+        self._append_optuna_point("trial_value", trial, trial_value)
+        self._append_optuna_point("best_value", trial, best_value)
+        self._append_optuna_point("duration_sec", trial, duration)
+
     def _append_point(self, key: str, step: float, value: float) -> None:
         data = self._metric_data[key]
         data["x"].append(step)
@@ -706,6 +885,18 @@ class TrainingPanel(QWidget):
                 return
             self._curves[key].setData(list(data["x"]), list(data["y"]))
             self._plot_timer.restart()
+
+    def _append_optuna_point(self, key: str, trial: float, value: float) -> None:
+        data = self._optuna_data[key]
+        data["x"].append(trial)
+        data["y"].append(value)
+        if key in self._optuna_curves and key in self._optuna_visible:
+            self._optuna_curves[key].setData(list(data["x"]), list(data["y"]))
+
+    def set_optuna_curve_visible(self, key: str, visible: bool) -> None:
+        if not self._charts_available:
+            return
+        self._toggle_optuna_curve(key, visible)
 
     def _toggle_curve(self, key: str, visible: bool) -> None:
         data = self._metric_data[key]
@@ -722,9 +913,29 @@ class TrainingPanel(QWidget):
                 self._legend.removeItem(self._curves[key])
                 self._legend_keys.remove(key)
 
+    def _toggle_optuna_curve(self, key: str, visible: bool) -> None:
+        data = self._optuna_data[key]
+        if visible:
+            self._optuna_visible.add(key)
+            self._optuna_curves[key].setData(list(data["x"]), list(data["y"]))
+            if key not in self._optuna_legend_keys:
+                label = dict(self._optuna_metrics)[key]
+                self._optuna_legend.addItem(self._optuna_curves[key], label)
+                self._optuna_legend_keys.add(key)
+        else:
+            self._optuna_visible.discard(key)
+            self._optuna_curves[key].setData([], [])
+            if key in self._optuna_legend_keys:
+                self._optuna_legend.removeItem(self._optuna_curves[key])
+                self._optuna_legend_keys.remove(key)
+
     def _sync_curve_visibility(self) -> None:
         for _, key in self._metrics:
             self._toggle_curve(key, self._checkboxes[key].isChecked())
+
+    def _sync_optuna_curve_visibility(self) -> None:
+        for key, _ in self._optuna_metrics:
+            self._toggle_optuna_curve(key, key in self._optuna_visible)
 
     @staticmethod
     def _parse_kv_line(line: str) -> Optional[tuple[str, float]]:
@@ -751,6 +962,23 @@ class TrainingPanel(QWidget):
             return None
         return step, metric, value
 
+    @staticmethod
+    def _parse_optuna_csv_line(line: str) -> Optional[tuple[float, float, float, float]]:
+        if "," not in line:
+            return None
+        parts = line.strip().split(",", 3)
+        if len(parts) != 4:
+            return None
+        if parts[0] == "trial":
+            return None
+        try:
+            trial = float(parts[0])
+            trial_value = float(parts[1])
+            best_value = float(parts[2])
+            duration = float(parts[3])
+        except ValueError:
+            return None
+        return trial, trial_value, best_value, duration
 
     @staticmethod
     def _parse_float(key: str, line: str) -> Optional[float]:

@@ -101,6 +101,7 @@ def main() -> None:
     parser.add_argument("--optuna-steps", type=int, default=50_000, help="Timesteps per Optuna trial.")
     parser.add_argument("--optuna-train-best", action="store_true", help="Train final model with best params.")
     parser.add_argument("--optuna-out", default="", help="Optional JSON path for best Optuna params.")
+    parser.add_argument("--optuna-log", default="", help="Optional CSV path to log Optuna trials.")
     parser.add_argument("--model-out", default="ml/rl/models/ppo_forex.zip", help="Output model path.")
     parser.add_argument("--resume", action="store_true", help="Resume training from existing model.")
     args = parser.parse_args()
@@ -197,6 +198,14 @@ def main() -> None:
         except ImportError as exc:
             raise RuntimeError("Optuna not installed. Run: pip install optuna") from exc
 
+        optuna_log_path = args.optuna_log.strip()
+        optuna_fh = None
+        if optuna_log_path:
+            log_path = Path(optuna_log_path)
+            log_path.parent.mkdir(parents=True, exist_ok=True)
+            optuna_fh = log_path.open("w", encoding="utf-8")
+            optuna_fh.write("trial,value,best_value,duration_sec\n")
+
         def objective(trial: "optuna.Trial") -> float:
             n_steps = trial.suggest_categorical("n_steps", [256, 512, 1024, 2048])
             batch_sizes = [32, 64, 128, 256]
@@ -228,11 +237,22 @@ def main() -> None:
             )
             return float(mean_reward)
 
+        def _log_optuna_trial(study: "optuna.Study", trial: "optuna.Trial") -> None:
+            if not optuna_fh or trial.value is None:
+                return
+            duration = trial.duration.total_seconds() if trial.duration else 0.0
+            optuna_fh.write(
+                f"{trial.number},{float(trial.value):.10g},{float(study.best_value):.10g},{duration:.6f}\n"
+            )
+            optuna_fh.flush()
+
         study = optuna.create_study(direction="maximize")
-        study.optimize(objective, n_trials=args.optuna_trials)
+        study.optimize(objective, n_trials=args.optuna_trials, callbacks=[_log_optuna_trial])
         best_params = study.best_trial.params
         print(f"Optuna best value: {study.best_value:.6f}")
         print(f"Optuna best params: {best_params}")
+        if optuna_fh:
+            optuna_fh.close()
         if args.optuna_out:
             out_path = Path(args.optuna_out)
             out_path.parent.mkdir(parents=True, exist_ok=True)

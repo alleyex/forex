@@ -171,6 +171,16 @@ QWidget[class="training_params"] QPushButton[class="primary"]:hover {
     background-color: #4a6a86;
 }
 
+QWidget[class="training_params"] QLabel[class="result_label"] {
+    color: #b8b8b8;
+    font-size: 12px;
+}
+
+QWidget[class="training_params"] QLabel[class="result_value"] {
+    color: #f0f0f0;
+    font-size: 13px;
+}
+
 QGroupBox {
     font-weight: 600;
     margin-top: 18px;

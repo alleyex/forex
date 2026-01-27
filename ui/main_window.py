@@ -208,6 +208,7 @@ class MainWindow(QMainWindow):
         self._trade_panel.symbol_list_requested.connect(self._on_symbol_list_requested)
         self._training_params_panel.start_requested.connect(self._start_ppo_training)
         self._training_params_panel.optuna_requested.connect(self._start_ppo_training)
+        self._training_params_panel.tab_changed.connect(self._on_training_tab_changed)
         self._simulation_params_panel.start_requested.connect(self._start_simulation)
         self._simulation_params_panel.stop_requested.connect(self._stop_simulation)
         self._log_dock.visibilityChanged.connect(self._sync_log_toggle_action)
@@ -268,6 +269,8 @@ class MainWindow(QMainWindow):
     @Slot(dict)
     def _start_ppo_training(self, params: dict) -> None:
         self._training_panel.reset_metrics()
+        if params.get("optuna_trials", 0) > 0:
+            self._training_panel.reset_optuna_metrics()
         controller = self._get_ppo_controller()
         if controller is None:
             return
@@ -360,16 +363,31 @@ class MainWindow(QMainWindow):
                 parent=self,
                 log=self._log_panel.append,
                 ingest_log=self._training_panel.ingest_log_line,
+                ingest_optuna_log=self._training_panel.ingest_optuna_log_line,
                 on_finished=lambda *_: self._training_panel.flush_plot(),
             )
             self._ppo_controller.best_params_found.connect(self._on_optuna_best_params)
+            self._ppo_controller.optuna_trial_logged.connect(
+                self._training_params_panel.update_optuna_trial_summary
+            )
+            self._ppo_controller.optuna_best_params_logged.connect(
+                self._training_params_panel.update_optuna_best_params
+            )
         return self._ppo_controller
+
+    @Slot(str)
+    def _on_training_tab_changed(self, tab: str) -> None:
+        if tab == "optuna":
+            self._training_panel.show_optuna_plot()
+        else:
+            self._training_panel.show_training_plot()
 
     @Slot(dict)
     def _on_optuna_best_params(self, params: dict) -> None:
         if not self._training_params_panel.should_apply_optuna():
             return
         self._training_params_panel.apply_optuna_params(params)
+        self._training_params_panel.update_optuna_best_params(params)
 
     def _get_simulation_controller(self) -> Optional[SimulationController]:
         if self._simulation_controller is None:

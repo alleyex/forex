@@ -6,6 +6,7 @@ from pathlib import Path
 from typing import Callable, Optional
 
 import ast
+import re
 
 from PySide6.QtCore import QObject, QProcess, QTimer, Signal
 
@@ -14,6 +15,8 @@ from ui.controllers.process_runner import ProcessRunner
 
 class PPOTrainingController(QObject):
     best_params_found = Signal(dict)
+    optuna_trial_logged = Signal(str)
+    optuna_best_params_logged = Signal(dict)
 
     def __init__(
         self,
@@ -21,11 +24,13 @@ class PPOTrainingController(QObject):
         parent: QObject,
         log: Callable[[str], None],
         ingest_log: Callable[[str], None],
+        ingest_optuna_log: Optional[Callable[[str], None]] = None,
         on_finished: Optional[Callable[[int, QProcess.ExitStatus], None]] = None,
     ) -> None:
         super().__init__(parent)
         self._log = log
         self._ingest_log = ingest_log
+        self._ingest_optuna_log = ingest_optuna_log
         self._on_finished = on_finished
         self._runner = ProcessRunner(
             parent=self,
@@ -39,6 +44,11 @@ class PPOTrainingController(QObject):
         self._metrics_tail_timer.timeout.connect(self._tail_metrics_log)
         self._metrics_last_offset = 0
         self._use_metrics_log = False
+        self._optuna_log_path: Optional[str] = None
+        self._optuna_tail_timer = QTimer(self)
+        self._optuna_tail_timer.setInterval(200)
+        self._optuna_tail_timer.timeout.connect(self._tail_optuna_log)
+        self._optuna_last_offset = 0
 
     def start(self, params: dict, data_path: str) -> None:
         if self._runner.is_running():
@@ -53,6 +63,8 @@ class PPOTrainingController(QObject):
         self._log("▶️ 開始 PPO 訓練")
         self._start_metrics_log_tailer()
         self._use_metrics_log = True
+        if params.get("optuna_trials", 0) > 0:
+            self._start_optuna_log_tailer()
         discrete_positions = str(params.get("discrete_positions", "")).strip()
         if not discrete_positions:
             discrete_positions = "-1,0,1"
@@ -111,6 +123,8 @@ class PPOTrainingController(QObject):
                     str(params["optuna_steps"]),
                 ]
             )
+            if self._optuna_log_path:
+                args.extend(["--optuna-log", self._optuna_log_path])
             if params.get("optuna_train_best") and not optuna_only:
                 args.append("--optuna-train-best")
             optuna_out = params.get("optuna_out", "").strip()
@@ -124,6 +138,7 @@ class PPOTrainingController(QObject):
         if not started:
             self._log("⚠️ PPO 訓練尚在執行")
             self._stop_metrics_log_tailer()
+            self._stop_optuna_log_tailer()
 
     def _on_stdout_line(self, line: str) -> None:
         if self._use_metrics_log:
@@ -134,6 +149,7 @@ class PPOTrainingController(QObject):
         else:
             self._log(line)
             self._ingest_log(line)
+        self._handle_optuna_line(line)
         if line.startswith("Optuna best params:"):
             payload = line.split(":", 1)[1].strip()
             try:
@@ -145,12 +161,15 @@ class PPOTrainingController(QObject):
 
     def _on_stderr_line(self, line: str) -> None:
         self._log(f"⚠️ {line}")
+        self._handle_optuna_line(line)
 
     def _on_finished_internal(self, exit_code: int, exit_status: QProcess.ExitStatus) -> None:
         status = "完成" if exit_status == QProcess.NormalExit else "異常結束"
         self._log(f"⏹️ PPO 訓練{status} (exit={exit_code})")
         self._tail_metrics_log()
+        self._tail_optuna_log()
         self._stop_metrics_log_tailer()
+        self._stop_optuna_log_tailer()
         if self._on_finished:
             self._on_finished(exit_code, exit_status)
 
@@ -191,6 +210,84 @@ class PPOTrainingController(QObject):
                 continue
             self._ingest_log(line)
 
+    def _start_optuna_log_tailer(self) -> None:
+        if self._ingest_optuna_log is None:
+            return
+        tmp_dir = Path(tempfile.gettempdir())
+        self._optuna_log_path = str(tmp_dir / f"ppo_optuna_{id(self)}.csv")
+        self._optuna_last_offset = 0
+        self._optuna_tail_timer.start()
+
+    def _stop_optuna_log_tailer(self) -> None:
+        self._optuna_tail_timer.stop()
+        if self._optuna_log_path:
+            try:
+                Path(self._optuna_log_path).unlink(missing_ok=True)
+            except Exception:
+                pass
+        self._optuna_log_path = None
+        self._optuna_last_offset = 0
+
+    def _tail_optuna_log(self) -> None:
+        if not self._optuna_log_path or self._ingest_optuna_log is None:
+            return
+        path = Path(self._optuna_log_path)
+        if not path.exists():
+            return
+        try:
+            with path.open("r", encoding="utf-8") as fh:
+                fh.seek(self._optuna_last_offset)
+                data = fh.read()
+                self._optuna_last_offset = fh.tell()
+        except Exception:
+            return
+        if not data:
+            return
+        for line in data.strip().splitlines():
+            if line.startswith("trial"):
+                continue
+            self._ingest_optuna_log(line)
+
     @staticmethod
     def _should_log_summary(line: str) -> bool:
         return line.startswith("Training setup:") or line.startswith("Optuna best")
+
+    def _handle_optuna_line(self, line: str) -> None:
+        summary, best_params = self._parse_optuna_trial_details(line)
+        if summary:
+            self.optuna_trial_logged.emit(summary)
+        if best_params:
+            self.optuna_best_params_logged.emit(best_params)
+
+    @staticmethod
+    def _parse_optuna_trial_details(line: str) -> tuple[Optional[str], Optional[dict]]:
+        match = re.search(
+            r"Trial\s+(?P<trial>\d+)\s+finished with value:\s+(?P<value>[-+0-9.eE]+)",
+            line,
+        )
+        best_match = re.search(
+            r"Best is trial\s+(?P<best_trial>\d+)\s+with value:\s+(?P<best_value>[-+0-9.eE]+)",
+            line,
+        )
+        if not match or not best_match:
+            return None, None
+        trial = match.group("trial")
+        value = match.group("value")
+        best_trial = best_match.group("best_trial")
+        best_value = best_match.group("best_value")
+        summary = f"Trial {trial}: value={value} | best={best_value} (trial {best_trial})"
+        best_params = None
+        if trial == best_trial:
+            params_match = re.search(
+                r"parameters:\s+(\{.*?\})(?:\.\s+Best is trial|$)",
+                line,
+            )
+            if params_match:
+                params_text = params_match.group(1)
+                try:
+                    parsed = ast.literal_eval(params_text)
+                except (ValueError, SyntaxError):
+                    parsed = None
+                if isinstance(parsed, dict):
+                    best_params = parsed
+        return summary, best_params
