@@ -206,6 +206,7 @@ class MainWindow(QMainWindow):
         self._trade_panel.account_info_requested.connect(self._on_fetch_account_info)
         self._trade_panel.symbol_list_requested.connect(self._on_symbol_list_requested)
         self._training_params_panel.start_requested.connect(self._start_ppo_training)
+        self._training_params_panel.optuna_requested.connect(self._start_ppo_training)
         self._simulation_params_panel.start_requested.connect(self._start_simulation)
         self._simulation_params_panel.stop_requested.connect(self._stop_simulation)
         self._log_dock.visibilityChanged.connect(self._sync_log_toggle_action)
@@ -359,7 +360,14 @@ class MainWindow(QMainWindow):
                 log=self._log_panel.append,
                 ingest_log=self._training_panel.ingest_log_line,
             )
+            self._ppo_controller.best_params_found.connect(self._on_optuna_best_params)
         return self._ppo_controller
+
+    @Slot(dict)
+    def _on_optuna_best_params(self, params: dict) -> None:
+        if not self._training_params_panel.should_apply_optuna():
+            return
+        self._training_params_panel.apply_optuna_params(params)
 
     def _get_simulation_controller(self) -> Optional[SimulationController]:
         if self._simulation_controller is None:
