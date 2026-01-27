@@ -8,7 +8,7 @@ from typing import Optional
 from stable_baselines3 import PPO
 from stable_baselines3.common.vec_env import DummyVecEnv
 from stable_baselines3.common.monitor import Monitor
-from stable_baselines3.common.callbacks import EvalCallback
+from stable_baselines3.common.callbacks import BaseCallback, CallbackList, EvalCallback
 from stable_baselines3.common.evaluation import evaluate_policy
 
 from ml.rl.envs.trading_env import TradingConfig, TradingEnv
@@ -17,6 +17,28 @@ from ml.rl.features.feature_builder import build_features, load_csv
 
 def _build_env(features, closes, config: TradingConfig) -> DummyVecEnv:
     return DummyVecEnv([lambda: Monitor(TradingEnv(features, closes, config))])
+
+
+class MetricsLogCallback(BaseCallback):
+    def __init__(self, write_metric, verbose: int = 0) -> None:
+        super().__init__(verbose=verbose)
+        self._write_metric = write_metric
+
+    def _on_step(self) -> bool:
+        step = int(self.num_timesteps)
+        for info in self.locals.get("infos", []):
+            metrics = info.get("episode")
+            if not metrics:
+                continue
+            if "r" in metrics:
+                self._write_metric(step, "ep_rew_mean", float(metrics["r"]))
+        return True
+
+    def _on_rollout_end(self) -> None:
+        step = int(self.num_timesteps)
+        mean_reward = self.logger.name_to_value.get("rollout/ep_rew_mean")
+        if mean_reward is not None:
+            self._write_metric(step, "ep_rew_mean", float(mean_reward))
 
 
 def _train_model(
@@ -29,9 +51,6 @@ def _train_model(
     ent_coef: float,
     total_steps: int,
     verbose: int = 1,
-    eval_env: Optional[DummyVecEnv] = None,
-    eval_freq: int = 10_000,
-    eval_episodes: int = 5,
 ) -> PPO:
     model = PPO(
         "MlpPolicy",
@@ -43,16 +62,6 @@ def _train_model(
         gamma=gamma,
         ent_coef=ent_coef,
     )
-    if eval_env is not None:
-        eval_callback = EvalCallback(
-            eval_env,
-            eval_freq=eval_freq,
-            n_eval_episodes=eval_episodes,
-            deterministic=True,
-        )
-        model.learn(total_timesteps=total_steps, callback=eval_callback)
-    else:
-        model.learn(total_timesteps=total_steps)
     return model
 
 
@@ -71,8 +80,23 @@ def main() -> None:
     parser.add_argument("--eval-episodes", type=int, default=5, help="Eval episodes per evaluation.")
     parser.add_argument("--transaction-cost-bps", type=float, default=1.0, help="Transaction cost in bps.")
     parser.add_argument("--slippage-bps", type=float, default=0.5, help="Slippage in bps.")
+    parser.add_argument("--holding-cost-bps", type=float, default=0.0, help="Holding cost in bps per step.")
     parser.add_argument("--no-random-start", action="store_true", help="Disable random episode starts.")
+    parser.add_argument("--min-position-change", type=float, default=0.0, help="Minimum position change.")
+    parser.add_argument("--discretize-actions", action="store_true", help="Snap actions to discrete positions.")
+    parser.add_argument(
+        "--discrete-positions",
+        default="-1,0,1",
+        help="Comma-separated discrete positions (e.g. -1,0,1).",
+    )
+    parser.add_argument("--max-position", type=float, default=1.0, help="Maximum absolute position size.")
+    parser.add_argument("--position-step", type=float, default=0.0, help="Position step size (0 disables).")
+    parser.add_argument("--reward-scale", type=float, default=1.0, help="Scale reward by this factor.")
+    parser.add_argument("--reward-clip", type=float, default=0.0, help="Clip reward to +/- value (0 disables).")
+    parser.add_argument("--risk-aversion", type=float, default=0.0, help="Penalty for variance of PnL.")
     parser.add_argument("--verbose", type=int, default=1, help="PPO verbosity level.")
+    parser.add_argument("--metrics-log", default="", help="Optional CSV path to append metrics.")
+    parser.add_argument("--metrics-log-every", type=int, default=1, help="Write metrics every N log entries.")
     parser.add_argument("--optuna-trials", type=int, default=0, help="Run Optuna hyperparameter search.")
     parser.add_argument("--optuna-steps", type=int, default=50_000, help="Timesteps per Optuna trial.")
     parser.add_argument("--optuna-train-best", action="store_true", help="Train final model with best params.")
@@ -96,17 +120,40 @@ def main() -> None:
     eval_closes = feature_set.closes[split_idx:]
 
     random_start = not args.no_random_start
+    discrete_positions = tuple(
+        float(item)
+        for item in (part.strip() for part in args.discrete_positions.split(","))
+        if item
+    )
     train_config = TradingConfig(
         episode_length=args.episode_length,
         transaction_cost_bps=args.transaction_cost_bps,
         slippage_bps=args.slippage_bps,
+        holding_cost_bps=args.holding_cost_bps,
         random_start=random_start,
+        min_position_change=args.min_position_change,
+        discretize_actions=args.discretize_actions,
+        discrete_positions=discrete_positions,
+        max_position=args.max_position,
+        position_step=args.position_step,
+        reward_scale=args.reward_scale,
+        reward_clip=args.reward_clip,
+        risk_aversion=args.risk_aversion,
     )
     eval_config = TradingConfig(
         episode_length=args.episode_length,
         transaction_cost_bps=args.transaction_cost_bps,
         slippage_bps=args.slippage_bps,
+        holding_cost_bps=args.holding_cost_bps,
         random_start=False,
+        min_position_change=args.min_position_change,
+        discretize_actions=args.discretize_actions,
+        discrete_positions=discrete_positions,
+        max_position=args.max_position,
+        position_step=args.position_step,
+        reward_scale=args.reward_scale,
+        reward_clip=args.reward_clip,
+        risk_aversion=args.risk_aversion,
     )
     env = _build_env(train_features, train_closes, train_config)
     eval_env = _build_env(eval_features, eval_closes, eval_config)
@@ -120,6 +167,29 @@ def main() -> None:
         f"total_steps={args.total_steps}",
         f"resume={args.resume}",
     )
+
+    metrics_log_path = args.metrics_log.strip()
+    metrics_log_every = max(1, int(args.metrics_log_every))
+    metrics_fh = None
+    metrics_counter = 0
+    if metrics_log_path:
+        log_path = Path(metrics_log_path)
+        log_path.parent.mkdir(parents=True, exist_ok=True)
+        metrics_fh = log_path.open("w", encoding="utf-8")
+        metrics_fh.write("step,metric,value\n")
+
+    def _write_metric(step: int, metric: str, value: float) -> None:
+        nonlocal metrics_counter
+        if metrics_fh is None:
+            return
+        metrics_counter += 1
+        if metrics_counter % metrics_log_every != 0:
+            return
+        metrics_fh.write(f"{step},{metric},{value:.10g}\n")
+        if metrics_counter % (metrics_log_every * 10) == 0:
+            metrics_fh.flush()
+
+    metrics_callback = MetricsLogCallback(_write_metric)
 
     if args.optuna_trials > 0:
         try:
@@ -146,6 +216,10 @@ def main() -> None:
                 total_steps=args.optuna_steps,
                 verbose=0,
             )
+            model.learn(
+                total_timesteps=args.optuna_steps,
+                callback=CallbackList([metrics_callback]),
+            )
             mean_reward, _ = evaluate_policy(
                 model,
                 eval_env,
@@ -167,16 +241,23 @@ def main() -> None:
             return
         model = _train_model(
             env=env,
-            eval_env=eval_env,
             learning_rate=float(best_params["learning_rate"]),
             n_steps=int(best_params["n_steps"]),
             batch_size=int(best_params["batch_size"]),
             gamma=float(best_params["gamma"]),
             ent_coef=float(best_params["ent_coef"]),
             total_steps=args.total_steps,
-            eval_freq=args.eval_freq,
-            eval_episodes=args.eval_episodes,
             verbose=args.verbose,
+        )
+        eval_callback = EvalCallback(
+            eval_env,
+            eval_freq=args.eval_freq,
+            n_eval_episodes=args.eval_episodes,
+            deterministic=True,
+        )
+        model.learn(
+            total_timesteps=args.total_steps,
+            callback=CallbackList([eval_callback, metrics_callback]),
         )
     elif args.resume:
         if not model_path.exists():
@@ -189,24 +270,37 @@ def main() -> None:
             n_eval_episodes=args.eval_episodes,
             deterministic=True,
         )
-        model.learn(total_timesteps=args.total_steps, callback=eval_callback)
+        model.learn(
+            total_timesteps=args.total_steps,
+            callback=CallbackList([eval_callback, metrics_callback]),
+        )
     else:
         model = _train_model(
             env=env,
-            eval_env=eval_env,
             learning_rate=args.learning_rate,
             n_steps=args.n_steps,
             batch_size=args.batch_size,
             gamma=args.gamma,
             ent_coef=args.ent_coef,
             total_steps=args.total_steps,
-            eval_freq=args.eval_freq,
-            eval_episodes=args.eval_episodes,
             verbose=args.verbose,
+        )
+        eval_callback = EvalCallback(
+            eval_env,
+            eval_freq=args.eval_freq,
+            n_eval_episodes=args.eval_episodes,
+            deterministic=True,
+        )
+        model.learn(
+            total_timesteps=args.total_steps,
+            callback=CallbackList([eval_callback, metrics_callback]),
         )
 
     model_path.parent.mkdir(parents=True, exist_ok=True)
     model.save(str(model_path))
+    if metrics_fh:
+        metrics_fh.flush()
+        metrics_fh.close()
 
 
 if __name__ == "__main__":

@@ -104,6 +104,7 @@ class MainWindow(QMainWindow):
         self._setup_panel_switcher()
         self._setup_status_bar()
         self._setup_menu_toolbar()
+        self._show_panel("training", show_log=True)
 
     def _setup_connection_controller(self) -> None:
         if not self._use_cases:
@@ -359,6 +360,7 @@ class MainWindow(QMainWindow):
                 parent=self,
                 log=self._log_panel.append,
                 ingest_log=self._training_panel.ingest_log_line,
+                on_finished=lambda *_: self._training_panel.flush_plot(),
             )
             self._ppo_controller.best_params_found.connect(self._on_optuna_best_params)
         return self._ppo_controller
