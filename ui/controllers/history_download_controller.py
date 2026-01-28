@@ -14,6 +14,7 @@ from config.paths import SYMBOL_LIST_FILE, TIMEFRAMES_FILE, TOKEN_FILE
 from config.settings import OAuthTokens
 from infrastructure.storage.json_store import read_json, write_json
 from ui.dialogs.history_download_dialog import HistoryDownloadDialog
+from ui.utils.formatters import format_history_message
 from utils.reactor_manager import reactor_manager
 
 
@@ -59,8 +60,8 @@ class HistoryDownloadController(QObject):
             timeframe=timeframe,
             from_ts=from_ts,
             to_ts=now_ms,
-            on_saved=lambda path: self._log_async(f"✅ 已儲存歷史資料：{path}"),
-            on_error=lambda e: self._log_async(f"⚠️ 歷史資料錯誤: {e}"),
+            on_saved=lambda path: self._log_async(format_history_message("history_saved", path=path)),
+            on_error=lambda e: self._log_async(format_history_message("history_error", error=e)),
             on_log=self._log_async,
         )
 
@@ -83,14 +84,14 @@ class HistoryDownloadController(QObject):
         if symbols:
             self._dialog.set_symbols(symbols)
         else:
-            self._log("📥 symbol list 不完整，正在重新取得...")
+            self._log(format_history_message("symbol_list_incomplete"))
             self._use_cases.fetch_symbols(
                 app_auth_service=self._app_auth_service,
                 account_id=account_id,
                 on_symbols_received=lambda symbols: QTimer.singleShot(
                     0, self, lambda: self._save_symbol_list(account_id, symbols)
                 ),
-                on_error=lambda e: self._log_async(f"⚠️ symbol list 錯誤: {e}"),
+                on_error=lambda e: self._log_async(format_history_message("symbol_list_error", error=e)),
                 on_log=self._log_async,
             )
 
@@ -116,8 +117,8 @@ class HistoryDownloadController(QObject):
             from_ts=params["from_ts"],
             to_ts=params["to_ts"],
             output_path=params["output_path"],
-            on_saved=lambda path: self._log_async(f"✅ 已儲存歷史資料：{path}"),
-            on_error=lambda e: self._log_async(f"⚠️ 歷史資料錯誤: {e}"),
+            on_saved=lambda path: self._log_async(format_history_message("history_saved", path=path)),
+            on_error=lambda e: self._log_async(format_history_message("history_error", error=e)),
             on_log=self._log_async,
         )
 
@@ -126,35 +127,35 @@ class HistoryDownloadController(QObject):
         if account_id is None:
             return
 
-        self._log("📥 正在取得 symbol list...")
+        self._log(format_history_message("symbol_list_fetching"))
         self._use_cases.fetch_symbols(
             app_auth_service=self._app_auth_service,
             account_id=account_id,
             on_symbols_received=lambda symbols: QTimer.singleShot(
                 0, self, lambda: self._save_symbol_list(account_id, symbols)
             ),
-            on_error=lambda e: self._log_async(f"⚠️ symbol list 錯誤: {e}"),
+            on_error=lambda e: self._log_async(format_history_message("symbol_list_error", error=e)),
             on_log=self._log_async,
         )
 
     def _get_account_id(self) -> Optional[int]:
         if not self._app_auth_service:
-            self._log("⚠️ 尚未完成 App 認證")
+            self._log(format_history_message("app_auth_missing"))
             return None
         if not self._app_auth_service.is_app_authenticated:
-            self._log("⚠️ App 認證已中斷，請稍候自動重連")
+            self._log(format_history_message("app_auth_disconnected"))
             return None
         if not self._oauth_service or self._oauth_service.status != ConnectionStatus.ACCOUNT_AUTHENTICATED:
-            self._log("⚠️ 尚未完成 OAuth 帳戶認證")
+            self._log(format_history_message("oauth_missing"))
             return None
 
         try:
             tokens = OAuthTokens.from_file(TOKEN_FILE)
         except Exception as exc:
-            self._log(f"⚠️ 無法讀取 OAuth Token: {exc}")
+            self._log(format_history_message("token_read_failed", error=exc))
             return None
         if not tokens.account_id:
-            self._log("⚠️ 缺少帳戶 ID")
+            self._log(format_history_message("account_id_missing"))
             return None
         return tokens.account_id
 
@@ -168,7 +169,7 @@ class HistoryDownloadController(QObject):
 
     def _save_symbol_list(self, account_id: int, symbols: list) -> None:
         if not symbols:
-            self._log("⚠️ symbol list 為空")
+            self._log(format_history_message("symbol_list_empty"))
             return
         payload = []
         for symbol in symbols:
@@ -187,13 +188,19 @@ class HistoryDownloadController(QObject):
                 }
             )
         path = self._symbol_list_path()
-        self._log(f"📦 正在寫入 symbol list：{path.resolve()} ({len(payload)} 筆)")
+        self._log(
+            format_history_message(
+                "symbol_list_write_start",
+                path=path.resolve(),
+                count=len(payload),
+            )
+        )
         try:
             write_json(path, payload)
         except Exception as exc:
-            self._log(f"⚠️ 無法寫入 symbol list: {exc}")
+            self._log(format_history_message("symbol_list_write_failed", error=exc))
             return
-        self._log(f"✅ 已儲存 symbol list：{path.resolve()}")
+        self._log(format_history_message("symbol_list_saved", path=path.resolve()))
         if self._dialog and self._dialog.isVisible():
             self._dialog.set_symbols(payload)
 
@@ -253,7 +260,7 @@ class HistoryDownloadController(QObject):
             try:
                 write_json(path, timeframes)
             except Exception as exc:
-                self._log(f"⚠️ 無法寫入 timeframes.json: {exc}")
+                self._log(format_history_message("timeframes_write_failed", error=exc))
         return timeframes
 
     @staticmethod

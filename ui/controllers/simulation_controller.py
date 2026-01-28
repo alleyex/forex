@@ -10,6 +10,9 @@ from PySide6.QtCore import QObject, QProcess, QTimer
 from PySide6.QtWidgets import QMessageBox, QWidget
 
 from ui.controllers.process_runner import ProcessRunner
+from ui.state.simulation_state import SimulationState
+from ui.presenters.simulation_presenter import SimulationPresenter
+from ui.utils.formatters import format_simulation_message
 
 
 class SimulationController(QObject):
@@ -18,28 +21,14 @@ class SimulationController(QObject):
         *,
         parent: QObject,
         log: Callable[[str], None],
-        reset_plot: Callable[[], None],
-        ingest_equity: Callable[[int, float], None],
-        flush_plot: Optional[Callable[[], None]] = None,
-        update_summary: Callable[..., None],
-        update_trade_stats: Callable[[str], None],
-        update_streak_stats: Callable[[str], None],
-        update_holding_stats: Callable[[str], None],
-        update_action_distribution: Callable[[str], None],
-        update_playback_range: Callable[[str], None],
+        state: SimulationState,
+        presenter: SimulationPresenter,
         on_finished: Optional[Callable[[int, QProcess.ExitStatus], None]] = None,
     ) -> None:
         super().__init__(parent)
         self._log = log
-        self._reset_plot = reset_plot
-        self._ingest_equity = ingest_equity
-        self._flush_plot = flush_plot
-        self._update_summary = update_summary
-        self._update_trade_stats = update_trade_stats
-        self._update_streak_stats = update_streak_stats
-        self._update_holding_stats = update_holding_stats
-        self._update_action_distribution = update_action_distribution
-        self._update_playback_range = update_playback_range
+        self._state = state
+        self._presenter = presenter
         self._on_finished = on_finished
         self._runner = ProcessRunner(
             parent=self,
@@ -55,7 +44,7 @@ class SimulationController(QObject):
 
     def start(self, params: dict) -> None:
         if self._runner.is_running():
-            self._log("ℹ️ 回放模擬仍在進行中")
+            self._log(format_simulation_message("already_running"))
             return
 
         data_path = params.get("data", "").strip()
@@ -67,7 +56,8 @@ class SimulationController(QObject):
             self._show_error("模型檔案不存在，請選擇有效的 ZIP 檔案。")
             return
 
-        self._reset_plot()
+        self._state.reset_plot.emit()
+        self._state.reset_summary.emit()
         self._start_equity_log_tailer()
         args = [
             "ml/rl/sim/run_live_sim.py",
@@ -89,102 +79,46 @@ class SimulationController(QObject):
             "--equity-log-every",
             "200",
         ]
-        self._log("▶️ 開始回放模擬")
+        self._log(format_simulation_message("start"))
         started = self._runner.start(sys.executable, args, env={"PYTHONPATH": "."})
         if not started:
-            self._log("⚠️ 回放模擬尚在執行")
+            self._log(format_simulation_message("start_failed"))
             self._stop_equity_log_tailer()
 
     def stop(self) -> None:
         if not self._runner.is_running():
-            self._log("ℹ️ 回放模擬未在進行中")
+            self._log(format_simulation_message("not_running"))
             return
-        self._log("⏹️ 已要求停止回放模擬")
+        self._log(format_simulation_message("stop_requested"))
         self._stop_equity_log_tailer()
         if not self._runner.stop():
-            self._log("⚠️ 回放模擬停止失敗")
+            self._log(format_simulation_message("stop_failed"))
 
     def _show_error(self, message: str) -> None:
-        self._log(f"⚠️ {message}")
+        self._log(format_simulation_message("param_error", message=message))
         parent = self.parent()
         if isinstance(parent, QWidget):
             QMessageBox.warning(parent, "回放參數錯誤", message)
 
     def _on_stdout_line(self, line: str) -> None:
         self._log(line)
-        self._maybe_update_plot(line)
+        self._presenter.handle_stdout_line(line)
 
     def _on_stderr_line(self, line: str) -> None:
-        self._log(f"⚠️ {line}")
+        self._log(format_simulation_message("param_error", message=line))
 
     def _on_finished_internal(self, exit_code: int, exit_status: QProcess.ExitStatus) -> None:
-        status = "完成" if exit_status == QProcess.NormalExit else "異常結束"
-        self._log(f"⏹️ 回放模擬{status} (exit={exit_code})")
-        if self._flush_plot:
-            self._flush_plot()
+        self._log(
+            format_simulation_message(
+                "finished",
+                exit_status=exit_status == QProcess.NormalExit,
+                exit_code=exit_code,
+            )
+        )
+        self._state.flush_plot.emit()
         self._stop_equity_log_tailer()
         if self._on_finished:
             self._on_finished(exit_code, exit_status)
-
-    def _maybe_update_plot(self, line: str) -> None:
-        if "step=" in line and "equity=" in line:
-            parts = line.split()
-            step = None
-            equity = None
-            for part in parts:
-                if part.startswith("step="):
-                    try:
-                        step = int(part.split("=")[1])
-                    except ValueError:
-                        pass
-                if part.startswith("equity="):
-                    try:
-                        equity = float(part.split("=")[1])
-                    except ValueError:
-                        pass
-            if step is not None and equity is not None:
-                self._ingest_equity(step, equity)
-                return
-        if line.startswith("Done."):
-            tokens = line.replace("Done.", "").split()
-            data = {}
-            for token in tokens:
-                if "=" in token:
-                    key, value = token.split("=", 1)
-                    data[key] = value
-            try:
-                trades = int(data.get("trades", "0"))
-                equity = float(data.get("equity", "0"))
-                total_return = float(data.get("return", "0"))
-            except ValueError:
-                return
-            self._update_summary(
-                total_return=total_return,
-                trades=trades,
-                equity=equity,
-            )
-        if line.startswith("Max drawdown:"):
-            try:
-                max_dd = float(line.split(":", 1)[1].strip())
-            except ValueError:
-                return
-            self._update_summary(max_drawdown=max_dd)
-        if line.startswith("Sharpe:"):
-            try:
-                sharpe = float(line.split(":", 1)[1].strip())
-            except ValueError:
-                return
-            self._update_summary(sharpe=sharpe)
-        if line.startswith("Trade stats:"):
-            self._update_trade_stats(line.replace("Trade stats:", "").strip())
-        if line.startswith("Streak stats:"):
-            self._update_streak_stats(line.replace("Streak stats:", "").strip())
-        if line.startswith("Holding stats:"):
-            self._update_holding_stats(line.replace("Holding stats:", "").strip())
-        if line.startswith("Action distribution:"):
-            self._update_action_distribution(line.replace("Action distribution:", "").strip())
-        if line.startswith("Playback range:"):
-            self._update_playback_range(line.replace("Playback range:", "").strip())
 
     def _start_equity_log_tailer(self) -> None:
         tmp_dir = Path(tempfile.gettempdir())
@@ -229,4 +163,4 @@ class SimulationController(QObject):
                 equity = float(parts[1])
             except ValueError:
                 continue
-            self._ingest_equity(step, equity)
+            self._presenter.handle_equity_point(step, equity)

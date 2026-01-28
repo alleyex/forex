@@ -10,7 +10,7 @@ from PySide6.QtWidgets import (
 from PySide6.QtCore import Signal, Slot, Qt
 
 from ui.dialogs.base_auth_dialog import BaseAuthDialog
-from ui.widgets.form_helpers import configure_form_layout
+from ui.widgets.layout_helpers import configure_form_layout
 from application import AppState, AppAuthServiceLike, BrokerUseCases, EventBus
 from config.constants import ConnectionStatus
 from config.paths import TOKEN_FILE

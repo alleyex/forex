@@ -9,6 +9,7 @@ from config.constants import ConnectionStatus
 from config.paths import TOKEN_FILE
 from config.settings import OAuthTokens
 from utils.reactor_manager import reactor_manager
+from ui.utils.formatters import format_trendbar_message
 
 
 class TrendbarController(QObject):
@@ -43,22 +44,22 @@ class TrendbarController(QObject):
 
     def start(self, symbol_id: int) -> None:
         if not self._app_auth_service:
-            self._log("⚠️ 尚未完成 App 認證")
+            self._log(format_trendbar_message("app_auth_missing"))
             return
         if not self._is_app_authenticated():
-            self._log("⚠️ App 認證已中斷，請稍候自動重連")
+            self._log(format_trendbar_message("app_auth_disconnected"))
             return
         if not self._oauth_service or self._oauth_service.status != ConnectionStatus.ACCOUNT_AUTHENTICATED:
-            self._log("⚠️ 尚未完成 OAuth 帳戶認證")
+            self._log(format_trendbar_message("oauth_missing"))
             return
 
         try:
             tokens = OAuthTokens.from_file(TOKEN_FILE)
         except Exception as exc:
-            self._log(f"⚠️ 無法讀取 OAuth Token: {exc}")
+            self._log(format_trendbar_message("token_read_failed", error=exc))
             return
         if not tokens.account_id:
-            self._log("⚠️ 缺少帳戶 ID")
+            self._log(format_trendbar_message("account_id_missing"))
             return
 
         if self._trendbar_service is None:
@@ -67,13 +68,17 @@ class TrendbarController(QObject):
         self._trendbar_service.clear_log_history()
         self._trendbar_service.set_callbacks(
             on_trendbar=lambda data: self._log_async(
-                f"📊 M1 {data['timestamp']} "
-                f"O={self._format_price(data['open'])} "
-                f"H={self._format_price(data['high'])} "
-                f"L={self._format_price(data['low'])} "
-                f"C={self._format_price(data['close'])}"
+                format_trendbar_message(
+                    "trendbar_bar",
+                    timeframe="M1",
+                    timestamp=data["timestamp"],
+                    open=self._format_price(data["open"]),
+                    high=self._format_price(data["high"]),
+                    low=self._format_price(data["low"]),
+                    close=self._format_price(data["close"]),
+                )
             ),
-            on_error=lambda e: self._log_async(f"⚠️ K 線錯誤: {e}"),
+            on_error=lambda e: self._log_async(format_trendbar_message("trendbar_error", error=e)),
             on_log=self._log_async,
         )
 
@@ -86,11 +91,11 @@ class TrendbarController(QObject):
         )
         self._active = True
         self._set_active(True)
-        self._log(f"📈 已開始 M1 K 線：symbol {symbol_id}")
+        self._log(format_trendbar_message("trendbar_started", symbol_id=symbol_id))
 
     def stop(self) -> None:
         if not self._trendbar_service or not self._trendbar_service.in_progress:
-            self._log("ℹ️ 目前沒有 K 線訂閱")
+            self._log(format_trendbar_message("no_subscription"))
             self._active = False
             self._set_active(False)
             return

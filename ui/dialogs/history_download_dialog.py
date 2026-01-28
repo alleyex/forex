@@ -22,7 +22,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from ui.widgets.form_helpers import (
+from ui.widgets.layout_helpers import (
     apply_form_label_width,
     align_form_fields,
     build_browse_row,

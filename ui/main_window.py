@@ -10,21 +10,22 @@ from PySide6.QtWidgets import (
     QStackedWidget,
 )
 from PySide6.QtCore import Slot, Signal, Qt
-from PySide6.QtGui import QAction
 
-from ui.layout.dock_manager import DockManager
 from ui.layout.panel_switcher import PanelSet, PanelSwitcher
-from ui.layout.toolbar_actions import build_toolbar_actions, ToolbarActions
+from ui.layout.dock_manager import DockManagerController
 
 from ui.widgets.trade_panel import TradePanel
 from ui.widgets.simulation_panel import SimulationPanel, SimulationParamsPanel
 from ui.widgets.training_panel import TrainingPanel, TrainingParamsPanel
 from ui.widgets.log_widget import LogWidget
+from ui.presenters import SimulationPresenter, TrainingPresenter
+from ui.state import SimulationState, TrainingState
 from ui.controllers import (
     ConnectionController,
     HistoryDownloadController,
     PPOTrainingController,
     SimulationController,
+    ToolbarController,
     TrendbarController,
 )
 
@@ -75,13 +76,14 @@ class MainWindow(QMainWindow):
         self._price_digits = 5
         self._ppo_controller: Optional[PPOTrainingController] = None
         self._simulation_controller: Optional[SimulationController] = None
-        self._log_collapsed = False
         self._trendbar_controller = None
         self._history_download_controller = None
-        self._dock_manager: Optional[DockManager] = None
+        self._dock_controller: Optional[DockManagerController] = None
         self._panel_switcher: Optional[PanelSwitcher] = None
-        self._toolbar_actions: Optional[ToolbarActions] = None
+        self._toolbar_controller: Optional[ToolbarController] = None
         self._connection_controller: Optional[ConnectionController] = None
+        self._training_state: Optional[TrainingState] = None
+        self._training_presenter: Optional[TrainingPresenter] = None
 
         self._setup_ui()
         self._setup_connection_controller()
@@ -143,6 +145,38 @@ class MainWindow(QMainWindow):
             font_point_delta=2,
         )
 
+        self._training_state = TrainingState(parent=self)
+        self._training_presenter = TrainingPresenter(parent=self, state=self._training_state)
+
+        self._training_state.metric_point.connect(self._training_panel.append_metric_point)
+        self._training_state.optuna_point.connect(self._training_panel.append_optuna_point)
+        self._training_state.optuna_reset.connect(self._training_params_panel.reset_optuna_results)
+        self._training_state.optuna_trial_summary.connect(
+            self._training_params_panel.update_optuna_trial_summary
+        )
+        self._training_state.optuna_best_params.connect(
+            self._training_params_panel.update_optuna_best_params
+        )
+        self._training_state.best_params_found.connect(self._on_optuna_best_params)
+
+        self._simulation_state = SimulationState(parent=self)
+        self._simulation_presenter = SimulationPresenter(parent=self, state=self._simulation_state)
+
+        self._simulation_state.reset_plot.connect(self._simulation_panel.reset_plot)
+        self._simulation_state.flush_plot.connect(self._simulation_panel.flush_plot)
+        self._simulation_state.reset_summary.connect(self._simulation_params_panel.reset_summary)
+        self._simulation_state.equity_point.connect(self._simulation_panel.append_equity_point)
+        self._simulation_state.summary_update.connect(self._update_simulation_summary)
+        self._simulation_state.trade_stats.connect(self._simulation_params_panel.update_trade_stats)
+        self._simulation_state.streak_stats.connect(self._simulation_params_panel.update_streak_stats)
+        self._simulation_state.holding_stats.connect(self._simulation_params_panel.update_holding_stats)
+        self._simulation_state.action_distribution.connect(
+            self._simulation_params_panel.update_action_distribution
+        )
+        self._simulation_state.playback_range.connect(
+            self._simulation_params_panel.update_playback_range
+        )
+
     def _setup_stack(self) -> None:
         self._stack = QStackedWidget()
         self._trade_container = QWidget()
@@ -157,18 +191,16 @@ class MainWindow(QMainWindow):
         self.setCentralWidget(self._stack)
 
     def _setup_docks(self) -> None:
-        self._dock_manager = DockManager(
-            self,
+        self._dock_controller = DockManagerController(
+            parent=self,
             log_panel=self._log_panel,
             training_params_panel=self._training_params_panel,
             simulation_params_panel=self._simulation_params_panel,
         )
-        self._dock_manager.add_docks()
-        self._log_dock = self._dock_manager.docks.log
-        self._training_params_dock = self._dock_manager.docks.training_params
-        self._simulation_params_dock = self._dock_manager.docks.simulation_params
 
     def _setup_panel_switcher(self) -> None:
+        if self._dock_controller is None:
+            return
         self._panel_switcher = PanelSwitcher(
             stack=self._stack,
             panels=PanelSet(
@@ -176,7 +208,7 @@ class MainWindow(QMainWindow):
                 training=self._training_panel,
                 simulation=self._simulation_panel,
             ),
-            dock_manager=self._dock_manager,
+            dock_manager=self._dock_controller.manager,
         )
 
     def _setup_status_bar(self) -> None:
@@ -190,7 +222,6 @@ class MainWindow(QMainWindow):
         """Connect panel signals"""
         self._connect_core_signals()
         self._connect_panel_signals()
-        self._connect_toolbar_signals()
 
     def _connect_core_signals(self) -> None:
         self.logRequested.connect(self._handle_log_message)
@@ -211,30 +242,25 @@ class MainWindow(QMainWindow):
         self._training_params_panel.tab_changed.connect(self._on_training_tab_changed)
         self._simulation_params_panel.start_requested.connect(self._start_simulation)
         self._simulation_params_panel.stop_requested.connect(self._stop_simulation)
-        self._log_dock.visibilityChanged.connect(self._sync_log_toggle_action)
-
-    def _connect_toolbar_signals(self) -> None:
-        self._action_fetch_account_info.triggered.connect(self._on_fetch_account_info)
-        self._action_train_ppo.triggered.connect(self._on_train_ppo_clicked)
-        self._action_simulation.triggered.connect(self._on_simulation_clicked)
-        self._action_history_download.triggered.connect(self._open_history_download_dialog)
-        self._action_toggle_log.toggled.connect(self._toggle_log_dock)
 
     def _setup_menu_toolbar(self) -> None:
         """Create menu and toolbar actions"""
-        self._toolbar_actions = build_toolbar_actions(self, self._log_dock.isVisible())
-        self._action_app_auth = self._toolbar_actions.action_app_auth
-        self._action_oauth = self._toolbar_actions.action_oauth
-        self._action_toggle_connection = self._toolbar_actions.action_toggle_connection
-        self._action_fetch_account_info = self._toolbar_actions.action_fetch_account_info
-        self._action_train_ppo = self._toolbar_actions.action_train_ppo
-        self._action_simulation = self._toolbar_actions.action_simulation
-        self._action_history_download = self._toolbar_actions.action_history_download
-        self._action_toggle_log = self._toolbar_actions.action_toggle_log
-
-        self._action_app_auth.triggered.connect(self._open_app_auth_dialog)
-        self._action_oauth.triggered.connect(self._open_oauth_dialog)
-        self._action_toggle_connection.triggered.connect(self._toggle_connection)
+        if self._dock_controller is None:
+            return
+        self._toolbar_controller = ToolbarController(
+            parent=self,
+            log_visible=self._dock_controller.log_dock.isVisible(),
+            on_app_auth=self._open_app_auth_dialog,
+            on_oauth=self._open_oauth_dialog,
+            on_toggle_connection=self._toggle_connection,
+            on_fetch_account_info=self._on_fetch_account_info,
+            on_train_ppo=self._on_train_ppo_clicked,
+            on_simulation=self._on_simulation_clicked,
+            on_history_download=self._open_history_download_dialog,
+            on_toggle_log=self._dock_controller.toggle_log,
+        )
+        self._dock_controller.bind_log_action(self._toolbar_controller.action_toggle_log)
+        self._action_toggle_connection = self._toolbar_controller.action_toggle_connection
 
     @Slot()
     def _on_trendbar_toggle_requested(self) -> None:
@@ -242,21 +268,6 @@ class MainWindow(QMainWindow):
         if controller is None:
             return
         controller.toggle(self._trendbar_symbol_id)
-
-    @Slot(bool)
-    def _toggle_log_dock(self, visible: bool) -> None:
-        if self._dock_manager is None:
-            return
-        self._dock_manager.toggle_log(visible)
-
-    @Slot(bool)
-    def _sync_log_toggle_action(self, visible: bool) -> None:
-        self._action_toggle_log.blockSignals(True)
-        try:
-            self._action_toggle_log.setChecked(visible)
-            self._action_toggle_log.setVisible(not visible)
-        finally:
-            self._action_toggle_log.blockSignals(False)
 
     @Slot()
     def _on_train_ppo_clicked(self) -> None:
@@ -271,6 +282,7 @@ class MainWindow(QMainWindow):
         self._training_panel.reset_metrics()
         if params.get("optuna_trials", 0) > 0:
             self._training_panel.reset_optuna_metrics()
+            self._training_presenter.reset_optuna_results()
         controller = self._get_ppo_controller()
         if controller is None:
             return
@@ -281,7 +293,6 @@ class MainWindow(QMainWindow):
         controller = self._get_simulation_controller()
         if controller is None:
             return
-        self._simulation_params_panel.reset_summary()
         controller.start(params)
 
     @Slot()
@@ -359,19 +370,23 @@ class MainWindow(QMainWindow):
 
     def _get_ppo_controller(self) -> Optional[PPOTrainingController]:
         if self._ppo_controller is None:
+            if not self._training_presenter or not self._training_state:
+                return None
             self._ppo_controller = PPOTrainingController(
                 parent=self,
                 log=self._log_panel.append,
-                ingest_log=self._training_panel.ingest_log_line,
-                ingest_optuna_log=self._training_panel.ingest_optuna_log_line,
+                ingest_log=self._training_presenter.handle_log_line,
+                ingest_optuna_log=self._training_presenter.handle_optuna_log_line,
                 on_finished=lambda *_: self._training_panel.flush_plot(),
             )
-            self._ppo_controller.best_params_found.connect(self._on_optuna_best_params)
+            self._ppo_controller.best_params_found.connect(
+                self._training_presenter.handle_best_params_found
+            )
             self._ppo_controller.optuna_trial_logged.connect(
-                self._training_params_panel.update_optuna_trial_summary
+                self._training_presenter.handle_optuna_trial_summary
             )
             self._ppo_controller.optuna_best_params_logged.connect(
-                self._training_params_panel.update_optuna_best_params
+                self._training_presenter.handle_optuna_best_params
             )
         return self._ppo_controller
 
@@ -394,17 +409,14 @@ class MainWindow(QMainWindow):
             self._simulation_controller = SimulationController(
                 parent=self,
                 log=self._log_panel.append,
-                reset_plot=self._simulation_panel.reset_plot,
-                ingest_equity=self._simulation_panel.ingest_equity,
-                flush_plot=self._simulation_panel.flush_plot,
-                update_summary=self._simulation_params_panel.update_summary,
-                update_trade_stats=self._simulation_params_panel.update_trade_stats,
-                update_streak_stats=self._simulation_params_panel.update_streak_stats,
-                update_holding_stats=self._simulation_params_panel.update_holding_stats,
-                update_action_distribution=self._simulation_params_panel.update_action_distribution,
-                update_playback_range=self._simulation_params_panel.update_playback_range,
+                state=self._simulation_state,
+                presenter=self._simulation_presenter,
             )
         return self._simulation_controller
+
+    @Slot(dict)
+    def _update_simulation_summary(self, data: dict) -> None:
+        self._simulation_params_panel.update_summary(**data)
 
     @Slot()
     def _on_fetch_account_info(self) -> None:
@@ -414,16 +426,7 @@ class MainWindow(QMainWindow):
     def _show_panel(self, panel: str, *, show_log: Optional[bool]) -> None:
         if self._panel_switcher is None:
             return
-        self._panel_switcher.show(panel, show_log)
-
-    def _set_log_collapsed(self, collapsed: bool) -> None:
-        self._log_collapsed = collapsed
-        if self._dock_manager is None:
-            return
-        self._dock_manager.set_log_collapsed(collapsed)
-        self._action_toggle_log.blockSignals(True)
-        self._action_toggle_log.setChecked(not collapsed)
-        self._action_toggle_log.blockSignals(False)
+        self._panel_switcher.show(panel, show_log=show_log)
 
     def _handle_accounts_received(self, accounts: list, account_id: Optional[int]) -> None:
         try:

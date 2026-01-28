@@ -1,8 +1,10 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from typing import Optional
 
-from PySide6.QtCore import Qt
+from PySide6.QtCore import Qt, QObject
+from PySide6.QtGui import QAction
 from PySide6.QtWidgets import QDockWidget, QMainWindow, QWidget
 
 
@@ -92,3 +94,67 @@ class DockManager:
     def _configure_corners(self) -> None:
         self._main_window.setCorner(Qt.BottomLeftCorner, Qt.LeftDockWidgetArea)
         self._main_window.setCorner(Qt.BottomRightCorner, Qt.BottomDockWidgetArea)
+
+
+class DockManagerController(QObject):
+    def __init__(
+        self,
+        *,
+        parent: QMainWindow,
+        log_panel: QWidget,
+        training_params_panel: QWidget,
+        simulation_params_panel: QWidget,
+        on_log_visibility_changed: Optional[callable] = None,
+    ) -> None:
+        super().__init__(parent)
+        self._manager = DockManager(
+            parent,
+            log_panel=log_panel,
+            training_params_panel=training_params_panel,
+            simulation_params_panel=simulation_params_panel,
+        )
+        self._manager.add_docks()
+        self._log_action: Optional[QAction] = None
+        self._on_log_visibility_changed = on_log_visibility_changed
+        self.log_dock.visibilityChanged.connect(self._handle_log_visibility_changed)
+
+    @property
+    def manager(self) -> DockManager:
+        return self._manager
+
+    @property
+    def log_dock(self) -> QDockWidget:
+        return self._manager.docks.log
+
+    @property
+    def training_params_dock(self) -> QDockWidget:
+        return self._manager.docks.training_params
+
+    @property
+    def simulation_params_dock(self) -> QDockWidget:
+        return self._manager.docks.simulation_params
+
+    def bind_log_action(self, action: QAction) -> None:
+        self._log_action = action
+        self._sync_log_action(self.log_dock.isVisible())
+
+    def toggle_log(self, visible: bool) -> None:
+        self._manager.toggle_log(visible)
+
+    def set_log_collapsed(self, collapsed: bool) -> None:
+        self._manager.set_log_collapsed(collapsed)
+
+    def _handle_log_visibility_changed(self, visible: bool) -> None:
+        self._sync_log_action(visible)
+        if self._on_log_visibility_changed:
+            self._on_log_visibility_changed(visible)
+
+    def _sync_log_action(self, visible: bool) -> None:
+        if self._log_action is None:
+            return
+        self._log_action.blockSignals(True)
+        try:
+            self._log_action.setChecked(visible)
+            self._log_action.setVisible(not visible)
+        finally:
+            self._log_action.blockSignals(False)

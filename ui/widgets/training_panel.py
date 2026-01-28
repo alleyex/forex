@@ -28,7 +28,7 @@ from PySide6.QtWidgets import (
     QStackedWidget,
 )
 
-from ui.widgets.form_helpers import (
+from ui.widgets.layout_helpers import (
     apply_form_label_width,
     align_form_fields,
     build_browse_row,
@@ -171,8 +171,6 @@ class TrainingParamsPanel(QWidget):
             label_alignment=Qt.AlignLeft | Qt.AlignVCenter,
             field_growth_policy=QFormLayout.FieldsStayAtSizeHint,
         )
-        apply_form_label_width(cost_layout, env_label_width)
-        align_form_fields(cost_layout, Qt.AlignLeft | Qt.AlignVCenter)
 
         self._transaction_cost_bps = QDoubleSpinBox()
         self._transaction_cost_bps.setRange(0.0, 100.0)
@@ -206,6 +204,8 @@ class TrainingParamsPanel(QWidget):
             "Holding cost (bps)",
             _wrap_field(self._holding_cost_bps),
         )
+        apply_form_label_width(cost_layout, env_label_width)
+        align_form_fields(cost_layout, Qt.AlignLeft | Qt.AlignVCenter)
 
         action_group = QGroupBox("Action & Position")
         action_layout = QFormLayout(action_group)
@@ -214,8 +214,6 @@ class TrainingParamsPanel(QWidget):
             label_alignment=Qt.AlignLeft | Qt.AlignVCenter,
             field_growth_policy=QFormLayout.FieldsStayAtSizeHint,
         )
-        apply_form_label_width(action_layout, env_label_width)
-        align_form_fields(action_layout, Qt.AlignLeft | Qt.AlignVCenter)
 
         self._min_position_change = QDoubleSpinBox()
         self._min_position_change.setRange(0.0, 1.0)
@@ -263,6 +261,8 @@ class TrainingParamsPanel(QWidget):
             "Position step",
             _wrap_field(self._position_step),
         )
+        apply_form_label_width(action_layout, env_label_width)
+        align_form_fields(action_layout, Qt.AlignLeft | Qt.AlignVCenter)
 
         episode_group = QGroupBox("Episode & Sampling")
         episode_layout = QFormLayout(episode_group)
@@ -271,8 +271,6 @@ class TrainingParamsPanel(QWidget):
             label_alignment=Qt.AlignLeft | Qt.AlignVCenter,
             field_growth_policy=QFormLayout.FieldsStayAtSizeHint,
         )
-        apply_form_label_width(episode_layout, env_label_width)
-        align_form_fields(episode_layout, Qt.AlignLeft | Qt.AlignVCenter)
 
         self._episode_length = QSpinBox()
         self._episode_length.setRange(1, 20_000)
@@ -289,6 +287,8 @@ class TrainingParamsPanel(QWidget):
             "Random start",
             _wrap_field(self._random_start),
         )
+        apply_form_label_width(episode_layout, env_label_width)
+        align_form_fields(episode_layout, Qt.AlignLeft | Qt.AlignVCenter)
 
         reward_group = QGroupBox("Reward shaping")
         reward_layout = QFormLayout(reward_group)
@@ -297,8 +297,6 @@ class TrainingParamsPanel(QWidget):
             label_alignment=Qt.AlignLeft | Qt.AlignVCenter,
             field_growth_policy=QFormLayout.FieldsStayAtSizeHint,
         )
-        apply_form_label_width(reward_layout, env_label_width)
-        align_form_fields(reward_layout, Qt.AlignLeft | Qt.AlignVCenter)
 
         self._reward_scale = QDoubleSpinBox()
         self._reward_scale.setRange(0.0, 100.0)
@@ -332,6 +330,8 @@ class TrainingParamsPanel(QWidget):
             "Risk aversion",
             _wrap_field(self._risk_aversion),
         )
+        apply_form_label_width(reward_layout, env_label_width)
+        align_form_fields(reward_layout, Qt.AlignLeft | Qt.AlignVCenter)
 
         optuna_group = QGroupBox("Optuna Settings")
         optuna_layout = QFormLayout(optuna_group)
@@ -826,6 +826,20 @@ class TrainingPanel(QWidget):
                 continue
             data = self._metric_data[key]
             self._curves[key].setData(list(data["x"]), list(data["y"]))
+
+    def append_metric_point(self, key: str, step: float, value: float) -> None:
+        if not self._charts_available:
+            return
+        if key not in self._metric_labels:
+            return
+        self._append_point(key, step, value)
+
+    def append_optuna_point(self, key: str, trial: float, value: float) -> None:
+        if not self._charts_available:
+            return
+        if key not in self._optuna_data:
+            return
+        self._append_optuna_point(key, trial, value)
 
     def show_training_plot(self) -> None:
         if not self._charts_available:

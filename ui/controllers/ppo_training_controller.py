@@ -11,6 +11,7 @@ import re
 from PySide6.QtCore import QObject, QProcess, QTimer, Signal
 
 from ui.controllers.process_runner import ProcessRunner
+from ui.utils.formatters import format_training_message
 
 
 class PPOTrainingController(QObject):
@@ -52,15 +53,15 @@ class PPOTrainingController(QObject):
 
     def start(self, params: dict, data_path: str) -> None:
         if self._runner.is_running():
-            self._log("ℹ️ PPO 訓練仍在進行中")
+            self._log(format_training_message("already_running"))
             return
 
         optuna_only = bool(params.get("optuna_only"))
         if optuna_only and params.get("optuna_trials", 0) <= 0:
-            self._log("⚠️ Optuna 試驗次數需大於 0")
+            self._log(format_training_message("optuna_trials_required"))
             return
 
-        self._log("▶️ 開始 PPO 訓練")
+        self._log(format_training_message("start"))
         self._start_metrics_log_tailer()
         self._use_metrics_log = True
         if params.get("optuna_trials", 0) > 0:
@@ -136,7 +137,7 @@ class PPOTrainingController(QObject):
             args.append("--resume")
         started = self._runner.start(sys.executable, args, env={"PYTHONPATH": "."})
         if not started:
-            self._log("⚠️ PPO 訓練尚在執行")
+            self._log(format_training_message("start_failed"))
             self._stop_metrics_log_tailer()
             self._stop_optuna_log_tailer()
 
@@ -160,12 +161,17 @@ class PPOTrainingController(QObject):
                 self.best_params_found.emit(params)
 
     def _on_stderr_line(self, line: str) -> None:
-        self._log(f"⚠️ {line}")
+        self._log(format_training_message("stderr", line=line))
         self._handle_optuna_line(line)
 
     def _on_finished_internal(self, exit_code: int, exit_status: QProcess.ExitStatus) -> None:
-        status = "完成" if exit_status == QProcess.NormalExit else "異常結束"
-        self._log(f"⏹️ PPO 訓練{status} (exit={exit_code})")
+        self._log(
+            format_training_message(
+                "finished",
+                exit_status=exit_status == QProcess.NormalExit,
+                exit_code=exit_code,
+            )
+        )
         self._tail_metrics_log()
         self._tail_optuna_log()
         self._stop_metrics_log_tailer()

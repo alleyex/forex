@@ -11,7 +11,7 @@ from PySide6.QtWidgets import (
 from PySide6.QtCore import Signal, Slot, Qt
 
 from ui.dialogs.base_auth_dialog import BaseAuthDialog, DialogState
-from ui.widgets.form_helpers import configure_form_layout
+from ui.widgets.layout_helpers import configure_form_layout
 from domain import Account
 from application import (
     AppState,

@@ -3,6 +3,7 @@ from ui.controllers.ppo_training_controller import PPOTrainingController
 from ui.controllers.simulation_controller import SimulationController
 from ui.controllers.connection_controller import ConnectionController
 from ui.controllers.trendbar_controller import TrendbarController
+from ui.controllers.toolbar_controller import ToolbarController
 
 __all__ = [
     "HistoryDownloadController",
@@ -10,4 +11,5 @@ __all__ = [
     "ConnectionController",
     "SimulationController",
     "TrendbarController",
+    "ToolbarController",
 ]

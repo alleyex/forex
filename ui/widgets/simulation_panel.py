@@ -23,7 +23,7 @@ from PySide6.QtWidgets import (
     QGroupBox,
 )
 
-from ui.widgets.form_helpers import (
+from ui.widgets.layout_helpers import (
     apply_form_label_width,
     align_form_fields,
     build_browse_row,
@@ -386,6 +386,9 @@ class SimulationPanel(QWidget):
 
     def reset_stream(self) -> None:
         self.reset_plot()
+
+    def append_equity_point(self, step: int, equity: float) -> None:
+        self.ingest_equity(step, equity)
 
     def ingest_equity(self, step: int, equity: float) -> None:
         self._last_point = (step, equity)
