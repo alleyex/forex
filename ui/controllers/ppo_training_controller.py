@@ -11,6 +11,7 @@ import re
 from PySide6.QtCore import QObject, QProcess, QTimer, Signal
 
 from ui.controllers.process_runner import ProcessRunner
+from ui.state.training_state import TrainingState
 from ui.utils.formatters import format_training_message
 
 
@@ -23,13 +24,13 @@ class PPOTrainingController(QObject):
         self,
         *,
         parent: QObject,
-        log: Callable[[str], None],
+        state: TrainingState,
         ingest_log: Callable[[str], None],
         ingest_optuna_log: Optional[Callable[[str], None]] = None,
         on_finished: Optional[Callable[[int, QProcess.ExitStatus], None]] = None,
     ) -> None:
         super().__init__(parent)
-        self._log = log
+        self._state = state
         self._ingest_log = ingest_log
         self._ingest_optuna_log = ingest_optuna_log
         self._on_finished = on_finished
@@ -53,15 +54,15 @@ class PPOTrainingController(QObject):
 
     def start(self, params: dict, data_path: str) -> None:
         if self._runner.is_running():
-            self._log(format_training_message("already_running"))
+            self._state.log_message.emit(format_training_message("already_running"))
             return
 
         optuna_only = bool(params.get("optuna_only"))
         if optuna_only and params.get("optuna_trials", 0) <= 0:
-            self._log(format_training_message("optuna_trials_required"))
+            self._state.log_message.emit(format_training_message("optuna_trials_required"))
             return
 
-        self._log(format_training_message("start"))
+        self._state.log_message.emit(format_training_message("start"))
         self._start_metrics_log_tailer()
         self._use_metrics_log = True
         if params.get("optuna_trials", 0) > 0:
@@ -137,18 +138,18 @@ class PPOTrainingController(QObject):
             args.append("--resume")
         started = self._runner.start(sys.executable, args, env={"PYTHONPATH": "."})
         if not started:
-            self._log(format_training_message("start_failed"))
+            self._state.log_message.emit(format_training_message("start_failed"))
             self._stop_metrics_log_tailer()
             self._stop_optuna_log_tailer()
 
     def _on_stdout_line(self, line: str) -> None:
         if self._use_metrics_log:
             if self._should_log_summary(line):
-                self._log(line)
+                self._state.log_message.emit(line)
             if "ep_rew_mean" not in line:
                 self._ingest_log(line)
         else:
-            self._log(line)
+            self._state.log_message.emit(line)
             self._ingest_log(line)
         self._handle_optuna_line(line)
         if line.startswith("Optuna best params:"):
@@ -161,11 +162,11 @@ class PPOTrainingController(QObject):
                 self.best_params_found.emit(params)
 
     def _on_stderr_line(self, line: str) -> None:
-        self._log(format_training_message("stderr", line=line))
+        self._state.log_message.emit(format_training_message("stderr", line=line))
         self._handle_optuna_line(line)
 
     def _on_finished_internal(self, exit_code: int, exit_status: QProcess.ExitStatus) -> None:
-        self._log(
+        self._state.log_message.emit(
             format_training_message(
                 "finished",
                 exit_status=exit_status == QProcess.NormalExit,

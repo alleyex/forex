@@ -1,9 +1,12 @@
 from __future__ import annotations
 
-from PySide6.QtCore import QObject, Signal
+from PySide6.QtCore import Signal
+
+from ui.state.base import StateBase
 
 
-class TrainingState(QObject):
+class TrainingState(StateBase):
+    log_message = Signal(str)
     metric_point = Signal(str, float, float)
     optuna_point = Signal(str, float, float)
     optuna_reset = Signal()

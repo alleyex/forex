@@ -10,6 +10,7 @@ from config.constants import ConnectionStatus
 from config.paths import TOKEN_FILE
 from ui.dialogs.app_auth_dialog import AppAuthDialog
 from ui.dialogs.oauth_dialog import OAuthDialog
+from ui.utils.formatters import format_connection_message
 
 
 class ConnectionController(QObject):
@@ -86,7 +87,7 @@ class ConnectionController(QObject):
     @Slot()
     def toggle_connection(self) -> None:
         if self._connection_in_progress:
-            self.logRequested.emit("⏳ 連線流程進行中，請稍候")
+            self.logRequested.emit(format_connection_message("in_progress"))
             return
 
         if self.is_oauth_authenticated() or self.is_app_authenticated():
@@ -109,7 +110,7 @@ class ConnectionController(QObject):
 
                 if self._on_reset_controllers:
                     self._on_reset_controllers()
-                self.logRequested.emit("🔌 已斷線")
+                self.logRequested.emit(format_connection_message("disconnected"))
             finally:
                 self._connection_in_progress = False
             return
@@ -121,7 +122,7 @@ class ConnectionController(QObject):
                 return
             self.open_oauth_dialog(auto_connect=True)
             if self.is_oauth_authenticated():
-                self.logRequested.emit("✅ 已完成連線")
+                self.logRequested.emit(format_connection_message("connected_done"))
         finally:
             self._connection_in_progress = False
 
@@ -168,5 +169,5 @@ class ConnectionController(QObject):
             if oauth_service is not None:
                 self.set_oauth_service(oauth_service)
             else:
-                self.logRequested.emit("⚠️ OAuth 服務建立失敗")
+                self.logRequested.emit(format_connection_message("oauth_service_failed"))
         self._oauth_dialog_open = False

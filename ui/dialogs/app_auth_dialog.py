@@ -16,6 +16,7 @@ from config.constants import ConnectionStatus
 from config.paths import TOKEN_FILE
 from config.settings import AppCredentials
 from utils.reactor_manager import reactor_manager
+from ui.utils.formatters import format_connection_message
 
 
 class CredentialsFormWidget(QWidget):
@@ -180,7 +181,7 @@ class AppAuthDialog(BaseAuthDialog):
             try:
                 use_cases = self._use_cases
                 if use_cases is None:
-                    self._log_error("缺少 broker 用例配置")
+                    self._log_error(format_connection_message("missing_use_cases"))
                     return
                 self._service = use_cases.create_app_auth(data["host_type"], self._token_file)
             except (FileNotFoundError, ValueError) as e:

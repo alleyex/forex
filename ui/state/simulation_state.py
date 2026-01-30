@@ -1,9 +1,12 @@
 from __future__ import annotations
 
-from PySide6.QtCore import QObject, Signal
+from PySide6.QtCore import Signal
+
+from ui.state.base import StateBase
 
 
-class SimulationState(QObject):
+class SimulationState(StateBase):
+    log_message = Signal(str)
     reset_plot = Signal()
     flush_plot = Signal()
     reset_summary = Signal()

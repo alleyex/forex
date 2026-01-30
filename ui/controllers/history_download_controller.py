@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import time
 from pathlib import Path
-from typing import Callable, Optional
+from typing import Optional
 
 from PySide6.QtCore import QObject, QTimer
 from PySide6.QtWidgets import QWidget
@@ -14,6 +14,7 @@ from config.paths import SYMBOL_LIST_FILE, TIMEFRAMES_FILE, TOKEN_FILE
 from config.settings import OAuthTokens
 from infrastructure.storage.json_store import read_json, write_json
 from ui.dialogs.history_download_dialog import HistoryDownloadDialog
+from ui.state.history_download_state import HistoryDownloadState
 from ui.utils.formatters import format_history_message
 from utils.reactor_manager import reactor_manager
 
@@ -27,15 +28,13 @@ class HistoryDownloadController(QObject):
         app_auth_service: AppAuthServiceLike,
         oauth_service: OAuthServiceLike,
         parent: QWidget,
-        log: Callable[[str], None],
-        log_async: Callable[[str], None],
+        state: HistoryDownloadState,
     ) -> None:
         super().__init__(parent)
         self._use_cases = use_cases
         self._app_auth_service = app_auth_service
         self._oauth_service = oauth_service
-        self._log = log
-        self._log_async = log_async
+        self._state = state
         self._download_pipeline: Optional[HistoryDownloadPipeline] = None
         self._dialog: Optional[HistoryDownloadDialog] = None
 
@@ -60,9 +59,13 @@ class HistoryDownloadController(QObject):
             timeframe=timeframe,
             from_ts=from_ts,
             to_ts=now_ms,
-            on_saved=lambda path: self._log_async(format_history_message("history_saved", path=path)),
-            on_error=lambda e: self._log_async(format_history_message("history_error", error=e)),
-            on_log=self._log_async,
+            on_saved=lambda path: self._emit_log_async(
+                format_history_message("history_saved", path=path)
+            ),
+            on_error=lambda e: self._emit_log_async(
+                format_history_message("history_error", error=e)
+            ),
+            on_log=self._emit_log_async,
         )
 
     def open_download_dialog(self, default_symbol_id: int) -> None:
@@ -84,15 +87,17 @@ class HistoryDownloadController(QObject):
         if symbols:
             self._dialog.set_symbols(symbols)
         else:
-            self._log(format_history_message("symbol_list_incomplete"))
+            self._emit_log(format_history_message("symbol_list_incomplete"))
             self._use_cases.fetch_symbols(
                 app_auth_service=self._app_auth_service,
                 account_id=account_id,
                 on_symbols_received=lambda symbols: QTimer.singleShot(
                     0, self, lambda: self._save_symbol_list(account_id, symbols)
                 ),
-                on_error=lambda e: self._log_async(format_history_message("symbol_list_error", error=e)),
-                on_log=self._log_async,
+                on_error=lambda e: self._emit_log_async(
+                    format_history_message("symbol_list_error", error=e)
+                ),
+                on_log=self._emit_log_async,
             )
 
         if self._dialog.exec() != HistoryDownloadDialog.Accepted:
@@ -117,9 +122,13 @@ class HistoryDownloadController(QObject):
             from_ts=params["from_ts"],
             to_ts=params["to_ts"],
             output_path=params["output_path"],
-            on_saved=lambda path: self._log_async(format_history_message("history_saved", path=path)),
-            on_error=lambda e: self._log_async(format_history_message("history_error", error=e)),
-            on_log=self._log_async,
+            on_saved=lambda path: self._emit_log_async(
+                format_history_message("history_saved", path=path)
+            ),
+            on_error=lambda e: self._emit_log_async(
+                format_history_message("history_error", error=e)
+            ),
+            on_log=self._emit_log_async,
         )
 
     def request_symbol_list(self) -> None:
@@ -127,35 +136,37 @@ class HistoryDownloadController(QObject):
         if account_id is None:
             return
 
-        self._log(format_history_message("symbol_list_fetching"))
+        self._emit_log(format_history_message("symbol_list_fetching"))
         self._use_cases.fetch_symbols(
             app_auth_service=self._app_auth_service,
             account_id=account_id,
             on_symbols_received=lambda symbols: QTimer.singleShot(
                 0, self, lambda: self._save_symbol_list(account_id, symbols)
             ),
-            on_error=lambda e: self._log_async(format_history_message("symbol_list_error", error=e)),
-            on_log=self._log_async,
+            on_error=lambda e: self._emit_log_async(
+                format_history_message("symbol_list_error", error=e)
+            ),
+            on_log=self._emit_log_async,
         )
 
     def _get_account_id(self) -> Optional[int]:
         if not self._app_auth_service:
-            self._log(format_history_message("app_auth_missing"))
+            self._emit_log(format_history_message("app_auth_missing"))
             return None
         if not self._app_auth_service.is_app_authenticated:
-            self._log(format_history_message("app_auth_disconnected"))
+            self._emit_log(format_history_message("app_auth_disconnected"))
             return None
         if not self._oauth_service or self._oauth_service.status != ConnectionStatus.ACCOUNT_AUTHENTICATED:
-            self._log(format_history_message("oauth_missing"))
+            self._emit_log(format_history_message("oauth_missing"))
             return None
 
         try:
             tokens = OAuthTokens.from_file(TOKEN_FILE)
         except Exception as exc:
-            self._log(format_history_message("token_read_failed", error=exc))
+            self._emit_log(format_history_message("token_read_failed", error=exc))
             return None
         if not tokens.account_id:
-            self._log(format_history_message("account_id_missing"))
+            self._emit_log(format_history_message("account_id_missing"))
             return None
         return tokens.account_id
 
@@ -169,7 +180,7 @@ class HistoryDownloadController(QObject):
 
     def _save_symbol_list(self, account_id: int, symbols: list) -> None:
         if not symbols:
-            self._log(format_history_message("symbol_list_empty"))
+            self._emit_log(format_history_message("symbol_list_empty"))
             return
         payload = []
         for symbol in symbols:
@@ -188,7 +199,7 @@ class HistoryDownloadController(QObject):
                 }
             )
         path = self._symbol_list_path()
-        self._log(
+        self._emit_log(
             format_history_message(
                 "symbol_list_write_start",
                 path=path.resolve(),
@@ -198,9 +209,9 @@ class HistoryDownloadController(QObject):
         try:
             write_json(path, payload)
         except Exception as exc:
-            self._log(format_history_message("symbol_list_write_failed", error=exc))
+            self._emit_log(format_history_message("symbol_list_write_failed", error=exc))
             return
-        self._log(format_history_message("symbol_list_saved", path=path.resolve()))
+        self._emit_log(format_history_message("symbol_list_saved", path=path.resolve()))
         if self._dialog and self._dialog.isVisible():
             self._dialog.set_symbols(payload)
 
@@ -260,8 +271,14 @@ class HistoryDownloadController(QObject):
             try:
                 write_json(path, timeframes)
             except Exception as exc:
-                self._log(format_history_message("timeframes_write_failed", error=exc))
+                self._emit_log(format_history_message("timeframes_write_failed", error=exc))
         return timeframes
+
+    def _emit_log(self, message: str) -> None:
+        self._state.log_message.emit(message)
+
+    def _emit_log_async(self, message: str) -> None:
+        QTimer.singleShot(0, self._state, lambda: self._state.log_message.emit(message))
 
     @staticmethod
     def _timeframe_minutes(timeframe: str) -> int:

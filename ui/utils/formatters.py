@@ -174,3 +174,70 @@ def format_history_message(event: str, **kwargs) -> str:
     if event == "symbol_list_error":
         return f"⚠️ symbol list 錯誤: {kwargs.get('error')}"
     return templates.get(event, "")
+
+
+def format_connection_message(event: str, **kwargs) -> str:
+    templates = {
+        "in_progress": "⏳ 連線流程進行中，請稍候",
+        "disconnected": "🔌 已斷線",
+        "connected_done": "✅ 已完成連線",
+        "oauth_service_failed": "⚠️ OAuth 服務建立失敗",
+        "service_connected": "✅ 服務已連線",
+        "oauth_connected": "✅ OAuth 已連線",
+        "missing_connection_controller": "⚠️ 缺少連線控制器",
+        "missing_use_cases": "⚠️ 缺少 broker 用例配置",
+        "missing_app_auth": "⚠️ 尚未完成 App 認證",
+        "missing_oauth": "⚠️ 尚未完成 OAuth 帳戶認證",
+        "account_list_empty": "⚠️ 帳戶列表為空",
+        "account_info_header": "📄 帳戶基本資料",
+        "funds_header": "📄 帳戶資金狀態",
+        "fetching_funds": "⏳ 正在取得帳戶資金，請稍候",
+    }
+    if event == "account_count":
+        return f"📄 帳戶數量: {kwargs.get('count', 0)}"
+    if event == "account_field":
+        return f"{kwargs.get('label')}: {kwargs.get('value')}"
+    if event == "funds_field":
+        return f"{kwargs.get('label')}: {kwargs.get('value')}"
+    if event == "account_parse_failed":
+        return f"⚠️ 帳戶資料解析失敗: {kwargs.get('error')}"
+    if event == "funds_error":
+        return f"⚠️ 取得帳戶資金失敗: {kwargs.get('error')}"
+    return templates.get(event, "")
+
+
+def format_optuna_trial_summary(text: str) -> str:
+    match = re.search(
+        r"Trial\s+(?P<trial>\d+):\s+value=(?P<value>[-+0-9.eE]+)\s+\|\s+best=(?P<best>[-+0-9.eE]+)\s+\(trial\s+(?P<best_trial>\d+)\)",
+        text,
+    )
+    if not match:
+        return text
+    trial = match.group("trial")
+    value = match.group("value")
+    best = match.group("best")
+    best_trial = match.group("best_trial")
+    return f"Trial {trial}\nValue: {value}\nBest so far: {best} (trial {best_trial})"
+
+
+def format_optuna_best_params(params: dict) -> str:
+    order = ["n_steps", "batch_size", "learning_rate", "gamma", "ent_coef"]
+    items = []
+    for key in order:
+        if key not in params:
+            continue
+        value = params[key]
+        if isinstance(value, float):
+            formatted = f"{value:.6g}"
+        else:
+            formatted = str(value)
+        items.append(f"{key}={formatted}")
+    return "\n".join(items) if items else "—"
+
+
+def format_optuna_empty_trial() -> str:
+    return "尚未完成試驗"
+
+
+def format_optuna_empty_best() -> str:
+    return "最佳參數：—"

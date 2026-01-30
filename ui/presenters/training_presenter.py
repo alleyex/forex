@@ -4,13 +4,13 @@ from typing import Optional
 
 from PySide6.QtCore import QObject
 
+from ui.presenters.base import PresenterBase
 from ui.state.training_state import TrainingState
 
 
-class TrainingPresenter(QObject):
+class TrainingPresenter(PresenterBase):
     def __init__(self, *, parent: QObject, state: TrainingState) -> None:
-        super().__init__(parent)
-        self._state = state
+        super().__init__(parent=parent, state=state)
         self._current_step = 0
 
     def handle_log_line(self, line: str) -> None:

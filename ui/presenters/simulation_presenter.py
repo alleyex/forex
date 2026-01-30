@@ -4,13 +4,13 @@ from typing import Optional
 
 from PySide6.QtCore import QObject
 
+from ui.presenters.base import PresenterBase
 from ui.state.simulation_state import SimulationState
 
 
-class SimulationPresenter(QObject):
+class SimulationPresenter(PresenterBase):
     def __init__(self, *, parent: QObject, state: SimulationState) -> None:
-        super().__init__(parent)
-        self._state = state
+        super().__init__(parent=parent, state=state)
 
     def handle_stdout_line(self, line: str) -> None:
         self._maybe_emit_equity(line)

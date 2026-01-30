@@ -2,24 +2,23 @@
 from typing import Optional
 import sys
 
-from PySide6.QtWidgets import (
-    QMainWindow,
-    QWidget,
-    QHBoxLayout,
-    QLabel,
-    QStackedWidget,
-)
+from PySide6.QtWidgets import QMainWindow
 from PySide6.QtCore import Slot, Signal, Qt
 
-from ui.layout.panel_switcher import PanelSet, PanelSwitcher
 from ui.layout.dock_manager import DockManagerController
+from ui.layout.main_window_builder import (
+    PanelBundle,
+    StackBundle,
+    StatusBundle,
+    ToolbarBundle,
+    build_docks,
+    build_panel_switcher,
+    build_panels,
+    build_stack,
+    build_status_bar,
+    build_toolbar,
+)
 
-from ui.widgets.trade_panel import TradePanel
-from ui.widgets.simulation_panel import SimulationPanel, SimulationParamsPanel
-from ui.widgets.training_panel import TrainingPanel, TrainingParamsPanel
-from ui.widgets.log_widget import LogWidget
-from ui.presenters import SimulationPresenter, TrainingPresenter
-from ui.state import SimulationState, TrainingState
 from ui.controllers import (
     ConnectionController,
     HistoryDownloadController,
@@ -41,7 +40,11 @@ from config.settings import OAuthTokens
 from utils.reactor_manager import reactor_manager
 
 from config.constants import ConnectionStatus
-from ui.utils.formatters import format_app_auth_status, format_oauth_status
+from ui.utils.formatters import (
+    format_app_auth_status,
+    format_connection_message,
+    format_oauth_status,
+)
 
 
 class MainWindow(QMainWindow):
@@ -82,8 +85,11 @@ class MainWindow(QMainWindow):
         self._panel_switcher: Optional[PanelSwitcher] = None
         self._toolbar_controller: Optional[ToolbarController] = None
         self._connection_controller: Optional[ConnectionController] = None
-        self._training_state: Optional[TrainingState] = None
-        self._training_presenter: Optional[TrainingPresenter] = None
+        self._training_state = None
+        self._training_presenter = None
+        self._simulation_state = None
+        self._simulation_presenter = None
+        self._history_download_state = None
 
         self._setup_ui()
         self._setup_connection_controller()
@@ -132,91 +138,60 @@ class MainWindow(QMainWindow):
         self.resize(1280, 720)
 
     def _setup_panels(self) -> None:
-        self._trade_panel = TradePanel()
-        self._training_panel = TrainingPanel()
-        self._training_params_panel = TrainingParamsPanel()
-        self._simulation_panel = SimulationPanel()
-        self._simulation_params_panel = SimulationParamsPanel()
-
-        self._log_panel = LogWidget(
-            title="",
-            with_timestamp=True,
-            monospace=True,
-            font_point_delta=2,
+        bundle: PanelBundle = build_panels(
+            self,
+            on_optuna_best_params=self._on_optuna_best_params,
+            on_simulation_summary=self._update_simulation_summary,
         )
-
-        self._training_state = TrainingState(parent=self)
-        self._training_presenter = TrainingPresenter(parent=self, state=self._training_state)
-
-        self._training_state.metric_point.connect(self._training_panel.append_metric_point)
-        self._training_state.optuna_point.connect(self._training_panel.append_optuna_point)
-        self._training_state.optuna_reset.connect(self._training_params_panel.reset_optuna_results)
-        self._training_state.optuna_trial_summary.connect(
-            self._training_params_panel.update_optuna_trial_summary
-        )
-        self._training_state.optuna_best_params.connect(
-            self._training_params_panel.update_optuna_best_params
-        )
-        self._training_state.best_params_found.connect(self._on_optuna_best_params)
-
-        self._simulation_state = SimulationState(parent=self)
-        self._simulation_presenter = SimulationPresenter(parent=self, state=self._simulation_state)
-
-        self._simulation_state.reset_plot.connect(self._simulation_panel.reset_plot)
-        self._simulation_state.flush_plot.connect(self._simulation_panel.flush_plot)
-        self._simulation_state.reset_summary.connect(self._simulation_params_panel.reset_summary)
-        self._simulation_state.equity_point.connect(self._simulation_panel.append_equity_point)
-        self._simulation_state.summary_update.connect(self._update_simulation_summary)
-        self._simulation_state.trade_stats.connect(self._simulation_params_panel.update_trade_stats)
-        self._simulation_state.streak_stats.connect(self._simulation_params_panel.update_streak_stats)
-        self._simulation_state.holding_stats.connect(self._simulation_params_panel.update_holding_stats)
-        self._simulation_state.action_distribution.connect(
-            self._simulation_params_panel.update_action_distribution
-        )
-        self._simulation_state.playback_range.connect(
-            self._simulation_params_panel.update_playback_range
-        )
+        self._trade_panel = bundle.trade_panel
+        self._training_panel = bundle.training_panel
+        self._training_params_panel = bundle.training_params_panel
+        self._simulation_panel = bundle.simulation_panel
+        self._simulation_params_panel = bundle.simulation_params_panel
+        self._log_panel = bundle.log_panel
+        self._training_state = bundle.training_state
+        self._training_presenter = bundle.training_presenter
+        self._simulation_state = bundle.simulation_state
+        self._simulation_presenter = bundle.simulation_presenter
+        self._history_download_state = bundle.history_download_state
 
     def _setup_stack(self) -> None:
-        self._stack = QStackedWidget()
-        self._trade_container = QWidget()
-        trade_layout = QHBoxLayout(self._trade_container)
-        trade_layout.setContentsMargins(10, 10, 10, 10)
-        trade_layout.setSpacing(10)
-        trade_layout.addWidget(self._trade_panel)
-
-        self._stack.addWidget(self._trade_container)
-        self._stack.addWidget(self._training_panel)
-        self._stack.addWidget(self._simulation_panel)
-        self.setCentralWidget(self._stack)
+        stack_bundle: StackBundle = build_stack(
+            self,
+            trade_panel=self._trade_panel,
+            training_panel=self._training_panel,
+            simulation_panel=self._simulation_panel,
+        )
+        self._stack = stack_bundle.stack
+        self._trade_container = stack_bundle.trade_container
 
     def _setup_docks(self) -> None:
-        self._dock_controller = DockManagerController(
-            parent=self,
+        self._dock_controller = build_docks(
             log_panel=self._log_panel,
             training_params_panel=self._training_params_panel,
             simulation_params_panel=self._simulation_params_panel,
+            main_window=self,
         )
 
     def _setup_panel_switcher(self) -> None:
         if self._dock_controller is None:
             return
-        self._panel_switcher = PanelSwitcher(
+        self._panel_switcher = build_panel_switcher(
             stack=self._stack,
-            panels=PanelSet(
-                trade=self._trade_container,
-                training=self._training_panel,
-                simulation=self._simulation_panel,
-            ),
-            dock_manager=self._dock_controller.manager,
+            trade_container=self._trade_container,
+            training_panel=self._training_panel,
+            simulation_panel=self._simulation_panel,
+            dock_controller=self._dock_controller,
         )
 
     def _setup_status_bar(self) -> None:
-        status_bar = self.statusBar()
-        self._app_auth_status_label = QLabel(self._format_app_auth_status())
-        self._oauth_status_label = QLabel(self._format_oauth_status())
-        status_bar.addWidget(self._app_auth_status_label)
-        status_bar.addWidget(self._oauth_status_label)
+        status_bundle: StatusBundle = build_status_bar(
+            self,
+            app_auth_text=self._format_app_auth_status(),
+            oauth_text=self._format_oauth_status(),
+        )
+        self._app_auth_status_label = status_bundle.app_auth_label
+        self._oauth_status_label = status_bundle.oauth_label
 
     def _connect_signals(self) -> None:
         """Connect panel signals"""
@@ -247,9 +222,9 @@ class MainWindow(QMainWindow):
         """Create menu and toolbar actions"""
         if self._dock_controller is None:
             return
-        self._toolbar_controller = ToolbarController(
-            parent=self,
-            log_visible=self._dock_controller.log_dock.isVisible(),
+        toolbar_bundle: ToolbarBundle = build_toolbar(
+            self,
+            dock_controller=self._dock_controller,
             on_app_auth=self._open_app_auth_dialog,
             on_oauth=self._open_oauth_dialog,
             on_toggle_connection=self._toggle_connection,
@@ -259,8 +234,8 @@ class MainWindow(QMainWindow):
             on_history_download=self._open_history_download_dialog,
             on_toggle_log=self._dock_controller.toggle_log,
         )
-        self._dock_controller.bind_log_action(self._toolbar_controller.action_toggle_log)
-        self._action_toggle_connection = self._toolbar_controller.action_toggle_connection
+        self._toolbar_controller = toolbar_bundle.toolbar_controller
+        self._action_toggle_connection = toolbar_bundle.action_toggle_connection
 
     @Slot()
     def _on_trendbar_toggle_requested(self) -> None:
@@ -279,7 +254,8 @@ class MainWindow(QMainWindow):
 
     @Slot(dict)
     def _start_ppo_training(self, params: dict) -> None:
-        self._training_panel.reset_metrics()
+        if not params.get("optuna_only", False):
+            self._training_panel.reset_metrics()
         if params.get("optuna_trials", 0) > 0:
             self._training_panel.reset_optuna_metrics()
             self._training_presenter.reset_optuna_results()
@@ -324,13 +300,13 @@ class MainWindow(QMainWindow):
 
     def _get_history_download_controller(self) -> Optional[HistoryDownloadController]:
         if not self._use_cases:
-            self._log_panel.append("⚠️ 缺少 broker 用例配置")
+            self._log_panel.append(format_connection_message("missing_use_cases"))
             return None
         if not self._service:
-            self._log_panel.append("⚠️ 尚未完成 App 認證")
+            self._log_panel.append(format_connection_message("missing_app_auth"))
             return None
         if not self._is_oauth_authenticated():
-            self._log_panel.append("⚠️ 尚未完成 OAuth 帳戶認證")
+            self._log_panel.append(format_connection_message("missing_oauth"))
             return None
 
         if self._history_download_controller is None:
@@ -339,20 +315,19 @@ class MainWindow(QMainWindow):
                 app_auth_service=self._service,
                 oauth_service=self._oauth_service,
                 parent=self,
-                log=self._log_panel.append,
-                log_async=self.logRequested.emit,
+                state=self._history_download_state,
             )
         return self._history_download_controller
 
     def _get_trendbar_controller(self) -> Optional[TrendbarController]:
         if not self._use_cases:
-            self._log_panel.append("⚠️ 缺少 broker 用例配置")
+            self._log_panel.append(format_connection_message("missing_use_cases"))
             return None
         if not self._service:
-            self._log_panel.append("⚠️ 尚未完成 App 認證")
+            self._log_panel.append(format_connection_message("missing_app_auth"))
             return None
         if not self._is_oauth_authenticated():
-            self._log_panel.append("⚠️ 尚未完成 OAuth 帳戶認證")
+            self._log_panel.append(format_connection_message("missing_oauth"))
             return None
 
         if self._trendbar_controller is None:
@@ -374,7 +349,7 @@ class MainWindow(QMainWindow):
                 return None
             self._ppo_controller = PPOTrainingController(
                 parent=self,
-                log=self._log_panel.append,
+                state=self._training_state,
                 ingest_log=self._training_presenter.handle_log_line,
                 ingest_optuna_log=self._training_presenter.handle_optuna_log_line,
                 on_finished=lambda *_: self._training_panel.flush_plot(),
@@ -408,7 +383,6 @@ class MainWindow(QMainWindow):
         if self._simulation_controller is None:
             self._simulation_controller = SimulationController(
                 parent=self,
-                log=self._log_panel.append,
                 state=self._simulation_state,
                 presenter=self._simulation_presenter,
             )
@@ -430,9 +404,9 @@ class MainWindow(QMainWindow):
 
     def _handle_accounts_received(self, accounts: list, account_id: Optional[int]) -> None:
         try:
-            self.logRequested.emit(f"📄 帳戶數量: {len(accounts)}")
+            self.logRequested.emit(format_connection_message("account_count", count=len(accounts)))
             if not accounts:
-                self.logRequested.emit("⚠️ 帳戶列表為空")
+                self.logRequested.emit(format_connection_message("account_list_empty"))
                 return
 
             selected = None
@@ -446,24 +420,30 @@ class MainWindow(QMainWindow):
 
             env_text = "真實" if selected.is_live else "模擬"
             login_text = "-" if selected.trader_login is None else str(selected.trader_login)
-            self.logRequested.emit("📄 帳戶基本資料")
-            self.logRequested.emit(f"帳戶 ID: {selected.account_id}")
-            self.logRequested.emit(f"環境: {env_text}")
-            self.logRequested.emit(f"交易登入: {login_text}")
+            self.logRequested.emit(format_connection_message("account_info_header"))
+            self.logRequested.emit(
+                format_connection_message("account_field", label="帳戶 ID", value=selected.account_id)
+            )
+            self.logRequested.emit(
+                format_connection_message("account_field", label="環境", value=env_text)
+            )
+            self.logRequested.emit(
+                format_connection_message("account_field", label="交易登入", value=login_text)
+            )
             self._fetch_account_funds(selected.account_id)
         except Exception as exc:
-            self.logRequested.emit(f"⚠️ 帳戶資料解析失敗: {exc}")
+            self.logRequested.emit(format_connection_message("account_parse_failed", error=exc))
 
     def _fetch_account_funds(self, account_id: int) -> None:
         if not self._service:
-            self.logRequested.emit("⚠️ 尚未完成 App 認證")
+            self.logRequested.emit(format_connection_message("missing_app_auth"))
             return
 
         if self._use_cases is None:
-            self.logRequested.emit("⚠️ 缺少 broker 用例配置")
+            self.logRequested.emit(format_connection_message("missing_use_cases"))
             return
         if self._use_cases.account_funds_in_progress():
-            self.logRequested.emit("⏳ 正在取得帳戶資金，請稍候")
+            self.logRequested.emit(format_connection_message("fetching_funds"))
             return
         reactor_manager.ensure_running()
         from twisted.internet import reactor
@@ -472,24 +452,60 @@ class MainWindow(QMainWindow):
             self._service,
             account_id,
             lambda funds: self.fundsReceived.emit(funds),
-            lambda e: self.logRequested.emit(f"⚠️ 取得帳戶資金失敗: {e}"),
+            lambda e: self.logRequested.emit(format_connection_message("funds_error", error=e)),
             self.logRequested.emit,
         )
 
     def _handle_funds_received(self, funds: AccountFundsSnapshot) -> None:
         snapshot = funds
-        self.logRequested.emit("📄 帳戶資金狀態")
+        self.logRequested.emit(format_connection_message("funds_header"))
         money_digits = snapshot.money_digits if snapshot.money_digits is not None else 2
-        self.logRequested.emit(f"餘額: {self._format_money(snapshot.balance, money_digits)}")
-        self.logRequested.emit(f"淨值: {self._format_money(snapshot.equity, money_digits)}")
-        self.logRequested.emit(f"可用資金: {self._format_money(snapshot.free_margin, money_digits)}")
-        self.logRequested.emit(f"已用保證金: {self._format_money(snapshot.used_margin, money_digits)}")
+        self.logRequested.emit(
+            format_connection_message(
+                "funds_field",
+                label="餘額",
+                value=self._format_money(snapshot.balance, money_digits),
+            )
+        )
+        self.logRequested.emit(
+            format_connection_message(
+                "funds_field",
+                label="淨值",
+                value=self._format_money(snapshot.equity, money_digits),
+            )
+        )
+        self.logRequested.emit(
+            format_connection_message(
+                "funds_field",
+                label="可用資金",
+                value=self._format_money(snapshot.free_margin, money_digits),
+            )
+        )
+        self.logRequested.emit(
+            format_connection_message(
+                "funds_field",
+                label="已用保證金",
+                value=self._format_money(snapshot.used_margin, money_digits),
+            )
+        )
         if snapshot.margin_level is None:
             margin_text = "-"
         else:
             margin_text = f"{snapshot.margin_level:.2f}%"
-        self.logRequested.emit(f"保證金比例: {margin_text}")
-        self.logRequested.emit(f"帳戶幣別: {snapshot.currency or '-'}")
+        self.logRequested.emit(
+            format_connection_message(
+                "funds_field",
+                label="保證金比例",
+                value=margin_text,
+            )
+        )
+        self.logRequested.emit(
+            format_connection_message(
+                "funds_field",
+                label="帳戶幣別",
+                value=snapshot.currency or "-",
+            )
+        )
 
     @staticmethod
     def _format_money(value: Optional[float], digits: int) -> str:
@@ -573,7 +589,7 @@ class MainWindow(QMainWindow):
 
     def _handle_app_auth_success(self, _client) -> None:
         self._app_auth_status_label.setText(self._format_app_auth_status())
-        self._log_panel.append("✅ 服務已連線")
+        self._log_panel.append(format_connection_message("service_connected"))
         if self._app_state:
             self._app_state.update_app_status(int(self._service.status))
         self._sync_connection_action()
@@ -597,7 +613,7 @@ class MainWindow(QMainWindow):
 
     def _handle_oauth_success(self, _tokens) -> None:
         self._oauth_status_label.setText(self._format_oauth_status())
-        self._log_panel.append("✅ OAuth 已連線")
+        self._log_panel.append(format_connection_message("oauth_connected"))
         if self._app_state:
             self._app_state.update_oauth_status(int(self._oauth_service.status))
         self._sync_connection_action()
@@ -636,7 +652,7 @@ class MainWindow(QMainWindow):
     @Slot()
     def _toggle_connection(self) -> None:
         if not self._connection_controller:
-            self._log_panel.append("⚠️ 缺少連線控制器")
+            self._log_panel.append(format_connection_message("missing_connection_controller"))
             return
         self._connection_controller.toggle_connection()
 

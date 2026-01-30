@@ -25,6 +25,8 @@ from config.constants import ConnectionStatus
 from config.paths import TOKEN_FILE
 from config.settings import OAuthTokens
 from ui.dialogs.account_dialog import AccountDialog
+from ui.utils.formatters import format_connection_message
+from utils.reactor_manager import reactor_manager
 
 
 @dataclass
@@ -267,7 +269,7 @@ class OAuthDialog(BaseAuthDialog):
 
         try:
             if self._use_cases is None:
-                self._log_error("缺少 broker 用例配置")
+                self._log_error(format_connection_message("missing_use_cases"))
                 return
             self._login_service = self._use_cases.create_oauth_login(
                 token_file=self._token_file,
@@ -305,7 +307,7 @@ class OAuthDialog(BaseAuthDialog):
         redirect_uri = self._form.redirect_uri.text().strip()
         try:
             if self._use_cases is None:
-                self._log_error("缺少 broker 用例配置")
+                self._log_error(format_connection_message("missing_use_cases"))
                 return
             service = self._use_cases.create_oauth_login(
                 token_file=self._token_file,
@@ -345,7 +347,7 @@ class OAuthDialog(BaseAuthDialog):
             return
 
         if self._use_cases is None:
-            self._log_error("缺少 broker 用例配置")
+            self._log_error(format_connection_message("missing_use_cases"))
             return
 
         if self._use_cases.account_list_in_progress():
@@ -356,7 +358,6 @@ class OAuthDialog(BaseAuthDialog):
         self._refresh_controls()
 
         from twisted.internet import reactor
-        from utils.reactor_manager import reactor_manager
         reactor_manager.ensure_running()
         reactor.callFromThread(
             self._use_cases.fetch_accounts,
@@ -393,7 +394,7 @@ class OAuthDialog(BaseAuthDialog):
 
         try:
             if self._use_cases is None:
-                self._log_error("缺少 broker 用例配置")
+                self._log_error(format_connection_message("missing_use_cases"))
                 return
             self._service = self._use_cases.create_oauth(self._app_auth_service, self._token_file)
         except Exception as exc:
@@ -411,7 +412,6 @@ class OAuthDialog(BaseAuthDialog):
         self._refresh_controls()
 
         from twisted.internet import reactor
-        from utils.reactor_manager import reactor_manager
         reactor_manager.ensure_running()
         reactor.callFromThread(self._service.connect)
 

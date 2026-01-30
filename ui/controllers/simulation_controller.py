@@ -20,13 +20,11 @@ class SimulationController(QObject):
         self,
         *,
         parent: QObject,
-        log: Callable[[str], None],
         state: SimulationState,
         presenter: SimulationPresenter,
         on_finished: Optional[Callable[[int, QProcess.ExitStatus], None]] = None,
     ) -> None:
         super().__init__(parent)
-        self._log = log
         self._state = state
         self._presenter = presenter
         self._on_finished = on_finished
@@ -44,7 +42,7 @@ class SimulationController(QObject):
 
     def start(self, params: dict) -> None:
         if self._runner.is_running():
-            self._log(format_simulation_message("already_running"))
+            self._state.log_message.emit(format_simulation_message("already_running"))
             return
 
         data_path = params.get("data", "").strip()
@@ -79,36 +77,36 @@ class SimulationController(QObject):
             "--equity-log-every",
             "200",
         ]
-        self._log(format_simulation_message("start"))
+        self._state.log_message.emit(format_simulation_message("start"))
         started = self._runner.start(sys.executable, args, env={"PYTHONPATH": "."})
         if not started:
-            self._log(format_simulation_message("start_failed"))
+            self._state.log_message.emit(format_simulation_message("start_failed"))
             self._stop_equity_log_tailer()
 
     def stop(self) -> None:
         if not self._runner.is_running():
-            self._log(format_simulation_message("not_running"))
+            self._state.log_message.emit(format_simulation_message("not_running"))
             return
-        self._log(format_simulation_message("stop_requested"))
+        self._state.log_message.emit(format_simulation_message("stop_requested"))
         self._stop_equity_log_tailer()
         if not self._runner.stop():
-            self._log(format_simulation_message("stop_failed"))
+            self._state.log_message.emit(format_simulation_message("stop_failed"))
 
     def _show_error(self, message: str) -> None:
-        self._log(format_simulation_message("param_error", message=message))
+        self._state.log_message.emit(format_simulation_message("param_error", message=message))
         parent = self.parent()
         if isinstance(parent, QWidget):
             QMessageBox.warning(parent, "回放參數錯誤", message)
 
     def _on_stdout_line(self, line: str) -> None:
-        self._log(line)
+        self._state.log_message.emit(line)
         self._presenter.handle_stdout_line(line)
 
     def _on_stderr_line(self, line: str) -> None:
-        self._log(format_simulation_message("param_error", message=line))
+        self._state.log_message.emit(format_simulation_message("param_error", message=line))
 
     def _on_finished_internal(self, exit_code: int, exit_status: QProcess.ExitStatus) -> None:
-        self._log(
+        self._state.log_message.emit(
             format_simulation_message(
                 "finished",
                 exit_status=exit_status == QProcess.NormalExit,

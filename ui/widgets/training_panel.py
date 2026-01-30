@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
-import re
 from typing import Optional
 try:
     import pyqtgraph as pg
@@ -28,6 +27,12 @@ from PySide6.QtWidgets import (
     QStackedWidget,
 )
 
+from ui.utils.formatters import (
+    format_optuna_best_params,
+    format_optuna_empty_best,
+    format_optuna_empty_trial,
+    format_optuna_trial_summary,
+)
 from ui.widgets.layout_helpers import (
     apply_form_label_width,
     align_form_fields,
@@ -410,7 +415,7 @@ class TrainingParamsPanel(QWidget):
 
         trial_title = QLabel("Latest trial")
         trial_title.setProperty("class", "result_label")
-        self._optuna_trial_summary = QLabel("尚未完成試驗")
+        self._optuna_trial_summary = QLabel(format_optuna_empty_trial())
         self._optuna_trial_summary.setWordWrap(True)
         self._optuna_trial_summary.setProperty("class", "result_value")
         optuna_results_layout.addWidget(trial_title, 0, 0, Qt.AlignTop)
@@ -418,7 +423,7 @@ class TrainingParamsPanel(QWidget):
 
         best_title = QLabel("Best params")
         best_title.setProperty("class", "result_label")
-        self._optuna_best_summary = QLabel("最佳參數：—")
+        self._optuna_best_summary = QLabel(format_optuna_empty_best())
         self._optuna_best_summary.setWordWrap(True)
         self._optuna_best_summary.setProperty("class", "result_value")
         optuna_results_layout.addWidget(best_title, 1, 0, Qt.AlignTop)
@@ -461,47 +466,16 @@ class TrainingParamsPanel(QWidget):
             self._ent_coef.setValue(float(params["ent_coef"]))
 
     def reset_optuna_results(self) -> None:
-        self._optuna_trial_summary.setText("尚未完成試驗")
-        self._optuna_best_summary.setText("最佳參數：—")
+        self._optuna_trial_summary.setText(format_optuna_empty_trial())
+        self._optuna_best_summary.setText(format_optuna_empty_best())
 
     def update_optuna_trial_summary(self, text: str) -> None:
-        formatted = self._format_optuna_trial(text)
-        self._optuna_trial_summary.setText(formatted)
+        self._optuna_trial_summary.setText(format_optuna_trial_summary(text))
 
     def update_optuna_best_params(self, params: dict) -> None:
         if not params:
             return
-        summary = self._format_best_params(params)
-        self._optuna_best_summary.setText(summary)
-
-    @staticmethod
-    def _format_best_params(params: dict) -> str:
-        order = ["n_steps", "batch_size", "learning_rate", "gamma", "ent_coef"]
-        items = []
-        for key in order:
-            if key not in params:
-                continue
-            value = params[key]
-            if isinstance(value, float):
-                formatted = f"{value:.6g}"
-            else:
-                formatted = str(value)
-            items.append(f"{key}={formatted}")
-        return "\n".join(items) if items else "—"
-
-    @staticmethod
-    def _format_optuna_trial(text: str) -> str:
-        match = re.search(
-            r"Trial\s+(?P<trial>\d+):\s+value=(?P<value>[-+0-9.eE]+)\s+\|\s+best=(?P<best>[-+0-9.eE]+)\s+\(trial\s+(?P<best_trial>\d+)\)",
-            text,
-        )
-        if not match:
-            return text
-        trial = match.group("trial")
-        value = match.group("value")
-        best = match.group("best")
-        best_trial = match.group("best_trial")
-        return f"Trial {trial}\nValue: {value}\nBest so far: {best} (trial {best_trial})"
+        self._optuna_best_summary.setText(format_optuna_best_params(params))
 
     def get_params(self) -> dict:
         return {
