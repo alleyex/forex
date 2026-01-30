@@ -1,7 +1,7 @@
 # Architecture Notes
 
 ## 1) Entry and Bootstrap
-- `main.py` / `app.py`: app entry points.
+- `main_train.py` / `app.py`: app entry points.
 - `bootstrap.py`: initializes logging, provider registry, use cases, event bus, and app state.
 - `config/runtime.py`: reads environment config (TOKEN_FILE, BROKER_PROVIDER, LOG_LEVEL).
 
@@ -20,10 +20,10 @@
 - `infrastructure/broker/fake/*`: fake provider for tests/offline.
 
 ## 5) UI Layer
-- `ui/dialogs/app_auth_dialog.py`: app auth flow.
-- `ui/dialogs/oauth_dialog.py`: OAuth flow.
-- `ui/main_window.py`: trendbar, accounts, funds UI.
-- `ui/widgets/*`: reusable widgets.
+- `ui_train/dialogs/app_auth_dialog.py`: app auth flow.
+- `ui_train/dialogs/oauth_dialog.py`: OAuth flow.
+- `ui_train/main_window.py`: trendbar, accounts, funds UI.
+- `ui_train/widgets/*`: reusable widgets.
 
 ## 6) Event and State
 - `application/events.py`: EventBus for in-process signals.

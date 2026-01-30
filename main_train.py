@@ -1,4 +1,4 @@
-# main_live.py
+# main_train.py
 import sys
 from pathlib import Path
 from PySide6.QtWidgets import QApplication
@@ -6,7 +6,7 @@ from PySide6.QtCore import qInstallMessageHandler
 import traceback
 
 from bootstrap import bootstrap
-from ui_live.main_window import LiveMainWindow
+from ui_train.main_window import MainWindow
 
 
 def _qt_message_handler(mode, context, message) -> None:
@@ -18,21 +18,22 @@ def _qt_message_handler(mode, context, message) -> None:
 
 
 def main() -> int:
-    """Live trading app entry point"""
+    """Application entry point"""
     use_cases, _, event_bus, app_state = bootstrap()
     qInstallMessageHandler(_qt_message_handler)
     app = QApplication(sys.argv)
-    app.setStyle("Fusion")
+    app.setStyle("Fusion")  # Consistent cross-platform look
     style_path = Path("ui_train/styles/app.qss")
     if style_path.exists():
         app.setStyleSheet(style_path.read_text())
-
-    main_window = LiveMainWindow(
+    
+    main_window = MainWindow(
         use_cases=use_cases,
         event_bus=event_bus,
         app_state=app_state,
     )
     main_window.showMaximized()
+    
     return app.exec()
 
 

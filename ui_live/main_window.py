@@ -3,8 +3,8 @@ from __future__ import annotations
 from typing import Optional
 
 from PySide6.QtCore import Qt, Signal, Slot
+from PySide6.QtGui import QAction
 from PySide6.QtWidgets import (
-    QAction,
     QLabel,
     QMainWindow,
     QSplitter,
@@ -15,13 +15,13 @@ from PySide6.QtWidgets import (
 
 from application import AppAuthServiceLike, AppState, BrokerUseCases, EventBus, OAuthServiceLike
 from config.constants import ConnectionStatus
-from ui.controllers.connection_controller import ConnectionController
-from ui.utils.formatters import (
+from ui_train.controllers.connection_controller import ConnectionController
+from ui_train.utils.formatters import (
     format_app_auth_status,
     format_connection_message,
     format_oauth_status,
 )
-from ui.widgets.log_widget import LogWidget
+from ui_train.widgets.log_widget import LogWidget
 
 
 class LiveMainWindow(QMainWindow):

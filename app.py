@@ -4,8 +4,8 @@ from PySide6.QtCore import qInstallMessageHandler
 import traceback
 
 from bootstrap import bootstrap
-from ui.dialogs.app_auth_dialog import AppAuthDialog
-from ui.main_window import MainWindow
+from ui_train.dialogs.app_auth_dialog import AppAuthDialog
+from ui_train.main_window import MainWindow
 from config import load_config
 
 
