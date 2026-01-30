@@ -6,7 +6,7 @@ from PySide6.QtCore import qInstallMessageHandler
 import traceback
 
 from bootstrap import bootstrap
-from ui_live.main_window import LiveMainWindow
+from ui.live.main_window import LiveMainWindow
 
 
 def _qt_message_handler(mode, context, message) -> None:
@@ -23,7 +23,7 @@ def main() -> int:
     qInstallMessageHandler(_qt_message_handler)
     app = QApplication(sys.argv)
     app.setStyle("Fusion")
-    style_path = Path("ui_train/styles/app.qss")
+    style_path = Path("ui/shared/styles/app.qss")
     if style_path.exists():
         app.setStyleSheet(style_path.read_text())
 

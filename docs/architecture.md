@@ -20,10 +20,13 @@
 - `infrastructure/broker/fake/*`: fake provider for tests/offline.
 
 ## 5) UI Layer
-- `ui_train/dialogs/app_auth_dialog.py`: app auth flow.
-- `ui_train/dialogs/oauth_dialog.py`: OAuth flow.
-- `ui_train/main_window.py`: trendbar, accounts, funds UI.
-- `ui_train/widgets/*`: reusable widgets.
+- `ui/train/`: training/replay UI.
+- `ui/live/`: live trading UI.
+- `ui/shared/controllers/`: shared UI controllers (connection, process runner).
+- `ui/shared/dialogs/`: shared auth/account dialogs.
+- `ui/shared/widgets/`: reusable widgets.
+- `ui/shared/styles/`: shared QSS and tokens.
+- `ui/shared/utils/`: shared formatters and helpers.
 
 ## 6) Event and State
 - `application/events.py`: EventBus for in-process signals.
