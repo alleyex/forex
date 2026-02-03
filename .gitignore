@@ -9,6 +9,7 @@ __pycache__/
 *.csv
 ml/rl/models/
 data/raw_history/
+data/
 token.json
 __pycache__/
 *.pyc
