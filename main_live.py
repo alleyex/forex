@@ -2,7 +2,7 @@
 import sys
 from pathlib import Path
 from PySide6.QtWidgets import QApplication
-from PySide6.QtCore import qInstallMessageHandler
+from PySide6.QtCore import QTimer, qInstallMessageHandler
 import traceback
 
 from bootstrap import bootstrap
@@ -33,6 +33,7 @@ def main() -> int:
         app_state=app_state,
     )
     main_window.showMaximized()
+    QTimer.singleShot(1000, main_window._toggle_connection)
     return app.exec()
 
 

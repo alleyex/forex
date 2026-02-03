@@ -127,7 +127,7 @@ class TrendbarServiceLike(Protocol):
     def clear_log_history(self) -> None:
         ...
 
-    def subscribe(self, account_id: int, symbol_id: int) -> None:
+    def subscribe(self, account_id: int, symbol_id: int, timeframe: str = "M1") -> None:
         ...
 
     def unsubscribe(self) -> None:

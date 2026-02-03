@@ -161,7 +161,8 @@ class TrendbarHistoryService(LogHistoryMixin[TrendbarHistoryCallbacks], Operatio
         request.period = self._period
         if to_ts is None:
             now_ms = int(time.time() * 1000)
-            aligned_to = (now_ms // (5 * 60 * 1000)) * (5 * 60 * 1000)
+            period_ms = max(1, self._period_minutes()) * 60 * 1000
+            aligned_to = (now_ms // period_ms) * period_ms
             request.toTimestamp = aligned_to
         else:
             request.toTimestamp = int(to_ts)

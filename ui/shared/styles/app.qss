@@ -35,7 +35,8 @@ QDialog[class="history_dialog"] QDialogButtonBox QPushButton {
 }
 
 QMainWindow {
-    color: #e6e6e6;
+    background-color: #1f2328;
+    color: #e6e9ef;
 }
 
 QToolButton {
@@ -45,8 +46,22 @@ QToolButton {
 }
 
 QPushButton {
+    background-color: #2c3138;
+    border: 1px solid #3a424c;
+    border-radius: 6px;
+    color: #e6e9ef;
     padding: 6px 12px;
     min-height: 20px;
+}
+
+QPushButton:hover {
+    background-color: #343b44;
+    border-color: #475160;
+}
+
+QPushButton:pressed {
+    background-color: #23272e;
+    border-color: #3a424c;
 }
 
 QLineEdit,
@@ -54,8 +69,20 @@ QComboBox,
 QSpinBox,
 QDoubleSpinBox,
 QDateTimeEdit {
+    background-color: #232830;
+    border: 1px solid #3a424c;
+    border-radius: 6px;
+    color: #e6e9ef;
     padding: 2px 8px;
     min-height: 20px;
+}
+
+QLineEdit:focus,
+QComboBox:focus,
+QSpinBox:focus,
+QDoubleSpinBox:focus,
+QDateTimeEdit:focus {
+    border-color: #5b8fd1;
 }
 
 QComboBox {
@@ -72,6 +99,22 @@ QToolButton {
     min-height: 20px;
 }
 
+QToolBar {
+    background: #262b31;
+    border-bottom: 1px solid #343b44;
+    spacing: 6px;
+}
+
+QStatusBar {
+    background: #262b31;
+    border-top: 1px solid #343b44;
+    color: #c9d1d9;
+}
+
+QSplitter::handle {
+    background: #2a3037;
+}
+
 QDockWidget::title {
     padding: 8px 12px;
     font-weight: 600;
@@ -83,16 +126,17 @@ QDockWidget::contents {
 }
 
 QTabWidget::pane {
-    border: 1px solid #3a3a3a;
+    background: #1f2328;
+    border: 1px solid #343b44;
     border-radius: 8px;
     padding: 6px;
 }
 
 QTabBar::tab {
-    background: #3a3a3a;
-    color: #d8d8d8;
+    background: #2a3037;
+    color: #c9d1d9;
     padding: 6px 14px;
-    border: 1px solid #4a4a4a;
+    border: 1px solid #343b44;
     border-bottom: none;
     border-top-left-radius: 6px;
     border-top-right-radius: 6px;
@@ -100,13 +144,59 @@ QTabBar::tab {
 }
 
 QTabBar::tab:selected {
-    background: #2b2b2b;
-    color: #f0f0f0;
+    background: #1f2328;
+    color: #f5f7fb;
     font-weight: 600;
 }
 
 QTabBar::tab:!selected {
     margin-top: 4px;
+}
+
+QGroupBox {
+    background-color: #262b31;
+    border: 1px solid #343b44;
+    border-radius: 8px;
+    font-weight: 600;
+    margin-top: 18px;
+    padding: 10px;
+}
+
+QGroupBox::title {
+    subcontrol-origin: margin;
+    left: 12px;
+    padding: 0 8px;
+    color: #c9d1d9;
+}
+
+QLabel {
+    color: #d3d8e0;
+}
+
+QLabel[class="section_title"] {
+    color: #f5f7fb;
+    font-size: 18px;
+    font-weight: 700;
+}
+
+QLabel[class="placeholder"] {
+    color: #9aa4b2;
+}
+
+QTableWidget,
+QListWidget {
+    background: #1f2328;
+    border: 1px solid #343b44;
+    border-radius: 6px;
+    gridline-color: #2a3037;
+    color: #d3d8e0;
+}
+
+QHeaderView::section {
+    background: #2a3037;
+    color: #c9d1d9;
+    padding: 4px 8px;
+    border: 1px solid #343b44;
 }
 
 QWidget[class="simulation_params"] QGroupBox {
@@ -179,17 +269,6 @@ QWidget[class="training_params"] QLabel[class="result_label"] {
 QWidget[class="training_params"] QLabel[class="result_value"] {
     color: #f0f0f0;
     font-size: 13px;
-}
-
-QGroupBox {
-    font-weight: 600;
-    margin-top: 18px;
-}
-
-QGroupBox::title {
-    subcontrol-origin: margin;
-    left: 12px;
-    padding: 0 10px;
 }
 
 QLabel[class="dialog_hint"] {

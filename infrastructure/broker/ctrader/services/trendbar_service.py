@@ -3,6 +3,7 @@
 """
 from dataclasses import dataclass
 from datetime import datetime, timezone
+import time
 from typing import Callable, Optional, Protocol
 
 from ctrader_open_api import Client
@@ -69,6 +70,9 @@ class TrendbarService(LogHistoryMixin[TrendbarServiceCallbacks], OperationStateM
         self._account_id: Optional[int] = None
         self._symbol_id: Optional[int] = None
         self._period: int = ProtoOATrendbarPeriod.M1
+        self._period_name: str = "M1"
+        self._period_minutes: int = 1
+        self._last_bar: Optional[dict] = None
         self._spot_subscribed = False
         self._last_bar_ts: Optional[int] = None
         self._client: Optional[Client] = None
@@ -88,13 +92,14 @@ class TrendbarService(LogHistoryMixin[TrendbarServiceCallbacks], OperationStateM
         )
         self._replay_log_history()
 
-    def subscribe(self, account_id: int, symbol_id: int) -> None:
+    def subscribe(self, account_id: int, symbol_id: int, timeframe: str = "M1") -> None:
         """訂閱即時 K 線"""
         if self._in_progress:
             self.unsubscribe()
 
         self._account_id = int(account_id)
         self._symbol_id = int(symbol_id)
+        self._period_name, self._period, self._period_minutes = self._resolve_period(timeframe)
         self._app_auth_service.add_message_handler(self._handle_message)
 
         try:
@@ -111,7 +116,11 @@ class TrendbarService(LogHistoryMixin[TrendbarServiceCallbacks], OperationStateM
         request.symbolId = self._symbol_id
         request.period = self._period
         self._client.send(request)
-        self._log(format_sent_subscribe(f"已送出 K 線訂閱：{self._symbol_id} (M1)"))
+        self._log(
+            format_sent_subscribe(
+                f"已送出 K 線訂閱：{self._symbol_id} ({self._period_name})"
+            )
+        )
         self._start_operation()
 
     def unsubscribe(self) -> None:
@@ -134,7 +143,11 @@ class TrendbarService(LogHistoryMixin[TrendbarServiceCallbacks], OperationStateM
             self._unsubscribe_spot()
         self._app_auth_service.remove_message_handler(self._handle_message)
         self._end_operation()
-        self._log(format_sent_unsubscribe(f"已取消 K 線訂閱：{self._symbol_id} (M1)"))
+        self._log(
+            format_sent_unsubscribe(
+                f"已取消 K 線訂閱：{self._symbol_id} ({self._period_name})"
+            )
+        )
 
     def _handle_message(self, client: Client, msg: object) -> bool:
         if not self._in_progress:
@@ -190,34 +203,111 @@ class TrendbarService(LogHistoryMixin[TrendbarServiceCallbacks], OperationStateM
         if self._symbol_id and msg.symbolId != self._symbol_id:
             return
         trendbars = list(getattr(msg, "trendbar", []))
-        if not trendbars:
+        latest = trendbars[-1] if trendbars else None
+        if latest is not None and latest.period == self._period:
+            self._seed_from_trendbar(latest, msg.symbolId)
+            if self._last_bar is not None and self._callbacks.on_trendbar:
+                self._callbacks.on_trendbar(self._last_bar)
             return
+        updated = self._update_from_spot(msg)
+        if updated is not None and self._callbacks.on_trendbar:
+            self._callbacks.on_trendbar(updated)
 
-        latest = trendbars[-1]
-        if latest.period != self._period:
+    def _seed_from_trendbar(self, bar: TrendbarMessage, symbol_id: int) -> None:
+        ts_minutes = int(bar.utcTimestampInMinutes)
+        if self._last_bar_ts is not None and ts_minutes < self._last_bar_ts:
             return
-        if self._last_bar_ts == int(latest.utcTimestampInMinutes):
-            return
-        self._last_bar_ts = int(latest.utcTimestampInMinutes)
-
-        low = int(latest.low)
-        open_price = low + int(latest.deltaOpen)
-        close_price = low + int(latest.deltaClose)
-        high = low + int(latest.deltaHigh)
-        ts = int(latest.utcTimestampInMinutes) * 60
+        self._last_bar_ts = ts_minutes
+        low = int(bar.low)
+        open_price = low + int(bar.deltaOpen)
+        close_price = low + int(bar.deltaClose)
+        high = low + int(bar.deltaHigh)
+        ts = ts_minutes * 60
         ts_text = datetime.fromtimestamp(ts, tz=timezone.utc).strftime("%H:%M")
-
-        data = {
-            "symbol_id": msg.symbolId,
-            "period": "M1",
+        self._last_bar = {
+            "symbol_id": symbol_id,
+            "period": self._period_name,
             "timestamp": ts_text,
+            "utc_timestamp_minutes": ts_minutes,
             "open": open_price,
             "high": high,
             "low": low,
             "close": close_price,
         }
-        if self._callbacks.on_trendbar:
-            self._callbacks.on_trendbar(data)
+
+    def _update_from_spot(self, msg: SpotEventMessage) -> Optional[dict]:
+        price = self._extract_price(msg)
+        if price is None:
+            return None
+        ts_minutes = self._extract_bucket_minutes(msg)
+        if ts_minutes is None:
+            return None
+        if self._last_bar is None:
+            return None
+        if self._last_bar.get("utc_timestamp_minutes") != ts_minutes:
+            return None
+        self._last_bar["high"] = max(self._last_bar["high"], price)
+        self._last_bar["low"] = min(self._last_bar["low"], price)
+        self._last_bar["close"] = price
+        self._last_bar_ts = ts_minutes
+        return dict(self._last_bar)
+
+    @staticmethod
+    def _extract_price(msg: SpotEventMessage) -> Optional[float]:
+        bid = getattr(msg, "bid", None)
+        ask = getattr(msg, "ask", None)
+        bid_val = float(bid) if bid is not None and bid != 0 else None
+        ask_val = float(ask) if ask is not None and ask != 0 else None
+        if bid_val is not None and ask_val is not None:
+            return (bid_val + ask_val) / 2.0
+        if bid_val is not None:
+            return bid_val
+        if ask_val is not None:
+            return ask_val
+        return None
+
+    def _extract_bucket_minutes(self, msg: SpotEventMessage) -> Optional[int]:
+        ts = getattr(msg, "timestamp", None)
+        if ts is None or int(ts) == 0:
+            ts_seconds = int(time.time())
+        else:
+            ts_seconds = self._normalize_timestamp_seconds(int(ts))
+        if ts_seconds <= 0:
+            return None
+        minutes = ts_seconds // 60
+        bucket = (minutes // self._period_minutes) * self._period_minutes
+        return int(bucket)
+
+    @staticmethod
+    def _normalize_timestamp_seconds(ts: int) -> int:
+        if ts > 10**17:
+            return ts // 10**9
+        if ts > 10**14:
+            return ts // 10**6
+        if ts > 10**11:
+            return ts // 10**3
+        return ts
+
+    @staticmethod
+    def _resolve_period(timeframe: str) -> tuple[str, int, int]:
+        mapping = {
+            "M1": (ProtoOATrendbarPeriod.M1, 1),
+            "M5": (ProtoOATrendbarPeriod.M5, 5),
+            "M10": (ProtoOATrendbarPeriod.M10, 10),
+            "M15": (ProtoOATrendbarPeriod.M15, 15),
+            "M30": (ProtoOATrendbarPeriod.M30, 30),
+            "H1": (ProtoOATrendbarPeriod.H1, 60),
+            "H4": (ProtoOATrendbarPeriod.H4, 240),
+            "H12": (ProtoOATrendbarPeriod.H12, 720),
+            "D1": (ProtoOATrendbarPeriod.D1, 1440),
+            "W1": (ProtoOATrendbarPeriod.W1, 10080),
+            "MN1": (ProtoOATrendbarPeriod.MN1, 43200),
+        }
+        name = timeframe.upper()
+        if name not in mapping:
+            name = "M1"
+        period, minutes = mapping[name]
+        return name, period, minutes
 
     def _on_error(self, msg: ErrorMessage) -> None:
         if is_already_subscribed(msg.errorCode, msg.description):

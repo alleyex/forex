@@ -135,7 +135,7 @@ class FakeTrendbarService:
     def clear_log_history(self) -> None:
         pass
 
-    def subscribe(self, account_id: int, symbol_id: int) -> None:
+    def subscribe(self, account_id: int, symbol_id: int, timeframe: str = "M1") -> None:
         pass
 
     def unsubscribe(self) -> None:
