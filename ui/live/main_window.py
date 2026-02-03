@@ -53,7 +53,7 @@ class LiveMainWindow(QMainWindow):
     oauthStatusChanged = Signal(int)
     historyReceived = Signal(list)
     trendbarReceived = Signal(dict)
-    quoteUpdated = Signal(int, object, object)
+    quoteUpdated = Signal(int, object, object, object)
 
     def __init__(
         self,
@@ -102,6 +102,7 @@ class LiveMainWindow(QMainWindow):
         self._quote_symbol_ids = {name: self._resolve_symbol_id(name) for name in self._quote_symbols}
         self._quote_rows: dict[int, int] = {}
         self._quote_row_digits: dict[int, int] = {}
+        self._quote_last_mid: dict[int, float] = {}
         self._quote_subscribed = False
         self._spot_message_handler = None
 
@@ -214,8 +215,8 @@ class LiveMainWindow(QMainWindow):
         panel = QGroupBox("行情表")
         layout = QVBoxLayout(panel)
 
-        table = QTableWidget(2, 3)
-        table.setHorizontalHeaderLabels(["Symbol", "Bid", "Ask"])
+        table = QTableWidget(2, 5)
+        table.setHorizontalHeaderLabels(["Symbol", "Bid", "Ask", "Spread", "Time"])
         table.verticalHeader().setVisible(False)
         table.setEditTriggers(QTableWidget.NoEditTriggers)
         table.setSelectionBehavior(QTableWidget.SelectRows)
@@ -235,6 +236,10 @@ class LiveMainWindow(QMainWindow):
                     symbol, self._price_digits
                 )
             for col in (1, 2):
+                item = QTableWidgetItem("-")
+                item.setTextAlignment(Qt.AlignCenter)
+                table.setItem(row, col, item)
+            for col in (3, 4):
                 item = QTableWidgetItem("-")
                 item.setTextAlignment(Qt.AlignCenter)
                 table.setItem(row, col, item)
@@ -318,11 +323,14 @@ class LiveMainWindow(QMainWindow):
             return False
         bid = getattr(msg, "bid", None)
         ask = getattr(msg, "ask", None)
-        self.quoteUpdated.emit(int(symbol_id), bid, ask)
+        spot_ts = getattr(msg, "spotTimestamp", None)
+        if spot_ts is None:
+            spot_ts = getattr(msg, "timestamp", None)
+        self.quoteUpdated.emit(int(symbol_id), bid, ask, spot_ts)
         return False
 
-    @Slot(int, object, object)
-    def _handle_quote_updated(self, symbol_id: int, bid, ask) -> None:
+    @Slot(int, object, object, object)
+    def _handle_quote_updated(self, symbol_id: int, bid, ask, spot_ts) -> None:
         if not self._quotes_table:
             return
         row = self._quote_rows.get(symbol_id)
@@ -330,6 +338,7 @@ class LiveMainWindow(QMainWindow):
             return
         self._set_quote_cell(row, 1, bid)
         self._set_quote_cell(row, 2, ask)
+        self._set_quote_extras(row, symbol_id, bid, ask, spot_ts)
 
     def _set_quote_cell(self, row: int, column: int, value) -> None:
         if not self._quotes_table:
@@ -350,6 +359,47 @@ class LiveMainWindow(QMainWindow):
             self._quotes_table.setItem(row, column, item)
         else:
             item.setText(text)
+
+    def _set_quote_extras(self, row: int, symbol_id: int, bid, ask, spot_ts) -> None:
+        if not self._quotes_table:
+            return
+        bid_val = self._normalize_price(bid)
+        ask_val = self._normalize_price(ask)
+        time_text = self._format_spot_time(spot_ts)
+        if bid_val in (None, 0) or ask_val in (None, 0):
+            self._set_quote_text(row, 3, "--")
+            self._set_quote_text(row, 4, time_text)
+            return
+        mid = (bid_val + ask_val) / 2.0
+        self._quote_last_mid[symbol_id] = mid
+
+        digits = self._quote_row_digits.get(symbol_id, self._price_digits)
+        spread = ask_val - bid_val
+        spread_text = f"{spread:.{digits}f}"
+        self._set_quote_text(row, 3, spread_text)
+        self._set_quote_text(row, 4, time_text)
+
+    def _set_quote_text(self, row: int, column: int, text: str) -> None:
+        if not self._quotes_table:
+            return
+        item = self._quotes_table.item(row, column)
+        if item is None:
+            item = QTableWidgetItem(text)
+            item.setTextAlignment(Qt.AlignCenter)
+            self._quotes_table.setItem(row, column, item)
+        else:
+            item.setText(text)
+
+    def _format_spot_time(self, spot_ts) -> str:
+        if spot_ts in (None, 0, "0", "0.0"):
+            return datetime.utcnow().strftime("%H:%M:%S")
+        try:
+            ts_val = float(spot_ts)
+        except (TypeError, ValueError):
+            return datetime.utcnow().strftime("%H:%M:%S")
+        if ts_val > 1e12:
+            ts_val = ts_val / 1000.0
+        return datetime.utcfromtimestamp(ts_val).strftime("%H:%M:%S")
 
     def _normalize_price(self, value) -> Optional[float]:
         if value is None:
