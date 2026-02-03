@@ -6,7 +6,7 @@ import json
 from pathlib import Path
 
 from ctrader_open_api.messages.OpenApiModelMessages_pb2 import ProtoOAPayloadType
-from PySide6.QtCore import Qt, Signal, Slot
+from PySide6.QtCore import Qt, Signal, Slot, QTimer
 from PySide6.QtGui import QAction
 from PySide6.QtWidgets import (
     QGroupBox,
@@ -80,14 +80,28 @@ class LiveMainWindow(QMainWindow):
         self._candles: list[tuple[float, float, float, float, float]] = []
         self._chart_plot = None
         self._candlestick_item = None
+        self._last_price_line = None
+        self._last_price_label = None
         self._symbol_name = "EURUSD"
         self._symbol_id = self._resolve_symbol_id(self._symbol_name)
         self._timeframe = "M1"
         self._price_digits = 5
+        self._chart_ready = False
+        self._pending_candles: Optional[list[tuple[float, float, float, float, float]]] = None
+        self._chart_frozen = True
+        self._chart_timer = QTimer(self)
+        self._chart_timer.setInterval(200)
+        self._chart_timer.timeout.connect(self._flush_chart_update)
+        self._chart_timer.start()
         self._quotes_table = None
         self._quote_symbols = ["EURUSD", "USDJPY"]
+        self._quote_digits = {
+            "EURUSD": 5,
+            "USDJPY": 3,
+        }
         self._quote_symbol_ids = {name: self._resolve_symbol_id(name) for name in self._quote_symbols}
         self._quote_rows: dict[int, int] = {}
+        self._quote_row_digits: dict[int, int] = {}
         self._quote_subscribed = False
         self._spot_message_handler = None
 
@@ -217,6 +231,9 @@ class LiveMainWindow(QMainWindow):
             symbol_id = self._quote_symbol_ids.get(symbol)
             if symbol_id is not None:
                 self._quote_rows[symbol_id] = row
+                self._quote_row_digits[symbol_id] = self._quote_digits.get(
+                    symbol, self._price_digits
+                )
             for col in (1, 2):
                 item = QTableWidgetItem("-")
                 item.setTextAlignment(Qt.AlignCenter)
@@ -321,7 +338,11 @@ class LiveMainWindow(QMainWindow):
         if normalized == 0:
             text = "--"
         else:
-            text = self._format_price(value)
+            digits = self._quote_row_digits.get(
+                next((k for k, v in self._quote_rows.items() if v == row), None),
+                self._price_digits,
+            )
+            text = self._format_price(value, digits=digits)
         item = self._quotes_table.item(row, column)
         if item is None:
             item = QTableWidgetItem(text)
@@ -343,11 +364,12 @@ class LiveMainWindow(QMainWindow):
             return numeric / (10 ** self._price_digits)
         return numeric
 
-    def _format_price(self, value) -> str:
+    def _format_price(self, value, *, digits: Optional[int] = None) -> str:
         normalized = self._normalize_price(value)
         if normalized is None:
             return "-"
-        return f"{normalized:.{self._price_digits}f}"
+        use_digits = self._price_digits if digits is None else digits
+        return f"{normalized:.{use_digits}f}"
 
     def _build_chart_panel(self) -> QWidget:
         panel = QGroupBox("即時K線圖")
@@ -364,6 +386,9 @@ class LiveMainWindow(QMainWindow):
         plot.showGrid(x=True, y=True, alpha=0.15)
         plot.setLabel("bottom", "time")
         plot.setLabel("left", "price")
+        plot.enableAutoRange(False, False)
+        plot.setXRange(0, 1, padding=0)
+        plot.setYRange(0, 1, padding=0)
         axis_pen = pg.mkPen("#5b6370")
         axis_text = pg.mkPen("#c9d1d9")
         plot.getAxis("bottom").setPen(axis_pen)
@@ -374,21 +399,65 @@ class LiveMainWindow(QMainWindow):
 
         self._candlestick_item = CandlestickItem([])
         plot.addItem(self._candlestick_item)
+        self._last_price_line = pg.InfiniteLine(
+            angle=0,
+            pen=pg.mkPen("#9ca3af", width=1, style=Qt.DashLine),
+            movable=False,
+        )
+        plot.addItem(self._last_price_line)
+        self._last_price_label = pg.TextItem(color="#e5e7eb", anchor=(0, 0.5))
+        self._last_price_label.setZValue(10)
+        plot.addItem(self._last_price_label)
         self._chart_plot = plot
 
         return panel
 
     def set_candles(self, candles: list[tuple[float, float, float, float, float]]) -> None:
+        self._pending_candles = candles
+
+    def _flush_chart_update(self) -> None:
+        if self._pending_candles is None:
+            return
+        candles = self._pending_candles
+        self._pending_candles = None
         if not self._candlestick_item or not self._chart_plot:
             return
-        if not candles:
-            self._candlestick_item.setData([])
+        if self._chart_frozen:
             return
+        if not candles:
+            if self._chart_ready:
+                self._candlestick_item.setData([])
+                if self._last_price_line:
+                    self._last_price_line.hide()
+                if self._last_price_label:
+                    self._last_price_label.hide()
+            return
+        if not self._chart_ready:
+            self._chart_ready = True
         self._candlestick_item.setData(candles)
-        self._chart_plot.setXRange(candles[0][0], candles[-1][0], padding=0.02)
+        self._chart_plot.enableAutoRange(False, False)
+        step_seconds = self._timeframe_minutes() * 60
+        extra_space = step_seconds * 5 if step_seconds > 0 else 0
+        self._chart_plot.setXRange(
+            candles[0][0],
+            candles[-1][0] + extra_space,
+            padding=0.0,
+        )
         lows = [candle[3] for candle in candles]
         highs = [candle[2] for candle in candles]
         self._chart_plot.setYRange(min(lows), max(highs), padding=0.1)
+        last_close = candles[-1][4]
+        if self._last_price_line:
+            self._last_price_line.setValue(last_close)
+            self._last_price_line.show()
+        if self._last_price_label:
+            label = f"{last_close:.{self._price_digits}f}"
+            self._last_price_label.setText(label)
+            step_seconds = self._timeframe_minutes() * 60
+            x_offset = step_seconds if step_seconds > 0 else 0
+            y_offset = (max(highs) - min(lows)) * 0.015 if highs and lows else 0
+            self._last_price_label.setPos(candles[-1][0] + x_offset, last_close + y_offset)
+            self._last_price_label.show()
 
     def _setup_toolbar(self) -> None:
         toolbar = QToolBar("Live toolbar", self)
@@ -447,6 +516,8 @@ class LiveMainWindow(QMainWindow):
             self._request_recent_history()
             self._ensure_quote_subscription()
         else:
+            self._chart_frozen = True
+            self._pending_candles = None
             self._history_requested = False
             self._pending_history = False
             self._stop_live_trendbar()
@@ -527,6 +598,7 @@ class LiveMainWindow(QMainWindow):
                 )
             )
         self._candles = candles
+        self._chart_frozen = False
         self.set_candles(self._candles)
         self.logRequested.emit(f"✅ 已載入 {len(candles)} 筆 K 線資料")
         self._log_recent_history_rows(rows_sorted, count=5)
