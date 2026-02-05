@@ -9,6 +9,7 @@ from typing import Callable, Optional
 from PySide6.QtCore import QObject, QProcess, QTimer
 from PySide6.QtWidgets import QMessageBox, QWidget
 
+from config.paths import RUN_LIVE_SIM_SCRIPT
 from ui.shared.controllers.process_runner import ProcessRunner
 from ui.train.state.simulation_state import SimulationState
 from ui.train.presenters.simulation_presenter import SimulationPresenter
@@ -58,7 +59,7 @@ class SimulationController(QObject):
         self._state.reset_summary.emit()
         self._start_equity_log_tailer()
         args = [
-            "tools/rl/run_live_sim.py",
+            RUN_LIVE_SIM_SCRIPT,
             "--data",
             data_path,
             "--model",

@@ -10,6 +10,7 @@ import re
 
 from PySide6.QtCore import QObject, QProcess, QTimer, Signal
 
+from config.paths import TRAIN_PPO_SCRIPT
 from ui.shared.controllers.process_runner import ProcessRunner
 from ui.train.state.training_state import TrainingState
 from ui.shared.utils.formatters import format_training_message
@@ -71,7 +72,7 @@ class PPOTrainingController(QObject):
         if not discrete_positions:
             discrete_positions = "-1,0,1"
         args = [
-            "tools/rl/train_ppo.py",
+            TRAIN_PPO_SCRIPT,
             "--data",
             data_path,
             "--total-steps",
