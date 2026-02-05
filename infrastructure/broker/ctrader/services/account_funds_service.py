@@ -18,7 +18,6 @@ from broker.base import BaseCallbacks, LogHistoryMixin, OperationStateMixin, bui
 from infrastructure.broker.ctrader.services.app_auth_service import AppAuthService
 from infrastructure.broker.ctrader.services.message_helpers import (
     format_error,
-    format_success,
     is_already_subscribed,
 )
 from infrastructure.broker.ctrader.services.timeout_tracker import TimeoutTracker

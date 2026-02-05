@@ -2,7 +2,7 @@
 from typing import Optional
 
 from PySide6.QtWidgets import QMainWindow
-from PySide6.QtCore import Slot, Signal, Qt
+from PySide6.QtCore import Slot, Signal
 
 from ui.train.layout.dock_manager import DockManagerController
 from ui.train.layout.main_window_builder import (
@@ -37,7 +37,6 @@ from application import (
     EventBus,
     OAuthServiceLike,
 )
-from config.settings import OAuthTokens
 from config.constants import ConnectionStatus
 from ui.shared.utils.formatters import (
     format_app_auth_status,

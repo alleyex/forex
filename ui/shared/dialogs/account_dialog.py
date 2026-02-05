@@ -12,7 +12,6 @@ from PySide6.QtWidgets import (
     QTableWidgetItem,
     QLabel,
 )
-from PySide6.QtCore import Qt
 
 from domain import Account
 

@@ -7,7 +7,7 @@ from PySide6.QtWidgets import (
     QVBoxLayout, QLabel, QLineEdit,
     QPushButton, QComboBox, QFormLayout, QWidget,
 )
-from PySide6.QtCore import Signal, Slot, Qt
+from PySide6.QtCore import Signal, Slot
 
 from ui.shared.dialogs.base_auth_dialog import BaseAuthDialog
 from ui.shared.widgets.layout_helpers import configure_form_layout
