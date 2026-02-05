@@ -137,8 +137,6 @@ class LiveMainWindow(QMainWindow):
         self._account_switch_in_progress = False
         self._last_authorized_account_id: Optional[int] = None
         self._unauthorized_accounts: set[int] = set()
-        self._last_restore_ts: float = 0.0
-        self._pending_oauth_reconnect = False
         self._pending_full_reconnect = False
         self._account_funds_uc = None
         self._symbol_list_uc = None
@@ -176,6 +174,11 @@ class LiveMainWindow(QMainWindow):
         self._funds_timer = QTimer(self)
         self._funds_timer.setInterval(5000)
         self._funds_timer.timeout.connect(self._refresh_account_balance)
+        self._positions_refresh_timer = QTimer(self)
+        self._positions_refresh_timer.setSingleShot(True)
+        self._positions_refresh_timer.setInterval(300)
+        self._positions_refresh_timer.timeout.connect(self._apply_positions_refresh)
+        self._positions_refresh_pending = False
         self._auto_connect_timer = QTimer(self)
         self._auto_connect_timer.setSingleShot(True)
         self._auto_connect_timer.timeout.connect(self._toggle_connection)
@@ -1464,7 +1467,7 @@ class LiveMainWindow(QMainWindow):
         self._set_quote_text(row, 3, spread_text)
         self._set_quote_text(row, 4, time_text)
         if self._open_positions:
-            self._update_positions_table(self._open_positions)
+            self._schedule_positions_refresh()
 
     def _set_quote_text(self, row: int, column: int, text: str) -> None:
         if not self._quotes_table:
@@ -1476,6 +1479,17 @@ class LiveMainWindow(QMainWindow):
             self._quotes_table.setItem(row, column, item)
         else:
             item.setText(text)
+
+    def _schedule_positions_refresh(self) -> None:
+        if self._positions_refresh_pending:
+            return
+        self._positions_refresh_pending = True
+        self._positions_refresh_timer.start()
+
+    def _apply_positions_refresh(self) -> None:
+        self._positions_refresh_pending = False
+        if self._open_positions:
+            self._update_positions_table(self._open_positions)
 
     @staticmethod
     def _volume_to_lots(volume_value: float) -> float:
@@ -2214,61 +2228,6 @@ class LiveMainWindow(QMainWindow):
         self.logRequested.emit("⚠️ Selected account is not authorized for Open API.")
         if self._last_authorized_account_id and token_account and int(token_account) != int(self._last_authorized_account_id):
             self.logRequested.emit("ℹ️ 帳戶未授權，請切回可用帳戶並手動重新連線")
-
-    def _restore_authorized_account(self, account_id: int) -> None:
-        if not self._oauth_service:
-            return
-        now = time.time()
-        if now - self._last_restore_ts < 3.0:
-            return
-        self._last_restore_ts = now
-        try:
-            tokens = OAuthTokens.from_file(TOKEN_FILE)
-        except Exception:
-            return
-        tokens.account_id = int(account_id)
-        try:
-            tokens.save(TOKEN_FILE)
-        except Exception:
-            pass
-        if hasattr(self._oauth_service, "update_tokens"):
-            try:
-                self._oauth_service.update_tokens(tokens)
-            except Exception:
-                pass
-            current_status = getattr(self._oauth_service, "status", ConnectionStatus.DISCONNECTED)
-            token_account = getattr(getattr(self._oauth_service, "tokens", None), "account_id", None)
-            if current_status == ConnectionStatus.ACCOUNT_AUTHENTICATED and token_account == int(account_id):
-                self._sync_account_combo(int(account_id))
-            else:
-                self._schedule_oauth_reconnect()
-        if self._app_state:
-            self._app_state.update_selected_account(int(account_id))
-        self._sync_account_combo(int(account_id))
-
-    def _schedule_oauth_reconnect(self) -> None:
-        if not self._oauth_service or self._pending_oauth_reconnect:
-            return
-        if getattr(self._oauth_service, "in_progress", False):
-            return
-        self._pending_oauth_reconnect = True
-
-        def _do_reconnect() -> None:
-            self._pending_oauth_reconnect = False
-            if not self._oauth_service:
-                return
-            try:
-                self._oauth_service.disconnect()
-            except Exception:
-                pass
-            if getattr(self._oauth_service, "in_progress", False):
-                return
-            from utils.reactor_manager import reactor_manager
-            reactor_manager.ensure_running()
-            from twisted.internet import reactor
-            reactor.callFromThread(self._oauth_service.connect)
-
-        QTimer.singleShot(400, _do_reconnect)
 
     def _load_tokens_for_accounts(self) -> Optional[OAuthTokens]:
         try:
