@@ -71,7 +71,7 @@ class PPOTrainingController(QObject):
         if not discrete_positions:
             discrete_positions = "-1,0,1"
         args = [
-            "ml/rl/train/train_ppo.py",
+            "tools/rl/train_ppo.py",
             "--data",
             data_path,
             "--total-steps",

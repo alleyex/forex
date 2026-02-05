@@ -58,7 +58,7 @@ class SimulationController(QObject):
         self._state.reset_summary.emit()
         self._start_equity_log_tailer()
         args = [
-            "ml/rl/sim/run_live_sim.py",
+            "tools/rl/run_live_sim.py",
             "--data",
             data_path,
             "--model",
