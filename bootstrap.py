@@ -5,9 +5,9 @@ from typing import Optional, Tuple
 
 from application import AppState, BrokerUseCases, EventBus
 from broker.core import get_provider, register_provider
-from broker.providers import CTraderProvider
+from infrastructure.broker.ctrader.provider import CTraderProvider
 from config import load_config, setup_logging
-from infrastructure.broker.fake import FakeProvider
+from infrastructure.broker.fake.provider import FakeProvider
 
 
 def bootstrap(provider_name: Optional[str] = None) -> Tuple[BrokerUseCases, str, EventBus, AppState]:
