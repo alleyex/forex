@@ -179,11 +179,6 @@ class LiveMainWindow(QMainWindow):
         self._positions_refresh_timer.setInterval(300)
         self._positions_refresh_timer.timeout.connect(self._apply_positions_refresh)
         self._positions_refresh_pending = False
-        self._log_throttle_last: dict[str, float] = {}
-        self._log_throttle_rules: list[tuple[str, float]] = [
-            ("Request funds", 5.0),
-            ("Positions received", 5.0),
-        ]
         self._auto_connect_timer = QTimer(self)
         self._auto_connect_timer.setSingleShot(True)
         self._auto_connect_timer.timeout.connect(self._toggle_connection)
@@ -216,7 +211,7 @@ class LiveMainWindow(QMainWindow):
         self._auto_connect_timer.start(1000)
 
         if self._event_bus:
-            self._event_bus.subscribe("log", self._handle_log_message)
+            self._event_bus.subscribe("log", self._log_panel.append)
 
         if self._service:
             self.set_service(self._service)
@@ -1240,7 +1235,6 @@ class LiveMainWindow(QMainWindow):
             if int(account_id or 0) != int(self._app_state.selected_account_id):
                 return False
         positions = list(getattr(msg, "position", []))
-        self.logRequested.emit(f"✅ Positions received: {len(positions)}")
         self.positionsUpdated.emit(positions)
         return False
 
@@ -1980,7 +1974,6 @@ class LiveMainWindow(QMainWindow):
         if now - self._last_funds_fetch_ts < 4.5:
             return
         account_id = int(self._app_state.selected_account_id)
-        self.logRequested.emit(f"➡️ Request funds (account_id={account_id})")
         try:
             if getattr(self, "_account_funds_uc", None) is None:
                 self._account_funds_uc = self._use_cases.create_account_funds(self._service)
@@ -2137,7 +2130,7 @@ class LiveMainWindow(QMainWindow):
         self._connection_controller = controller
 
     def _connect_signals(self) -> None:
-        self.logRequested.connect(self._handle_log_message)
+        self.logRequested.connect(self._log_panel.append)
         self.appAuthStatusChanged.connect(self._handle_app_auth_status)
         self.oauthStatusChanged.connect(self._handle_oauth_status)
         self.oauthError.connect(self._handle_oauth_error)
@@ -2148,20 +2141,6 @@ class LiveMainWindow(QMainWindow):
         self.historyReceived.connect(self._handle_history_received)
         self.trendbarReceived.connect(self._handle_trendbar_received)
         self.quoteUpdated.connect(self._handle_quote_updated)
-
-    @Slot(str)
-    def _handle_log_message(self, message: str) -> None:
-        if not self._log_panel:
-            return
-        now = time.time()
-        for pattern, interval in self._log_throttle_rules:
-            if pattern in message:
-                last_ts = self._log_throttle_last.get(pattern, 0.0)
-                if now - last_ts < interval:
-                    return
-                self._log_throttle_last[pattern] = now
-                break
-        self._log_panel.append(message)
 
     @Slot()
     def _toggle_connection(self) -> None:
