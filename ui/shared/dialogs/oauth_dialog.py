@@ -6,9 +6,9 @@ from typing import Optional
 
 from PySide6.QtWidgets import (
     QVBoxLayout, QHBoxLayout, QLabel, QLineEdit,
-    QPushButton, QFormLayout, QWidget, QSizePolicy, QDialog,
+    QPushButton, QFormLayout, QWidget, QSizePolicy,
 )
-from PySide6.QtCore import Signal, Slot, Qt, QTimer
+from PySide6.QtCore import Signal, Slot, Qt
 
 from ui.shared.dialogs.base_auth_dialog import BaseAuthDialog, DialogState
 from ui.shared.widgets.layout_helpers import configure_form_layout
@@ -233,10 +233,6 @@ class OAuthDialog(BaseAuthDialog):
         self.accountsReceived.connect(self._handle_accounts_received)
         self.accountsFailed.connect(self._handle_accounts_error)
         self.statusChanged.connect(self._handle_status_changed)
-
-    def _auto_start_if_available(self) -> None:
-        self._auto_auth_after_accounts = True
-        self._start_auth()
 
     def _load_initial_data(self) -> None:
         """載入初始資料"""
@@ -557,12 +553,6 @@ class OAuthDialog(BaseAuthDialog):
         self._refresh_controls()
         if self._auto_auth_after_accounts:
             self._auto_auth_after_accounts = False
-
-    def _accept_if_accounts_stuck(self) -> None:
-        return
-
-    def _schedule_oauth_reconnect(self) -> None:
-        return
 
     # ─────────────────────────────────────────────────────────────
     # 控制項狀態
