@@ -24,6 +24,7 @@ from infrastructure.broker.ctrader.services.message_helpers import (
     format_unhandled,
     is_already_subscribed,
 )
+from utils.metrics import metrics
 
 
 @dataclass
@@ -159,6 +160,7 @@ class AppAuthService(BaseAuthService[AppAuthServiceCallbacks, Client, AppAuthMes
 
         self._set_status(ConnectionStatus.CONNECTING)
 
+        self._metrics_connect_started = time.monotonic()
         self._client = Client(self._host, self._port, TcpProtocol)
         self._send_wrapped = False
         self._wrap_client_send()
@@ -215,6 +217,7 @@ class AppAuthService(BaseAuthService[AppAuthServiceCallbacks, Client, AppAuthMes
         if self._client is not client:
             self._client = client
         self._set_status(ConnectionStatus.CONNECTED)
+        metrics.inc("ctrader.app_auth.connected")
         self._last_message_ts = time.time()
         self._start_heartbeat_loop()
         self._log(format_success("已連線！"))
@@ -231,6 +234,7 @@ class AppAuthService(BaseAuthService[AppAuthServiceCallbacks, Client, AppAuthMes
         self._cancel_reconnect_timer()
         self._client = None
         self._send_wrapped = False
+        metrics.inc("ctrader.app_auth.disconnected")
         self._emit_error(error_message(ErrorCode.NETWORK, "已斷線", reason))
         if self._manual_disconnect:
             self._manual_disconnect = False
@@ -324,6 +328,10 @@ class AppAuthService(BaseAuthService[AppAuthServiceCallbacks, Client, AppAuthMes
         self._end_operation()
         self._set_status(ConnectionStatus.APP_AUTHENTICATED)
         self._log(format_success("應用程式已授權！"))
+        metrics.inc("ctrader.app_auth.success")
+        started_at = getattr(self, "_metrics_connect_started", None)
+        if started_at is not None:
+            metrics.observe("ctrader.app_auth.latency_s", time.monotonic() - started_at)
 
         if self._callbacks.on_app_auth_success:
             self._callbacks.on_app_auth_success(client)
@@ -334,6 +342,7 @@ class AppAuthService(BaseAuthService[AppAuthServiceCallbacks, Client, AppAuthMes
             return
         self._end_operation()
         self._set_status(ConnectionStatus.DISCONNECTED)
+        metrics.inc("ctrader.app_auth.error")
         self._emit_error(format_error(msg.errorCode, msg.description))
 
     def _handle_trading_error(self, client: Client, msg) -> None:

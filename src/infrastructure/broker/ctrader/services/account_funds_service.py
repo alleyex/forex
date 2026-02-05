@@ -24,6 +24,7 @@ from infrastructure.broker.ctrader.services.message_helpers import (
     format_warning,
 )
 from infrastructure.broker.ctrader.services.timeout_tracker import TimeoutTracker
+from utils.metrics import metrics
 
 
 class TraderMessage(Protocol):
@@ -131,6 +132,7 @@ class AccountFundsService(LogHistoryMixin[AccountFundsServiceCallbacks], Operati
         self._await_trader = True
         self._await_reconcile = True
         self._await_assets = True
+        self._metrics_started_at = time.monotonic()
 
         try:
             self._client = self._app_auth_service.get_client()
@@ -277,6 +279,7 @@ class AccountFundsService(LogHistoryMixin[AccountFundsServiceCallbacks], Operati
 
     def _on_error(self, msg: ErrorMessage) -> None:
         self._emit_error(format_error(msg.errorCode, msg.description))
+        metrics.inc("ctrader.account_funds.error")
         self._cleanup()
 
     def _maybe_finish(self) -> None:
@@ -306,6 +309,10 @@ class AccountFundsService(LogHistoryMixin[AccountFundsServiceCallbacks], Operati
         )
         if self._callbacks.on_funds_received:
             self._callbacks.on_funds_received(funds)
+        metrics.inc("ctrader.account_funds.success")
+        started_at = getattr(self, "_metrics_started_at", None)
+        if started_at is not None:
+            metrics.observe("ctrader.account_funds.latency_s", time.monotonic() - started_at)
         self._cleanup()
 
     def _cleanup(self) -> None:
@@ -316,6 +323,7 @@ class AccountFundsService(LogHistoryMixin[AccountFundsServiceCallbacks], Operati
     def _on_timeout(self) -> None:
         if not self._in_progress:
             return
+        metrics.inc("ctrader.account_funds.timeout")
         self._emit_error(error_message(ErrorCode.TIMEOUT, "取得帳戶資金逾時"))
         self._cleanup()
 
@@ -323,6 +331,7 @@ class AccountFundsService(LogHistoryMixin[AccountFundsServiceCallbacks], Operati
         if not self._in_progress:
             return
         self._log(format_warning(f"帳戶資金逾時，重試第 {attempt} 次"))
+        metrics.inc("ctrader.account_funds.retry")
         if not self._client or self._account_id is None:
             return
         self._send_trader_request()

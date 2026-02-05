@@ -2,6 +2,7 @@
 Symbol list service
 """
 from dataclasses import dataclass
+import time
 from typing import Callable, Optional, Protocol, Sequence
 
 from ctrader_open_api import Client
@@ -20,6 +21,7 @@ from infrastructure.broker.ctrader.services.message_helpers import (
     format_warning,
 )
 from infrastructure.broker.ctrader.services.timeout_tracker import TimeoutTracker
+from utils.metrics import metrics
 
 
 class LightSymbolMessage(Protocol):
@@ -83,6 +85,7 @@ class SymbolListService(LogHistoryMixin[SymbolListServiceCallbacks], OperationSt
         self._account_id = int(account_id)
         self._include_archived = bool(include_archived)
         runtime = load_config()
+        self._metrics_started_at = time.monotonic()
         self._timeout_tracker.configure_retry(
             retry_policy_from_config(runtime),
             self._retry_request,
@@ -123,6 +126,10 @@ class SymbolListService(LogHistoryMixin[SymbolListServiceCallbacks], OperationSt
         self._timeout_tracker.cancel()
         symbols = self._parse_symbols(msg.symbol)
         self._log(format_success(f"已接收 symbol: {len(symbols)} 筆"))
+        metrics.inc("ctrader.symbol_list.success")
+        started_at = getattr(self, "_metrics_started_at", None)
+        if started_at is not None:
+            metrics.observe("ctrader.symbol_list.latency_s", time.monotonic() - started_at)
         if self._callbacks.on_symbols_received:
             self._callbacks.on_symbols_received(symbols)
 
@@ -130,6 +137,7 @@ class SymbolListService(LogHistoryMixin[SymbolListServiceCallbacks], OperationSt
         self._end_operation()
         self._app_auth_service.remove_message_handler(self._handle_message)
         self._timeout_tracker.cancel()
+        metrics.inc("ctrader.symbol_list.error")
         self._emit_error(format_error(msg.errorCode, msg.description))
 
     def _on_timeout(self) -> None:
@@ -137,12 +145,14 @@ class SymbolListService(LogHistoryMixin[SymbolListServiceCallbacks], OperationSt
             return
         self._end_operation()
         self._app_auth_service.remove_message_handler(self._handle_message)
+        metrics.inc("ctrader.symbol_list.timeout")
         self._emit_error(error_message(ErrorCode.TIMEOUT, "取得 symbol list 逾時"))
 
     def _retry_request(self, attempt: int) -> None:
         if not self._in_progress:
             return
         self._log(format_warning(f"symbol list 逾時，重試第 {attempt} 次"))
+        metrics.inc("ctrader.symbol_list.retry")
         self._send_request()
 
     @staticmethod

@@ -6,6 +6,7 @@ from typing import Callable, Iterable, Optional, Union
 
 from application.broker.protocols import AppAuthServiceLike, TrendbarHistoryServiceLike
 from application.broker.use_cases import BrokerUseCases
+from config.data_governance import normalize_timeframe, write_metadata_for_csv
 from config.paths import RAW_HISTORY_DIR
 
 
@@ -97,6 +98,19 @@ class HistoryDownloadPipeline:
             writer = csv.DictWriter(handle, fieldnames=fieldnames)
             writer.writeheader()
             writer.writerows(rows_list)
+
+        write_metadata_for_csv(
+            path,
+            artifact_type="raw_history_csv",
+            details={
+                "symbol_id": int(symbol_id),
+                "timeframe": normalize_timeframe(timeframe),
+                "row_count": len(rows_list),
+                "columns": fieldnames,
+                "range_start": start,
+                "range_end": end,
+            },
+        )
 
         return str(path)
 

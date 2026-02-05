@@ -2,6 +2,7 @@
 OAuth 帳戶認證服務
 """
 from dataclasses import dataclass
+import time
 from typing import Callable, Optional, Protocol
 
 from ctrader_open_api import Client
@@ -21,6 +22,7 @@ from config.constants import ConnectionStatus, MessageType
 from config.paths import TOKEN_FILE
 from config.runtime import load_config, retry_policy_from_config
 from config.settings import OAuthTokens
+from utils.metrics import metrics
 
 
 class OAuthMessage(Protocol):
@@ -60,6 +62,7 @@ class OAuthService(BaseService[OAuthServiceCallbacks]):
         self._token_file = token_file
         self._timeout_tracker = TimeoutTracker(self._on_timeout)
         self._last_authenticated_account_id: Optional[int] = None
+        self._metrics_started_at: Optional[float] = None
 
     @classmethod
     def create(cls, app_auth_service: AppAuthService, token_file: str = TOKEN_FILE) -> "OAuthService":
@@ -105,6 +108,7 @@ class OAuthService(BaseService[OAuthServiceCallbacks]):
             return
         self._set_status(ConnectionStatus.CONNECTING)
         self._log("🔐 正在發送帳戶認證...")
+        self._metrics_started_at = time.monotonic()
 
         if error := self._validate_tokens():
             self._emit_error(error)
@@ -148,6 +152,7 @@ class OAuthService(BaseService[OAuthServiceCallbacks]):
             return error_message(ErrorCode.AUTH, "缺少帳戶 ID")
         if self._tokens.is_expired():
             if not self._tokens.refresh_token:
+                metrics.inc("ctrader.oauth.refresh.missing")
                 return error_message(ErrorCode.AUTH, "Token 已過期，且缺少 refresh token")
             try:
                 exchanger = TokenExchanger(self._app_auth_service.get_credentials())
@@ -158,7 +163,9 @@ class OAuthService(BaseService[OAuthServiceCallbacks]):
                 refreshed.save(self._token_file)
                 self._tokens = refreshed
                 self._log("🔁 已自動刷新 OAuth Token")
+                metrics.inc("ctrader.oauth.refresh.success")
             except Exception as exc:
+                metrics.inc("ctrader.oauth.refresh.failure")
                 return error_message(ErrorCode.AUTH, "Token 刷新失敗", str(exc))
         return None
 
@@ -193,6 +200,9 @@ class OAuthService(BaseService[OAuthServiceCallbacks]):
         except Exception:
             self._last_authenticated_account_id = None
         self._log(format_success("帳戶已授權！"))
+        metrics.inc("ctrader.oauth.success")
+        if self._metrics_started_at is not None:
+            metrics.observe("ctrader.oauth.latency_s", time.monotonic() - self._metrics_started_at)
         if self._callbacks.on_oauth_success:
             self._callbacks.on_oauth_success(self._tokens)
 
@@ -201,6 +211,7 @@ class OAuthService(BaseService[OAuthServiceCallbacks]):
         self._end_operation()
         self._app_auth_service.remove_message_handler(self._handle_message)
         self._timeout_tracker.cancel()
+        metrics.inc("ctrader.oauth.error")
         self._emit_error(format_error(msg.errorCode, msg.description))
         self._set_status(ConnectionStatus.DISCONNECTED)
 
@@ -209,6 +220,7 @@ class OAuthService(BaseService[OAuthServiceCallbacks]):
             return
         self._end_operation()
         self._app_auth_service.remove_message_handler(self._handle_message)
+        metrics.inc("ctrader.oauth.timeout")
         self._emit_error(error_message(ErrorCode.TIMEOUT, "帳戶認證逾時"))
         self._set_status(ConnectionStatus.DISCONNECTED)
 
@@ -216,4 +228,5 @@ class OAuthService(BaseService[OAuthServiceCallbacks]):
         if not self._in_progress:
             return
         self._log(f"⚠️ 帳戶認證逾時，重試第 {attempt} 次")
+        metrics.inc("ctrader.oauth.retry")
         self._send_auth_request()

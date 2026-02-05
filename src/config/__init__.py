@@ -13,6 +13,7 @@ from config.paths import (
     TOKEN_FILE,
     TRAIN_PPO_SCRIPT,
 )
+from config.data_governance import SCHEMA_VERSION, normalize_timeframe, write_metadata_for_csv
 from config.runtime import load_config
 
 __all__ = [
@@ -21,11 +22,14 @@ __all__ = [
     "MODEL_DIR",
     "RAW_HISTORY_DIR",
     "RUN_LIVE_SIM_SCRIPT",
+    "SCHEMA_VERSION",
     "SRC_DIR",
     "SYMBOL_LIST_FILE",
     "TIMEFRAMES_FILE",
     "TOKEN_FILE",
     "TRAIN_PPO_SCRIPT",
+    "normalize_timeframe",
     "load_config",
     "setup_logging",
+    "write_metadata_for_csv",
 ]

@@ -2,6 +2,7 @@
 帳戶列表服務
 """
 from dataclasses import dataclass
+import time
 from typing import Callable, Optional, Protocol, Sequence
 
 from ctrader_open_api import Client
@@ -19,6 +20,7 @@ from infrastructure.broker.ctrader.services.message_helpers import (
     format_success,
     format_warning,
 )
+from utils.metrics import metrics
 from infrastructure.broker.ctrader.services.timeout_tracker import TimeoutTracker
 
 
@@ -87,6 +89,7 @@ class AccountListService(LogHistoryMixin[AccountListServiceCallbacks], Operation
             return
 
         runtime = load_config()
+        self._metrics_started_at = time.monotonic()
         self._timeout_tracker.configure_retry(
             retry_policy_from_config(runtime),
             self._retry_request,
@@ -129,6 +132,10 @@ class AccountListService(LogHistoryMixin[AccountListServiceCallbacks], Operation
         self._timeout_tracker.cancel()
         accounts = self._parse_accounts(msg.ctidTraderAccount)
         self._log(format_success(f"已接收帳戶: {len(accounts)} 個"))
+        metrics.inc("ctrader.account_list.success")
+        started_at = getattr(self, "_metrics_started_at", None)
+        if started_at is not None:
+            metrics.observe("ctrader.account_list.latency_s", time.monotonic() - started_at)
         if self._callbacks.on_accounts_received:
             self._callbacks.on_accounts_received(accounts)
 
@@ -137,6 +144,7 @@ class AccountListService(LogHistoryMixin[AccountListServiceCallbacks], Operation
         self._end_operation()
         self._app_auth_service.remove_message_handler(self._handle_message)
         self._timeout_tracker.cancel()
+        metrics.inc("ctrader.account_list.error")
         self._emit_error(format_error(msg.errorCode, msg.description))
 
     def _on_timeout(self) -> None:
@@ -144,12 +152,14 @@ class AccountListService(LogHistoryMixin[AccountListServiceCallbacks], Operation
             return
         self._end_operation()
         self._app_auth_service.remove_message_handler(self._handle_message)
+        metrics.inc("ctrader.account_list.timeout")
         self._emit_error(error_message(ErrorCode.TIMEOUT, "取得帳戶列表逾時"))
 
     def _retry_request(self, attempt: int) -> None:
         if not self._in_progress:
             return
         self._log(format_warning(f"帳戶列表逾時，重試第 {attempt} 次"))
+        metrics.inc("ctrader.account_list.retry")
         self._send_request()
 
     @staticmethod
