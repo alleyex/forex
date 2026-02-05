@@ -179,6 +179,12 @@ class LiveMainWindow(QMainWindow):
         self._positions_refresh_timer.setInterval(300)
         self._positions_refresh_timer.timeout.connect(self._apply_positions_refresh)
         self._positions_refresh_pending = False
+        self._log_throttle_last: dict[str, float] = {}
+        self._log_throttle_rules: list[tuple[str, float]] = [
+            ("收到報價事件", 5.0),
+            ("Request funds", 5.0),
+            ("Positions received", 5.0),
+        ]
         self._auto_connect_timer = QTimer(self)
         self._auto_connect_timer.setSingleShot(True)
         self._auto_connect_timer.timeout.connect(self._toggle_connection)
@@ -211,7 +217,7 @@ class LiveMainWindow(QMainWindow):
         self._auto_connect_timer.start(1000)
 
         if self._event_bus:
-            self._event_bus.subscribe("log", self._log_panel.append)
+            self._event_bus.subscribe("log", self._handle_log_message)
 
         if self._service:
             self.set_service(self._service)
@@ -2132,7 +2138,7 @@ class LiveMainWindow(QMainWindow):
         self._connection_controller = controller
 
     def _connect_signals(self) -> None:
-        self.logRequested.connect(self._log_panel.append)
+        self.logRequested.connect(self._handle_log_message)
         self.appAuthStatusChanged.connect(self._handle_app_auth_status)
         self.oauthStatusChanged.connect(self._handle_oauth_status)
         self.oauthError.connect(self._handle_oauth_error)
@@ -2143,6 +2149,20 @@ class LiveMainWindow(QMainWindow):
         self.historyReceived.connect(self._handle_history_received)
         self.trendbarReceived.connect(self._handle_trendbar_received)
         self.quoteUpdated.connect(self._handle_quote_updated)
+
+    @Slot(str)
+    def _handle_log_message(self, message: str) -> None:
+        if not self._log_panel:
+            return
+        now = time.time()
+        for pattern, interval in self._log_throttle_rules:
+            if pattern in message:
+                last_ts = self._log_throttle_last.get(pattern, 0.0)
+                if now - last_ts < interval:
+                    return
+                self._log_throttle_last[pattern] = now
+                break
+        self._log_panel.append(message)
 
     @Slot()
     def _toggle_connection(self) -> None:
