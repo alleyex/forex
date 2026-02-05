@@ -17,18 +17,17 @@ from ui.train.layout.main_window_builder import (
     build_status_bar,
     build_toolbar,
 )
-from ui.train.layout import PanelSwitcher
+from ui.train.layout.panel_switcher import PanelSwitcher
 
-from ui.train.controllers import (
-    ConnectionController,
-    HistoryDownloadController,
-    AccountInfoController,
-    PPOTrainingController,
-    SimulationController,
-    ToolbarController,
-    TrendbarController,
-)
-from ui.train.presenters import ConnectionPresenter, HistoryDownloadPresenter
+from ui.train.controllers.connection_controller import ConnectionController
+from ui.train.controllers.history_download_controller import HistoryDownloadController
+from ui.train.controllers.account_info_controller import AccountInfoController
+from ui.train.controllers.ppo_training_controller import PPOTrainingController
+from ui.train.controllers.simulation_controller import SimulationController
+from ui.train.controllers.toolbar_controller import ToolbarController
+from ui.train.controllers.trendbar_controller import TrendbarController
+from ui.train.presenters.connection_presenter import ConnectionPresenter
+from ui.train.presenters.history_download_presenter import HistoryDownloadPresenter
 
 from application import (
     AppState,

@@ -15,7 +15,7 @@ from config.settings import OAuthTokens
 from infrastructure.storage.json_store import read_json, write_json
 from ui.train.dialogs.history_download_dialog import HistoryDownloadDialog
 from ui.train.state.history_download_state import HistoryDownloadState
-from ui.train.presenters import HistoryDownloadPresenter
+from ui.train.presenters.history_download_presenter import HistoryDownloadPresenter
 from utils.reactor_manager import reactor_manager
 
 

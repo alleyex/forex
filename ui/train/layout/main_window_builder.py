@@ -11,16 +11,16 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from ui.train.controllers import ToolbarController
+from ui.train.controllers.toolbar_controller import ToolbarController
 from ui.train.layout.dock_manager import DockManagerController
 from ui.train.layout.panel_switcher import PanelSet, PanelSwitcher
-from ui.train.presenters import SimulationPresenter, TrainingPresenter, TrendbarPresenter
-from ui.train.state import (
-    HistoryDownloadState,
-    SimulationState,
-    TrainingState,
-    TrendbarState,
-)
+from ui.train.presenters.simulation_presenter import SimulationPresenter
+from ui.train.presenters.training_presenter import TrainingPresenter
+from ui.train.presenters.trendbar_presenter import TrendbarPresenter
+from ui.train.state.history_download_state import HistoryDownloadState
+from ui.train.state.simulation_state import SimulationState
+from ui.train.state.training_state import TrainingState
+from ui.train.state.trendbar_state import TrendbarState
 from ui.shared.widgets.log_widget import LogWidget
 from ui.train.widgets.simulation_panel import SimulationPanel, SimulationParamsPanel
 from ui.train.widgets.trade_panel import TradePanel
