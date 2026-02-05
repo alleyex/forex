@@ -8,6 +8,8 @@ __pycache__/
 .ruff_cache/
 *.csv
 ml/rl/models/
+src/ml/rl/models/
+*.egg-info/
 data/raw_history/
 data/
 token.json

@@ -1,7 +1,13 @@
 # main_live.py
 import os
 import sys
+from importlib import resources
 from pathlib import Path
+
+ROOT_DIR = Path(__file__).resolve().parent
+SRC_DIR = ROOT_DIR / "src"
+if str(SRC_DIR) not in sys.path:
+    sys.path.insert(0, str(SRC_DIR))
 
 from PySide6.QtCore import Qt
 from PySide6.QtWidgets import QApplication
@@ -20,9 +26,9 @@ def main() -> int:
     QApplication.setAttribute(Qt.AA_UseSoftwareOpenGL, True)
     app = QApplication(sys.argv)
     app.setStyle("Fusion")
-    style_path = Path("ui/shared/styles/app.qss")
-    if style_path.exists():
-        app.setStyleSheet(style_path.read_text())
+    style_path = resources.files("ui.shared.styles").joinpath("app.qss")
+    if style_path.is_file():
+        app.setStyleSheet(style_path.read_text(encoding="utf-8"))
 
     main_window = LiveMainWindow(
         use_cases=use_cases,

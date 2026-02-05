@@ -1,9 +1,16 @@
 # main_train.py
 import sys
+from importlib import resources
 from pathlib import Path
+import traceback
+
+ROOT_DIR = Path(__file__).resolve().parent
+SRC_DIR = ROOT_DIR / "src"
+if str(SRC_DIR) not in sys.path:
+    sys.path.insert(0, str(SRC_DIR))
+
 from PySide6.QtWidgets import QApplication
 from PySide6.QtCore import qInstallMessageHandler
-import traceback
 
 from bootstrap import bootstrap
 from ui.train.main_window import MainWindow
@@ -23,9 +30,9 @@ def main() -> int:
     qInstallMessageHandler(_qt_message_handler)
     app = QApplication(sys.argv)
     app.setStyle("Fusion")  # Consistent cross-platform look
-    style_path = Path("ui/shared/styles/app.qss")
-    if style_path.exists():
-        app.setStyleSheet(style_path.read_text())
+    style_path = resources.files("ui.shared.styles").joinpath("app.qss")
+    if style_path.is_file():
+        app.setStyleSheet(style_path.read_text(encoding="utf-8"))
     
     main_window = MainWindow(
         use_cases=use_cases,

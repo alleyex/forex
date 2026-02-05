@@ -1,7 +1,0 @@
-DATA_DIR = "data"
-RAW_HISTORY_DIR = f"{DATA_DIR}/raw_history"
-TOKEN_FILE = "token.json"
-SYMBOL_LIST_FILE = "symbol.json"
-TIMEFRAMES_FILE = "timeframes.json"
-TRAIN_PPO_SCRIPT = "tools/rl/train_ppo.py"
-RUN_LIVE_SIM_SCRIPT = "tools/rl/run_live_sim.py"

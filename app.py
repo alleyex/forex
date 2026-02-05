@@ -1,7 +1,14 @@
 import sys
+from pathlib import Path
+import traceback
+
+ROOT_DIR = Path(__file__).resolve().parent
+SRC_DIR = ROOT_DIR / "src"
+if str(SRC_DIR) not in sys.path:
+    sys.path.insert(0, str(SRC_DIR))
+
 from PySide6.QtWidgets import QApplication
 from PySide6.QtCore import qInstallMessageHandler
-import traceback
 
 from bootstrap import bootstrap
 from ui.shared.dialogs.app_auth_dialog import AppAuthDialog

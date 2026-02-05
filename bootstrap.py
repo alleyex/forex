@@ -24,7 +24,7 @@ def bootstrap(provider_name: Optional[str] = None) -> Tuple[BrokerUseCases, str,
         (use_cases, provider_name)
     """
     config = load_config()
-    setup_logging(level_name=config.log_level)
+    setup_logging(level_name=config.log_level, log_file=config.log_file)
     name = provider_name or config.provider
     register_provider(CTraderProvider())
     register_provider(FakeProvider())

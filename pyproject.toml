@@ -1,0 +1,47 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "forex"
+version = "0.1.0"
+description = "Forex trading UI, broker integration, and RL tooling"
+readme = "docs/architecture.md"
+requires-python = ">=3.10"
+license = { text = "Proprietary" }
+
+dependencies = []
+
+[project.optional-dependencies]
+ui = [
+  "PySide6",
+  "pyqtgraph",
+  "numpy",
+  "pandas",
+]
+ml = [
+  "numpy",
+  "pandas",
+  "gymnasium",
+  "stable-baselines3",
+  "optuna",
+]
+ctrader = [
+  "ctrader-open-api",
+]
+dev = [
+  "pytest",
+  "pytest-cov",
+  "ruff",
+  "black",
+  "mypy",
+]
+
+[tool.setuptools]
+package-dir = {"" = "src"}
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools.package-data]
+"ui.shared.styles" = ["app.qss"]
