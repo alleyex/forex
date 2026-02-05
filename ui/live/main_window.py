@@ -1918,16 +1918,6 @@ class LiveMainWindow(QMainWindow):
             take_profit = int(round(tp_points))
         return stop_loss, take_profit
 
-    def _points_per_pip(self, symbol_name: str) -> int:
-        digits = self._symbol_digits_by_name.get(symbol_name)
-        if digits is None:
-            digits = self._quote_digits.get(symbol_name, self._price_digits)
-        try:
-            digits = int(digits)
-        except (TypeError, ValueError):
-            digits = self._price_digits
-        return int(10 ** max(0, 6 - digits))
-
     def _sync_auto_position_from_positions(self, positions: list[object]) -> None:
         if not self._auto_enabled:
             return
