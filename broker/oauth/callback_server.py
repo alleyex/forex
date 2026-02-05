@@ -2,10 +2,10 @@
 OAuth 回調伺服器
 """
 import time
-import urllib.parse
 import webbrowser
 from http.server import BaseHTTPRequestHandler, HTTPServer
 from typing import Optional, Tuple, Callable
+from urllib import parse
 
 
 class OAuthCallbackHandler(BaseHTTPRequestHandler):
@@ -13,8 +13,8 @@ class OAuthCallbackHandler(BaseHTTPRequestHandler):
     
     def do_GET(self):
         """處理 GET 請求"""
-        parsed = urllib.parse.urlparse(self.path)
-        params = urllib.parse.parse_qs(parsed.query)
+        parsed = parse.urlparse(self.path)
+        params = parse.parse_qs(parsed.query)
         self.server.code = params.get("code", [None])[0]
         self.server.request_path = parsed.path
         
@@ -57,7 +57,7 @@ class CallbackServer:
         Raises:
             ValueError: URI 格式無效
         """
-        parsed = urllib.parse.urlparse(redirect_uri)
+        parsed = parse.urlparse(redirect_uri)
         host = parsed.hostname
         port = parsed.port
         path = parsed.path or "/"

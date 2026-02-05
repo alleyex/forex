@@ -3,9 +3,8 @@ OAuth Token 交換工具
 """
 import json
 import time
-import urllib.parse
-import urllib.request
 from typing import Optional
+from urllib import parse, request
 
 from config.settings import OAuthTokens, AppCredentials
 
@@ -33,7 +32,7 @@ class TokenExchanger:
             "redirect_uri": self._redirect_uri,
             "scope": "trading",
         }
-        return f"{self.AUTH_URL}?{urllib.parse.urlencode(params)}"
+        return f"{self.AUTH_URL}?{parse.urlencode(params)}"
     
     def exchange_code(
         self, 
@@ -66,10 +65,10 @@ class TokenExchanger:
     
     def _post_request(self, data: dict) -> dict:
         """發送 POST 請求並回傳解析後的 JSON 回應"""
-        encoded = urllib.parse.urlencode(data).encode("utf-8")
-        req = urllib.request.Request(self.TOKEN_URL, data=encoded, method="POST")
+        encoded = parse.urlencode(data).encode("utf-8")
+        req = request.Request(self.TOKEN_URL, data=encoded, method="POST")
         
-        with urllib.request.urlopen(req, timeout=15) as response:
+        with request.urlopen(req, timeout=15) as response:
             payload = response.read().decode("utf-8")
         
         return self._safe_json_loads(payload)
