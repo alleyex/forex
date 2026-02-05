@@ -302,7 +302,7 @@ class AppAuthService(BaseAuthService[AppAuthServiceCallbacks, Client, AppAuthMes
 
     def _handle_spot_event(self, client: Client, msg) -> None:
         """處理報價事件（避免未處理訊息噪音）"""
-        self._log(format_confirm("收到報價事件", ProtoOAPayloadType.PROTO_OA_SPOT_EVENT))
+        return
 
     def _handle_unsubscribe_spots(self, client: Client, msg) -> None:
         """處理報價退訂回應"""

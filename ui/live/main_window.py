@@ -181,7 +181,6 @@ class LiveMainWindow(QMainWindow):
         self._positions_refresh_pending = False
         self._log_throttle_last: dict[str, float] = {}
         self._log_throttle_rules: list[tuple[str, float]] = [
-            ("收到報價事件", 5.0),
             ("Request funds", 5.0),
             ("Positions received", 5.0),
         ]
