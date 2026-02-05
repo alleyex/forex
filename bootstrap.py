@@ -6,7 +6,8 @@ from typing import Optional, Tuple
 from application import AppState, BrokerUseCases, EventBus
 from broker.core import get_provider, register_provider
 from infrastructure.broker.ctrader.provider import CTraderProvider
-from config import load_config, setup_logging
+from config.logging import setup_logging
+from config.runtime import load_config
 from infrastructure.broker.fake.provider import FakeProvider
 
 

@@ -6,7 +6,7 @@ import traceback
 from bootstrap import bootstrap
 from ui.shared.dialogs.app_auth_dialog import AppAuthDialog
 from ui.train.main_window import MainWindow
-from config import load_config
+from config.runtime import load_config
 
 
 def _qt_message_handler(mode, context, message) -> None:
