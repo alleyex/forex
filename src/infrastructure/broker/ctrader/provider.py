@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import Optional
 
-from broker.core.provider import BrokerProvider
+from application.broker.provider import BrokerProvider
 from infrastructure.broker.ctrader.services.account_funds_service import AccountFundsService
 from infrastructure.broker.ctrader.services.account_list_service import AccountListService
 from infrastructure.broker.ctrader.services.app_auth_service import AppAuthService

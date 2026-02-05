@@ -5,10 +5,10 @@ from dataclasses import dataclass
 import threading
 from typing import Callable, Optional
 
-from broker.base import BaseCallbacks, LogHistoryMixin, OperationStateMixin, build_callbacks
-from broker.errors import ErrorCode, error_message
-from broker.oauth.tokens import TokenExchanger
-from broker.oauth.callback_server import CallbackServer
+from infrastructure.broker.base import BaseCallbacks, LogHistoryMixin, OperationStateMixin, build_callbacks
+from infrastructure.broker.errors import ErrorCode, error_message
+from infrastructure.broker.oauth.tokens import TokenExchanger
+from infrastructure.broker.oauth.callback_server import CallbackServer
 from config.paths import TOKEN_FILE
 from config.runtime import load_config
 from config.settings import OAuthTokens, AppCredentials

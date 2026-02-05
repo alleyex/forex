@@ -3,7 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Optional
 
-from broker.core.provider import BrokerProvider
+from application.broker.provider import BrokerProvider
 
 
 @dataclass

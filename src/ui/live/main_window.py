@@ -158,7 +158,7 @@ class LiveMainWindow(QMainWindow):
         self._symbol_digits_by_name: dict[str, int] = {}
         self._symbol_overrides: dict[str, dict] = {}
         self._symbol_overrides_loaded = False
-        self._symbol_details_retry_archived: set[int] = set()
+        self._symbol_details_unavailable: set[int] = set()
         self._fx_symbols = self._filter_fx_symbols(self._symbol_names)
         self._symbol_name = (
             "EURUSD" if "EURUSD" in self._symbol_id_map else (self._fx_symbols[0] if self._fx_symbols else "EURUSD")
@@ -1071,8 +1071,6 @@ class LiveMainWindow(QMainWindow):
         current_symbol = self._trade_symbol.currentText() if hasattr(self, "_trade_symbol") else ""
         if not current_symbol:
             current_symbol = self._symbol_name
-        if current_symbol:
-            self._fetch_symbol_details(current_symbol)
 
     def _sync_lot_value_style(self) -> None:
         if self._lot_risk.isChecked():
@@ -2086,7 +2084,13 @@ class LiveMainWindow(QMainWindow):
         )
         lows = [candle[3] for candle in candles]
         highs = [candle[2] for candle in candles]
-        self._chart_plot.setYRange(min(lows), max(highs), padding=0.1)
+        min_price = min(lows)
+        max_price = max(highs)
+        if min_price == max_price:
+            pad = max(0.0001, min_price * 0.0001)
+            self._chart_plot.setYRange(min_price - pad, max_price + pad, padding=0.0)
+        else:
+            self._chart_plot.setYRange(min_price, max_price, padding=0.1)
         last_close = candles[-1][4]
         if self._last_price_line:
             self._last_price_line.setValue(last_close)
@@ -2182,7 +2186,6 @@ class LiveMainWindow(QMainWindow):
             self._ensure_quote_subscription()
             self._request_positions()
             self._refresh_account_balance()
-            self._fetch_symbol_details(self._symbol_name)
             if not self._funds_timer.isActive():
                 self._funds_timer.start()
         else:
@@ -2427,7 +2430,6 @@ class LiveMainWindow(QMainWindow):
             self._ensure_quote_subscription()
             self._request_positions()
             self._refresh_account_balance()
-            self._fetch_symbol_details(self._symbol_name)
             if not self._funds_timer.isActive():
                 self._funds_timer.start()
 
@@ -2741,7 +2743,6 @@ class LiveMainWindow(QMainWindow):
         if self._account_switch_in_progress:
             return
         self._sync_quote_symbols(symbol)
-        self._fetch_symbol_details(symbol)
         if symbol != self._symbol_name:
             self._symbol_name = symbol
             self._symbol_id = self._resolve_symbol_id(symbol)
@@ -2762,6 +2763,8 @@ class LiveMainWindow(QMainWindow):
             return
         if symbol_id in self._symbol_details_by_id:
             return
+        if symbol_id in self._symbol_details_unavailable:
+            return
         if self._symbol_by_id_uc is None:
             try:
                 self._symbol_by_id_uc = self._use_cases.create_symbol_by_id(self._service)
@@ -2777,15 +2780,8 @@ class LiveMainWindow(QMainWindow):
             if not symbols:
                 return
             merged = self._merge_symbol_details(symbols)
-            if not merged and symbol_id not in self._symbol_details_retry_archived:
-                self._symbol_details_retry_archived.add(symbol_id)
-                self._symbol_by_id_uc.fetch(
-                    account_id=account_id,
-                    symbol_ids=[symbol_id],
-                    include_archived=True,
-                )
-            elif not merged:
-                self._auto_log("⚠️ Symbol details missing volume/digits; using defaults or overrides.")
+            if not merged:
+                self._symbol_details_unavailable.add(symbol_id)
 
         self._symbol_by_id_uc.set_callbacks(
             on_symbols_received=_on_symbols,
@@ -3032,7 +3028,8 @@ if pg is not None:
                 return
             width = self._infer_half_width()
             for time, open_price, high, low, close in self._data:
-                painter.setPen(pg.mkPen("#4b5563", width=2))
+                wick_pen = pg.mkPen("#9ca3af", width=1)
+                painter.setPen(wick_pen)
                 painter.drawLine(QtCore.QPointF(time, low), QtCore.QPointF(time, high))
                 if open_price > close:
                     color = "#ef4444"
@@ -3040,9 +3037,16 @@ if pg is not None:
                 else:
                     color = "#10b981"
                     rect = QtCore.QRectF(time - width, open_price, width * 2, close - open_price)
-                painter.setPen(pg.mkPen(color, width=2))
-                painter.setBrush(pg.mkBrush(color))
-                painter.drawRect(rect)
+                if rect.height() == 0:
+                    painter.setPen(pg.mkPen(color, width=2))
+                    painter.drawLine(
+                        QtCore.QPointF(time - width, open_price),
+                        QtCore.QPointF(time + width, open_price),
+                    )
+                else:
+                    painter.setPen(pg.mkPen(color, width=2))
+                    painter.setBrush(pg.mkBrush(color))
+                    painter.drawRect(rect)
             painter.end()
 
         def _infer_half_width(self) -> float:

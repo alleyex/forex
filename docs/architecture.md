@@ -1,8 +1,9 @@
 # Architecture Notes
 
 ## 1) Entry and Bootstrap
-- `main_train.py` / `app.py`: app entry points.
-- `bootstrap.py`: initializes logging, provider registry, use cases, event bus, and app state.
+- `src/app/entrypoints/*`: primary entry points (train/live/auth).
+- `main_train.py` / `main_live.py` / `app.py`: thin wrappers that call the entrypoints.
+- `src/app/bootstrap.py`: initializes logging, provider registry, use cases, event bus, and app state.
 - `config/runtime.py`: reads environment config (TOKEN_FILE, BROKER_PROVIDER, LOG_LEVEL).
 
 ## 2) Application Layer
@@ -14,6 +15,9 @@
 - `domain/accounts.py`: Account, AccountFundsSnapshot.
 
 ## 4) Infrastructure Layer
+- `infrastructure/broker/base.py`: base mixins/callbacks for broker services.
+- `infrastructure/broker/errors.py`: shared broker error utilities.
+- `infrastructure/broker/oauth/*`: OAuth helper utilities.
 - `infrastructure/broker/ctrader/provider.py`: provider implementation (cTrader).
 - `infrastructure/broker/ctrader/services/*`: concrete services (auth, account list, funds, trendbar).
 - `infrastructure/broker/fake/*`: fake provider for tests/offline.

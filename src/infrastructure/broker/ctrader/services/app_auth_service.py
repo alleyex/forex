@@ -11,8 +11,8 @@ from ctrader_open_api.messages.OpenApiCommonMessages_pb2 import ProtoHeartbeatEv
 from ctrader_open_api.messages.OpenApiMessages_pb2 import ProtoOAApplicationAuthReq
 from ctrader_open_api.messages.OpenApiModelMessages_pb2 import ProtoOAPayloadType
 
-from broker.base import BaseAuthService, BaseCallbacks, build_callbacks
-from broker.errors import ErrorCode, error_message
+from infrastructure.broker.base import BaseAuthService, BaseCallbacks, build_callbacks
+from infrastructure.broker.errors import ErrorCode, error_message
 from config.constants import MessageType, ConnectionStatus
 from config.paths import TOKEN_FILE
 from config.runtime import load_config

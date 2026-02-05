@@ -8,9 +8,9 @@ from typing import Callable, Optional, Protocol
 from ctrader_open_api import Client
 from ctrader_open_api.messages.OpenApiMessages_pb2 import ProtoOAAccountAuthReq
 
-from broker.base import BaseCallbacks, BaseService, build_callbacks
-from broker.errors import ErrorCode, error_message
-from broker.oauth.tokens import TokenExchanger
+from infrastructure.broker.base import BaseCallbacks, BaseService, build_callbacks
+from infrastructure.broker.errors import ErrorCode, error_message
+from infrastructure.broker.oauth.tokens import TokenExchanger
 from infrastructure.broker.ctrader.services.app_auth_service import AppAuthService
 from infrastructure.broker.ctrader.services.message_helpers import (
     dispatch_payload,

@@ -10,8 +10,8 @@ from ctrader_open_api import Client
 from ctrader_open_api.messages.OpenApiMessages_pb2 import ProtoOASymbolByIdReq
 from ctrader_open_api.messages.OpenApiModelMessages_pb2 import ProtoOAPayloadType
 
-from broker.base import BaseCallbacks, LogHistoryMixin, OperationStateMixin, build_callbacks
-from broker.errors import ErrorCode, error_message
+from infrastructure.broker.base import BaseCallbacks, LogHistoryMixin, OperationStateMixin, build_callbacks
+from infrastructure.broker.errors import ErrorCode, error_message
 from infrastructure.broker.ctrader.services.app_auth_service import AppAuthService
 from infrastructure.broker.ctrader.services.message_helpers import (
     dispatch_payload,

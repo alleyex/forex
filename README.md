@@ -4,7 +4,7 @@ This repository contains a desktop trading UI, broker integration (cTrader), and
 
 ## Layout
 
-- `src/` application code (application, broker, infrastructure, ui, ml, tools)
+- `src/` application code (app, application, domain, infrastructure, ui, ml, tools)
 - `data/` runtime artifacts (ignored from git)
 - `docs/` architecture and operational notes
 
@@ -25,16 +25,24 @@ pip install -e '.[ml]'
 
 ## Run
 
-Training UI:
+Training UI (wrapper entrypoint):
 
 ```bash
 QT_OPENGL=software LOG_LEVEL=INFO python main_train.py
 ```
 
-Live UI:
+Live UI (wrapper entrypoint):
 
 ```bash
 QT_OPENGL=software LOG_LEVEL=INFO python main_live.py
+```
+
+Direct module entrypoints:
+
+```bash
+QT_OPENGL=software LOG_LEVEL=INFO python -m app.entrypoints.train
+QT_OPENGL=software LOG_LEVEL=INFO python -m app.entrypoints.live
+python -m app.entrypoints.app
 ```
 
 ## Tests
