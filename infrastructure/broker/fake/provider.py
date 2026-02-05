@@ -190,6 +190,80 @@ class FakeSymbolListService:
             self._on_symbols_received([])
 
 
+@dataclass
+class FakeSymbolByIdService:
+    app_auth_service: FakeAppAuthService
+    in_progress: bool = False
+
+    def set_callbacks(self, on_symbols_received=None, on_error=None, on_log=None) -> None:
+        self._on_symbols_received = on_symbols_received
+        self._on_error = on_error
+        self._on_log = on_log
+
+    def clear_log_history(self) -> None:
+        pass
+
+    def fetch(
+        self,
+        account_id: int,
+        symbol_ids: list[int],
+        include_archived: bool = False,
+        timeout_seconds: Optional[int] = None,
+    ) -> None:
+        if self._on_symbols_received:
+            self._on_symbols_received([])
+
+
+@dataclass
+class FakeOrderService:
+    app_auth_service: FakeAppAuthService
+    in_progress: bool = False
+
+    def set_callbacks(self, on_execution=None, on_error=None, on_log=None) -> None:
+        self._on_execution = on_execution
+        self._on_error = on_error
+        self._on_log = on_log
+
+    def place_market_order(
+        self,
+        *,
+        account_id: int,
+        symbol_id: int,
+        trade_side: str,
+        volume: int,
+        stop_loss: Optional[float] = None,
+        take_profit: Optional[float] = None,
+        label: Optional[str] = None,
+        comment: Optional[str] = None,
+        client_order_id: Optional[str] = None,
+        slippage_points: Optional[int] = None,
+    ) -> Optional[str]:
+        if self._on_execution:
+            self._on_execution(
+                {
+                    "client_order_id": client_order_id,
+                    "position_id": None,
+                    "order": None,
+                    "position": None,
+                    "deal": None,
+                }
+            )
+        return client_order_id
+
+    def close_position(self, *, account_id: int, position_id: int, volume: int) -> bool:
+        if self._on_execution:
+            self._on_execution(
+                {
+                    "client_order_id": None,
+                    "position_id": position_id,
+                    "order": None,
+                    "position": None,
+                    "deal": None,
+                }
+            )
+        return True
+
+
 class FakeProvider(BrokerProvider):
     """Fake provider for tests and offline development."""
 
@@ -213,8 +287,14 @@ class FakeProvider(BrokerProvider):
     def create_symbol_list_service(self, app_auth_service):
         return FakeSymbolListService(app_auth_service=app_auth_service)
 
+    def create_symbol_by_id_service(self, app_auth_service):
+        return FakeSymbolByIdService(app_auth_service=app_auth_service)
+
     def create_trendbar_service(self, app_auth_service):
         return FakeTrendbarService(app_auth_service=app_auth_service)
 
     def create_trendbar_history_service(self, app_auth_service):
         return FakeTrendbarHistoryService(app_auth_service=app_auth_service)
+
+    def create_order_service(self, app_auth_service):
+        return FakeOrderService(app_auth_service=app_auth_service)

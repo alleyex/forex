@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Callable, Optional, Protocol
+from typing import Callable, Optional, Protocol, Sequence
 
 from domain import Account, AccountFundsSnapshot
 
@@ -88,6 +88,7 @@ class AccountFundsUseCaseLike(Protocol):
     def set_callbacks(
         self,
         on_funds_received: Optional[Callable[[AccountFundsSnapshot], None]] = None,
+        on_position_pnl: Optional[Callable[[dict[int, float]], None]] = None,
         on_error=None,
         on_log=None,
     ) -> None:
@@ -112,6 +113,25 @@ class SymbolListUseCaseLike(Protocol):
     def fetch(
         self,
         account_id: int,
+        include_archived: bool = False,
+        timeout_seconds: Optional[int] = None,
+    ) -> None:
+        ...
+
+
+class SymbolByIdUseCaseLike(Protocol):
+    in_progress: bool
+
+    def set_callbacks(self, on_symbols_received=None, on_error=None, on_log=None) -> None:
+        ...
+
+    def clear_log_history(self) -> None:
+        ...
+
+    def fetch(
+        self,
+        account_id: int,
+        symbol_ids: Sequence[int],
         include_archived: bool = False,
         timeout_seconds: Optional[int] = None,
     ) -> None:
@@ -149,7 +169,33 @@ class TrendbarHistoryServiceLike(Protocol):
         timeframe: str = "M5",
         from_ts: Optional[int] = None,
         to_ts: Optional[int] = None,
-    ) -> None:
+        ) -> None:
+        ...
+
+
+class OrderServiceLike(Protocol):
+    in_progress: bool
+
+    def set_callbacks(self, on_execution=None, on_error=None, on_log=None) -> None:
+        ...
+
+    def place_market_order(
+        self,
+        *,
+        account_id: int,
+        symbol_id: int,
+        trade_side: str,
+        volume: int,
+        stop_loss: Optional[float] = None,
+        take_profit: Optional[float] = None,
+        label: Optional[str] = None,
+        comment: Optional[str] = None,
+        client_order_id: Optional[str] = None,
+        slippage_points: Optional[int] = None,
+    ) -> Optional[str]:
+        ...
+
+    def close_position(self, *, account_id: int, position_id: int, volume: int) -> bool:
         ...
 
 
@@ -190,10 +236,18 @@ class BrokerUseCaseFactory(Protocol):
     ) -> SymbolListUseCaseLike:
         ...
 
+    def create_symbol_by_id_service(
+        self, app_auth_service: AppAuthServiceLike
+    ) -> SymbolByIdUseCaseLike:
+        ...
+
     def create_trendbar_service(self, app_auth_service: AppAuthServiceLike) -> TrendbarServiceLike:
         ...
 
     def create_trendbar_history_service(
         self, app_auth_service: AppAuthServiceLike
     ) -> TrendbarHistoryServiceLike:
+        ...
+
+    def create_order_service(self, app_auth_service: AppAuthServiceLike) -> OrderServiceLike:
         ...

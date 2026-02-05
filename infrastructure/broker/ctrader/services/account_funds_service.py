@@ -2,6 +2,7 @@
 帳戶資金狀態服務
 """
 from dataclasses import dataclass
+import time
 from typing import Callable, Optional, Protocol, Sequence
 
 from ctrader_open_api import Client
@@ -15,7 +16,11 @@ from ctrader_open_api.messages.OpenApiModelMessages_pb2 import ProtoOAPayloadTyp
 
 from broker.base import BaseCallbacks, LogHistoryMixin, OperationStateMixin, build_callbacks
 from infrastructure.broker.ctrader.services.app_auth_service import AppAuthService
-from infrastructure.broker.ctrader.services.message_helpers import format_error
+from infrastructure.broker.ctrader.services.message_helpers import (
+    format_error,
+    format_success,
+    is_already_subscribed,
+)
 from infrastructure.broker.ctrader.services.timeout_tracker import TimeoutTracker
 
 
@@ -78,6 +83,7 @@ class AccountFunds:
 class AccountFundsServiceCallbacks(BaseCallbacks):
     """AccountFundsService 的回調函式"""
     on_funds_received: Optional[Callable[[AccountFunds], None]] = None
+    on_position_pnl: Optional[Callable[[dict[int, float]], None]] = None
 
 
 class AccountFundsService(LogHistoryMixin[AccountFundsServiceCallbacks], OperationStateMixin):
@@ -91,11 +97,14 @@ class AccountFundsService(LogHistoryMixin[AccountFundsServiceCallbacks], Operati
         self._in_progress = False
         self._timeout_tracker = TimeoutTracker(self._on_timeout)
         self._log_history = []
+        self._last_pnl_request_ts: float = 0.0
+        self._min_pnl_interval: float = 2.0
         self._reset_state()
 
     def set_callbacks(
         self,
         on_funds_received: Optional[Callable[[AccountFunds], None]] = None,
+        on_position_pnl: Optional[Callable[[dict[int, float]], None]] = None,
         on_error: Optional[Callable[[str], None]] = None,
         on_log: Optional[Callable[[str], None]] = None,
     ) -> None:
@@ -103,6 +112,7 @@ class AccountFundsService(LogHistoryMixin[AccountFundsServiceCallbacks], Operati
         self._callbacks = build_callbacks(
             AccountFundsServiceCallbacks,
             on_funds_received=on_funds_received,
+            on_position_pnl=on_position_pnl,
             on_error=on_error,
             on_log=on_log,
         )
@@ -164,10 +174,12 @@ class AccountFundsService(LogHistoryMixin[AccountFundsServiceCallbacks], Operati
         self._client.send(request)
 
     def _send_pnl_request(self, position_ids: Sequence[int]) -> None:
+        now = time.monotonic()
+        if now - self._last_pnl_request_ts < self._min_pnl_interval:
+            return
+        self._last_pnl_request_ts = now
         request = ProtoOAGetPositionUnrealizedPnLReq()
         request.ctidTraderAccountId = self._account_id
-        for position_id in position_ids:
-            request.positionId.append(int(position_id))
         self._await_pnl = True
         self._client.send(request)
 
@@ -177,7 +189,6 @@ class AccountFundsService(LogHistoryMixin[AccountFundsServiceCallbacks], Operati
             return False
 
         payload = getattr(msg, "payloadType", None)
-
         if payload == ProtoOAPayloadType.PROTO_OA_TRADER_RES:
             self._on_trader(msg)
             return True
@@ -195,6 +206,9 @@ class AccountFundsService(LogHistoryMixin[AccountFundsServiceCallbacks], Operati
             return True
 
         if payload == ProtoOAPayloadType.PROTO_OA_ERROR_RES:
+            if is_already_subscribed(getattr(msg, "errorCode", ""), getattr(msg, "description", "")):
+                return True
+            self._log(format_error(getattr(msg, "errorCode", ""), getattr(msg, "description", "")))
             self._on_error(msg)
             return True
 
@@ -231,11 +245,17 @@ class AccountFundsService(LogHistoryMixin[AccountFundsServiceCallbacks], Operati
         money_digits = int(getattr(msg, "moneyDigits", self._money_digits or 0))
         pnl_items = list(getattr(msg, "positionUnrealizedPnL", []))
         net_pnl = 0.0
+        position_pnl: dict[int, float] = {}
         for item in pnl_items:
             net_value = int(getattr(item, "netUnrealizedPnL", 0))
+            position_id = int(getattr(item, "positionId", 0))
+            if position_id:
+                position_pnl[position_id] = self._scale_money(net_value, money_digits)
             net_pnl += self._scale_money(net_value, money_digits)
         self._net_unrealized_pnl = net_pnl
         self._await_pnl = False
+        if self._callbacks.on_position_pnl:
+            self._callbacks.on_position_pnl(position_pnl)
         self._maybe_finish()
 
     def _on_assets(self, msg: AssetMessage) -> None:

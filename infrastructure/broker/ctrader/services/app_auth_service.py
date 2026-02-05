@@ -275,6 +275,7 @@ class AppAuthService(BaseAuthService[AppAuthServiceCallbacks, Client, AppAuthMes
             MessageType.ERROR_RESPONSE: self._handle_error_response,
             MessageType.HEARTBEAT: self._handle_heartbeat_event,
             ProtoOAPayloadType.PROTO_OA_SPOT_EVENT: self._handle_spot_event,
+            ProtoOAPayloadType.PROTO_OA_ERROR_RES: self._handle_trading_error,
             ProtoOAPayloadType.PROTO_OA_UNSUBSCRIBE_SPOTS_RES: self._handle_unsubscribe_spots,
         }
 
@@ -282,7 +283,18 @@ class AppAuthService(BaseAuthService[AppAuthServiceCallbacks, Client, AppAuthMes
         if handler:
             handler(client, msg)
             return True
+        if self._is_noise_payload(msg_type):
+            return True
         return False
+
+    @staticmethod
+    def _is_noise_payload(msg_type: int) -> bool:
+        return msg_type in {
+            2113,
+            2125,
+            2138,
+            2166,
+        }
 
     def _handle_heartbeat_event(self, client: Client, msg) -> None:
         """處理心跳事件（僅更新活躍時間）"""
@@ -318,6 +330,12 @@ class AppAuthService(BaseAuthService[AppAuthServiceCallbacks, Client, AppAuthMes
             return
         self._end_operation()
         self._set_status(ConnectionStatus.DISCONNECTED)
+        self._emit_error(format_error(msg.errorCode, msg.description))
+
+    def _handle_trading_error(self, client: Client, msg) -> None:
+        """處理交易相關錯誤回應（避免重複訂閱噪音）"""
+        if is_already_subscribed(msg.errorCode, msg.description):
+            return
         self._emit_error(format_error(msg.errorCode, msg.description))
 
     def _wrap_client_send(self) -> None:

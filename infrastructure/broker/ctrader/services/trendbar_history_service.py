@@ -4,6 +4,7 @@
 from dataclasses import dataclass
 from datetime import datetime, timezone
 import time
+import threading
 from typing import Callable, Optional, Protocol, Sequence
 
 from ctrader_open_api import Client
@@ -16,13 +17,8 @@ from broker.base import BaseCallbacks, LogHistoryMixin, OperationStateMixin, bui
 from infrastructure.broker.ctrader.services.app_auth_service import AppAuthService
 from infrastructure.broker.ctrader.services.message_helpers import (
     dispatch_payload,
-    format_confirm,
     format_error,
     is_already_subscribed,
-)
-from infrastructure.broker.ctrader.services.spot_subscription import (
-    send_spot_subscribe,
-    send_spot_unsubscribe,
 )
 
 
@@ -60,6 +56,9 @@ class TrendbarHistoryService(LogHistoryMixin[TrendbarHistoryCallbacks], Operatio
     取得指定週期的 K 線歷史資料
     """
 
+    _MIN_TIMESTAMP_MS = 0
+    _MAX_TIMESTAMP_MS = 2147483646000
+
     def __init__(self, app_auth_service: AppAuthService):
         self._app_auth_service = app_auth_service
         self._callbacks = TrendbarHistoryCallbacks()
@@ -76,9 +75,11 @@ class TrendbarHistoryService(LogHistoryMixin[TrendbarHistoryCallbacks], Operatio
         self._current_range: Optional[tuple[int, int]] = None
         self._total_ranges = 0
         self._completed_ranges = 0
-        self._spot_subscribed = False
-        self._await_spot_subscribe = False
         self._period = ProtoOATrendbarPeriod.M5
+        self._last_request_ts: float = 0.0
+        self._min_request_interval: float = 0.2
+        self._send_timer: Optional[threading.Timer] = None
+        self._last_pagination_to_ts: Optional[int] = None
 
     def set_callbacks(
         self,
@@ -143,7 +144,6 @@ class TrendbarHistoryService(LogHistoryMixin[TrendbarHistoryCallbacks], Operatio
                 from_ts=from_ts,
                 to_ts=to_ts,
             )
-        self._ensure_spot_subscription()
         self._maybe_send_request()
 
     def _prepare_request(
@@ -163,13 +163,17 @@ class TrendbarHistoryService(LogHistoryMixin[TrendbarHistoryCallbacks], Operatio
             now_ms = int(time.time() * 1000)
             period_ms = max(1, self._period_minutes()) * 60 * 1000
             aligned_to = (now_ms // period_ms) * period_ms
-            request.toTimestamp = aligned_to
+            request.toTimestamp = min(aligned_to, self._MAX_TIMESTAMP_MS)
         else:
-            request.toTimestamp = int(to_ts)
+            request.toTimestamp = min(max(int(to_ts), self._MIN_TIMESTAMP_MS), self._MAX_TIMESTAMP_MS)
         if from_ts is None:
-            request.fromTimestamp = max(0, request.toTimestamp - (window_minutes * 60 * 1000))
+            request.fromTimestamp = max(self._MIN_TIMESTAMP_MS, request.toTimestamp - (window_minutes * 60 * 1000))
         else:
-            request.fromTimestamp = int(from_ts)
+            request.fromTimestamp = min(max(int(from_ts), self._MIN_TIMESTAMP_MS), self._MAX_TIMESTAMP_MS)
+        if request.fromTimestamp > request.toTimestamp:
+            request.fromTimestamp = max(
+                self._MIN_TIMESTAMP_MS, request.toTimestamp - (window_minutes * 60 * 1000)
+            )
         self._last_request_mode = "milliseconds"
         request.count = int(count)
         self._last_request_count = int(count)
@@ -181,12 +185,19 @@ class TrendbarHistoryService(LogHistoryMixin[TrendbarHistoryCallbacks], Operatio
     def _resolve_period(timeframe: str) -> int:
         mapping = {
             "M1": "M1",
+            "M2": "M2",
+            "M3": "M3",
+            "M4": "M4",
             "M5": "M5",
             "M10": "M10",
             "M15": "M15",
+            "M30": "M30",
             "H1": "H1",
             "H4": "H4",
+            "H12": "H12",
             "D1": "D1",
+            "W1": "W1",
+            "MN1": "MN1",
         }
         name = mapping.get(timeframe.upper(), "M5")
         return getattr(ProtoOATrendbarPeriod, name, ProtoOATrendbarPeriod.M5)
@@ -215,6 +226,9 @@ class TrendbarHistoryService(LogHistoryMixin[TrendbarHistoryCallbacks], Operatio
     def _period_minutes(self) -> int:
         period_map = {
             ProtoOATrendbarPeriod.M1: 1,
+            ProtoOATrendbarPeriod.M2: 2,
+            ProtoOATrendbarPeriod.M3: 3,
+            ProtoOATrendbarPeriod.M4: 4,
             ProtoOATrendbarPeriod.M5: 5,
             ProtoOATrendbarPeriod.M10: 10,
             ProtoOATrendbarPeriod.M15: 15,
@@ -231,8 +245,23 @@ class TrendbarHistoryService(LogHistoryMixin[TrendbarHistoryCallbacks], Operatio
     def _maybe_send_request(self) -> None:
         if not hasattr(self, "_pending_request"):
             return
-        if self._await_spot_subscribe:
+        now = time.monotonic()
+        elapsed = now - self._last_request_ts
+        if elapsed < self._min_request_interval:
+            if self._send_timer is not None:
+                return
+            delay = max(0.0, self._min_request_interval - elapsed)
+            self._send_timer = threading.Timer(delay, self._send_pending_request)
+            self._send_timer.daemon = True
+            self._send_timer.start()
             return
+        self._send_pending_request()
+
+    def _send_pending_request(self) -> None:
+        if not hasattr(self, "_pending_request"):
+            return
+        self._send_timer = None
+        self._last_request_ts = time.monotonic()
         self._client.send(self._pending_request)
         self._log(
             f"📥 取得 M5 歷史資料：{self._last_request_count} 筆 "
@@ -246,28 +275,10 @@ class TrendbarHistoryService(LogHistoryMixin[TrendbarHistoryCallbacks], Operatio
         return dispatch_payload(
             msg,
             {
-                ProtoOAPayloadType.PROTO_OA_SUBSCRIBE_SPOTS_RES: self._on_spot_subscribed,
-                ProtoOAPayloadType.PROTO_OA_UNSUBSCRIBE_SPOTS_RES: self._on_spot_unsubscribe_confirmed,
-                ProtoOAPayloadType.PROTO_OA_SPOT_EVENT: self._on_spot_event,
                 ProtoOAPayloadType.PROTO_OA_GET_TRENDBARS_RES: self._on_history,
                 ProtoOAPayloadType.PROTO_OA_ERROR_RES: self._on_error,
             },
         )
-
-    def _on_spot_subscribed(self, _msg: object) -> None:
-        self._await_spot_subscribe = False
-        self._maybe_send_request()
-
-    def _on_spot_unsubscribe_confirmed(self, _msg: object) -> None:
-        self._log(
-            format_confirm(
-                "報價退訂已確認",
-                ProtoOAPayloadType.PROTO_OA_UNSUBSCRIBE_SPOTS_RES,
-            )
-        )
-
-    def _on_spot_event(self, _msg: object) -> None:
-        return
 
     def _on_history(self, msg: TrendbarHistoryMessage) -> None:
         bars = list(getattr(msg, "trendbar", []))
@@ -305,6 +316,24 @@ class TrendbarHistoryService(LogHistoryMixin[TrendbarHistoryCallbacks], Operatio
         else:
             self._history_buffer.extend(self._to_dict(bar) for bar in bars)
 
+        has_more = bool(getattr(msg, "hasMore", False))
+        if has_more and not self._request_ranges and bars:
+            oldest_minutes = min(int(bar.utcTimestampInMinutes) for bar in bars)
+            oldest_ts = oldest_minutes * 60 * 1000
+            if self._last_pagination_to_ts == oldest_ts:
+                has_more = False
+            else:
+                self._last_pagination_to_ts = oldest_ts
+                self._prepare_request(
+                    self._last_request_count,
+                    use_seconds=False,
+                    window_minutes=self._last_request_window,
+                    from_ts=max(self._MIN_TIMESTAMP_MS, oldest_ts - (self._last_request_window * 60 * 1000)),
+                    to_ts=oldest_ts,
+                )
+                self._maybe_send_request()
+                return
+
         if self._total_ranges:
             self._completed_ranges += 1
             range_text = self._format_range(self._current_range)
@@ -332,16 +361,17 @@ class TrendbarHistoryService(LogHistoryMixin[TrendbarHistoryCallbacks], Operatio
         open_price = low + int(bar.deltaOpen)
         close_price = low + int(bar.deltaClose)
         high = low + int(bar.deltaHigh)
+        divisor = 100000.0
         ts_minutes = int(bar.utcTimestampInMinutes)
         ts = ts_minutes * 60
         ts_text = datetime.fromtimestamp(ts, tz=timezone.utc).strftime("%Y-%m-%d %H:%M")
         return {
             "utc_timestamp_minutes": ts_minutes,
             "timestamp": ts_text,
-            "open": open_price,
-            "high": high,
-            "low": low,
-            "close": close_price,
+            "open": open_price / divisor,
+            "high": high / divisor,
+            "low": low / divisor,
+            "close": close_price / divisor,
             "volume": int(getattr(bar, "volume", 0)),
             "period": int(getattr(bar, "period", 0)),
         }
@@ -366,28 +396,6 @@ class TrendbarHistoryService(LogHistoryMixin[TrendbarHistoryCallbacks], Operatio
     def _cleanup(self) -> None:
         self._end_operation()
         self._app_auth_service.remove_message_handler(self._handle_message)
-        self._unsubscribe_spot()
-
-    def _ensure_spot_subscription(self) -> None:
-        if self._account_id is None or self._symbol_id is None:
-            return
-        send_spot_subscribe(
-            self._client,
-            account_id=self._account_id,
-            symbol_id=self._symbol_id,
-            log=self._log,
-            subscribe_to_spot_timestamp=True,
-        )
-        self._spot_subscribed = True
-        self._await_spot_subscribe = True
-
-    def _unsubscribe_spot(self) -> None:
-        if not self._spot_subscribed or self._account_id is None or self._symbol_id is None:
-            return
-        send_spot_unsubscribe(
-            self._client,
-            account_id=self._account_id,
-            symbol_id=self._symbol_id,
-            log=self._log,
-        )
-        self._spot_subscribed = False
+        if self._send_timer is not None:
+            self._send_timer.cancel()
+            self._send_timer = None

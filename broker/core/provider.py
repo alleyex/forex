@@ -37,11 +37,19 @@ class BrokerProvider(BrokerUseCaseFactory, ABC):
         ...
 
     @abstractmethod
+    def create_symbol_by_id_service(self, app_auth_service):
+        ...
+
+    @abstractmethod
     def create_trendbar_service(self, app_auth_service):
         ...
 
     @abstractmethod
     def create_trendbar_history_service(self, app_auth_service):
+        ...
+
+    @abstractmethod
+    def create_order_service(self, app_auth_service):
         ...
 
 

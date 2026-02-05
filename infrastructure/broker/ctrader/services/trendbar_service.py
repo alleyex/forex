@@ -74,6 +74,8 @@ class TrendbarService(LogHistoryMixin[TrendbarServiceCallbacks], OperationStateM
         self._period_minutes: int = 1
         self._last_bar: Optional[dict] = None
         self._spot_subscribed = False
+        self._await_spot_subscribe = False
+        self._pending_trendbar_request: Optional[ProtoOASubscribeLiveTrendbarReq] = None
         self._last_bar_ts: Optional[int] = None
         self._client: Optional[Client] = None
 
@@ -109,19 +111,17 @@ class TrendbarService(LogHistoryMixin[TrendbarServiceCallbacks], OperationStateM
             self._app_auth_service.remove_message_handler(self._handle_message)
             return
 
-        self._ensure_spot_subscription()
-
-        request = ProtoOASubscribeLiveTrendbarReq()
-        request.ctidTraderAccountId = self._account_id
-        request.symbolId = self._symbol_id
-        request.period = self._period
-        self._client.send(request)
-        self._log(
-            format_sent_subscribe(
-                f"已送出 K 線訂閱：{self._symbol_id} ({self._period_name})"
-            )
-        )
         self._start_operation()
+        self._pending_trendbar_request = ProtoOASubscribeLiveTrendbarReq()
+        self._pending_trendbar_request.ctidTraderAccountId = self._account_id
+        self._pending_trendbar_request.symbolId = self._symbol_id
+        self._pending_trendbar_request.period = self._period
+
+        if self._spot_subscribed:
+            self._send_trendbar_request()
+        else:
+            self._await_spot_subscribe = True
+            self._ensure_spot_subscription()
 
     def unsubscribe(self) -> None:
         """取消訂閱即時 K 線"""
@@ -139,8 +139,6 @@ class TrendbarService(LogHistoryMixin[TrendbarServiceCallbacks], OperationStateM
             self._end_operation()
             return
         client.send(request)
-        if self._spot_subscribed:
-            self._unsubscribe_spot()
         self._app_auth_service.remove_message_handler(self._handle_message)
         self._end_operation()
         self._log(
@@ -172,6 +170,9 @@ class TrendbarService(LogHistoryMixin[TrendbarServiceCallbacks], OperationStateM
                 ProtoOAPayloadType.PROTO_OA_SUBSCRIBE_SPOTS_RES,
             )
         )
+        if self._await_spot_subscribe:
+            self._await_spot_subscribe = False
+            self._send_trendbar_request()
 
     def _on_spot_unsubscribe_confirmed(self, _msg: object) -> None:
         self._log(
@@ -209,9 +210,30 @@ class TrendbarService(LogHistoryMixin[TrendbarServiceCallbacks], OperationStateM
             if self._last_bar is not None and self._callbacks.on_trendbar:
                 self._callbacks.on_trendbar(self._last_bar)
             return
+
         updated = self._update_from_spot(msg)
+        if updated is None and self._last_bar is None:
+            price = self._extract_price(msg)
+            bucket = self._extract_bucket_minutes(msg)
+            if price is not None and bucket is not None:
+                ts = bucket * 60
+                ts_text = datetime.fromtimestamp(ts, tz=timezone.utc).strftime("%H:%M")
+                self._last_bar = {
+                    "symbol_id": msg.symbolId,
+                    "period": self._period_name,
+                    "timestamp": ts_text,
+                    "utc_timestamp_minutes": bucket,
+                    "open": price,
+                    "high": price,
+                    "low": price,
+                    "close": price,
+                }
+                self._last_bar_ts = bucket
+                updated = dict(self._last_bar)
+
         if updated is not None and self._callbacks.on_trendbar:
             self._callbacks.on_trendbar(updated)
+        return
 
     def _seed_from_trendbar(self, bar: TrendbarMessage, symbol_id: int) -> None:
         ts_minutes = int(bar.utcTimestampInMinutes)
@@ -222,6 +244,7 @@ class TrendbarService(LogHistoryMixin[TrendbarServiceCallbacks], OperationStateM
         open_price = low + int(bar.deltaOpen)
         close_price = low + int(bar.deltaClose)
         high = low + int(bar.deltaHigh)
+        divisor = 100000.0
         ts = ts_minutes * 60
         ts_text = datetime.fromtimestamp(ts, tz=timezone.utc).strftime("%H:%M")
         self._last_bar = {
@@ -229,10 +252,10 @@ class TrendbarService(LogHistoryMixin[TrendbarServiceCallbacks], OperationStateM
             "period": self._period_name,
             "timestamp": ts_text,
             "utc_timestamp_minutes": ts_minutes,
-            "open": open_price,
-            "high": high,
-            "low": low,
-            "close": close_price,
+            "open": open_price / divisor,
+            "high": high / divisor,
+            "low": low / divisor,
+            "close": close_price / divisor,
         }
 
     def _update_from_spot(self, msg: SpotEventMessage) -> Optional[dict]:
@@ -256,6 +279,12 @@ class TrendbarService(LogHistoryMixin[TrendbarServiceCallbacks], OperationStateM
     def _extract_price(msg: SpotEventMessage) -> Optional[float]:
         bid = getattr(msg, "bid", None)
         ask = getattr(msg, "ask", None)
+        has_bid = getattr(msg, "hasBid", None)
+        has_ask = getattr(msg, "hasAsk", None)
+        if has_bid is False:
+            bid = None
+        if has_ask is False:
+            ask = None
         bid_val = float(bid) if bid is not None and bid != 0 else None
         ask_val = float(ask) if ask is not None and ask != 0 else None
         if bid_val is not None and ask_val is not None:
@@ -267,7 +296,9 @@ class TrendbarService(LogHistoryMixin[TrendbarServiceCallbacks], OperationStateM
         return None
 
     def _extract_bucket_minutes(self, msg: SpotEventMessage) -> Optional[int]:
-        ts = getattr(msg, "timestamp", None)
+        ts = getattr(msg, "spotTimestamp", None)
+        if ts is None:
+            ts = getattr(msg, "timestamp", None)
         if ts is None or int(ts) == 0:
             ts_seconds = int(time.time())
         else:
@@ -292,6 +323,9 @@ class TrendbarService(LogHistoryMixin[TrendbarServiceCallbacks], OperationStateM
     def _resolve_period(timeframe: str) -> tuple[str, int, int]:
         mapping = {
             "M1": (ProtoOATrendbarPeriod.M1, 1),
+            "M2": (ProtoOATrendbarPeriod.M2, 2),
+            "M3": (ProtoOATrendbarPeriod.M3, 3),
+            "M4": (ProtoOATrendbarPeriod.M4, 4),
             "M5": (ProtoOATrendbarPeriod.M5, 5),
             "M10": (ProtoOATrendbarPeriod.M10, 10),
             "M15": (ProtoOATrendbarPeriod.M15, 15),
@@ -311,6 +345,9 @@ class TrendbarService(LogHistoryMixin[TrendbarServiceCallbacks], OperationStateM
 
     def _on_error(self, msg: ErrorMessage) -> None:
         if is_already_subscribed(msg.errorCode, msg.description):
+            if self._await_spot_subscribe:
+                self._await_spot_subscribe = False
+                self._send_trendbar_request()
             return
         self._emit_error(format_error(msg.errorCode, msg.description))
 
@@ -334,3 +371,14 @@ class TrendbarService(LogHistoryMixin[TrendbarServiceCallbacks], OperationStateM
             log=self._log,
         )
         self._spot_subscribed = False
+
+    def _send_trendbar_request(self) -> None:
+        if not self._pending_trendbar_request or not self._client:
+            return
+        self._client.send(self._pending_trendbar_request)
+        self._log(
+            format_sent_subscribe(
+                f"已送出 K 線訂閱：{self._symbol_id} ({self._period_name})"
+            )
+        )
+        self._pending_trendbar_request = None

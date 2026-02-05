@@ -4,8 +4,10 @@ from .oauth_login_service import OAuthLoginService, OAuthLoginServiceCallbacks
 from .account_list_service import AccountListService, AccountListServiceCallbacks
 from .account_funds_service import AccountFundsService, AccountFundsServiceCallbacks, AccountFunds
 from .symbol_list_service import SymbolListService, SymbolListServiceCallbacks
+from .symbol_by_id_service import SymbolByIdService, SymbolByIdServiceCallbacks
 from .trendbar_service import TrendbarService, TrendbarServiceCallbacks
 from .trendbar_history_service import TrendbarHistoryService, TrendbarHistoryCallbacks
+from .order_service import OrderService, OrderServiceCallbacks
 
 __all__ = [
     "AppAuthService",
@@ -21,8 +23,12 @@ __all__ = [
     "AccountFunds",
     "SymbolListService",
     "SymbolListServiceCallbacks",
+    "SymbolByIdService",
+    "SymbolByIdServiceCallbacks",
     "TrendbarService",
     "TrendbarServiceCallbacks",
     "TrendbarHistoryService",
     "TrendbarHistoryCallbacks",
+    "OrderService",
+    "OrderServiceCallbacks",
 ]

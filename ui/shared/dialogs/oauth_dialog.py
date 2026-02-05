@@ -6,9 +6,9 @@ from typing import Optional
 
 from PySide6.QtWidgets import (
     QVBoxLayout, QHBoxLayout, QLabel, QLineEdit,
-    QPushButton, QFormLayout, QWidget, QSizePolicy,
+    QPushButton, QFormLayout, QWidget, QSizePolicy, QDialog,
 )
-from PySide6.QtCore import Signal, Slot, Qt
+from PySide6.QtCore import Signal, Slot, Qt, QTimer
 
 from ui.shared.dialogs.base_auth_dialog import BaseAuthDialog, DialogState
 from ui.shared.widgets.layout_helpers import configure_form_layout
@@ -152,6 +152,7 @@ class OAuthDialog(BaseAuthDialog):
         self._app_state = app_state
         self._state = OAuthDialogState()
         self._accept_after_accounts = False
+        self._auto_auth_after_accounts = False
 
         self._service: Optional[OAuthServiceLike] = oauth_service
         self._login_service: Optional[OAuthLoginServiceLike] = None
@@ -168,6 +169,7 @@ class OAuthDialog(BaseAuthDialog):
             )
             self.statusChanged.emit(int(self._service.status))
         self._load_initial_data()
+        self._maybe_auto_start()
 
     def _setup_ui(self) -> None:
         """初始化 UI"""
@@ -231,6 +233,10 @@ class OAuthDialog(BaseAuthDialog):
         self.accountsReceived.connect(self._handle_accounts_received)
         self.accountsFailed.connect(self._handle_accounts_error)
         self.statusChanged.connect(self._handle_status_changed)
+
+    def _auto_start_if_available(self) -> None:
+        self._auto_auth_after_accounts = True
+        self._start_auth()
 
     def _load_initial_data(self) -> None:
         """載入初始資料"""
@@ -381,6 +387,24 @@ class OAuthDialog(BaseAuthDialog):
             self._log_error("缺少應用程式認證服務")
             return
 
+        if not self._selected_account and not self._form.account_id.text().strip():
+            access_token = self._form.access_token.text().strip()
+            if access_token and self._use_cases and not self._state.accounts_in_progress:
+                self._auto_auth_after_accounts = True
+                self._log_info("🔎 先取得帳戶列表以完成選擇")
+                self._fetch_accounts()
+                return
+
+        if not self._form.account_id.text().strip():
+            try:
+                tokens = OAuthTokens.from_file(self._token_file)
+                if tokens and tokens.account_id:
+                    self._form.account_id.setText(str(tokens.account_id))
+            except Exception:
+                pass
+        if not self._form.account_id.text().strip() and self._selected_account:
+            self._form.account_id.setText(str(self._selected_account.account_id))
+
         if error := self._form.validate_for_auth():
             self._log_error(error)
             return
@@ -425,10 +449,6 @@ class OAuthDialog(BaseAuthDialog):
         self._log_success("帳戶認證成功！")
         self._state.auth_in_progress = False
         self._refresh_controls()
-        if self._app_auth_service:
-            self._accept_after_accounts = True
-            self._fetch_accounts()
-            return
         self.accept()
 
     @Slot(str)
@@ -460,38 +480,89 @@ class OAuthDialog(BaseAuthDialog):
             self._app_state.update_oauth_status(status)
         if self._event_bus:
             self._event_bus.publish("oauth_status", status)
+        if status >= ConnectionStatus.ACCOUNT_AUTHENTICATED:
+            if not self._state.auth_in_progress and not self._state.accounts_in_progress:
+                if self._selected_account is None:
+                    account_text = self._form.account_id.text().strip()
+                    if account_text:
+                        try:
+                            self._selected_account = Account(
+                                account_id=int(account_text),
+                                is_live=None,
+                                trader_login=None,
+                            )
+                        except (TypeError, ValueError):
+                            self._selected_account = None
+                if self._selected_account:
+                    self.accept()
 
     @Slot(list)
     def _handle_accounts_received(self, accounts: list) -> None:
         self._log_success(f"取得帳戶數: {len(accounts)}")
+        try:
+            tokens = OAuthTokens.from_file(self._token_file)
+            if tokens and tokens.account_id:
+                account_ids = {
+                    int(a.account_id)
+                    for a in accounts
+                    if getattr(a, "account_id", None) is not None
+                }
+                if account_ids and int(tokens.account_id) not in account_ids:
+                    self._log_warning(
+                        f"帳戶不一致：token={tokens.account_id}，可用帳戶={sorted(account_ids)}"
+                    )
+        except Exception:
+            pass
         if len(accounts) == 1:
             self._selected_account = accounts[0]
             self._form.account_id.setText(str(accounts[0].account_id))
         elif len(accounts) > 1:
             dialog = AccountDialog(accounts, self)
-            if dialog.exec() == dialog.Accepted:
+            if dialog.exec() == QDialog.Accepted:
                 selected = dialog.get_selected_account()
                 if selected:
                     self._selected_account = selected
                     self._form.account_id.setText(str(selected.account_id))
             else:
                 self._log_warning("已取消帳戶選擇")
+        if self._selected_account:
+            self._log_info(f"✅ Selected account: {self._selected_account.account_id}")
+            try:
+                tokens = OAuthTokens.from_file(self._token_file)
+                if tokens:
+                    tokens.account_id = int(self._selected_account.account_id)
+                    tokens.save(self._token_file)
+                    if self._service:
+                        current_account = getattr(self._service.tokens, "account_id", None)
+                        if current_account != tokens.account_id:
+                            self._log_info(
+                                f"🔁 Switch OAuth account {current_account} -> {tokens.account_id}"
+                            )
+                            self._service.update_tokens(tokens)
+            except Exception:
+                pass
+        if self._auto_auth_after_accounts and self._selected_account:
+            self._auto_auth_after_accounts = False
+            self._start_auth()
         self._state.accounts_in_progress = False
         self._refresh_controls()
         if self._app_state:
             account_id = None if self._selected_account is None else self._selected_account.account_id
             self._app_state.update_selected_account(account_id)
-        if self._accept_after_accounts and self._selected_account:
-            self._accept_after_accounts = False
-            self.accept()
 
     @Slot(str)
     def _handle_accounts_error(self, error: str) -> None:
         self._log_error(error)
         self._state.accounts_in_progress = False
         self._refresh_controls()
-        if self._accept_after_accounts:
-            self._accept_after_accounts = False
+        if self._auto_auth_after_accounts:
+            self._auto_auth_after_accounts = False
+
+    def _accept_if_accounts_stuck(self) -> None:
+        return
+
+    def _schedule_oauth_reconnect(self) -> None:
+        return
 
     # ─────────────────────────────────────────────────────────────
     # 控制項狀態

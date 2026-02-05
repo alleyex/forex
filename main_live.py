@@ -1,26 +1,23 @@
 # main_live.py
+import os
 import sys
 from pathlib import Path
+
+from PySide6.QtCore import Qt
 from PySide6.QtWidgets import QApplication
-from PySide6.QtCore import QTimer, qInstallMessageHandler
-import traceback
 
 from bootstrap import bootstrap
 from ui.live.main_window import LiveMainWindow
 
 
-def _qt_message_handler(mode, context, message) -> None:
-    location = f"{context.file}:{context.line}" if context.file else "<unknown>"
-    print(f"Qt[{mode}] {message} ({location})")
-    if "QObject::startTimer" in message:
-        print("Python stack (most recent call last):")
-        print("".join(traceback.format_stack()))
-
-
 def main() -> int:
     """Live trading app entry point"""
     use_cases, _, event_bus, app_state = bootstrap()
-    qInstallMessageHandler(_qt_message_handler)
+    if os.getenv("QT_OPENGL") is None:
+        os.environ["QT_OPENGL"] = "software"
+    if os.getenv("QT_QUICK_BACKEND") is None:
+        os.environ["QT_QUICK_BACKEND"] = "software"
+    QApplication.setAttribute(Qt.AA_UseSoftwareOpenGL, True)
     app = QApplication(sys.argv)
     app.setStyle("Fusion")
     style_path = Path("ui/shared/styles/app.qss")
@@ -33,7 +30,6 @@ def main() -> int:
         app_state=app_state,
     )
     main_window.showMaximized()
-    QTimer.singleShot(1000, main_window._toggle_connection)
     return app.exec()
 
 

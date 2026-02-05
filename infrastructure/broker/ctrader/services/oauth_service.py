@@ -54,6 +54,7 @@ class OAuthService(BaseService[OAuthServiceCallbacks]):
         self._client = client
         self._tokens = tokens
         self._timeout_tracker = TimeoutTracker(self._on_timeout)
+        self._last_authenticated_account_id: Optional[int] = None
 
     @classmethod
     def create(cls, app_auth_service: AppAuthService, token_file: str = TOKEN_FILE) -> "OAuthService":
@@ -66,6 +67,14 @@ class OAuthService(BaseService[OAuthServiceCallbacks]):
     def tokens(self) -> OAuthTokens:
         """取得目前的 Token"""
         return self._tokens
+
+    @property
+    def last_authenticated_account_id(self) -> Optional[int]:
+        return self._last_authenticated_account_id
+
+    def update_tokens(self, tokens: OAuthTokens) -> None:
+        """更新 Token（例如切換帳戶後）"""
+        self._tokens = tokens
 
     def set_callbacks(
         self,
@@ -134,6 +143,7 @@ class OAuthService(BaseService[OAuthServiceCallbacks]):
         request = ProtoOAAccountAuthReq()
         request.accessToken = self._tokens.access_token
         request.ctidTraderAccountId = int(self._tokens.account_id)
+        self._log(f"🔐 Account auth request account_id={request.ctidTraderAccountId}")
         self._client.send(request)
 
     def _handle_message(self, client: Client, msg: OAuthMessage) -> bool:
@@ -154,6 +164,10 @@ class OAuthService(BaseService[OAuthServiceCallbacks]):
         self._app_auth_service.remove_message_handler(self._handle_message)
         self._timeout_tracker.cancel()
         self._set_status(ConnectionStatus.ACCOUNT_AUTHENTICATED)
+        try:
+            self._last_authenticated_account_id = int(self._tokens.account_id)
+        except Exception:
+            self._last_authenticated_account_id = None
         self._log(format_success("帳戶已授權！"))
         if self._callbacks.on_oauth_success:
             self._callbacks.on_oauth_success(self._tokens)

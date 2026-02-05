@@ -180,17 +180,31 @@ class HistoryDownloadController(QObject):
             if isinstance(symbol, dict):
                 symbol_id = symbol.get("symbol_id")
                 symbol_name = symbol.get("symbol_name") or symbol.get("name")
+                extra = {
+                    k: symbol.get(k)
+                    for k in ("min_volume", "max_volume", "volume_step", "lot_size", "digits")
+                    if k in symbol
+                }
             else:
                 symbol_id = getattr(symbol, "symbol_id", None)
                 symbol_name = getattr(symbol, "name", None)
+                extra = {
+                    "min_volume": getattr(symbol, "min_volume", None),
+                    "max_volume": getattr(symbol, "max_volume", None),
+                    "volume_step": getattr(symbol, "volume_step", None),
+                    "lot_size": getattr(symbol, "lot_size", None),
+                    "digits": getattr(symbol, "digits", None),
+                }
             if symbol_id is None or symbol_name is None:
                 continue
-            payload.append(
-                {
-                    "symbol_id": int(symbol_id),
-                    "symbol_name": str(symbol_name),
-                }
-            )
+            item = {
+                "symbol_id": int(symbol_id),
+                "symbol_name": str(symbol_name),
+            }
+            for key, value in extra.items():
+                if value is not None:
+                    item[key] = value
+            payload.append(item)
         path = self._symbol_list_path()
         self._presenter.emit(
             "symbol_list_write_start",
@@ -226,7 +240,14 @@ class HistoryDownloadController(QObject):
                 continue
             if not isinstance(symbol_name, str) or not symbol_name.strip():
                 continue
-            symbols.append({"symbol_id": symbol_id, "symbol_name": symbol_name})
+            keep = {
+                "symbol_id": symbol_id,
+                "symbol_name": symbol_name,
+            }
+            for key in ("min_volume", "max_volume", "volume_step", "lot_size", "digits"):
+                if key in item:
+                    keep[key] = item[key]
+            symbols.append(keep)
         return symbols
 
     @staticmethod

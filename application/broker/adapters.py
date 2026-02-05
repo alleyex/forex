@@ -6,6 +6,7 @@ from application.broker.protocols import (
     AccountFundsLike,
     AccountFundsUseCaseLike,
     AccountListUseCaseLike,
+    SymbolByIdUseCaseLike,
     SymbolListUseCaseLike,
 )
 from domain import Account, AccountFundsSnapshot, Symbol
@@ -122,7 +123,7 @@ class AccountFundsServiceAdapter:
     def in_progress(self) -> bool:
         return self._service.in_progress
 
-    def set_callbacks(self, on_funds_received=None, on_error=None, on_log=None) -> None:
+    def set_callbacks(self, on_funds_received=None, on_position_pnl=None, on_error=None, on_log=None) -> None:
         def handle_funds(funds: AccountFundsLike) -> None:
             snapshot = to_funds_snapshot(funds)
             if on_funds_received:
@@ -130,6 +131,7 @@ class AccountFundsServiceAdapter:
 
         self._service.set_callbacks(
             on_funds_received=handle_funds,
+            on_position_pnl=on_position_pnl,
             on_error=on_error,
             on_log=on_log,
         )
@@ -151,9 +153,8 @@ class SymbolListServiceAdapter:
 
     def set_callbacks(self, on_symbols_received=None, on_error=None, on_log=None) -> None:
         def handle_symbols(raw_symbols) -> None:
-            domain_symbols = to_symbols_from_dicts(raw_symbols)
             if on_symbols_received:
-                on_symbols_received(domain_symbols)
+                on_symbols_received(raw_symbols)
 
         self._service.set_callbacks(
             on_symbols_received=handle_symbols,
@@ -172,6 +173,43 @@ class SymbolListServiceAdapter:
     ) -> None:
         self._service.fetch(
             account_id=account_id,
+            include_archived=include_archived,
+            timeout_seconds=timeout_seconds,
+        )
+
+
+class SymbolByIdServiceAdapter:
+    def __init__(self, service: SymbolByIdUseCaseLike):
+        self._service = service
+
+    @property
+    def in_progress(self) -> bool:
+        return self._service.in_progress
+
+    def set_callbacks(self, on_symbols_received=None, on_error=None, on_log=None) -> None:
+        def handle_symbols(raw_symbols) -> None:
+            if on_symbols_received:
+                on_symbols_received(raw_symbols)
+
+        self._service.set_callbacks(
+            on_symbols_received=handle_symbols,
+            on_error=on_error,
+            on_log=on_log,
+        )
+
+    def clear_log_history(self) -> None:
+        self._service.clear_log_history()
+
+    def fetch(
+        self,
+        account_id: int,
+        symbol_ids: list[int],
+        include_archived: bool = False,
+        timeout_seconds: Optional[int] = None,
+    ) -> None:
+        self._service.fetch(
+            account_id=account_id,
+            symbol_ids=symbol_ids,
             include_archived=include_archived,
             timeout_seconds=timeout_seconds,
         )

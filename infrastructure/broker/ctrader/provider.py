@@ -8,9 +8,11 @@ from infrastructure.broker.ctrader.services.account_list_service import AccountL
 from infrastructure.broker.ctrader.services.app_auth_service import AppAuthService
 from infrastructure.broker.ctrader.services.oauth_login_service import OAuthLoginService
 from infrastructure.broker.ctrader.services.oauth_service import OAuthService
+from infrastructure.broker.ctrader.services.symbol_by_id_service import SymbolByIdService
 from infrastructure.broker.ctrader.services.symbol_list_service import SymbolListService
 from infrastructure.broker.ctrader.services.trendbar_history_service import TrendbarHistoryService
 from infrastructure.broker.ctrader.services.trendbar_service import TrendbarService
+from infrastructure.broker.ctrader.services.order_service import OrderService
 from config.paths import TOKEN_FILE
 
 
@@ -42,8 +44,14 @@ class CTraderProvider(BrokerProvider):
     def create_symbol_list_service(self, app_auth_service: AppAuthService) -> SymbolListService:
         return SymbolListService(app_auth_service=app_auth_service)
 
+    def create_symbol_by_id_service(self, app_auth_service: AppAuthService) -> SymbolByIdService:
+        return SymbolByIdService(app_auth_service=app_auth_service)
+
     def create_trendbar_service(self, app_auth_service: AppAuthService) -> TrendbarService:
         return TrendbarService(app_auth_service=app_auth_service)
 
     def create_trendbar_history_service(self, app_auth_service: AppAuthService) -> TrendbarHistoryService:
         return TrendbarHistoryService(app_auth_service=app_auth_service)
+
+    def create_order_service(self, app_auth_service: AppAuthService) -> OrderService:
+        return OrderService(app_auth_service=app_auth_service)

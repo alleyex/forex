@@ -1,0 +1,7 @@
+{
+  "EURUSD": {
+    "min_volume": 10000,
+    "volume_step": 10000,
+    "digits": 5
+  }
+}

@@ -9,7 +9,7 @@ from typing import Optional
 from application import EventBus
 
 from PySide6.QtWidgets import QDialog
-from PySide6.QtCore import Slot, QTimer
+from PySide6.QtCore import Slot
 
 from ui.shared.widgets.log_widget import LogWidget
 from ui.shared.widgets.status_widget import StatusWidget
@@ -48,8 +48,7 @@ class BaseAuthDialog(QDialog):
 
         self._connect_common_signals()
 
-        if self._auto_connect:
-            QTimer.singleShot(0, self._auto_start_if_available)
+        # Defer auto start to subclasses after they finish initialization.
 
     # ─────────────────────────────────────────────────────────────
     # 共用 UI
@@ -127,3 +126,7 @@ class BaseAuthDialog(QDialog):
         start_method = getattr(self, "_start_auth", None)
         if callable(start_method):
             start_method()
+
+    def _maybe_auto_start(self) -> None:
+        if self._auto_connect:
+            self._auto_start_if_available()

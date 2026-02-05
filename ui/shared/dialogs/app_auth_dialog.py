@@ -112,6 +112,7 @@ class AppAuthDialog(BaseAuthDialog):
             )
             self.statusChanged.emit(int(self._service.status))
         self._load_credentials()
+        self._maybe_auto_start()
 
     def _setup_ui(self) -> None:
         """初始化 UI"""

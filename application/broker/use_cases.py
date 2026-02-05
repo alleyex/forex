@@ -6,6 +6,7 @@ from typing import Callable, Generic, Optional, TypeVar
 from application.broker.adapters import (
     AccountFundsServiceAdapter,
     AccountListServiceAdapter,
+    SymbolByIdServiceAdapter,
     SymbolListServiceAdapter,
 )
 from application.broker.protocols import (
@@ -15,9 +16,11 @@ from application.broker.protocols import (
     BrokerUseCaseFactory,
     OAuthLoginServiceLike,
     OAuthServiceLike,
+    SymbolByIdUseCaseLike,
     SymbolListUseCaseLike,
     TrendbarHistoryServiceLike,
     TrendbarServiceLike,
+    OrderServiceLike,
 )
 from config.paths import TOKEN_FILE
 
@@ -57,6 +60,7 @@ class BrokerUseCases:
         self._account_list_cache: _UseCaseCache[AccountListUseCase] = _UseCaseCache()
         self._account_funds_cache: _UseCaseCache[AccountFundsUseCase] = _UseCaseCache()
         self._symbol_list_cache: _UseCaseCache[SymbolListUseCase] = _UseCaseCache()
+        self._symbol_by_id_cache: _UseCaseCache[SymbolByIdUseCase] = _UseCaseCache()
 
     def create_app_auth(self, host_type: str, token_file: str = TOKEN_FILE) -> AppAuthServiceLike:
         return self._provider.create_app_auth(host_type, token_file)
@@ -87,11 +91,18 @@ class BrokerUseCases:
         service = self._provider.create_symbol_list_service(app_auth_service=app_auth_service)
         return SymbolListUseCase(SymbolListServiceAdapter(service))
 
+    def create_symbol_by_id(self, app_auth_service: AppAuthServiceLike) -> SymbolByIdUseCaseLike:
+        service = self._provider.create_symbol_by_id_service(app_auth_service=app_auth_service)
+        return SymbolByIdUseCase(SymbolByIdServiceAdapter(service))
+
     def create_trendbar(self, app_auth_service: AppAuthServiceLike) -> TrendbarServiceLike:
         return self._provider.create_trendbar_service(app_auth_service=app_auth_service)
 
     def create_trendbar_history(self, app_auth_service: AppAuthServiceLike) -> TrendbarHistoryServiceLike:
         return self._provider.create_trendbar_history_service(app_auth_service=app_auth_service)
+
+    def create_order_service(self, app_auth_service: AppAuthServiceLike) -> OrderServiceLike:
+        return self._provider.create_order_service(app_auth_service=app_auth_service)
 
     def account_list_in_progress(self) -> bool:
         return bool(self._account_list_cache.use_case and self._account_list_cache.use_case.in_progress)
@@ -101,6 +112,9 @@ class BrokerUseCases:
 
     def symbol_list_in_progress(self) -> bool:
         return bool(self._symbol_list_cache.use_case and self._symbol_list_cache.use_case.in_progress)
+
+    def symbol_by_id_in_progress(self) -> bool:
+        return bool(self._symbol_by_id_cache.use_case and self._symbol_by_id_cache.use_case.in_progress)
 
     def fetch_accounts(
         self,
@@ -186,6 +200,39 @@ class BrokerUseCases:
         )
         return True
 
+    def fetch_symbol_by_id(
+        self,
+        app_auth_service: AppAuthServiceLike,
+        account_id: int,
+        symbol_ids: list[int],
+        include_archived: bool = False,
+        on_symbols_received=None,
+        on_error=None,
+        on_log=None,
+        timeout_seconds: Optional[int] = None,
+    ) -> bool:
+        symbol_by_id_uc = self._symbol_by_id_cache.get(
+            app_auth_service,
+            lambda: self.create_symbol_by_id(app_auth_service),
+        )
+
+        if symbol_by_id_uc.in_progress:
+            return False
+
+        symbol_by_id_uc.clear_log_history()
+        symbol_by_id_uc.set_callbacks(
+            on_symbols_received=on_symbols_received,
+            on_error=on_error,
+            on_log=on_log,
+        )
+        symbol_by_id_uc.fetch(
+            account_id=account_id,
+            symbol_ids=symbol_ids,
+            include_archived=include_archived,
+            timeout_seconds=timeout_seconds,
+        )
+        return True
+
 
 class AccountListUseCase:
     def __init__(self, adapter: AccountListServiceAdapter):
@@ -220,9 +267,10 @@ class AccountFundsUseCase:
     def in_progress(self) -> bool:
         return self._adapter.in_progress
 
-    def set_callbacks(self, on_funds_received=None, on_error=None, on_log=None) -> None:
+    def set_callbacks(self, on_funds_received=None, on_position_pnl=None, on_error=None, on_log=None) -> None:
         self._adapter.set_callbacks(
             on_funds_received=on_funds_received,
+            on_position_pnl=on_position_pnl,
             on_error=on_error,
             on_log=on_log,
         )
@@ -260,6 +308,39 @@ class SymbolListUseCase:
     ) -> None:
         self._adapter.fetch(
             account_id=account_id,
+            include_archived=include_archived,
+            timeout_seconds=timeout_seconds,
+        )
+
+
+class SymbolByIdUseCase:
+    def __init__(self, adapter: SymbolByIdServiceAdapter):
+        self._adapter = adapter
+
+    @property
+    def in_progress(self) -> bool:
+        return self._adapter.in_progress
+
+    def set_callbacks(self, on_symbols_received=None, on_error=None, on_log=None) -> None:
+        self._adapter.set_callbacks(
+            on_symbols_received=on_symbols_received,
+            on_error=on_error,
+            on_log=on_log,
+        )
+
+    def clear_log_history(self) -> None:
+        self._adapter.clear_log_history()
+
+    def fetch(
+        self,
+        account_id: int,
+        symbol_ids: list[int],
+        include_archived: bool = False,
+        timeout_seconds: Optional[int] = None,
+    ) -> None:
+        self._adapter.fetch(
+            account_id=account_id,
+            symbol_ids=symbol_ids,
             include_archived=include_archived,
             timeout_seconds=timeout_seconds,
         )
