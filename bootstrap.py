@@ -3,7 +3,9 @@ Application bootstrap: set up logging and resolve the broker provider.
 """
 from typing import Optional, Tuple
 
-from application import AppState, BrokerUseCases, EventBus
+from application.events import EventBus
+from application.state import AppState
+from application.broker.use_cases import BrokerUseCases
 from broker.core.provider import get_provider, register_provider
 from infrastructure.broker.ctrader.provider import CTraderProvider
 from config.logging import setup_logging

@@ -29,13 +29,10 @@ from ui.train.controllers.trendbar_controller import TrendbarController
 from ui.train.presenters.connection_presenter import ConnectionPresenter
 from ui.train.presenters.history_download_presenter import HistoryDownloadPresenter
 
-from application import (
-    AppState,
-    AppAuthServiceLike,
-    BrokerUseCases,
-    EventBus,
-    OAuthServiceLike,
-)
+from application.broker.protocols import AppAuthServiceLike, OAuthServiceLike
+from application.broker.use_cases import BrokerUseCases
+from application.events import EventBus
+from application.state import AppState
 from config.constants import ConnectionStatus
 from ui.shared.utils.formatters import (
     format_app_auth_status,

@@ -6,7 +6,7 @@ import json
 import os
 from typing import Optional
 
-from application import EventBus
+from application.events import EventBus
 
 from PySide6.QtWidgets import QDialog
 from PySide6.QtCore import Slot

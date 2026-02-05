@@ -7,7 +7,8 @@ from typing import Optional
 from PySide6.QtCore import QObject, QTimer
 from PySide6.QtWidgets import QWidget
 
-from application import AppAuthServiceLike, BrokerUseCases, OAuthServiceLike
+from application.broker.protocols import AppAuthServiceLike, OAuthServiceLike
+from application.broker.use_cases import BrokerUseCases
 from application.broker.history_download_pipeline import HistoryDownloadPipeline
 from config.constants import ConnectionStatus
 from config.paths import SYMBOL_LIST_FILE, TIMEFRAMES_FILE, TOKEN_FILE

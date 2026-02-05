@@ -5,7 +5,8 @@ from typing import Callable, Optional
 from PySide6.QtCore import QObject
 from PySide6.QtWidgets import QLabel
 
-from application import AppAuthServiceLike, AppState, OAuthServiceLike
+from application.broker.protocols import AppAuthServiceLike, OAuthServiceLike
+from application.state import AppState
 from config.constants import ConnectionStatus
 from ui.shared.utils.formatters import (
     format_app_auth_status,

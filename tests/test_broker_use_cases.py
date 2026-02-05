@@ -1,6 +1,6 @@
 import unittest
 
-from application import BrokerUseCases
+from application.broker.use_cases import BrokerUseCases
 from infrastructure.broker.fake.provider import FakeProvider
 
 

@@ -4,7 +4,8 @@ from typing import Callable, Optional
 
 from PySide6.QtCore import QObject
 
-from application import AppAuthServiceLike, BrokerUseCases, OAuthServiceLike, TrendbarServiceLike
+from application.broker.protocols import AppAuthServiceLike, OAuthServiceLike, TrendbarServiceLike
+from application.broker.use_cases import BrokerUseCases
 from config.constants import ConnectionStatus
 from config.paths import TOKEN_FILE
 from config.settings import OAuthTokens

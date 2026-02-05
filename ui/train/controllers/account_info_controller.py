@@ -4,7 +4,8 @@ from typing import Callable, Optional
 
 from PySide6.QtCore import QObject
 
-from application import AppAuthServiceLike, BrokerUseCases
+from application.broker.protocols import AppAuthServiceLike
+from application.broker.use_cases import BrokerUseCases
 from domain.accounts import AccountFundsSnapshot
 from ui.shared.utils.formatters import format_connection_message
 from utils.reactor_manager import reactor_manager

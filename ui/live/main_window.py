@@ -56,8 +56,10 @@ else:
     except Exception:
         pass
 
-from application import AppAuthServiceLike, AppState, BrokerUseCases, EventBus, OAuthServiceLike
-from application import OrderServiceLike
+from application.broker.protocols import AppAuthServiceLike, OAuthServiceLike, OrderServiceLike
+from application.broker.use_cases import BrokerUseCases
+from application.events import EventBus
+from application.state import AppState
 from config.constants import ConnectionStatus
 from config.paths import SYMBOL_LIST_FILE, TOKEN_FILE
 from config.settings import OAuthTokens

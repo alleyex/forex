@@ -3,7 +3,8 @@ from typing import Callable, Optional
 from PySide6.QtCore import QObject, Signal, Slot
 from PySide6.QtWidgets import QMessageBox, QWidget
 
-from application import AppAuthServiceLike, BrokerUseCases, OAuthServiceLike
+from application.broker.protocols import AppAuthServiceLike, OAuthServiceLike
+from application.broker.use_cases import BrokerUseCases
 from config.constants import ConnectionStatus
 from config.paths import TOKEN_FILE
 from ui.shared.dialogs.app_auth_dialog import AppAuthDialog
