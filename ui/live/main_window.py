@@ -1253,7 +1253,7 @@ class LiveMainWindow(QMainWindow):
             pos_list = []
         self._open_positions = pos_list
         self._sync_auto_position_from_positions(pos_list)
-        self._update_positions_table(pos_list)
+        self._schedule_positions_refresh()
 
     def _update_positions_table(self, positions: list[object]) -> None:
         if not self._positions_table:
