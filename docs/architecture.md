@@ -11,7 +11,6 @@
 - `application/broker/adapters.py`: converts service outputs into domain DTOs.
 
 ## 3) Domain Layer
-- `domain/auth.py`: Credentials, Tokens.
 - `domain/accounts.py`: Account, AccountFundsSnapshot.
 
 ## 4) Infrastructure Layer
