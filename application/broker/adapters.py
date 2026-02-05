@@ -9,7 +9,8 @@ from application.broker.protocols import (
     SymbolByIdUseCaseLike,
     SymbolListUseCaseLike,
 )
-from domain import Account, AccountFundsSnapshot, Symbol
+from domain.accounts import Account, AccountFundsSnapshot
+from domain.symbols import Symbol
 
 
 class AccountInfoLike(Protocol):

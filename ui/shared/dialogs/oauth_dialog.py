@@ -12,7 +12,7 @@ from PySide6.QtCore import Signal, Slot
 
 from ui.shared.dialogs.base_auth_dialog import BaseAuthDialog, DialogState
 from ui.shared.widgets.layout_helpers import configure_form_layout
-from domain import Account
+from domain.accounts import Account
 from application import (
     AppState,
     AppAuthServiceLike,

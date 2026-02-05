@@ -13,7 +13,7 @@ from PySide6.QtWidgets import (
     QLabel,
 )
 
-from domain import Account
+from domain.accounts import Account
 
 
 class AccountDialog(QDialog):

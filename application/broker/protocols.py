@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import Callable, Optional, Protocol, Sequence
 
-from domain import Account, AccountFundsSnapshot
+from domain.accounts import Account, AccountFundsSnapshot
 
 
 class AppAuthServiceLike(Protocol):
