@@ -1426,14 +1426,14 @@ class LiveMainWindow(QMainWindow):
     def _set_quote_cell(self, row: int, column: int, value) -> None:
         if not self._quotes_table:
             return
-        normalized = self._normalize_price(value)
+        digits = self._quote_row_digits.get(
+            next((k for k, v in self._quote_rows.items() if v == row), None),
+            self._price_digits,
+        )
+        normalized = self._normalize_price(value, digits=digits)
         if normalized == 0:
             text = "--"
         else:
-            digits = self._quote_row_digits.get(
-                next((k for k, v in self._quote_rows.items() if v == row), None),
-                self._price_digits,
-            )
             text = self._format_price(value, digits=digits)
         item = self._quotes_table.item(row, column)
         if item is None:
@@ -1446,8 +1446,9 @@ class LiveMainWindow(QMainWindow):
     def _set_quote_extras(self, row: int, symbol_id: int, bid, ask, spot_ts) -> None:
         if not self._quotes_table:
             return
-        bid_val = self._normalize_price(bid)
-        ask_val = self._normalize_price(ask)
+        digits = self._quote_row_digits.get(int(symbol_id), self._price_digits)
+        bid_val = self._normalize_price(bid, digits=digits)
+        ask_val = self._normalize_price(ask, digits=digits)
         if bid_val is not None:
             self._quote_last_bid[symbol_id] = bid_val
         if ask_val is not None:
@@ -1504,6 +1505,28 @@ class LiveMainWindow(QMainWindow):
         entry_price,
         volume,
     ) -> str:
+        # Prefer live quotes for real-time updates, fall back to cached/embedded PnL.
+        if symbol_id is not None and entry_price is not None and volume is not None:
+            try:
+                entry = float(entry_price)
+                vol = float(volume)
+            except (TypeError, ValueError):
+                entry = None
+                vol = None
+            if entry and vol and entry > 0 and vol > 0:
+                bid = self._quote_last_bid.get(int(symbol_id))
+                ask = self._quote_last_ask.get(int(symbol_id))
+                mid = self._quote_last_mid.get(int(symbol_id))
+                if side_value == ProtoOATradeSide.BUY:
+                    current = bid if bid else mid
+                elif side_value == ProtoOATradeSide.SELL:
+                    current = ask if ask else mid
+                else:
+                    current = None
+                if current is not None:
+                    pnl = (current - entry) * vol if side_value == ProtoOATradeSide.BUY else (entry - current) * vol
+                    return f"{pnl:,.2f}"
+
         position_id = getattr(position, "positionId", None)
         if position_id is not None:
             cached = self._position_pnl_by_id.get(int(position_id))
@@ -1638,7 +1661,7 @@ class LiveMainWindow(QMainWindow):
     def _symbol_list_path(self) -> Path:
         return self._project_root / SYMBOL_LIST_FILE
 
-    def _normalize_price(self, value) -> Optional[float]:
+    def _normalize_price(self, value, *, digits: Optional[int] = None) -> Optional[float]:
         if value is None:
             return None
         try:
@@ -1647,6 +1670,10 @@ class LiveMainWindow(QMainWindow):
             return None
         if numeric == 0:
             return 0.0
+        if digits is not None:
+            scale = 10 ** digits
+            if abs(numeric) >= scale:
+                return numeric / scale
         if isinstance(value, int):
             return numeric / 100000.0
         if numeric.is_integer() and abs(numeric) >= 100000:
@@ -1654,7 +1681,7 @@ class LiveMainWindow(QMainWindow):
         return numeric
 
     def _format_price(self, value, *, digits: Optional[int] = None) -> str:
-        normalized = self._normalize_price(value)
+        normalized = self._normalize_price(value, digits=digits)
         if normalized is None:
             return "-"
         use_digits = self._price_digits if digits is None else digits
@@ -2500,10 +2527,10 @@ class LiveMainWindow(QMainWindow):
         for row in rows_sorted:
             ts_minutes = float(row.get("utc_timestamp_minutes", 0))
             ts = ts_minutes * 60
-            open_price = self._normalize_price(row.get("open", 0))
-            high_price = self._normalize_price(row.get("high", 0))
-            low_price = self._normalize_price(row.get("low", 0))
-            close_price = self._normalize_price(row.get("close", 0))
+            open_price = self._normalize_price(row.get("open", 0), digits=digits)
+            high_price = self._normalize_price(row.get("high", 0), digits=digits)
+            low_price = self._normalize_price(row.get("low", 0), digits=digits)
+            close_price = self._normalize_price(row.get("close", 0), digits=digits)
             if None in (open_price, high_price, low_price, close_price):
                 continue
             open_price = round(float(open_price), digits)
@@ -2593,10 +2620,10 @@ class LiveMainWindow(QMainWindow):
             digits = self._price_digits
         ts_minutes = float(data.get("utc_timestamp_minutes", 0))
         ts = ts_minutes * 60
-        open_price = self._normalize_price(data.get("open", 0))
-        high_price = self._normalize_price(data.get("high", 0))
-        low_price = self._normalize_price(data.get("low", 0))
-        close_price = self._normalize_price(data.get("close", 0))
+        open_price = self._normalize_price(data.get("open", 0), digits=digits)
+        high_price = self._normalize_price(data.get("high", 0), digits=digits)
+        low_price = self._normalize_price(data.get("low", 0), digits=digits)
+        close_price = self._normalize_price(data.get("close", 0), digits=digits)
         if None in (open_price, high_price, low_price, close_price):
             return
         open_price = round(float(open_price), digits)
@@ -2630,11 +2657,16 @@ class LiveMainWindow(QMainWindow):
 
     def _update_chart_from_quote(self, symbol_id: int, bid, ask, spot_ts) -> None:
         if self._chart_frozen:
-            return
+            # If history is unavailable but live quotes are flowing, allow
+            # the chart to bootstrap from quotes so the UI isn't blank.
+            if self._candles:
+                return
+            self._chart_frozen = False
         if int(symbol_id) != int(self._symbol_id):
             return
-        bid_val = self._normalize_price(bid)
-        ask_val = self._normalize_price(ask)
+        digits = self._quote_row_digits.get(int(symbol_id), self._price_digits)
+        bid_val = self._normalize_price(bid, digits=digits)
+        ask_val = self._normalize_price(ask, digits=digits)
         price = None
         if bid_val and ask_val:
             price = (bid_val + ask_val) / 2.0
@@ -2658,7 +2690,6 @@ class LiveMainWindow(QMainWindow):
         if step_seconds <= 0:
             step_seconds = 60
         bucket = (ts_seconds // step_seconds) * step_seconds
-        digits = self._quote_row_digits.get(int(symbol_id), self._price_digits)
         price = round(float(price), digits)
         candle = (bucket, price, price, price, price)
         if not self._candles:

@@ -2,7 +2,10 @@
 
 ## 1) Entry and Bootstrap
 - `src/app/entrypoints/*`: primary entry points (train/live/auth).
-- `main_train.py` / `main_live.py` / `app.py`: thin wrappers that call the entrypoints.
+- CLI entry points via `pyproject.toml`:
+  - `forex-train` -> `app.entrypoints.train:main`
+  - `forex-live` -> `app.entrypoints.live:main`
+- Legacy wrappers: `main_train.py` / `main_live.py` / `app.py` (optional; prefer CLI or `python -m app.entrypoints.*`).
 - `src/app/bootstrap.py`: initializes logging, provider registry, use cases, event bus, and app state.
 - `config/runtime.py`: reads environment config (TOKEN_FILE, BROKER_PROVIDER, LOG_LEVEL).
 
@@ -17,19 +20,12 @@
 ## 4) Infrastructure Layer
 - `infrastructure/broker/base.py`: base mixins/callbacks for broker services.
 - `infrastructure/broker/errors.py`: shared broker error utilities.
-- `infrastructure/broker/oauth/*`: OAuth helper utilities.
-- `infrastructure/broker/ctrader/provider.py`: provider implementation (cTrader).
-- `infrastructure/broker/ctrader/services/*`: concrete services (auth, account list, funds, trendbar).
-- `infrastructure/broker/fake/*`: fake provider for tests/offline.
+- `infrastructure/broker/*`: provider implementations live here (verify the concrete provider folders present).
 
 ## 5) UI Layer
 - `ui/train/`: training/replay UI.
 - `ui/live/`: live trading UI.
-- `ui/shared/controllers/`: shared UI controllers (connection, process runner).
-- `ui/shared/dialogs/`: shared auth/account dialogs.
-- `ui/shared/widgets/`: reusable widgets.
-- `ui/shared/styles/`: shared QSS and tokens.
-- `ui/shared/utils/`: shared formatters and helpers.
+- `ui/shared/`: shared UI pieces (currently a minimal base; expand as needed).
 
 ## 6) Event and State
 - `application/events.py`: EventBus for in-process signals.

@@ -12,6 +12,10 @@ license = { text = "Proprietary" }
 
 dependencies = []
 
+[project.scripts]
+forex-train = "app.entrypoints.train:main"
+forex-live = "app.entrypoints.live:main"
+
 [project.optional-dependencies]
 ui = [
   "PySide6",
@@ -35,6 +39,7 @@ dev = [
   "ruff",
   "black",
   "mypy",
+  "import-linter",
 ]
 
 [tool.setuptools]
@@ -45,3 +50,25 @@ where = ["src"]
 
 [tool.setuptools.package-data]
 "ui.shared.styles" = ["app.qss"]
+
+[tool.importlinter]
+include_external_packages = false
+root_packages = ["app", "application", "domain", "infrastructure", "ui", "config", "tools", "ml", "utils"]
+
+[[tool.importlinter.contracts]]
+name = "Domain Is Independent"
+type = "forbidden"
+source_modules = ["domain"]
+forbidden_modules = ["application", "infrastructure", "ui", "app", "config", "tools", "ml", "utils"]
+
+[[tool.importlinter.contracts]]
+name = "Application Does Not Depend On UI Or App"
+type = "forbidden"
+source_modules = ["application"]
+forbidden_modules = ["ui", "app"]
+
+[[tool.importlinter.contracts]]
+name = "Infrastructure Does Not Depend On UI Or App"
+type = "forbidden"
+source_modules = ["infrastructure"]
+forbidden_modules = ["ui", "app"]
