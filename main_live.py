@@ -1,17 +1,17 @@
 import sys
-from pathlib import Path
 
-ROOT_DIR = Path(__file__).resolve().parent
-SRC_DIR = ROOT_DIR / "src"
-root_str = str(ROOT_DIR)
-src_str = str(SRC_DIR)
-if src_str in sys.path:
-    sys.path.remove(src_str)
-sys.path.insert(0, src_str)
-if root_str in sys.path:
-    sys.path.remove(root_str)
-
-from app.entrypoints.live import main
+try:
+    from forex.app.entrypoints.live import main
+except ModuleNotFoundError as exc:
+    print(
+        "Module not found. Recommended usage:\n"
+        "  1) Install the package (e.g. `pip install -e .[ui]`) and run the CLI:\n"
+        "     `forex-live`\n"
+        "  2) Or run with PYTHONPATH=src:\n"
+        "     `PYTHONPATH=src python -m forex.app.entrypoints.live`\n",
+        file=sys.stderr,
+    )
+    raise SystemExit(1) from exc
 
 
 if __name__ == "__main__":

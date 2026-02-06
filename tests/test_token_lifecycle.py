@@ -1,6 +1,6 @@
 import time
 
-from config.settings import OAuthTokens
+from forex.config.settings import OAuthTokens
 
 
 def test_token_expiry_checks() -> None:

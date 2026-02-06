@@ -9,6 +9,7 @@ __pycache__/
 *.csv
 ml/rl/models/
 src/ml/rl/models/
+src/forex/ml/rl/models/
 *.egg-info/
 data/raw_history/
 data/

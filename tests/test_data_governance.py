@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import json
 
-from config.data_governance import SCHEMA_VERSION, write_metadata_for_csv
+from forex.config.data_governance import SCHEMA_VERSION, write_metadata_for_csv
 
 
 def test_write_metadata_for_csv(tmp_path) -> None:

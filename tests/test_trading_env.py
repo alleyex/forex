@@ -3,7 +3,7 @@ from __future__ import annotations
 import numpy as np
 import pytest
 
-from ml.rl.envs.trading_env import TradingConfig, TradingEnv
+from forex.ml.rl.envs.trading_env import TradingConfig, TradingEnv
 
 
 def _make_env(config: TradingConfig) -> TradingEnv:

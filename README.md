@@ -40,9 +40,9 @@ QT_OPENGL=software LOG_LEVEL=INFO python main_live.py
 Direct module entrypoints:
 
 ```bash
-QT_OPENGL=software LOG_LEVEL=INFO python -m app.entrypoints.train
-QT_OPENGL=software LOG_LEVEL=INFO python -m app.entrypoints.live
-python -m app.entrypoints.app
+QT_OPENGL=software LOG_LEVEL=INFO python -m forex.app.entrypoints.train
+QT_OPENGL=software LOG_LEVEL=INFO python -m forex.app.entrypoints.live
+python -m forex.app.entrypoints.app
 ```
 
 ## Tests

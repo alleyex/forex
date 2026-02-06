@@ -1,8 +1,8 @@
 import unittest
 
-from application.broker.use_cases import BrokerUseCases
-from config.paths import TOKEN_FILE
-from infrastructure.broker.fake.provider import FakeProvider
+from forex.application.broker.use_cases import BrokerUseCases
+from forex.config.paths import TOKEN_FILE
+from forex.infrastructure.broker.fake.provider import FakeProvider
 
 
 class BrokerUseCasesTest(unittest.TestCase):

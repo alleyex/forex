@@ -13,8 +13,8 @@ license = { text = "Proprietary" }
 dependencies = []
 
 [project.scripts]
-forex-train = "app.entrypoints.train:main"
-forex-live = "app.entrypoints.live:main"
+forex-train = "forex.app.entrypoints.train:main"
+forex-live = "forex.app.entrypoints.live:main"
 
 [project.optional-dependencies]
 ui = [
@@ -49,26 +49,35 @@ package-dir = {"" = "src"}
 where = ["src"]
 
 [tool.setuptools.package-data]
-"ui.shared.styles" = ["app.qss"]
+"forex.ui.shared.styles" = ["app.qss"]
 
 [tool.importlinter]
 include_external_packages = false
-root_packages = ["app", "application", "domain", "infrastructure", "ui", "config", "tools", "ml", "utils"]
+root_packages = ["forex"]
 
 [[tool.importlinter.contracts]]
 name = "Domain Is Independent"
 type = "forbidden"
-source_modules = ["domain"]
-forbidden_modules = ["application", "infrastructure", "ui", "app", "config", "tools", "ml", "utils"]
+source_modules = ["forex.domain"]
+forbidden_modules = [
+  "forex.application",
+  "forex.infrastructure",
+  "forex.ui",
+  "forex.app",
+  "forex.config",
+  "forex.tools",
+  "forex.ml",
+  "forex.utils",
+]
 
 [[tool.importlinter.contracts]]
 name = "Application Does Not Depend On UI Or App"
 type = "forbidden"
-source_modules = ["application"]
-forbidden_modules = ["ui", "app"]
+source_modules = ["forex.application"]
+forbidden_modules = ["forex.ui", "forex.app"]
 
 [[tool.importlinter.contracts]]
 name = "Infrastructure Does Not Depend On UI Or App"
 type = "forbidden"
-source_modules = ["infrastructure"]
-forbidden_modules = ["ui", "app"]
+source_modules = ["forex.infrastructure"]
+forbidden_modules = ["forex.ui", "forex.app"]

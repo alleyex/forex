@@ -1,0 +1,42 @@
+import sys
+import traceback
+
+from PySide6.QtWidgets import QApplication
+from PySide6.QtCore import qInstallMessageHandler
+
+from forex.app.bootstrap import bootstrap
+from forex.ui.shared.dialogs.app_auth_dialog import AppAuthDialog
+from forex.ui.train.main_window import MainWindow
+from forex.config.runtime import load_config
+
+
+def _qt_message_handler(mode, context, message) -> None:
+    location = f"{context.file}:{context.line}" if context.file else "<unknown>"
+    print(f"Qt[{mode}] {message} ({location})")
+    if "QObject::startTimer" in message:
+        print("Python stack (most recent call last):")
+        print("".join(traceback.format_stack()))
+
+
+def main() -> int:
+    use_cases, _, event_bus, app_state = bootstrap()
+    config = load_config()
+    qInstallMessageHandler(_qt_message_handler)
+    app = QApplication(sys.argv)
+    dlg = AppAuthDialog(
+        token_file=config.token_file,
+        use_cases=use_cases,
+        event_bus=event_bus,
+        app_state=app_state,
+    )
+    if dlg.exec() != AppAuthDialog.Accepted:
+        sys.exit(0)
+
+    main = MainWindow(use_cases=use_cases, event_bus=event_bus, app_state=app_state)
+    main.show()
+
+    return app.exec()
+
+
+if __name__ == "__main__":
+    sys.exit(main())
