@@ -290,11 +290,13 @@ class LiveMainWindow(QMainWindow):
 
         chart_panel = self._build_chart_panel()
         autotrade_panel = self._build_autotrade_panel()
+        autotrade_panel.setMinimumWidth(0)
         top_splitter = QSplitter(Qt.Horizontal)
         top_splitter.addWidget(autotrade_panel)
         top_splitter.addWidget(chart_panel)
         top_splitter.setStretchFactor(0, 1)
         top_splitter.setStretchFactor(1, 2)
+        self._top_splitter = top_splitter
         QTimer.singleShot(0, lambda: self._init_splitter_sizes(top_splitter))
         content_layout.addWidget(top_splitter, 1)
 
@@ -307,6 +309,7 @@ class LiveMainWindow(QMainWindow):
         bottom_splitter.setStretchFactor(0, 1)
         bottom_splitter.setStretchFactor(1, 2)
         bottom_splitter.setStretchFactor(2, 1)
+        self._bottom_splitter = bottom_splitter
         QTimer.singleShot(0, lambda: self._init_bottom_splitter_sizes(bottom_splitter))
 
         splitter = QSplitter(Qt.Vertical)
@@ -514,7 +517,7 @@ class LiveMainWindow(QMainWindow):
             QWidget#tradeTab QLabel,
             QWidget#advancedTab QLabel {
                 color: #d5dde6;
-                min-width: 150px;
+                min-width: 110px;
             }
             QWidget#modelTab QLabel[spacer="true"],
             QWidget#tradeTab QLabel[spacer="true"],
@@ -611,7 +614,7 @@ class LiveMainWindow(QMainWindow):
         model_field_layout.setSpacing(6)
         self._model_path = QLineEdit("ppo-forex.zip")
         self._model_path.setPlaceholderText("ppo-forex.zip")
-        self._model_path.setMinimumWidth(220)
+        self._model_path.setMinimumWidth(140)
         self._model_path.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
         self._browse_model_dir_button = QToolButton()
         self._browse_model_dir_button.setIcon(self.style().standardIcon(QStyle.SP_FileIcon))
@@ -621,7 +624,7 @@ class LiveMainWindow(QMainWindow):
         self._browse_model_dir_button.setToolButtonStyle(Qt.ToolButtonIconOnly)
         field_height = 30
         self._field_widgets: list[QWidget] = []
-        field_width = 160
+        field_width = 120
         def _set_field_width(widget) -> None:
             self._field_widgets.append(widget)
             widget.setFixedWidth(field_width)
@@ -818,7 +821,15 @@ class LiveMainWindow(QMainWindow):
         total = splitter.width()
         if total <= 0:
             return
-        left = max(260, int(total * 0.16))
+        # Match the quotes panel width so the autotrade panel lines up.
+        left = None
+        bottom = getattr(self, "_bottom_splitter", None)
+        if bottom is not None:
+            sizes = bottom.sizes()
+            if sizes:
+                left = sizes[0]
+        if left is None:
+            left = max(220, int(total * 0.25))
         right = max(260, total - left)
         splitter.setSizes([left, right])
 
@@ -828,13 +839,31 @@ class LiveMainWindow(QMainWindow):
         if not getattr(self, "_field_widgets", None):
             return
         target = int(self._autotrade_tabs.width() * 0.33)
-        target = max(180, min(360, target))
+        target = max(140, min(280, target))
         for widget in self._field_widgets:
             widget.setFixedWidth(target)
 
     def resizeEvent(self, event) -> None:
         super().resizeEvent(event)
         self._sync_field_widths()
+        self._sync_top_splitter_sizes()
+
+    def _sync_top_splitter_sizes(self) -> None:
+        top = getattr(self, "_top_splitter", None)
+        bottom = getattr(self, "_bottom_splitter", None)
+        if top is None or bottom is None:
+            return
+        total = top.width()
+        if total <= 0:
+            return
+        sizes = bottom.sizes()
+        if not sizes:
+            return
+        left = min(max(160, sizes[0]), max(160, total - 160))
+        right = total - left
+        if right <= 0:
+            return
+        top.setSizes([left, right])
 
     def _init_bottom_splitter_sizes(self, splitter: QSplitter) -> None:
         total = splitter.width()

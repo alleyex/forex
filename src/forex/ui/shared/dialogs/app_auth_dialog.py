@@ -5,7 +5,8 @@ from typing import Optional
 
 from PySide6.QtWidgets import (
     QVBoxLayout, QLabel, QLineEdit,
-    QPushButton, QComboBox, QFormLayout, QWidget,
+    QPushButton, QFormLayout, QWidget, QHBoxLayout,
+    QRadioButton, QButtonGroup,
 )
 from PySide6.QtCore import Signal, Slot
 
@@ -32,11 +33,24 @@ class CredentialsFormWidget(QWidget):
     def _setup_ui(self) -> None:
         layout = QFormLayout(self)
         configure_form_layout(layout, horizontal_spacing=12, vertical_spacing=10)
-        
+
         # 環境選擇
-        self.host_combo = QComboBox()
-        self.host_combo.addItems(["demo", "live"])
-        layout.addRow(QLabel("環境:"), self.host_combo)
+        self._host_type = "demo"
+        self._host_locked = False
+        self._host_group = QButtonGroup(self)
+        self._host_demo = QRadioButton("demo")
+        self._host_live = QRadioButton("live")
+        self._host_group.addButton(self._host_demo)
+        self._host_group.addButton(self._host_live)
+        self._host_demo.setChecked(True)
+        host_row = QWidget()
+        host_layout = QHBoxLayout(host_row)
+        host_layout.setContentsMargins(0, 0, 0, 0)
+        host_layout.setSpacing(12)
+        host_layout.addWidget(self._host_demo)
+        host_layout.addWidget(self._host_live)
+        host_layout.addStretch(1)
+        layout.addRow(QLabel("環境:"), host_row)
         
         # Client ID
         self.client_id = QLineEdit()
@@ -50,14 +64,25 @@ class CredentialsFormWidget(QWidget):
     
     def set_enabled(self, enabled: bool) -> None:
         """啟用或停用所有欄位"""
-        self.host_combo.setEnabled(enabled)
+        if not self._host_locked:
+            self.set_host_enabled(enabled)
         self.client_id.setEnabled(enabled)
         self.client_secret.setEnabled(enabled)
-    
+
+    def set_host_enabled(self, enabled: bool) -> None:
+        """鎖定或解鎖環境選擇"""
+        self._host_locked = not enabled
+        self._host_demo.setEnabled(enabled)
+        self._host_live.setEnabled(enabled)
+
     def get_data(self) -> dict:
         """取得表單資料"""
+        if self._host_live.isChecked():
+            self._host_type = "live"
+        else:
+            self._host_type = "demo"
         return {
-            "host_type": self.host_combo.currentText(),
+            "host_type": self._host_type,
             "client_id": self.client_id.text().strip(),
             "client_secret": self.client_secret.text().strip(),
         }
@@ -65,7 +90,11 @@ class CredentialsFormWidget(QWidget):
     def load_data(self, host: str, client_id: str, client_secret: str) -> None:
         """載入資料到表單"""
         if host in ("demo", "live"):
-            self.host_combo.setCurrentText(host)
+            self._host_type = host
+            if host == "live":
+                self._host_live.setChecked(True)
+            else:
+                self._host_demo.setChecked(True)
         self.client_id.setText(client_id)
         self.client_secret.setText(client_secret)
     
@@ -258,6 +287,7 @@ class AppAuthDialog(BaseAuthDialog):
         
         if not data:
             self._log_warning(f"找不到 Token 檔案: {self._token_file}")
+            self._form.set_host_enabled(True)
             return
         
         host = data.get("host_type", "demo")
@@ -270,6 +300,8 @@ class AppAuthDialog(BaseAuthDialog):
             client_id=str(data.get("client_id", "")),
             client_secret=str(data.get("client_secret", "")),
         )
+        # Token 已存在時鎖定環境選擇
+        self._form.set_host_enabled(False)
 
     def _save_credentials(self, data: dict) -> bool:
         """儲存憑證到檔案"""
