@@ -34,6 +34,8 @@ from forex.application.broker.use_cases import BrokerUseCases
 from forex.application.events import EventBus
 from forex.application.state import AppState
 from forex.config.constants import ConnectionStatus
+from forex.config.paths import TOKEN_FILE
+from forex.config.settings import OAuthTokens
 from forex.ui.shared.utils.formatters import (
     format_app_auth_status,
     format_connection_message,
@@ -224,12 +226,10 @@ class MainWindow(QMainWindow):
         if self._account_info_controller is not None:
             self.accountsReceived.connect(self._account_info_controller.handle_accounts_received)
             self.fundsReceived.connect(self._account_info_controller.handle_funds_received)
+            self._account_info_controller.accountSelected.connect(self._trade_panel.update_account_info)
+            self._account_info_controller.fundsUpdated.connect(self._trade_panel.update_trader_info)
 
     def _connect_panel_signals(self) -> None:
-        self._trade_panel.trendbar_toggle_requested.connect(self._on_trendbar_toggle_requested)
-        self._trade_panel.history_download_requested.connect(self._on_history_download_requested)
-        self._trade_panel.account_info_requested.connect(self._on_fetch_account_info)
-        self._trade_panel.symbol_list_requested.connect(self._on_symbol_list_requested)
         self._training_params_panel.start_requested.connect(self._start_ppo_training)
         self._training_params_panel.optuna_requested.connect(self._start_ppo_training)
         self._training_params_panel.tab_changed.connect(self._on_training_tab_changed)
@@ -313,6 +313,8 @@ class MainWindow(QMainWindow):
 
     @Slot()
     def _on_history_download_requested(self) -> None:
+        if not self._ensure_account_info_connection():
+            return
         controller = self._get_history_download_controller()
         if controller is None:
             return
@@ -320,6 +322,8 @@ class MainWindow(QMainWindow):
 
     @Slot()
     def _open_history_download_dialog(self) -> None:
+        if not self._ensure_account_info_connection():
+            return
         controller = self._get_history_download_controller()
         if controller is None:
             return
@@ -430,6 +434,115 @@ class MainWindow(QMainWindow):
     def _on_fetch_account_info(self) -> None:
         """Handle fetch account info click"""
         self._show_panel("trade", show_log=None)
+        if not self._ensure_account_info_connection():
+            return
+        self._fetch_account_info()
+
+    def _ensure_account_info_connection(self) -> bool:
+        if not self._connection_controller:
+            self.logRequested.emit(format_connection_message("missing_connection_controller"))
+            return False
+
+        if not self._is_app_authenticated():
+            self._open_app_auth_dialog(auto_connect=True)
+        if not self._is_app_authenticated():
+            self.logRequested.emit(format_connection_message("missing_app_auth"))
+            return False
+
+        if not self._is_oauth_authenticated():
+            self._open_oauth_dialog(auto_connect=True)
+        if not self._is_oauth_authenticated():
+            self.logRequested.emit(format_connection_message("missing_oauth"))
+            return False
+
+        return True
+
+    def _load_tokens_for_accounts(self) -> Optional[OAuthTokens]:
+        try:
+            return OAuthTokens.from_file(TOKEN_FILE)
+        except Exception as exc:
+            self.logRequested.emit(f"⚠️ 無法讀取 token 檔案: {exc}")
+            return None
+
+    def _fetch_account_info(self) -> None:
+        if not self._use_cases:
+            self.logRequested.emit(format_connection_message("missing_use_cases"))
+            return
+        if not self._service:
+            self.logRequested.emit(format_connection_message("missing_app_auth"))
+            return
+        tokens = self._load_tokens_for_accounts()
+        access_token = "" if tokens is None else str(tokens.access_token or "").strip()
+        if not access_token:
+            self.logRequested.emit("⚠️ 缺少 Access Token，請先完成 OAuth 授權")
+            return
+
+        from forex.utils.reactor_manager import reactor_manager
+
+        reactor_manager.ensure_running()
+        from twisted.internet import reactor
+
+        selected_account_id = None if tokens is None else tokens.account_id
+
+        if tokens is not None:
+            expires_at = None
+            try:
+                expires_at = int(tokens.expires_at) if tokens.expires_at is not None else None
+            except Exception:
+                expires_at = None
+            seconds_to_expiry = None
+            try:
+                seconds_to_expiry = tokens.seconds_to_expiry()
+            except Exception:
+                seconds_to_expiry = None
+            self._trade_panel.update_token_info(expires_at, seconds_to_expiry)
+
+        if tokens is not None and tokens.account_id:
+            if self._use_cases.symbol_by_id_in_progress():
+                self.logRequested.emit("⏳ 正在取得商品詳細資訊，請稍候")
+            else:
+                symbol_id = int(self._trendbar_symbol_id or 0)
+                if symbol_id:
+                    reactor.callFromThread(
+                        self._use_cases.fetch_symbol_by_id,
+                        self._service,
+                        int(tokens.account_id),
+                        [symbol_id],
+                        False,
+                        lambda symbols: self._trade_panel.update_symbol_commission_info(
+                            symbols[0] if symbols else {}
+                        ),
+                        lambda e: self.logRequested.emit(f"⚠️ 商品詳細資訊取得失敗: {e}"),
+                        self.logRequested.emit,
+                    )
+                else:
+                    self.logRequested.emit("⚠️ 缺少商品 ID，無法取得佣金設定")
+
+        if self._use_cases.account_list_in_progress():
+            self.logRequested.emit("⏳ 正在取得帳戶列表，請稍候")
+        else:
+            reactor.callFromThread(
+                self._use_cases.fetch_accounts,
+                self._service,
+                access_token,
+                lambda accounts: self.accountsReceived.emit(accounts, selected_account_id),
+                lambda e: self.logRequested.emit(f"⚠️ 帳戶列表取得失敗: {e}"),
+                self.logRequested.emit,
+            )
+
+        if self._use_cases.ctid_profile_in_progress():
+            self.logRequested.emit("⏳ 正在取得 CTID Profile，請稍候")
+            return
+
+        reactor.callFromThread(
+            self._use_cases.fetch_ctid_profile,
+            self._service,
+            access_token,
+            lambda profile: self._trade_panel.update_profile_info(profile.user_id),
+            lambda e: self.logRequested.emit(f"⚠️ CTID Profile 取得失敗: {e}"),
+            self.logRequested.emit,
+        )
+
 
     def _show_panel(self, panel: str, *, show_log: Optional[bool]) -> None:
         if self._panel_switcher is None:

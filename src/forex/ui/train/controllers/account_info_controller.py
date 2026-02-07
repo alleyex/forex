@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import Callable, Optional
 
-from PySide6.QtCore import QObject
+from PySide6.QtCore import QObject, Signal
 
 from forex.application.broker.protocols import AppAuthServiceLike
 from forex.application.broker.use_cases import BrokerUseCases
@@ -12,6 +12,9 @@ from forex.utils.reactor_manager import reactor_manager
 
 
 class AccountInfoController(QObject):
+    accountSelected = Signal(object)
+    fundsUpdated = Signal(object)
+
     def __init__(
         self,
         *,
@@ -55,6 +58,7 @@ class AccountInfoController(QObject):
             )
             self._log(format_connection_message("account_field", label="環境", value=env_text))
             self._log(format_connection_message("account_field", label="交易登入", value=login_text))
+            self.accountSelected.emit(selected)
             self._fetch_account_funds(selected.account_id)
         except Exception as exc:
             self._log(format_connection_message("account_parse_failed", error=exc))
@@ -103,6 +107,7 @@ class AccountInfoController(QObject):
                 value=snapshot.currency or "-",
             )
         )
+        self.fundsUpdated.emit(snapshot)
 
     def _fetch_account_funds(self, account_id: int) -> None:
         if not self._service:

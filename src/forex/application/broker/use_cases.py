@@ -6,6 +6,7 @@ from typing import Callable, Generic, Optional, TypeVar
 from forex.application.broker.adapters import (
     AccountFundsServiceAdapter,
     AccountListServiceAdapter,
+    CtidProfileServiceAdapter,
     SymbolByIdServiceAdapter,
     SymbolListServiceAdapter,
 )
@@ -14,6 +15,7 @@ from forex.application.broker.protocols import (
     AccountListUseCaseLike,
     AppAuthServiceLike,
     BrokerUseCaseFactory,
+    CtidProfileUseCaseLike,
     OAuthLoginServiceLike,
     OAuthServiceLike,
     SymbolByIdUseCaseLike,
@@ -58,6 +60,7 @@ class BrokerUseCases:
     def __init__(self, provider: BrokerUseCaseFactory):
         self._provider = provider
         self._account_list_cache: _UseCaseCache[AccountListUseCase] = _UseCaseCache()
+        self._ctid_profile_cache: _UseCaseCache[CtidProfileUseCase] = _UseCaseCache()
         self._account_funds_cache: _UseCaseCache[AccountFundsUseCase] = _UseCaseCache()
         self._symbol_list_cache: _UseCaseCache[SymbolListUseCase] = _UseCaseCache()
         self._symbol_by_id_cache: _UseCaseCache[SymbolByIdUseCase] = _UseCaseCache()
@@ -83,6 +86,14 @@ class BrokerUseCases:
         )
         return AccountListUseCase(AccountListServiceAdapter(service))
 
+    def create_ctid_profile(
+        self, app_auth_service: AppAuthServiceLike, access_token: str
+    ) -> CtidProfileUseCaseLike:
+        service = self._provider.create_ctid_profile_service(
+            app_auth_service=app_auth_service, access_token=access_token
+        )
+        return CtidProfileUseCase(CtidProfileServiceAdapter(service))
+
     def create_account_funds(self, app_auth_service: AppAuthServiceLike) -> AccountFundsUseCaseLike:
         service = self._provider.create_account_funds_service(app_auth_service=app_auth_service)
         return AccountFundsUseCase(AccountFundsServiceAdapter(service))
@@ -106,6 +117,9 @@ class BrokerUseCases:
 
     def account_list_in_progress(self) -> bool:
         return bool(self._account_list_cache.use_case and self._account_list_cache.use_case.in_progress)
+
+    def ctid_profile_in_progress(self) -> bool:
+        return bool(self._ctid_profile_cache.use_case and self._ctid_profile_cache.use_case.in_progress)
 
     def account_funds_in_progress(self) -> bool:
         return bool(self._account_funds_cache.use_case and self._account_funds_cache.use_case.in_progress)
@@ -141,6 +155,33 @@ class BrokerUseCases:
             on_log=on_log,
         )
         account_list_uc.fetch(timeout_seconds)
+        return True
+
+    def fetch_ctid_profile(
+        self,
+        app_auth_service: AppAuthServiceLike,
+        access_token: str,
+        on_profile_received=None,
+        on_error=None,
+        on_log=None,
+        timeout_seconds: Optional[int] = None,
+    ) -> bool:
+        profile_uc = self._ctid_profile_cache.get(
+            app_auth_service,
+            lambda: self.create_ctid_profile(app_auth_service, access_token),
+            update=lambda uc: uc.set_access_token(access_token),
+        )
+
+        if profile_uc.in_progress:
+            return False
+
+        profile_uc.clear_log_history()
+        profile_uc.set_callbacks(
+            on_profile_received=on_profile_received,
+            on_error=on_error,
+            on_log=on_log,
+        )
+        profile_uc.fetch(timeout_seconds)
         return True
 
     def fetch_account_funds(
@@ -248,6 +289,31 @@ class AccountListUseCase:
     def set_callbacks(self, on_accounts_received=None, on_error=None, on_log=None) -> None:
         self._adapter.set_callbacks(
             on_accounts_received=on_accounts_received,
+            on_error=on_error,
+            on_log=on_log,
+        )
+
+    def clear_log_history(self) -> None:
+        self._adapter.clear_log_history()
+
+    def fetch(self, timeout_seconds: Optional[int] = None) -> None:
+        self._adapter.fetch(timeout_seconds)
+
+
+class CtidProfileUseCase:
+    def __init__(self, adapter: CtidProfileServiceAdapter):
+        self._adapter = adapter
+
+    @property
+    def in_progress(self) -> bool:
+        return self._adapter.in_progress
+
+    def set_access_token(self, access_token: str) -> None:
+        self._adapter.set_access_token(access_token)
+
+    def set_callbacks(self, on_profile_received=None, on_error=None, on_log=None) -> None:
+        self._adapter.set_callbacks(
+            on_profile_received=on_profile_received,
             on_error=on_error,
             on_log=on_log,
         )

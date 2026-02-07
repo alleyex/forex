@@ -111,7 +111,6 @@ def build_panels(
     trendbar_state = TrendbarState(parent=parent)
     trendbar_presenter = TrendbarPresenter(parent=parent, state=trendbar_state)
     trendbar_state.log_message.connect(log_panel.append)
-    trendbar_state.active_changed.connect(trade_panel.set_trendbar_active)
 
     return PanelBundle(
         trade_panel=trade_panel,

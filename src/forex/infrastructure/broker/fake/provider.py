@@ -98,16 +98,59 @@ class FakeAccountListService:
 
 
 @dataclass
+class FakeCtidProfileService:
+    app_auth_service: FakeAppAuthService
+    access_token: str
+    in_progress: bool = False
+    user_id: Optional[int] = None
+
+    def set_access_token(self, access_token: str) -> None:
+        self.access_token = access_token
+
+    def set_callbacks(self, on_profile_received=None, on_error=None, on_log=None) -> None:
+        self._on_profile_received = on_profile_received
+        self._on_error = on_error
+        self._on_log = on_log
+
+    def clear_log_history(self) -> None:
+        pass
+
+    def fetch(self, timeout_seconds: Optional[int] = None) -> None:
+        if self._on_profile_received:
+            self._on_profile_received(self)
+
+
+@dataclass
 class FakeAccountFundsService:
     app_auth_service: FakeAppAuthService
     in_progress: bool = False
     balance: Optional[float] = None
+    balance_version: Optional[int] = None
     equity: Optional[float] = None
     free_margin: Optional[float] = None
     used_margin: Optional[float] = None
     margin_level: Optional[float] = None
     currency: Optional[str] = None
     money_digits: Optional[int] = None
+    ctid_trader_account_id: Optional[int] = None
+    manager_bonus: Optional[float] = None
+    ib_bonus: Optional[float] = None
+    non_withdrawable_bonus: Optional[float] = None
+    access_rights: Optional[int] = None
+    deposit_asset_id: Optional[int] = None
+    swap_free: Optional[bool] = None
+    leverage_in_cents: Optional[int] = None
+    total_margin_calculation_type: Optional[int] = None
+    max_leverage: Optional[int] = None
+    french_risk: Optional[bool] = None
+    trader_login: Optional[int] = None
+    account_type: Optional[int] = None
+    broker_name: Optional[str] = None
+    registration_timestamp: Optional[int] = None
+    is_limited_risk: Optional[bool] = None
+    limited_risk_margin_calculation_strategy: Optional[int] = None
+    fair_stop_out: Optional[bool] = None
+    stop_out_strategy: Optional[int] = None
 
     def set_callbacks(self, on_funds_received=None, on_error=None, on_log=None) -> None:
         self._on_funds_received = on_funds_received
@@ -280,6 +323,9 @@ class FakeProvider(BrokerProvider):
 
     def create_account_list_service(self, app_auth_service, access_token: str):
         return FakeAccountListService(app_auth_service=app_auth_service, access_token=access_token)
+
+    def create_ctid_profile_service(self, app_auth_service, access_token: str):
+        return FakeCtidProfileService(app_auth_service=app_auth_service, access_token=access_token)
 
     def create_account_funds_service(self, app_auth_service):
         return FakeAccountFundsService(app_auth_service=app_auth_service)

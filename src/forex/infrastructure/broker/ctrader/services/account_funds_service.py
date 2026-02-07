@@ -74,12 +74,32 @@ class ErrorMessage(Protocol):
 @dataclass(frozen=True)
 class AccountFunds:
     balance: Optional[float]
+    balance_version: Optional[int]
     equity: Optional[float]
     free_margin: Optional[float]
     used_margin: Optional[float]
     margin_level: Optional[float]
     currency: Optional[str]
     money_digits: Optional[int]
+    ctid_trader_account_id: Optional[int]
+    manager_bonus: Optional[float]
+    ib_bonus: Optional[float]
+    non_withdrawable_bonus: Optional[float]
+    access_rights: Optional[int]
+    deposit_asset_id: Optional[int]
+    swap_free: Optional[bool]
+    leverage_in_cents: Optional[int]
+    total_margin_calculation_type: Optional[int]
+    max_leverage: Optional[int]
+    french_risk: Optional[bool]
+    trader_login: Optional[int]
+    account_type: Optional[int]
+    broker_name: Optional[str]
+    registration_timestamp: Optional[int]
+    is_limited_risk: Optional[bool]
+    limited_risk_margin_calculation_strategy: Optional[int]
+    fair_stop_out: Optional[bool]
+    stop_out_strategy: Optional[int]
 
 
 @dataclass
@@ -161,8 +181,27 @@ class AccountFundsService(LogHistoryMixin[AccountFundsServiceCallbacks], Operati
         self._await_pnl = False
         self._await_assets = False
         self._balance: Optional[float] = None
+        self._balance_version: Optional[int] = None
         self._deposit_asset_id: Optional[int] = None
         self._money_digits: Optional[int] = None
+        self._ctid_trader_account_id: Optional[int] = None
+        self._manager_bonus: Optional[float] = None
+        self._ib_bonus: Optional[float] = None
+        self._non_withdrawable_bonus: Optional[float] = None
+        self._access_rights: Optional[int] = None
+        self._swap_free: Optional[bool] = None
+        self._leverage_in_cents: Optional[int] = None
+        self._total_margin_calculation_type: Optional[int] = None
+        self._max_leverage: Optional[int] = None
+        self._french_risk: Optional[bool] = None
+        self._trader_login: Optional[int] = None
+        self._account_type: Optional[int] = None
+        self._broker_name: Optional[str] = None
+        self._registration_timestamp: Optional[int] = None
+        self._is_limited_risk: Optional[bool] = None
+        self._limited_risk_margin_calculation_strategy: Optional[int] = None
+        self._fair_stop_out: Optional[bool] = None
+        self._stop_out_strategy: Optional[int] = None
         self._used_margin: float = 0.0
         self._net_unrealized_pnl: float = 0.0
         self._assets_by_id: dict[int, str] = {}
@@ -226,10 +265,39 @@ class AccountFundsService(LogHistoryMixin[AccountFundsServiceCallbacks], Operati
     def _on_trader(self, msg: TraderMessage) -> None:
         trader = getattr(msg, "trader", None)
         if trader is not None:
+            self._ctid_trader_account_id = int(getattr(trader, "ctidTraderAccountId", 0))
             self._money_digits = int(getattr(trader, "moneyDigits", 0))
             self._deposit_asset_id = int(getattr(trader, "depositAssetId", 0))
             raw_balance = int(getattr(trader, "balance", 0))
             self._balance = self._scale_money(raw_balance, self._money_digits)
+            self._balance_version = int(getattr(trader, "balanceVersion", 0))
+            self._manager_bonus = self._scale_money(
+                int(getattr(trader, "managerBonus", 0)), self._money_digits
+            )
+            self._ib_bonus = self._scale_money(
+                int(getattr(trader, "ibBonus", 0)), self._money_digits
+            )
+            self._non_withdrawable_bonus = self._scale_money(
+                int(getattr(trader, "nonWithdrawableBonus", 0)), self._money_digits
+            )
+            self._access_rights = int(getattr(trader, "accessRights", 0))
+            self._swap_free = bool(getattr(trader, "swapFree", False))
+            self._leverage_in_cents = int(getattr(trader, "leverageInCents", 0))
+            self._total_margin_calculation_type = int(
+                getattr(trader, "totalMarginCalculationType", 0)
+            )
+            self._max_leverage = int(getattr(trader, "maxLeverage", 0))
+            self._french_risk = bool(getattr(trader, "frenchRisk", False))
+            self._trader_login = int(getattr(trader, "traderLogin", 0))
+            self._account_type = int(getattr(trader, "accountType", 0))
+            self._broker_name = str(getattr(trader, "brokerName", "") or "")
+            self._registration_timestamp = int(getattr(trader, "registrationTimestamp", 0))
+            self._is_limited_risk = bool(getattr(trader, "isLimitedRisk", False))
+            self._limited_risk_margin_calculation_strategy = int(
+                getattr(trader, "limitedRiskMarginCalculationStrategy", 0)
+            )
+            self._fair_stop_out = bool(getattr(trader, "fairStopOut", False))
+            self._stop_out_strategy = int(getattr(trader, "stopOutStrategy", 0))
         self._await_trader = False
         self._maybe_finish()
 
@@ -300,12 +368,32 @@ class AccountFundsService(LogHistoryMixin[AccountFundsServiceCallbacks], Operati
 
         funds = AccountFunds(
             balance=balance,
+            balance_version=self._balance_version,
             equity=equity,
             free_margin=free_margin,
             used_margin=used_margin,
             margin_level=margin_level,
             currency=currency,
             money_digits=self._money_digits,
+            ctid_trader_account_id=self._ctid_trader_account_id,
+            manager_bonus=self._manager_bonus,
+            ib_bonus=self._ib_bonus,
+            non_withdrawable_bonus=self._non_withdrawable_bonus,
+            access_rights=self._access_rights,
+            deposit_asset_id=self._deposit_asset_id,
+            swap_free=self._swap_free,
+            leverage_in_cents=self._leverage_in_cents,
+            total_margin_calculation_type=self._total_margin_calculation_type,
+            max_leverage=self._max_leverage,
+            french_risk=self._french_risk,
+            trader_login=self._trader_login,
+            account_type=self._account_type,
+            broker_name=self._broker_name,
+            registration_timestamp=self._registration_timestamp,
+            is_limited_risk=self._is_limited_risk,
+            limited_risk_margin_calculation_strategy=self._limited_risk_margin_calculation_strategy,
+            fair_stop_out=self._fair_stop_out,
+            stop_out_strategy=self._stop_out_strategy,
         )
         if self._callbacks.on_funds_received:
             self._callbacks.on_funds_received(funds)

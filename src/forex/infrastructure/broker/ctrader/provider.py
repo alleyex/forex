@@ -6,6 +6,7 @@ from forex.application.broker.provider import BrokerProvider
 from forex.infrastructure.broker.ctrader.services.account_funds_service import AccountFundsService
 from forex.infrastructure.broker.ctrader.services.account_list_service import AccountListService
 from forex.infrastructure.broker.ctrader.services.app_auth_service import AppAuthService
+from forex.infrastructure.broker.ctrader.services.ctid_profile_service import CtidProfileService
 from forex.infrastructure.broker.ctrader.services.oauth_login_service import OAuthLoginService
 from forex.infrastructure.broker.ctrader.services.oauth_service import OAuthService
 from forex.infrastructure.broker.ctrader.services.symbol_by_id_service import SymbolByIdService
@@ -37,6 +38,11 @@ class CTraderProvider(BrokerProvider):
         self, app_auth_service: AppAuthService, access_token: str
     ) -> AccountListService:
         return AccountListService(app_auth_service=app_auth_service, access_token=access_token)
+
+    def create_ctid_profile_service(
+        self, app_auth_service: AppAuthService, access_token: str
+    ) -> CtidProfileService:
+        return CtidProfileService(app_auth_service=app_auth_service, access_token=access_token)
 
     def create_account_funds_service(self, app_auth_service: AppAuthService) -> AccountFundsService:
         return AccountFundsService(app_auth_service=app_auth_service)

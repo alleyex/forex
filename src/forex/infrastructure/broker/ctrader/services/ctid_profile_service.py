@@ -1,12 +1,12 @@
 """
-帳戶列表服務
+CTID Profile 服務
 """
 from dataclasses import dataclass
 import time
-from typing import Callable, Optional, Protocol, Sequence
+from typing import Callable, Optional, Protocol
 
 from ctrader_open_api import Client
-from ctrader_open_api.messages.OpenApiMessages_pb2 import ProtoOAGetAccountListByAccessTokenReq
+from ctrader_open_api.messages.OpenApiMessages_pb2 import ProtoOAGetCtidProfileByTokenReq
 from ctrader_open_api.messages.OpenApiModelMessages_pb2 import ProtoOAPayloadType
 
 from forex.infrastructure.broker.base import BaseCallbacks, LogHistoryMixin, OperationStateMixin, build_callbacks
@@ -20,46 +20,40 @@ from forex.infrastructure.broker.ctrader.services.message_helpers import (
     format_success,
     format_warning,
 )
-from forex.utils.metrics import metrics
 from forex.infrastructure.broker.ctrader.services.timeout_tracker import TimeoutTracker
+from forex.utils.metrics import metrics
 
 
-class AccountInfoMessage(Protocol):
-    ctidTraderAccountId: int
-    isLive: bool
-    traderLogin: Optional[int]
-    lastClosingDealTimestamp: Optional[int]
-    lastBalanceUpdateTimestamp: Optional[int]
+class ProfileMessage(Protocol):
+    userId: int
 
 
-class AccountListMessage(Protocol):
+class ProfileResponseMessage(Protocol):
     payloadType: int
     errorCode: int
     description: str
-    permissionScope: Optional[int]
-    ctidTraderAccount: Sequence[AccountInfoMessage]
+    profile: Optional[ProfileMessage]
 
 
 @dataclass
-class AccountListServiceCallbacks(BaseCallbacks):
-    """AccountListService 的回調函式"""
-    on_accounts_received: Optional[Callable[[list], None]] = None
+class CtidProfile:
+    user_id: Optional[int]
 
 
-class AccountListService(LogHistoryMixin[AccountListServiceCallbacks], OperationStateMixin):
+@dataclass
+class CtidProfileServiceCallbacks(BaseCallbacks):
+    on_profile_received: Optional[Callable[[CtidProfile], None]] = None
+
+
+class CtidProfileService(LogHistoryMixin[CtidProfileServiceCallbacks], OperationStateMixin):
     """
-    透過存取權杖取得帳戶列表
-
-    使用方式：
-        service = AccountListService(app_auth_service, access_token)
-        service.set_callbacks(on_accounts_received=..., on_error=...)
-        service.fetch()
+    透過存取權杖取得 CTID Profile
     """
 
     def __init__(self, app_auth_service: AppAuthService, access_token: str):
         self._app_auth_service = app_auth_service
         self._access_token = access_token
-        self._callbacks = AccountListServiceCallbacks()
+        self._callbacks = CtidProfileServiceCallbacks()
         self._in_progress = False
         self._timeout_tracker = TimeoutTracker(self._on_timeout)
         self._log_history = []
@@ -69,21 +63,19 @@ class AccountListService(LogHistoryMixin[AccountListServiceCallbacks], Operation
 
     def set_callbacks(
         self,
-        on_accounts_received: Optional[Callable[[list], None]] = None,
+        on_profile_received: Optional[Callable[[CtidProfile], None]] = None,
         on_error: Optional[Callable[[str], None]] = None,
         on_log: Optional[Callable[[str], None]] = None,
     ) -> None:
-        """設定回調函式"""
         self._callbacks = build_callbacks(
-            AccountListServiceCallbacks,
-            on_accounts_received=on_accounts_received,
+            CtidProfileServiceCallbacks,
+            on_profile_received=on_profile_received,
             on_error=on_error,
             on_log=on_log,
         )
         self._replay_log_history()
 
     def fetch(self, timeout_seconds: Optional[int] = None) -> None:
-        """取得帳戶列表"""
         if not self._access_token:
             self._emit_error(error_message(ErrorCode.VALIDATION, "缺少存取權杖"))
             return
@@ -102,10 +94,9 @@ class AccountListService(LogHistoryMixin[AccountListServiceCallbacks], Operation
         self._send_request()
 
     def _send_request(self) -> None:
-        """發送帳戶列表請求"""
-        request = ProtoOAGetAccountListByAccessTokenReq()
+        request = ProtoOAGetCtidProfileByTokenReq()
         request.accessToken = self._access_token
-        self._log(format_request("正在取得帳戶列表..."))
+        self._log(format_request("正在取得 CTID Profile..."))
         try:
             client = self._app_auth_service.get_client()
         except Exception as exc:
@@ -116,39 +107,37 @@ class AccountListService(LogHistoryMixin[AccountListServiceCallbacks], Operation
             return
         client.send(request)
 
-    def _handle_message(self, client: Client, msg: AccountListMessage) -> bool:
-        """處理帳戶列表回應"""
+    def _handle_message(self, client: Client, msg: ProfileResponseMessage) -> bool:
         if not self._in_progress:
             return False
         return dispatch_payload(
             msg,
             {
-                ProtoOAPayloadType.PROTO_OA_GET_ACCOUNTS_BY_ACCESS_TOKEN_RES: self._on_accounts_received,
+                ProtoOAPayloadType.PROTO_OA_GET_CTID_PROFILE_BY_TOKEN_RES: self._on_profile_received,
                 ProtoOAPayloadType.PROTO_OA_ERROR_RES: self._on_error,
             },
         )
 
-    def _on_accounts_received(self, msg: AccountListMessage) -> None:
-        """帳戶列表接收成功"""
+    def _on_profile_received(self, msg: ProfileResponseMessage) -> None:
         self._end_operation()
         self._app_auth_service.remove_message_handler(self._handle_message)
         self._timeout_tracker.cancel()
-        permission_scope = getattr(msg, "permissionScope", None)
-        accounts = self._parse_accounts(msg.ctidTraderAccount, permission_scope)
-        self._log(format_success(f"已接收帳戶: {len(accounts)} 個"))
-        metrics.inc("ctrader.account_list.success")
+        profile = getattr(msg, "profile", None)
+        user_id = None if profile is None else int(getattr(profile, "userId", 0))
+        data = CtidProfile(user_id=user_id if user_id else None)
+        self._log(format_success("已接收 CTID Profile"))
+        metrics.inc("ctrader.ctid_profile.success")
         started_at = getattr(self, "_metrics_started_at", None)
         if started_at is not None:
-            metrics.observe("ctrader.account_list.latency_s", time.monotonic() - started_at)
-        if self._callbacks.on_accounts_received:
-            self._callbacks.on_accounts_received(accounts)
+            metrics.observe("ctrader.ctid_profile.latency_s", time.monotonic() - started_at)
+        if self._callbacks.on_profile_received:
+            self._callbacks.on_profile_received(data)
 
-    def _on_error(self, msg: AccountListMessage) -> None:
-        """帳戶列表接收失敗"""
+    def _on_error(self, msg: ProfileResponseMessage) -> None:
         self._end_operation()
         self._app_auth_service.remove_message_handler(self._handle_message)
         self._timeout_tracker.cancel()
-        metrics.inc("ctrader.account_list.error")
+        metrics.inc("ctrader.ctid_profile.error")
         self._emit_error(format_error(msg.errorCode, msg.description))
 
     def _on_timeout(self) -> None:
@@ -156,31 +145,12 @@ class AccountListService(LogHistoryMixin[AccountListServiceCallbacks], Operation
             return
         self._end_operation()
         self._app_auth_service.remove_message_handler(self._handle_message)
-        metrics.inc("ctrader.account_list.timeout")
-        self._emit_error(error_message(ErrorCode.TIMEOUT, "取得帳戶列表逾時"))
+        metrics.inc("ctrader.ctid_profile.timeout")
+        self._emit_error(error_message(ErrorCode.TIMEOUT, "取得 CTID Profile 逾時"))
 
     def _retry_request(self, attempt: int) -> None:
         if not self._in_progress:
             return
-        self._log(format_warning(f"帳戶列表逾時，重試第 {attempt} 次"))
-        metrics.inc("ctrader.account_list.retry")
+        self._log(format_warning(f"CTID Profile 逾時，重試第 {attempt} 次"))
+        metrics.inc("ctrader.ctid_profile.retry")
         self._send_request()
-
-    @staticmethod
-    def _parse_accounts(
-        raw_accounts: Sequence[AccountInfoMessage], permission_scope: Optional[int]
-    ) -> list:
-        """解析原始帳戶資料"""
-        return [
-            {
-                "account_id": int(account.ctidTraderAccountId),
-                "is_live": bool(account.isLive),
-                "trader_login": int(account.traderLogin) if account.traderLogin else None,
-                "permission_scope": permission_scope,
-                "last_closing_deal_timestamp": int(getattr(account, "lastClosingDealTimestamp", 0))
-                or None,
-                "last_balance_update_timestamp": int(getattr(account, "lastBalanceUpdateTimestamp", 0))
-                or None,
-            }
-            for account in raw_accounts
-        ]

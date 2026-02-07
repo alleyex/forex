@@ -6,10 +6,12 @@ from forex.application.broker.protocols import (
     AccountFundsLike,
     AccountFundsUseCaseLike,
     AccountListUseCaseLike,
+    AccountProfileLike,
+    CtidProfileUseCaseLike,
     SymbolByIdUseCaseLike,
     SymbolListUseCaseLike,
 )
-from forex.domain.accounts import Account, AccountFundsSnapshot
+from forex.domain.accounts import Account, AccountFundsSnapshot, AccountProfile
 from forex.domain.symbols import Symbol
 
 
@@ -17,6 +19,9 @@ class AccountInfoLike(Protocol):
     account_id: int
     is_live: Optional[bool]
     trader_login: Optional[int]
+    permission_scope: Optional[int]
+    last_closing_deal_timestamp: Optional[int]
+    last_balance_update_timestamp: Optional[int]
 
 class SymbolInfoLike(Protocol):
     symbol_id: int
@@ -28,6 +33,9 @@ def to_account(info: AccountInfoLike) -> Account:
         account_id=int(info.account_id),
         is_live=info.is_live,
         trader_login=info.trader_login,
+        permission_scope=getattr(info, "permission_scope", None),
+        last_closing_deal_timestamp=getattr(info, "last_closing_deal_timestamp", None),
+        last_balance_update_timestamp=getattr(info, "last_balance_update_timestamp", None),
     )
 
 
@@ -44,6 +52,9 @@ def to_accounts_from_dicts(raw_accounts: Iterable[dict]) -> list[Account]:
                     account_id=int(item.get("account_id", 0)),
                     is_live=bool(item.get("is_live", False)) if item.get("is_live") is not None else None,
                     trader_login=item.get("trader_login"),
+                    permission_scope=item.get("permission_scope"),
+                    last_closing_deal_timestamp=item.get("last_closing_deal_timestamp"),
+                    last_balance_update_timestamp=item.get("last_balance_update_timestamp"),
                 )
             )
         except Exception:
@@ -54,13 +65,37 @@ def to_accounts_from_dicts(raw_accounts: Iterable[dict]) -> list[Account]:
 def to_funds_snapshot(funds: AccountFundsLike) -> AccountFundsSnapshot:
     return AccountFundsSnapshot(
         balance=funds.balance,
+        balance_version=funds.balance_version,
         equity=funds.equity,
         free_margin=funds.free_margin,
         used_margin=funds.used_margin,
         margin_level=funds.margin_level,
         currency=funds.currency,
         money_digits=funds.money_digits,
+        ctid_trader_account_id=funds.ctid_trader_account_id,
+        manager_bonus=funds.manager_bonus,
+        ib_bonus=funds.ib_bonus,
+        non_withdrawable_bonus=funds.non_withdrawable_bonus,
+        access_rights=funds.access_rights,
+        deposit_asset_id=funds.deposit_asset_id,
+        swap_free=funds.swap_free,
+        leverage_in_cents=funds.leverage_in_cents,
+        total_margin_calculation_type=funds.total_margin_calculation_type,
+        max_leverage=funds.max_leverage,
+        french_risk=funds.french_risk,
+        trader_login=funds.trader_login,
+        account_type=funds.account_type,
+        broker_name=funds.broker_name,
+        registration_timestamp=funds.registration_timestamp,
+        is_limited_risk=funds.is_limited_risk,
+        limited_risk_margin_calculation_strategy=funds.limited_risk_margin_calculation_strategy,
+        fair_stop_out=funds.fair_stop_out,
+        stop_out_strategy=funds.stop_out_strategy,
     )
+
+
+def to_profile(profile: AccountProfileLike) -> AccountProfile:
+    return AccountProfile(user_id=getattr(profile, "user_id", None))
 
 
 def to_symbol(info: SymbolInfoLike) -> Symbol:
@@ -214,3 +249,33 @@ class SymbolByIdServiceAdapter:
             include_archived=include_archived,
             timeout_seconds=timeout_seconds,
         )
+
+
+class CtidProfileServiceAdapter:
+    def __init__(self, service: CtidProfileUseCaseLike):
+        self._service = service
+
+    @property
+    def in_progress(self) -> bool:
+        return self._service.in_progress
+
+    def set_access_token(self, access_token: str) -> None:
+        self._service.set_access_token(access_token)
+
+    def set_callbacks(self, on_profile_received=None, on_error=None, on_log=None) -> None:
+        def handle_profile(raw_profile) -> None:
+            domain_profile = to_profile(raw_profile)
+            if on_profile_received:
+                on_profile_received(domain_profile)
+
+        self._service.set_callbacks(
+            on_profile_received=handle_profile,
+            on_error=on_error,
+            on_log=on_log,
+        )
+
+    def clear_log_history(self) -> None:
+        self._service.clear_log_history()
+
+    def fetch(self, timeout_seconds: Optional[int] = None) -> None:
+        self._service.fetch(timeout_seconds)

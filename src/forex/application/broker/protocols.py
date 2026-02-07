@@ -202,11 +202,51 @@ class OrderServiceLike(Protocol):
 class AccountFundsLike(Protocol):
     money_digits: Optional[int]
     balance: Optional[float]
+    balance_version: Optional[int]
     equity: Optional[float]
     free_margin: Optional[float]
     used_margin: Optional[float]
     margin_level: Optional[float]
     currency: Optional[str]
+    ctid_trader_account_id: Optional[int]
+    manager_bonus: Optional[float]
+    ib_bonus: Optional[float]
+    non_withdrawable_bonus: Optional[float]
+    access_rights: Optional[int]
+    deposit_asset_id: Optional[int]
+    swap_free: Optional[bool]
+    leverage_in_cents: Optional[int]
+    total_margin_calculation_type: Optional[int]
+    max_leverage: Optional[int]
+    french_risk: Optional[bool]
+    trader_login: Optional[int]
+    account_type: Optional[int]
+    broker_name: Optional[str]
+    registration_timestamp: Optional[int]
+    is_limited_risk: Optional[bool]
+    limited_risk_margin_calculation_strategy: Optional[int]
+    fair_stop_out: Optional[bool]
+    stop_out_strategy: Optional[int]
+
+
+class AccountProfileLike(Protocol):
+    user_id: Optional[int]
+
+
+class CtidProfileUseCaseLike(Protocol):
+    in_progress: bool
+
+    def set_access_token(self, access_token: str) -> None:
+        ...
+
+    def set_callbacks(self, on_profile_received=None, on_error=None, on_log=None) -> None:
+        ...
+
+    def clear_log_history(self) -> None:
+        ...
+
+    def fetch(self, timeout_seconds: Optional[int] = None) -> None:
+        ...
 
 
 class BrokerUseCaseFactory(Protocol):
@@ -226,6 +266,11 @@ class BrokerUseCaseFactory(Protocol):
     def create_account_list_service(
         self, app_auth_service: AppAuthServiceLike, access_token: str
     ) -> AccountListUseCaseLike:
+        ...
+
+    def create_ctid_profile_service(
+        self, app_auth_service: AppAuthServiceLike, access_token: str
+    ) -> CtidProfileUseCaseLike:
         ...
 
     def create_account_funds_service(self, app_auth_service: AppAuthServiceLike) -> AccountFundsUseCaseLike:

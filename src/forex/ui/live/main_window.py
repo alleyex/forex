@@ -285,19 +285,17 @@ class LiveMainWindow(QMainWindow):
 
         content = QWidget()
         content_layout = QVBoxLayout(content)
-        content_layout.setContentsMargins(12, 12, 12, 12)
+        content_layout.setContentsMargins(0, 0, 0, 0)
         content_layout.setSpacing(12)
 
         chart_panel = self._build_chart_panel()
         autotrade_panel = self._build_autotrade_panel()
-        autotrade_panel.setMinimumWidth(0)
         top_splitter = QSplitter(Qt.Horizontal)
         top_splitter.addWidget(autotrade_panel)
         top_splitter.addWidget(chart_panel)
         top_splitter.setStretchFactor(0, 1)
         top_splitter.setStretchFactor(1, 2)
         self._top_splitter = top_splitter
-        QTimer.singleShot(0, lambda: self._init_splitter_sizes(top_splitter))
         content_layout.addWidget(top_splitter, 1)
 
         quotes_panel = self._build_quotes_panel()
@@ -310,17 +308,19 @@ class LiveMainWindow(QMainWindow):
         bottom_splitter.setStretchFactor(1, 2)
         bottom_splitter.setStretchFactor(2, 1)
         self._bottom_splitter = bottom_splitter
-        QTimer.singleShot(0, lambda: self._init_bottom_splitter_sizes(bottom_splitter))
+        QTimer.singleShot(0, self._align_panels_at_startup)
 
         splitter = QSplitter(Qt.Vertical)
         splitter.addWidget(content)
         splitter.addWidget(bottom_splitter)
         splitter.setStretchFactor(0, 3)
         splitter.setStretchFactor(1, 2)
+        self._main_splitter = splitter
+        QTimer.singleShot(0, self._init_main_splitter_sizes)
 
         central = QWidget()
         central_layout = QVBoxLayout(central)
-        central_layout.setContentsMargins(0, 0, 0, 0)
+        central_layout.setContentsMargins(12, 12, 12, 12)
         central_layout.addWidget(splitter)
         self.setCentralWidget(central)
 
@@ -507,7 +507,7 @@ class LiveMainWindow(QMainWindow):
             QWidget#modelTab QLabel[section="true"],
             QWidget#tradeTab QLabel[section="true"],
             QWidget#advancedTab QLabel[section="true"] {
-                color: #9aa6b2;
+                color: #a8b1bc;
                 font-weight: 600;
                 letter-spacing: 0.5px;
                 padding-top: 6px;
@@ -516,8 +516,7 @@ class LiveMainWindow(QMainWindow):
             QWidget#modelTab QLabel,
             QWidget#tradeTab QLabel,
             QWidget#advancedTab QLabel {
-                color: #d5dde6;
-                min-width: 110px;
+                color: #d3d8e0;
             }
             QWidget#modelTab QLabel[spacer="true"],
             QWidget#tradeTab QLabel[spacer="true"],
@@ -535,7 +534,7 @@ class LiveMainWindow(QMainWindow):
             QWidget#tradeTab QFrame[divider="true"],
             QWidget#advancedTab QFrame[divider="true"] {
                 border: none;
-                border-top: 1px solid rgba(255, 255, 255, 25);
+                border-top: 1px solid #343c46;
                 margin-top: 6px;
                 margin-bottom: 6px;
             }
@@ -553,7 +552,6 @@ class LiveMainWindow(QMainWindow):
             QWidget#advancedTab QLineEdit {
                 min-height: 30px;
                 padding: 2px 8px;
-                max-width: 360px;
             }
             QWidget#modelTab QRadioButton,
             QWidget#modelTab QCheckBox,
@@ -572,13 +570,15 @@ class LiveMainWindow(QMainWindow):
                 width: 16px;
                 height: 16px;
             }
-            QWidget#modelTab QFrame#card {
-                background: transparent;
-                border: 1px solid rgba(255, 255, 255, 10);
-                border-radius: 6px;
+            QWidget#modelTab QFrame#card,
+            QWidget#tradeTab QFrame#card,
+            QWidget#advancedTab QFrame#card {
+                background: #262d36;
+                border: 1px solid #343c46;
+                border-radius: 10px;
             }
             QWidget#modelTab QLabel#cardTitle {
-                color: #c7d0db;
+                color: #cdd6e1;
                 font-weight: 600;
                 letter-spacing: 0.2px;
                 padding-bottom: 2px;
@@ -587,7 +587,9 @@ class LiveMainWindow(QMainWindow):
             QWidget#modelTab QFrame#card QComboBox,
             QWidget#modelTab QFrame#card QDoubleSpinBox,
             QWidget#modelTab QFrame#card QSpinBox {
-                background: rgba(20, 24, 30, 140);
+                background: #1f252d;
+                border: 1px solid #343c46;
+                border-radius: 8px;
             }
             QWidget#modelTab QFrame#card QPushButton,
             QWidget#modelTab QFrame#card QToolButton {
@@ -599,8 +601,8 @@ class LiveMainWindow(QMainWindow):
                 padding: 0px;
             }
             QWidget#modelTab QToolButton#modelBrowseIcon:hover {
-                background: rgba(255, 255, 255, 20);
-                border-radius: 6px;
+                background: #2a323c;
+                border-radius: 8px;
             }
             """
         )
@@ -614,8 +616,6 @@ class LiveMainWindow(QMainWindow):
         model_field_layout.setSpacing(6)
         self._model_path = QLineEdit("ppo-forex.zip")
         self._model_path.setPlaceholderText("ppo-forex.zip")
-        self._model_path.setMinimumWidth(140)
-        self._model_path.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
         self._browse_model_dir_button = QToolButton()
         self._browse_model_dir_button.setIcon(self.style().standardIcon(QStyle.SP_FileIcon))
         self._browse_model_dir_button.setToolTip("Select model file")
@@ -623,15 +623,8 @@ class LiveMainWindow(QMainWindow):
         self._browse_model_dir_button.setText("")
         self._browse_model_dir_button.setToolButtonStyle(Qt.ToolButtonIconOnly)
         field_height = 30
-        self._field_widgets: list[QWidget] = []
-        field_width = 120
-        def _set_field_width(widget) -> None:
-            self._field_widgets.append(widget)
-            widget.setFixedWidth(field_width)
         self._model_path.setFixedHeight(field_height)
-        _set_field_width(self._model_path)
         self._browse_model_dir_button.setFixedHeight(field_height)
-        self._browse_model_dir_button.setMinimumWidth(36)
         self._browse_model_dir_button.clicked.connect(self._browse_model_file)
         model_field_layout.addWidget(self._model_path, 1)
         model_field_layout.addWidget(self._browse_model_dir_button)
@@ -641,7 +634,6 @@ class LiveMainWindow(QMainWindow):
         self._auto_trade_toggle.setCheckable(True)
         self._auto_trade_toggle.toggled.connect(self._toggle_auto_trade)
         self._auto_trade_toggle.setFixedHeight(field_height)
-        _set_field_width(self._auto_trade_toggle)
 
         model_card, model_card_form = _card("Model & Control")
         model_card_form.addRow("Model file", model_row)
@@ -652,12 +644,10 @@ class LiveMainWindow(QMainWindow):
         self._trade_symbol.addItems(symbol_choices)
         if self._symbol_name in symbol_choices:
             self._trade_symbol.setCurrentText(self._symbol_name)
-        _set_field_width(self._trade_symbol)
         self._refresh_symbol_button = QToolButton()
         self._refresh_symbol_button.setIcon(self.style().standardIcon(QStyle.SP_BrowserReload))
         self._refresh_symbol_button.setToolTip("Refresh symbol list")
         self._refresh_symbol_button.setFixedHeight(field_height)
-        self._refresh_symbol_button.setFixedWidth(28)
         self._refresh_symbol_button.clicked.connect(self._refresh_symbol_list)
         symbol_row = QWidget()
         symbol_layout = QHBoxLayout(symbol_row)
@@ -671,30 +661,11 @@ class LiveMainWindow(QMainWindow):
 
         self._trade_timeframe = QComboBox()
         self._trade_timeframe.addItems(["M1", "M5", "M15", "M30", "H1", "H4"])
-        _set_field_width(self._trade_timeframe)
         basic_card_form.addRow("Timeframe", self._trade_timeframe)
         self._trade_timeframe.currentTextChanged.connect(self._handle_trade_timeframe_changed)
         form_model.addRow(basic_card)
 
-        execution_card, execution_card_form = _card("Execution Mode")
-        mode_row = QWidget()
-        mode_layout = QVBoxLayout(mode_row)
-        mode_layout.setContentsMargins(0, 0, 0, 0)
-        mode_layout.setSpacing(4)
-        self._mode_demo = QRadioButton("Demo")
-        self._mode_live = QRadioButton("Live")
-        self._mode_demo.setChecked(True)
-        mode_group = QButtonGroup(panel)
-        mode_group.addButton(self._mode_demo)
-        mode_group.addButton(self._mode_live)
-        mode_layout.addWidget(self._mode_demo)
-        mode_layout.addWidget(self._mode_live)
-        execution_card_form.addRow("Mode", mode_row)
-        form_model.addRow(execution_card)
-
-        section_size = QLabel("POSITION SIZING")
-        section_size.setProperty("section", True)
-        form_trade.addRow(section_size)
+        trade_card, trade_card_form = _card("Position Sizing")
         lot_row = QWidget()
         lot_layout = QVBoxLayout(lot_row)
         lot_layout.setContentsMargins(0, 0, 0, 0)
@@ -707,7 +678,7 @@ class LiveMainWindow(QMainWindow):
         lot_group.addButton(self._lot_risk)
         lot_layout.addWidget(self._lot_fixed)
         lot_layout.addWidget(self._lot_risk)
-        form_trade.addRow("Sizing", lot_row)
+        trade_card_form.addRow("Sizing", lot_row)
 
         self._lot_value = QDoubleSpinBox()
         self._lot_value.setDecimals(2)
@@ -715,8 +686,7 @@ class LiveMainWindow(QMainWindow):
         self._lot_value.setSingleStep(0.01)
         self._lot_value.setValue(0.1)
         self._lot_value.setSuffix(" lots")
-        _set_field_width(self._lot_value)
-        form_trade.addRow("Lot / Risk%", self._lot_value)
+        trade_card_form.addRow("Lot / Risk%", self._lot_value)
         self._lot_fixed.toggled.connect(self._sync_lot_value_style)
         self._lot_risk.toggled.connect(self._sync_lot_value_style)
         self._sync_lot_value_style()
@@ -724,25 +694,17 @@ class LiveMainWindow(QMainWindow):
         self._max_positions = QSpinBox()
         self._max_positions.setRange(1, 20)
         self._max_positions.setValue(1)
-        _set_field_width(self._max_positions)
-        form_trade.addRow("Max positions", self._max_positions)
+        trade_card_form.addRow("Max positions", self._max_positions)
+        form_trade.addRow(trade_card)
 
-        divider_2 = QFrame()
-        divider_2.setFrameShape(QFrame.HLine)
-        divider_2.setProperty("divider", True)
-        form_trade.addRow(divider_2)
-
-        section_risk = QLabel("RISK CONTROLS")
-        section_risk.setProperty("section", True)
-        form_trade.addRow(section_risk)
+        risk_card, risk_card_form = _card("Risk Controls")
         self._stop_loss = QDoubleSpinBox()
         self._stop_loss.setDecimals(0)
         self._stop_loss.setRange(0.0, 1000000.0)
         self._stop_loss.setSingleStep(10.0)
         self._stop_loss.setValue(500.0)
         self._stop_loss.setSuffix(" pt")
-        _set_field_width(self._stop_loss)
-        form_trade.addRow("Stop loss (points)", self._stop_loss)
+        risk_card_form.addRow("Stop loss (points)", self._stop_loss)
 
         self._take_profit = QDoubleSpinBox()
         self._take_profit.setDecimals(0)
@@ -750,12 +712,10 @@ class LiveMainWindow(QMainWindow):
         self._take_profit.setSingleStep(10.0)
         self._take_profit.setValue(800.0)
         self._take_profit.setSuffix(" pt")
-        _set_field_width(self._take_profit)
-        form_trade.addRow("Take profit (points)", self._take_profit)
+        risk_card_form.addRow("Take profit (points)", self._take_profit)
 
-        form_risk = form_trade
         self._risk_guard = QCheckBox("Enable")
-        form_risk.addRow("Risk guard", self._risk_guard)
+        risk_card_form.addRow("Risk guard", self._risk_guard)
 
         self._max_drawdown = QDoubleSpinBox()
         self._max_drawdown.setDecimals(1)
@@ -763,8 +723,7 @@ class LiveMainWindow(QMainWindow):
         self._max_drawdown.setSingleStep(0.5)
         self._max_drawdown.setValue(10.0)
         self._max_drawdown.setSuffix(" %")
-        _set_field_width(self._max_drawdown)
-        form_risk.addRow("Max DD %", self._max_drawdown)
+        risk_card_form.addRow("Max DD %", self._max_drawdown)
 
         self._daily_loss = QDoubleSpinBox()
         self._daily_loss.setDecimals(1)
@@ -772,37 +731,35 @@ class LiveMainWindow(QMainWindow):
         self._daily_loss.setSingleStep(0.5)
         self._daily_loss.setValue(5.0)
         self._daily_loss.setSuffix(" %")
-        _set_field_width(self._daily_loss)
-        form_risk.addRow("Daily loss %", self._daily_loss)
+        risk_card_form.addRow("Daily loss %", self._daily_loss)
+        form_trade.addRow(risk_card)
 
         form_adv = _tab_form("Advanced", object_name="advancedTab")
+        advanced_card, advanced_card_form = _card("Advanced Settings")
         self._min_signal_interval = QSpinBox()
         self._min_signal_interval.setRange(0, 3600)
         self._min_signal_interval.setValue(5)
-        _set_field_width(self._min_signal_interval)
-        form_adv.addRow("Min interval (s)", self._min_signal_interval)
+        advanced_card_form.addRow("Min interval (s)", self._min_signal_interval)
 
         self._slippage_bps = QDoubleSpinBox()
         self._slippage_bps.setDecimals(2)
         self._slippage_bps.setRange(0.0, 50.0)
         self._slippage_bps.setValue(0.5)
-        _set_field_width(self._slippage_bps)
-        form_adv.addRow("Slippage bps", self._slippage_bps)
+        advanced_card_form.addRow("Slippage bps", self._slippage_bps)
 
         self._fee_bps = QDoubleSpinBox()
         self._fee_bps.setDecimals(2)
         self._fee_bps.setRange(0.0, 50.0)
         self._fee_bps.setValue(1.0)
-        _set_field_width(self._fee_bps)
-        form_adv.addRow("Fee bps", self._fee_bps)
+        advanced_card_form.addRow("Fee bps", self._fee_bps)
 
         self._confidence = QDoubleSpinBox()
         self._confidence.setDecimals(2)
         self._confidence.setRange(0.0, 1.0)
         self._confidence.setSingleStep(0.05)
         self._confidence.setValue(0.0)
-        _set_field_width(self._confidence)
-        form_adv.addRow("Confidence", self._confidence)
+        advanced_card_form.addRow("Confidence", self._confidence)
+        form_adv.addRow(advanced_card)
 
         self._auto_log_panel = LogWidget(
             title="Auto Trade",
@@ -813,7 +770,7 @@ class LiveMainWindow(QMainWindow):
         self._auto_log_panel.setMinimumHeight(140)
         self._auto_log_panel.setMaximumHeight(180)
         layout.addWidget(self._auto_log_panel)
-        QTimer.singleShot(0, self._sync_field_widths)
+        # width management disabled for autotrade fields
 
         return panel
 
@@ -830,23 +787,17 @@ class LiveMainWindow(QMainWindow):
                 left = sizes[0]
         if left is None:
             left = max(220, int(total * 0.25))
+        left = max(220, left)
         right = max(260, total - left)
         splitter.setSizes([left, right])
 
     def _sync_field_widths(self) -> None:
-        if not getattr(self, "_autotrade_tabs", None):
-            return
-        if not getattr(self, "_field_widgets", None):
-            return
-        target = int(self._autotrade_tabs.width() * 0.33)
-        target = max(140, min(280, target))
-        for widget in self._field_widgets:
-            widget.setFixedWidth(target)
+        return
 
     def resizeEvent(self, event) -> None:
         super().resizeEvent(event)
-        self._sync_field_widths()
-        self._sync_top_splitter_sizes()
+        if not getattr(self, "_panel_alignment_done", False):
+            self._align_panels_at_startup()
 
     def _sync_top_splitter_sizes(self) -> None:
         top = getattr(self, "_top_splitter", None)
@@ -859,11 +810,65 @@ class LiveMainWindow(QMainWindow):
         sizes = bottom.sizes()
         if not sizes:
             return
-        left = min(max(160, sizes[0]), max(160, total - 160))
+        left = min(max(220, sizes[0]), max(220, total - 220))
         right = total - left
         if right <= 0:
             return
         top.setSizes([left, right])
+
+    def _sync_bottom_splitter_sizes(self) -> None:
+        top = getattr(self, "_top_splitter", None)
+        bottom = getattr(self, "_bottom_splitter", None)
+        if top is None or bottom is None:
+            return
+        total = bottom.width()
+        if total <= 0:
+            return
+        sizes = top.sizes()
+        if not sizes:
+            return
+        left = min(max(220, sizes[0]), max(220, total - 320))
+        mid = max(320, int(total * 0.50))
+        right = total - left - mid
+        if right < 200:
+            right = 200
+            mid = max(320, total - left - right)
+        if left + mid + right <= total:
+            bottom.setSizes([left, mid, right])
+
+    def _align_panels_at_startup(self) -> None:
+        if getattr(self, "_panel_alignment_done", False):
+            return
+        top = getattr(self, "_top_splitter", None)
+        bottom = getattr(self, "_bottom_splitter", None)
+        if top is None or bottom is None:
+            return
+        # First size bottom so quotes width is known, then align top to it.
+        self._init_bottom_splitter_sizes(bottom)
+        self._init_splitter_sizes(top)
+        QTimer.singleShot(0, lambda: self._init_bottom_splitter_sizes(bottom))
+        QTimer.singleShot(0, lambda: self._init_splitter_sizes(top))
+        self._panel_alignment_done = True
+
+    def _init_main_splitter_sizes(self) -> None:
+        if getattr(self, "_main_splitter_done", False):
+            return
+        splitter = getattr(self, "_main_splitter", None)
+        if splitter is None:
+            return
+        total = splitter.height()
+        if total <= 0:
+            return
+        # Give the bottom (quotes/positions/log) a little more height.
+        top = int(total * 0.60) - 10
+        bottom = total - top
+        top = max(200, top)
+        bottom = max(180, bottom)
+        if top + bottom > total:
+            bottom = max(180, total - top)
+        if top + bottom <= total:
+            splitter.setSizes([top, bottom])
+            self._main_splitter_done = True
 
     def _init_bottom_splitter_sizes(self, splitter: QSplitter) -> None:
         total = splitter.width()
@@ -1131,8 +1136,6 @@ class LiveMainWindow(QMainWindow):
         _bind(self._risk_guard, "toggled")
         _bind(self._max_drawdown, "valueChanged")
         _bind(self._daily_loss, "valueChanged")
-        _bind(self._mode_demo, "toggled")
-        _bind(self._mode_live, "toggled")
         _bind(self._min_signal_interval, "valueChanged")
         _bind(self._slippage_bps, "valueChanged")
         _bind(self._fee_bps, "valueChanged")
@@ -1153,7 +1156,6 @@ class LiveMainWindow(QMainWindow):
             "risk_guard": bool(self._risk_guard.isChecked()),
             "max_drawdown": float(self._max_drawdown.value()),
             "daily_loss": float(self._daily_loss.value()),
-            "mode": "live" if self._mode_live.isChecked() else "demo",
             "min_signal_interval": int(self._min_signal_interval.value()),
             "slippage_bps": float(self._slippage_bps.value()),
             "fee_bps": float(self._fee_bps.value()),
@@ -1207,9 +1209,6 @@ class LiveMainWindow(QMainWindow):
                 self._max_drawdown.setValue(float(data.get("max_drawdown", self._max_drawdown.value())))
             if "daily_loss" in data:
                 self._daily_loss.setValue(float(data.get("daily_loss", self._daily_loss.value())))
-            mode = str(data.get("mode", "demo")).lower()
-            self._mode_live.setChecked(mode == "live")
-            self._mode_demo.setChecked(mode != "live")
             if "min_signal_interval" in data:
                 self._min_signal_interval.setValue(
                     int(data.get("min_signal_interval", self._min_signal_interval.value()))

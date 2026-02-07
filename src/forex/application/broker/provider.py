@@ -29,6 +29,10 @@ class BrokerProvider(BrokerUseCaseFactory, ABC):
         ...
 
     @abstractmethod
+    def create_ctid_profile_service(self, app_auth_service, access_token: str):
+        ...
+
+    @abstractmethod
     def create_account_funds_service(self, app_auth_service):
         ...
 
