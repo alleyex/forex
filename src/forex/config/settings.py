@@ -5,6 +5,13 @@ import os
 import time
 
 
+def _safe_chmod(filepath: str, mode: int) -> None:
+    try:
+        os.chmod(filepath, mode)
+    except Exception:
+        pass
+
+
 @dataclass
 class AppCredentials:
     """Application credentials container"""
@@ -52,6 +59,7 @@ class AppCredentials:
 
         with open(filepath, "w", encoding="utf-8") as file:
             json.dump(data, file, indent=2, ensure_ascii=False)
+        _safe_chmod(filepath, 0o600)
 
 
 @dataclass
@@ -115,3 +123,4 @@ class OAuthTokens:
 
         with open(filepath, "w", encoding="utf-8") as file:
             json.dump(data, file, indent=2, ensure_ascii=False)
+        _safe_chmod(filepath, 0o600)

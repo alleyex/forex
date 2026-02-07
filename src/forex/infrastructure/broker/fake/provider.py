@@ -261,11 +261,15 @@ class FakeSymbolByIdService:
 class FakeOrderService:
     app_auth_service: FakeAppAuthService
     in_progress: bool = False
+    _permission_scope: Optional[int] = None
 
     def set_callbacks(self, on_execution=None, on_error=None, on_log=None) -> None:
         self._on_execution = on_execution
         self._on_error = on_error
         self._on_log = on_log
+
+    def set_permission_scope(self, scope: Optional[int]) -> None:
+        self._permission_scope = None if scope is None else int(scope)
 
     def place_market_order(
         self,

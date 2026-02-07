@@ -3,6 +3,8 @@ Shared message helpers for cTrader services.
 """
 from typing import Any, Callable, Mapping
 
+from forex.infrastructure.broker.ctrader.auth.errors import describe_error_code
+
 
 def is_already_subscribed(error_code: Any, description: str) -> bool:
     return "ALREADY_SUBSCRIBED" in f"{error_code}" or "ALREADY_SUBSCRIBED" in description
@@ -13,6 +15,9 @@ def format_confirm(message: str, payload_type: int) -> str:
 
 
 def format_error(error_code: Any, description: str) -> str:
+    name = describe_error_code(error_code)
+    if name:
+        return f"錯誤 {error_code}({name}): {description}"
     return f"錯誤 {error_code}: {description}"
 
 

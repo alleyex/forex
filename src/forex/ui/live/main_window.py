@@ -466,6 +466,10 @@ class LiveMainWindow(QMainWindow):
             tab = QWidget()
             if object_name:
                 tab.setObjectName(object_name)
+            if object_name == "tradeTab":
+                self._trade_tab = tab
+            if object_name == "advancedTab":
+                self._advanced_tab = tab
             tab_layout = QVBoxLayout(tab)
             tab_layout.setContentsMargins(12, 10, 18, 24)
             tab_layout.setSpacing(8)
@@ -896,6 +900,10 @@ class LiveMainWindow(QMainWindow):
 
     def _toggle_auto_trade(self, enabled: bool) -> None:
         if enabled:
+            if self._app_state and self._app_state.selected_account_scope == 0:
+                self._auto_log("⚠️ 帳戶權限為僅檢視，無法啟用交易")
+                self._auto_trade_toggle.setChecked(False)
+                return
             if not self._load_auto_model():
                 self._auto_trade_toggle.setChecked(False)
                 return
@@ -964,6 +972,11 @@ class LiveMainWindow(QMainWindow):
         if self._order_service or not self._service:
             return
         self._order_service = self._use_cases.create_order_service(self._service)
+        if self._app_state:
+            scope = self._app_state.selected_account_scope
+            set_scope = getattr(self._order_service, "set_permission_scope", None)
+            if callable(set_scope):
+                set_scope(scope)
         self._order_service.set_callbacks(
             on_execution=self._handle_order_execution,
             on_error=lambda e: self._auto_log(f"❌ Order error: {e}"),
@@ -1023,6 +1036,53 @@ class LiveMainWindow(QMainWindow):
 
     def _handle_trade_timeframe_changed(self, timeframe: str) -> None:
         self._timeframe = timeframe
+
+    def _trading_widgets(self) -> list[QWidget]:
+        return [
+            self._auto_trade_toggle,
+            self._trade_symbol,
+            self._trade_timeframe,
+            self._refresh_symbol_button,
+            self._lot_fixed,
+            self._lot_risk,
+            self._lot_value,
+            self._max_positions,
+            self._stop_loss,
+            self._take_profit,
+            self._risk_guard,
+            self._max_drawdown,
+            self._daily_loss,
+            self._min_signal_interval,
+            self._slippage_bps,
+            self._fee_bps,
+            self._confidence,
+        ]
+
+    def _apply_trade_permission(self, scope: Optional[int]) -> None:
+        trading_allowed = scope != 0
+        for widget in self._trading_widgets():
+            if widget:
+                widget.setEnabled(trading_allowed)
+
+        if self._autotrade_tabs:
+            if getattr(self, "_trade_tab", None):
+                trade_idx = self._autotrade_tabs.indexOf(self._trade_tab)
+                if trade_idx >= 0:
+                    self._autotrade_tabs.setTabEnabled(trade_idx, trading_allowed)
+            if getattr(self, "_advanced_tab", None):
+                adv_idx = self._autotrade_tabs.indexOf(self._advanced_tab)
+                if adv_idx >= 0:
+                    self._autotrade_tabs.setTabEnabled(adv_idx, trading_allowed)
+
+        if self._order_service:
+            set_scope = getattr(self._order_service, "set_permission_scope", None)
+            if callable(set_scope):
+                set_scope(scope)
+
+        if not trading_allowed:
+            if self._auto_trade_toggle and self._auto_trade_toggle.isChecked():
+                self._auto_trade_toggle.setChecked(False)
+            self._auto_log("⚠️ 帳戶權限為僅檢視，交易功能已停用")
         self._history_requested = False
         self._pending_history = False
         self._last_history_request_key = None
@@ -2329,6 +2389,7 @@ class LiveMainWindow(QMainWindow):
                                 "account_id": getattr(item, "account_id", None),
                                 "is_live": getattr(item, "is_live", None),
                                 "trader_login": getattr(item, "trader_login", None),
+                                "permission_scope": getattr(item, "permission_scope", None),
                             }
                         )
                 self.logRequested.emit(f"✅ Accounts received: {raw_items}")
@@ -2356,14 +2417,18 @@ class LiveMainWindow(QMainWindow):
             account_id = getattr(account, "account_id", None)
             is_live = getattr(account, "is_live", None)
             trader_login = getattr(account, "trader_login", None)
+            permission_scope = getattr(account, "permission_scope", None)
             if isinstance(account, dict):
                 account_id = account.get("account_id")
                 is_live = account.get("is_live")
                 trader_login = account.get("trader_login")
+                permission_scope = account.get("permission_scope")
             kind = "Live" if is_live is True else ("Demo" if is_live is False else "Account")
             label = f"{kind} {account_id}"
             if trader_login:
                 label += f" · {trader_login}"
+            if permission_scope == 0:
+                label += " · VIEW"
             return label
 
         selected_index = 0
@@ -2418,7 +2483,8 @@ class LiveMainWindow(QMainWindow):
         current = self._app_state.selected_account_id
         if current is not None and int(current) == int(account_id):
             return
-        self._app_state.update_selected_account(int(account_id))
+        scope = self._resolve_account_scope(int(account_id))
+        self._app_state.set_selected_account(int(account_id), scope)
         if save_token:
             tokens = self._load_tokens_for_accounts()
             if tokens:
@@ -2433,6 +2499,20 @@ class LiveMainWindow(QMainWindow):
             self._account_switch_in_progress = True
             self.logRequested.emit("🔁 帳戶已切換，正在重新連線以完成授權")
             self._schedule_full_reconnect()
+
+    def _resolve_account_scope(self, account_id: int) -> Optional[int]:
+        for account in self._accounts:
+            if isinstance(account, dict):
+                acct_id = account.get("account_id")
+                scope = account.get("permission_scope")
+            else:
+                acct_id = getattr(account, "account_id", None)
+                scope = getattr(account, "permission_scope", None)
+            if acct_id is None:
+                continue
+            if int(acct_id) == int(account_id):
+                return None if scope is None else int(scope)
+        return None
 
     def _sync_account_combo(self, account_id: Optional[int]) -> None:
         if not self._account_combo or account_id is None:
@@ -2480,6 +2560,7 @@ class LiveMainWindow(QMainWindow):
                 return
         self._account_switch_in_progress = False
         self._sync_account_combo(state.selected_account_id)
+        self._apply_trade_permission(state.selected_account_scope)
         if state.selected_account_id:
             self._request_recent_history()
             self._ensure_quote_subscription()

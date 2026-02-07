@@ -11,7 +11,8 @@ from ctrader_open_api.messages.OpenApiCommonMessages_pb2 import ProtoHeartbeatEv
 from ctrader_open_api.messages.OpenApiMessages_pb2 import ProtoOAApplicationAuthReq
 from ctrader_open_api.messages.OpenApiModelMessages_pb2 import ProtoOAPayloadType
 
-from forex.infrastructure.broker.base import BaseAuthService, BaseCallbacks, build_callbacks
+from forex.infrastructure.broker.base import BaseCallbacks, build_callbacks
+from forex.infrastructure.broker.ctrader.services.base import CTraderAuthServiceBase
 from forex.infrastructure.broker.errors import ErrorCode, error_message
 from forex.config.constants import MessageType, ConnectionStatus
 from forex.config.paths import TOKEN_FILE
@@ -40,7 +41,7 @@ class AppAuthMessage(Protocol):
     description: str
 
 
-class AppAuthService(BaseAuthService[AppAuthServiceCallbacks, Client, AppAuthMessage]):
+class AppAuthService(CTraderAuthServiceBase[AppAuthServiceCallbacks, AppAuthMessage]):
     """
     處理 cTrader Open API 的應用程式層級認證
 

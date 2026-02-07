@@ -83,7 +83,13 @@ class CallbackServer:
         Returns:
             授權碼，若逾時則回傳 None
         """
-        server = self._create_server()
+        try:
+            server = self._create_server()
+        except OSError as exc:
+            if on_log:
+                on_log(f"⚠️ 無法啟動回調伺服器，可能是埠被占用: {exc}")
+                on_log("ℹ️ 可改用手動貼上授權碼流程")
+            return None
         
         if on_log:
             on_log("🌐 正在開啟瀏覽器進行 OAuth 授權...")

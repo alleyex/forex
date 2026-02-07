@@ -92,6 +92,7 @@ class OAuthLoginService(LogHistoryMixin[OAuthLoginServiceCallbacks], OperationSt
             )
 
             if not code:
+                self._log("ℹ️ 可改用手動貼上授權碼流程")
                 self._emit_error(error_message(ErrorCode.TIMEOUT, "OAuth 授權逾時"))
                 return
 

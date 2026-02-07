@@ -182,6 +182,7 @@ def format_connection_message(event: str, **kwargs) -> str:
         "oauth_service_failed": "⚠️ OAuth 服務建立失敗",
         "service_connected": "✅ 服務已連線",
         "oauth_connected": "✅ OAuth 已連線",
+        "logout_pending": "🚪 登出中，等待伺服器斷線確認",
         "missing_connection_controller": "⚠️ 缺少連線控制器",
         "missing_use_cases": "⚠️ 缺少 broker 用例配置",
         "missing_app_auth": "⚠️ 尚未完成 App 認證",

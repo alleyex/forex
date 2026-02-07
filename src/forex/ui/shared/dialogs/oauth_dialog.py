@@ -6,7 +6,7 @@ from typing import Optional
 
 from PySide6.QtWidgets import (
     QVBoxLayout, QHBoxLayout, QLabel, QLineEdit,
-    QPushButton, QFormLayout, QWidget, QSizePolicy,
+    QPushButton, QFormLayout, QWidget, QSizePolicy, QDialog,
 )
 from PySide6.QtCore import Signal, Slot
 
@@ -22,6 +22,7 @@ from forex.config.paths import TOKEN_FILE
 from forex.config.settings import OAuthTokens
 from forex.ui.shared.dialogs.account_dialog import AccountDialog
 from forex.ui.shared.utils.formatters import format_connection_message
+from forex.infrastructure.broker.ctrader.auth.refresh import refresh_tokens
 from forex.utils.reactor_manager import reactor_manager
 
 
@@ -129,6 +130,10 @@ class OAuthDialog(BaseAuthDialog):
     loginFailed = Signal(str)
     accountsReceived = Signal(list)
     accountsFailed = Signal(str)
+    tokenRefreshSucceeded = Signal(object)
+    tokenRefreshFailed = Signal(str)
+    profileReceived = Signal(object)
+    profileFailed = Signal(str)
 
     def __init__(
         self,
@@ -228,6 +233,10 @@ class OAuthDialog(BaseAuthDialog):
         self.loginFailed.connect(self._handle_login_error)
         self.accountsReceived.connect(self._handle_accounts_received)
         self.accountsFailed.connect(self._handle_accounts_error)
+        self.tokenRefreshSucceeded.connect(self._handle_token_refresh_success)
+        self.tokenRefreshFailed.connect(self._handle_token_refresh_error)
+        self.profileReceived.connect(self._handle_profile_received)
+        self.profileFailed.connect(self._handle_profile_error)
         self.statusChanged.connect(self._handle_status_changed)
 
     def _load_initial_data(self) -> None:
@@ -339,6 +348,9 @@ class OAuthDialog(BaseAuthDialog):
             self._log_error("缺少應用程式認證服務")
             return
 
+        if self._refresh_access_token_if_needed():
+            return
+
         access_token = self._form.access_token.text().strip()
         if not access_token:
             self._log_error("Access Token 為必填")
@@ -352,8 +364,7 @@ class OAuthDialog(BaseAuthDialog):
             self._log_info("⏳ 正在取得帳戶列表，請稍候")
             return
 
-        self._state.accounts_in_progress = True
-        self._refresh_controls()
+        self._set_accounts_busy(True)
 
         from twisted.internet import reactor
         reactor_manager.ensure_running()
@@ -365,6 +376,37 @@ class OAuthDialog(BaseAuthDialog):
             lambda e: self.accountsFailed.emit(e),
             lambda m: self.logReceived.emit(m),
         )
+
+    def _refresh_access_token_if_needed(self) -> bool:
+        try:
+            tokens = OAuthTokens.from_file(self._token_file)
+        except Exception:
+            return False
+        if not tokens.is_expired():
+            return False
+        if not tokens.refresh_token:
+            self._log_warning("⚠️ Access Token 已過期但沒有 Refresh Token")
+            return False
+
+        self._set_accounts_busy(True)
+        self._log_info("🔁 Access Token 已過期，嘗試自動刷新...")
+
+        import threading
+
+        def run_refresh() -> None:
+            try:
+                refreshed = refresh_tokens(
+                    token_file=self._token_file,
+                    refresh_token=tokens.refresh_token,
+                    existing_account_id=tokens.account_id,
+                )
+                refreshed.save(self._token_file)
+                self.tokenRefreshSucceeded.emit(refreshed)
+            except Exception as exc:
+                self.tokenRefreshFailed.emit(str(exc))
+
+        threading.Thread(target=run_refresh, daemon=True).start()
+        return True
 
     @Slot()
     def _start_auth(self) -> None:
@@ -441,6 +483,7 @@ class OAuthDialog(BaseAuthDialog):
         self._log_success("帳戶認證成功！")
         self._state.auth_in_progress = False
         self._refresh_controls()
+        self._fetch_ctid_profile(tokens.access_token)
         self.accept()
 
     @Slot(str)
@@ -457,12 +500,14 @@ class OAuthDialog(BaseAuthDialog):
         self._refresh_controls()
         if self._app_auth_service:
             self._fetch_accounts()
+            self._fetch_ctid_profile(tokens.access_token)
         else:
             self._log_warning("缺少應用程式認證服務，無法取得帳戶列表")
 
     @Slot(str)
     def _handle_login_error(self, error: str) -> None:
         self._log_error(error)
+        self._log_info("ℹ️ 若瀏覽器授權失敗，可改用「交換授權碼」手動登入")
         self._state.login_in_progress = False
         self._refresh_controls()
 
@@ -519,6 +564,8 @@ class OAuthDialog(BaseAuthDialog):
                 self._log_warning("已取消帳戶選擇")
         if self._selected_account:
             self._log_info(f"✅ Selected account: {self._selected_account.account_id}")
+            if self._selected_account.permission_scope == 0:
+                self._log_warning("⚠️ 此帳戶權限為僅檢視（SCOPE_VIEW），不可交易")
             try:
                 tokens = OAuthTokens.from_file(self._token_file)
                 if tokens:
@@ -536,19 +583,65 @@ class OAuthDialog(BaseAuthDialog):
         if self._auto_auth_after_accounts and self._selected_account:
             self._auto_auth_after_accounts = False
             self._start_auth()
-        self._state.accounts_in_progress = False
-        self._refresh_controls()
+        self._set_accounts_busy(False)
         if self._app_state:
             account_id = None if self._selected_account is None else self._selected_account.account_id
-            self._app_state.update_selected_account(account_id)
+            scope = None if self._selected_account is None else self._selected_account.permission_scope
+            self._app_state.set_selected_account(account_id, scope)
 
     @Slot(str)
     def _handle_accounts_error(self, error: str) -> None:
         self._log_error(error)
-        self._state.accounts_in_progress = False
-        self._refresh_controls()
+        self._set_accounts_busy(False)
         if self._auto_auth_after_accounts:
             self._auto_auth_after_accounts = False
+
+    @Slot(object)
+    def _handle_token_refresh_success(self, tokens: OAuthTokens) -> None:
+        self._log_success("Access Token 已自動刷新")
+        self._form.load_tokens(tokens)
+        self._set_accounts_busy(False)
+        self._fetch_accounts()
+
+    @Slot(str)
+    def _handle_token_refresh_error(self, error: str) -> None:
+        self._log_error(f"Token 刷新失敗: {error}")
+        self._set_accounts_busy(False)
+
+    @Slot(object)
+    def _handle_profile_received(self, profile) -> None:
+        user_id = getattr(profile, "user_id", None)
+        if user_id:
+            self._log_info(f"🙋 CTID userId: {user_id}")
+        else:
+            self._log_info("🙋 CTID profile 已取得")
+
+    @Slot(str)
+    def _handle_profile_error(self, error: str) -> None:
+        self._log_warning(f"CTID profile 取得失敗: {error}")
+
+    def _fetch_ctid_profile(self, access_token: str) -> None:
+        if not self._app_auth_service or not self._use_cases:
+            return
+        if self._use_cases.ctid_profile_in_progress():
+            return
+        if not access_token:
+            return
+
+        from twisted.internet import reactor
+        reactor_manager.ensure_running()
+        reactor.callFromThread(
+            self._use_cases.fetch_ctid_profile,
+            self._app_auth_service,
+            access_token,
+            lambda p: self.profileReceived.emit(p),
+            lambda e: self.profileFailed.emit(e),
+            lambda m: self.logReceived.emit(m),
+        )
+
+    def _set_accounts_busy(self, busy: bool) -> None:
+        self._state.accounts_in_progress = busy
+        self._refresh_controls()
 
     # ─────────────────────────────────────────────────────────────
     # 控制項狀態

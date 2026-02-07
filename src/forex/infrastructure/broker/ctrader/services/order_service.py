@@ -16,7 +16,8 @@ from ctrader_open_api.messages.OpenApiModelMessages_pb2 import (
     ProtoOATradeSide,
 )
 
-from forex.infrastructure.broker.base import BaseCallbacks, LogHistoryMixin, OperationStateMixin, build_callbacks
+from forex.infrastructure.broker.base import BaseCallbacks, build_callbacks
+from forex.infrastructure.broker.ctrader.services.base import CTraderServiceBase
 from forex.infrastructure.broker.ctrader.services.app_auth_service import AppAuthService
 from forex.infrastructure.broker.ctrader.services.message_helpers import (
     dispatch_payload,
@@ -24,6 +25,7 @@ from forex.infrastructure.broker.ctrader.services.message_helpers import (
     format_request,
     format_success,
 )
+from forex.infrastructure.broker.errors import ErrorCode, error_message
 
 
 class ExecutionMessage(Protocol):
@@ -43,17 +45,15 @@ class OrderServiceCallbacks(BaseCallbacks):
     on_execution: Optional[Callable[[dict], None]] = None
 
 
-class OrderService(LogHistoryMixin[OrderServiceCallbacks], OperationStateMixin):
+class OrderService(CTraderServiceBase[OrderServiceCallbacks]):
     """
     Minimal order service (market open + close position).
     """
 
     def __init__(self, app_auth_service: AppAuthService):
-        self._app_auth_service = app_auth_service
-        self._callbacks = OrderServiceCallbacks()
-        self._in_progress = False
-        self._log_history = []
+        super().__init__(app_auth_service=app_auth_service, callbacks=OrderServiceCallbacks())
         self._account_id: Optional[int] = None
+        self._permission_scope: Optional[int] = None
         self._client_order_id: Optional[str] = None
         self._position_id: Optional[int] = None
         self._last_requested_volume: Optional[int] = None
@@ -73,6 +73,9 @@ class OrderService(LogHistoryMixin[OrderServiceCallbacks], OperationStateMixin):
         )
         self._replay_log_history()
 
+    def set_permission_scope(self, scope: Optional[int]) -> None:
+        self._permission_scope = None if scope is None else int(scope)
+
     def place_market_order(
         self,
         *,
@@ -89,6 +92,8 @@ class OrderService(LogHistoryMixin[OrderServiceCallbacks], OperationStateMixin):
         client_order_id: Optional[str] = None,
         slippage_points: Optional[int] = None,
     ) -> Optional[str]:
+        if not self._ensure_trade_allowed():
+            return None
         if not self._start_operation():
             return None
         self._account_id = int(account_id)
@@ -126,13 +131,10 @@ class OrderService(LogHistoryMixin[OrderServiceCallbacks], OperationStateMixin):
             request.slippageInPoints = int(slippage_points)
 
         self._log(format_request("Sending market order..."))
-        try:
-            client = self._app_auth_service.get_client()
-        except Exception as exc:
-            self._emit_error(str(exc))
-            self._end_operation()
+        client = self._get_client_or_error()
+        if client is None:
             return None
-        self._app_auth_service.add_message_handler(self._handle_message)
+        self._bind_handler(self._handle_message)
         client.send(request)
         return self._client_order_id
 
@@ -143,6 +145,8 @@ class OrderService(LogHistoryMixin[OrderServiceCallbacks], OperationStateMixin):
         position_id: int,
         volume: int,
     ) -> bool:
+        if not self._ensure_trade_allowed():
+            return False
         if not self._start_operation():
             return False
         self._account_id = int(account_id)
@@ -160,13 +164,10 @@ class OrderService(LogHistoryMixin[OrderServiceCallbacks], OperationStateMixin):
         self._log(format_request(f"Close volume final: {normalized_volume}"))
         request.volume = normalized_volume
         self._log(format_request("Sending close position..."))
-        try:
-            client = self._app_auth_service.get_client()
-        except Exception as exc:
-            self._emit_error(str(exc))
-            self._end_operation()
+        client = self._get_client_or_error()
+        if client is None:
             return False
-        self._app_auth_service.add_message_handler(self._handle_message)
+        self._bind_handler(self._handle_message)
         client.send(request)
         return True
 
@@ -199,7 +200,7 @@ class OrderService(LogHistoryMixin[OrderServiceCallbacks], OperationStateMixin):
             return
 
         self._end_operation()
-        self._app_auth_service.remove_message_handler(self._handle_message)
+        self._unbind_handler(self._handle_message)
         self._log(format_success("Order executed"))
         if self._callbacks.on_execution:
             self._callbacks.on_execution(
@@ -230,7 +231,7 @@ class OrderService(LogHistoryMixin[OrderServiceCallbacks], OperationStateMixin):
 
     def _on_order_error(self, msg: ExecutionMessage) -> None:
         self._end_operation()
-        self._app_auth_service.remove_message_handler(self._handle_message)
+        self._unbind_handler(self._handle_message)
         error_code = getattr(msg, "errorCode", "")
         description = getattr(msg, "description", "")
         order = getattr(msg, "order", None)
@@ -245,10 +246,16 @@ class OrderService(LogHistoryMixin[OrderServiceCallbacks], OperationStateMixin):
 
     def _on_error(self, msg: ExecutionMessage) -> None:
         self._end_operation()
-        self._app_auth_service.remove_message_handler(self._handle_message)
+        self._unbind_handler(self._handle_message)
         error_code = getattr(msg, "errorCode", "")
         description = getattr(msg, "description", "")
         self._emit_error(format_error(error_code, description))
+
+    def _ensure_trade_allowed(self) -> bool:
+        if self._permission_scope == 0:
+            self._emit_error(error_message(ErrorCode.AUTH, "帳戶權限僅檢視，禁止交易"))
+            return False
+        return True
 
     @staticmethod
     def _generate_client_order_id() -> str:

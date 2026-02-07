@@ -1,6 +1,6 @@
 from typing import Callable, Optional
 
-from PySide6.QtCore import QObject, Signal, Slot
+from PySide6.QtCore import QObject, Signal, Slot, QTimer
 from PySide6.QtWidgets import QMessageBox, QWidget
 
 from forex.application.broker.protocols import AppAuthServiceLike, OAuthServiceLike
@@ -92,8 +92,16 @@ class ConnectionController(QObject):
         if self.is_oauth_authenticated() or self.is_app_authenticated():
             self._connection_in_progress = True
             try:
-                if self._oauth_service and self._oauth_service.status != ConnectionStatus.DISCONNECTED:
-                    self._oauth_service.disconnect()
+                oauth_service = self._oauth_service
+                if oauth_service and oauth_service.status != ConnectionStatus.DISCONNECTED:
+                    logout = getattr(oauth_service, "logout", None)
+                    if callable(logout):
+                        try:
+                            self.logRequested.emit(format_connection_message("logout_pending"))
+                            logout()
+                        except Exception:
+                            pass
+                    QTimer.singleShot(2500, lambda: oauth_service.disconnect())
                 self._oauth_service = None
                 self.oauthStatusChanged.emit(int(ConnectionStatus.DISCONNECTED))
 

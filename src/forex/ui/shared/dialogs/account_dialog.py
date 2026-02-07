@@ -35,8 +35,8 @@ class AccountDialog(QDialog):
         layout.addWidget(QLabel("請選擇要操作的帳戶："))
 
         self._table = QTableWidget(self)
-        self._table.setColumnCount(3)
-        self._table.setHorizontalHeaderLabels(["帳戶 ID", "環境", "交易登入"])
+        self._table.setColumnCount(4)
+        self._table.setHorizontalHeaderLabels(["帳戶 ID", "環境", "交易登入", "權限"])
         self._table.setRowCount(len(self._accounts))
         self._table.setSelectionBehavior(QTableWidget.SelectRows)
         self._table.setSelectionMode(QTableWidget.SingleSelection)
@@ -49,6 +49,14 @@ class AccountDialog(QDialog):
             self._table.setItem(row, 1, QTableWidgetItem(env_text))
             login_text = "" if account.trader_login is None else str(account.trader_login)
             self._table.setItem(row, 2, QTableWidgetItem(login_text))
+            scope = account.permission_scope
+            if scope == 1:
+                scope_text = "可交易"
+            elif scope == 0:
+                scope_text = "僅檢視"
+            else:
+                scope_text = "未知"
+            self._table.setItem(row, 3, QTableWidgetItem(scope_text))
 
         self._table.resizeColumnsToContents()
         if self._accounts:
