@@ -20,6 +20,7 @@ from forex.infrastructure.broker.ctrader.services.message_helpers import (
     dispatch_payload,
     format_error,
     is_already_subscribed,
+    is_non_subscribed_trendbar_unsubscribe,
 )
 
 
@@ -161,7 +162,7 @@ class TrendbarHistoryService(
             self._prepare_request(
                 count,
                 use_seconds=False,
-                window_minutes=count * 5,
+                window_minutes=count * self._period_minutes(),
                 from_ts=from_ts,
                 to_ts=to_ts,
             )
@@ -417,6 +418,8 @@ class TrendbarHistoryService(
 
     def _on_error(self, msg: ErrorMessage) -> None:
         if is_already_subscribed(msg.errorCode, msg.description):
+            return
+        if is_non_subscribed_trendbar_unsubscribe(msg.errorCode, msg.description):
             return
         self._emit_error(format_error(msg.errorCode, msg.description))
         self._cleanup()

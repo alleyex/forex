@@ -23,6 +23,7 @@ from forex.infrastructure.broker.ctrader.services.message_helpers import (
     format_sent_subscribe,
     format_sent_unsubscribe,
     is_already_subscribed,
+    is_non_subscribed_trendbar_unsubscribe,
 )
 from forex.infrastructure.broker.ctrader.services.spot_subscription import (
     send_spot_subscribe,
@@ -351,6 +352,8 @@ class TrendbarService(
             if self._await_spot_subscribe:
                 self._await_spot_subscribe = False
                 self._send_trendbar_request()
+            return
+        if is_non_subscribed_trendbar_unsubscribe(msg.errorCode, msg.description):
             return
         self._emit_error(format_error(msg.errorCode, msg.description))
 

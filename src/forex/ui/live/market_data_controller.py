@@ -2,13 +2,35 @@ from __future__ import annotations
 
 import time
 
+from forex.config.constants import ConnectionStatus
+
 
 class LiveMarketDataController:
     def __init__(self, window) -> None:
         self._window = window
 
     def set_trade_timeframe(self, timeframe: str) -> None:
-        self._window._timeframe = timeframe
+        w = self._window
+        next_timeframe = str(timeframe or "").strip().upper()
+        if not next_timeframe or next_timeframe == w._timeframe:
+            return
+        w._timeframe = next_timeframe
+        w._history_requested = False
+        w._pending_history = False
+        w._last_history_request_key = None
+        w._last_history_success_key = None
+        w._stop_live_trendbar()
+        w._chart_frozen = True
+        w._candles = []
+        w.set_candles([])
+        w._flush_chart_update()
+        if (
+            w._oauth_service
+            and getattr(w._oauth_service, "status", 0) >= ConnectionStatus.ACCOUNT_AUTHENTICATED
+            and w._app_state
+            and w._app_state.selected_account_id
+        ):
+            w._request_recent_history()
 
     def request_recent_history(self) -> None:
         w = self._window
@@ -172,6 +194,17 @@ class LiveMarketDataController:
         else:
             digits = w._price_digits
         ts_minutes = float(data.get("utc_timestamp_minutes", 0))
+        step_minutes = self.timeframe_minutes()
+        if step_minutes > 0:
+            ts_min_int = int(ts_minutes)
+            # Drop malformed trendbars that are not aligned to timeframe boundary.
+            if ts_min_int % step_minutes != 0:
+                return
+            now_minutes = int(time.time() // 60)
+            current_bucket = (now_minutes // step_minutes) * step_minutes
+            # Guard against broker stream anomalies emitting future buckets.
+            if ts_min_int > current_bucket:
+                return
         ts = ts_minutes * 60
         open_price = w._normalize_price(data.get("open", 0), digits=digits)
         high_price = w._normalize_price(data.get("high", 0), digits=digits)

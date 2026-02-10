@@ -10,6 +10,16 @@ def is_already_subscribed(error_code: Any, description: str) -> bool:
     return "ALREADY_SUBSCRIBED" in f"{error_code}" or "ALREADY_SUBSCRIBED" in description
 
 
+def is_non_subscribed_trendbar_unsubscribe(error_code: Any, description: str) -> bool:
+    text = f"{error_code} {description}".upper()
+    return (
+        "INVALID_REQUEST" in text
+        and "UNSUBSCRIBE" in text
+        and "NON-SUBSCRIBED" in text
+        and "TRENDBAR" in text
+    )
+
+
 def format_confirm(message: str, payload_type: int) -> str:
     return f"✅ {message}({int(payload_type)})"
 

@@ -2079,6 +2079,12 @@ class LiveMainWindow(QMainWindow):
         self._market_data_controller.handle_trendbar_received(data)
 
     def _update_chart_from_quote(self, symbol_id: int, bid, ask, spot_ts) -> None:
+        self._update_chart_last_price_from_quote(symbol_id, bid, ask)
+        if self._trendbar_active:
+            # While trendbar is active, allow quote to refine only the current
+            # open candle (same bucket) but never create/advance candles.
+            self._update_current_candle_from_quote(symbol_id, bid, ask, spot_ts)
+            return
         if getattr(self, "_awaiting_history_after_symbol_change", False):
             return
         if self._chart_frozen:
@@ -2137,6 +2143,92 @@ class LiveMainWindow(QMainWindow):
             return
         self.set_candles(self._candles)
         self._flush_chart_update()
+
+    def _update_current_candle_from_quote(self, symbol_id: int, bid, ask, spot_ts) -> None:
+        if int(symbol_id) != int(self._symbol_id):
+            return
+        if not self._candles:
+            return
+        digits = self._quote_row_digits.get(int(symbol_id), self._price_digits)
+        bid_val = self._normalize_price(bid, digits=digits)
+        ask_val = self._normalize_price(ask, digits=digits)
+        price = None
+        if bid_val and ask_val:
+            price = (bid_val + ask_val) / 2.0
+        elif bid_val:
+            price = bid_val
+        elif ask_val:
+            price = ask_val
+        if price is None:
+            return
+        ts_val = spot_ts
+        if ts_val is None or ts_val == 0:
+            ts_seconds = int(time.time())
+        else:
+            try:
+                ts_seconds = int(float(ts_val))
+            except (TypeError, ValueError):
+                ts_seconds = int(time.time())
+            if ts_seconds > 10**12:
+                ts_seconds = ts_seconds // 1000
+        step_seconds = self._timeframe_minutes() * 60
+        if step_seconds <= 0:
+            return
+        bucket = (ts_seconds // step_seconds) * step_seconds
+        now_bucket = (int(time.time()) // step_seconds) * step_seconds
+        if bucket > now_bucket:
+            return
+        last_time = self._candles[-1][0]
+        if bucket < last_time:
+            return
+        price = round(float(price), digits)
+        if bucket > last_time:
+            prev_close = self._candles[-1][4]
+            open_price = prev_close
+            high_price = max(open_price, price)
+            low_price = min(open_price, price)
+            self._candles.append((bucket, open_price, high_price, low_price, price))
+            if len(self._candles) > 50:
+                self._candles = self._candles[-50:]
+            self.set_candles(self._candles)
+            self._flush_chart_update()
+            return
+        open_price, high_price, low_price, _close = self._candles[-1][1:5]
+        high_price = max(high_price, price)
+        low_price = min(low_price, price)
+        self._candles[-1] = (last_time, open_price, high_price, low_price, price)
+        self.set_candles(self._candles)
+        self._flush_chart_update()
+
+    def _update_chart_last_price_from_quote(self, symbol_id: int, bid, ask) -> None:
+        if not self._chart_plot or not self._last_price_line or not self._last_price_label:
+            return
+        if int(symbol_id) != int(self._symbol_id):
+            return
+        digits = self._quote_row_digits.get(int(symbol_id), self._price_digits)
+        bid_val = self._normalize_price(bid, digits=digits)
+        ask_val = self._normalize_price(ask, digits=digits)
+        live_price = None
+        if bid_val and ask_val:
+            live_price = (bid_val + ask_val) / 2.0
+        elif bid_val:
+            live_price = bid_val
+        elif ask_val:
+            live_price = ask_val
+        if live_price is None:
+            return
+        self._last_price_line.setValue(live_price)
+        self._last_price_line.show()
+        label = f"{live_price:.{self._price_digits}f}"
+        self._last_price_label.setText(label)
+        if self._candles:
+            step_seconds = self._timeframe_minutes() * 60
+            x_offset = step_seconds if step_seconds > 0 else 0
+            highs = [candle[2] for candle in self._candles]
+            lows = [candle[3] for candle in self._candles]
+            y_offset = (max(highs) - min(lows)) * 0.015 if highs and lows else 0
+            self._last_price_label.setPos(self._candles[-1][0] + x_offset, live_price + y_offset)
+        self._last_price_label.show()
 
     def _handle_trendbar_error(self, error: str) -> None:
         self._market_data_controller.handle_trendbar_error(error)
