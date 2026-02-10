@@ -66,6 +66,7 @@ def initialize_live_window_state(window) -> None:
     window._chart_ready = False
     window._pending_candles = None
     window._chart_frozen = True
+    window._awaiting_history_after_symbol_change = False
 
     window._chart_timer = QTimer(window)
     window._chart_timer.setInterval(200)

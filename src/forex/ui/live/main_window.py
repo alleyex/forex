@@ -547,10 +547,7 @@ class LiveMainWindow(QMainWindow):
         model_card_form.addRow("Auto Trade", self._auto_trade_toggle)
         form_model.addRow(model_card)
         self._trade_symbol = QComboBox()
-        symbol_choices = self._fx_symbols or ["EURUSD", "USDJPY"]
-        self._trade_symbol.addItems(symbol_choices)
-        if self._symbol_name in symbol_choices:
-            self._trade_symbol.setCurrentText(self._symbol_name)
+        self._sync_trade_symbol_choices(preferred_symbol=self._symbol_name)
         self._refresh_symbol_button = QToolButton()
         self._refresh_symbol_button.setIcon(self.style().standardIcon(QStyle.SP_BrowserReload))
         self._refresh_symbol_button.setToolTip("Refresh symbol list")
@@ -1068,16 +1065,41 @@ class LiveMainWindow(QMainWindow):
         self._symbol_id_to_name = {symbol_id: name for name, symbol_id in mapping.items()}
         self._fx_symbols = self._filter_fx_symbols(self._symbol_names)
         current = self._trade_symbol.currentText()
-        self._trade_symbol.blockSignals(True)
-        self._trade_symbol.clear()
-        self._trade_symbol.addItems(self._fx_symbols or ["EURUSD", "USDJPY"])
-        if current and current in self._fx_symbols:
-            self._trade_symbol.setCurrentText(current)
-        self._trade_symbol.blockSignals(False)
+        self._sync_trade_symbol_choices(preferred_symbol=current)
         self._auto_log(f"✅ Symbol list refreshed: {len(self._fx_symbols)} symbols")
         current_symbol = self._trade_symbol.currentText() if hasattr(self, "_trade_symbol") else ""
         if not current_symbol:
             current_symbol = self._symbol_name
+
+    def _trade_symbol_choices(self) -> list[str]:
+        choices: list[str] = []
+        for symbol in self._quote_symbols:
+            if isinstance(symbol, str) and symbol and symbol not in choices:
+                choices.append(symbol)
+        if choices:
+            return choices
+        return ["EURUSD", "USDJPY"]
+
+    def _sync_trade_symbol_choices(self, preferred_symbol: Optional[str] = None) -> None:
+        if not hasattr(self, "_trade_symbol") or self._trade_symbol is None:
+            return
+        combo = self._trade_symbol
+        choices = self._trade_symbol_choices()
+        current = preferred_symbol or combo.currentText() or self._symbol_name
+        combo.blockSignals(True)
+        combo.clear()
+        combo.addItems(choices)
+        if current in choices:
+            target = current
+        elif self._symbol_name in choices:
+            target = self._symbol_name
+        else:
+            target = choices[0]
+        combo.setCurrentText(target)
+        combo.blockSignals(False)
+        if target and target != self._symbol_name:
+            self._symbol_name = target
+            self._symbol_id = self._resolve_symbol_id(target)
 
     def _sync_lot_value_style(self) -> None:
         if self._lot_risk.isChecked():
@@ -2017,6 +2039,8 @@ class LiveMainWindow(QMainWindow):
         self._market_data_controller.handle_trendbar_received(data)
 
     def _update_chart_from_quote(self, symbol_id: int, bid, ask, spot_ts) -> None:
+        if getattr(self, "_awaiting_history_after_symbol_change", False):
+            return
         if self._chart_frozen:
             # If history is unavailable but live quotes are flowing, allow
             # the chart to bootstrap from quotes so the UI isn't blank.

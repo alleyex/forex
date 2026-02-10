@@ -32,16 +32,26 @@ class LiveSymbolController:
             return
         if w._account_switch_in_progress:
             return
-        self.sync_quote_symbols(symbol)
         if symbol != w._symbol_name:
             w._symbol_name = symbol
             w._symbol_id = self.resolve_symbol_id(symbol)
+            w._price_digits = w._quote_digits.get(symbol, self.infer_quote_digits(symbol))
+            w._stop_live_trendbar()
+            # Clear previous symbol chart immediately to avoid transient mixed-scale spikes.
+            w._chart_frozen = True
+            w._awaiting_history_after_symbol_change = True
+            w._candles = []
+            w.set_candles([])
+            w._flush_chart_update()
         w._history_requested = False
         w._pending_history = False
         w._last_history_request_key = None
         w._last_history_success_key = None
         if w._oauth_service and getattr(w._oauth_service, "status", 0) >= 3:
             w._request_recent_history()
+        else:
+            # No authenticated history fetch path yet; allow quote bootstrap.
+            w._awaiting_history_after_symbol_change = False
 
     def fetch_symbol_details(self, symbol_name: str) -> None:
         w = self._window
@@ -252,6 +262,9 @@ class LiveSymbolController:
         w._quote_row_digits.clear()
         w._quote_last_mid.clear()
         w._quote_subscribed_ids.clear()
+        sync_trade_symbols = getattr(w, "_sync_trade_symbol_choices", None)
+        if callable(sync_trade_symbols):
+            sync_trade_symbols()
         if w._quotes_table:
             self.rebuild_quotes_table()
         if was_subscribed:

@@ -44,6 +44,7 @@ class LiveMarketDataController:
 
         def handle_error(error: str) -> None:
             w._history_requested = False
+            w._awaiting_history_after_symbol_change = False
             w.logRequested.emit(f"❌ History error: {error}")
 
         w._history_service.set_callbacks(
@@ -73,6 +74,7 @@ class LiveMarketDataController:
         if not rows:
             w.logRequested.emit("⚠️ No candle data received")
             w._history_requested = False
+            w._awaiting_history_after_symbol_change = False
             return
         digits = w._price_digits
         rows_sorted = sorted(rows, key=lambda r: r.get("utc_timestamp_minutes", 0))
@@ -97,6 +99,7 @@ class LiveMarketDataController:
         w._flush_chart_update()
         w.logRequested.emit(f"✅ Loaded {len(candles)} candles")
         w._history_requested = False
+        w._awaiting_history_after_symbol_change = False
         if w._app_state and w._app_state.selected_account_id:
             key = (int(w._app_state.selected_account_id), int(w._symbol_id), w._timeframe, 50)
             w._last_history_success_key = key
@@ -157,6 +160,13 @@ class LiveMarketDataController:
         if not getattr(w, "_logged_first_trendbar", False):
             w._logged_first_trendbar = True
         symbol_id = data.get("symbol_id")
+        if symbol_id is not None:
+            try:
+                if int(symbol_id) != int(w._symbol_id):
+                    # Ignore late trendbars from previous symbol subscriptions.
+                    return
+            except (TypeError, ValueError):
+                return
         if symbol_id is not None:
             digits = w._quote_row_digits.get(int(symbol_id), w._price_digits)
         else:
