@@ -6,7 +6,6 @@ import time
 import json
 from pathlib import Path
 
-from ctrader_open_api.messages.OpenApiMessages_pb2 import ProtoOAReconcileReq
 from ctrader_open_api.messages.OpenApiModelMessages_pb2 import ProtoOAPayloadType, ProtoOATradeSide
 import numpy as np
 import pandas as pd
@@ -63,11 +62,13 @@ from forex.application.state import AppState
 from forex.config.constants import ConnectionStatus
 from forex.config.paths import SYMBOL_LIST_FILE, TOKEN_FILE
 from forex.config.settings import OAuthTokens
-from forex.infrastructure.broker.ctrader.services.spot_subscription import (
-    send_spot_subscribe,
-    send_spot_unsubscribe,
-)
 from forex.ml.rl.features.feature_builder import build_features, load_scaler
+from forex.ui.live.account_controller import LiveAccountController
+from forex.ui.live.market_data_controller import LiveMarketDataController
+from forex.ui.live.positions_controller import LivePositionsController
+from forex.ui.live.quote_controller import LiveQuoteController
+from forex.ui.live.symbol_controller import LiveSymbolController
+from forex.ui.live.window_state import initialize_live_window_state
 from forex.ui.shared.controllers.connection_controller import ConnectionController
 from forex.ui.shared.controllers.service_binding import clear_log_history_safe, set_callbacks_safe
 from forex.ui.shared.utils.formatters import (
@@ -109,104 +110,12 @@ class LiveMainWindow(QMainWindow):
         self._app_state = app_state
         self._service = service
         self._oauth_service = oauth_service
-        self._connection_controller: Optional[ConnectionController] = None
-        self._history_service = None
-        self._history_requested = False
-        self._pending_history = False
-        self._last_history_request_key: Optional[tuple[int, int, str, int]] = None
-        self._last_history_request_ts: float = 0.0
-        self._last_history_success_key: Optional[tuple[int, int, str, int]] = None
-        self._last_history_success_ts: float = 0.0
-        self._trendbar_service = None
-        self._trendbar_active = False
-        self._order_service: Optional[OrderServiceLike] = None
-        self._auto_enabled = False
-        self._auto_model = None
-        self._auto_feature_scaler = None
-        self._auto_position = 0.0
-        self._auto_position_id: Optional[int] = None
-        self._auto_last_action_ts: Optional[float] = None
-        self._auto_balance: Optional[float] = None
-        self._auto_peak_balance: Optional[float] = None
-        self._auto_day_balance: Optional[float] = None
-        self._auto_day_key: Optional[str] = None
-        self._auto_log_panel: Optional[LogWidget] = None
-        self._positions_table = None
-        self._positions_message_handler = None
-        self._account_summary_labels: dict[str, QLabel] = {}
-        self._position_pnl_by_id: dict[int, float] = {}
-        self._accounts: list[object] = []
-        self._account_combo: Optional[QComboBox] = None
-        self._account_refresh_button: Optional[QToolButton] = None
-        self._account_switch_in_progress = False
-        self._last_authorized_account_id: Optional[int] = None
-        self._unauthorized_accounts: set[int] = set()
-        self._pending_full_reconnect = False
-        self._account_funds_uc = None
-        self._symbol_list_uc = None
-        self._symbol_by_id_uc = None
-        self._last_funds_fetch_ts: float = 0.0
-        self._candles: list[tuple[float, float, float, float, float]] = []
-        self._chart_plot = None
-        self._candlestick_item = None
-        self._last_price_line = None
-        self._last_price_label = None
-        self._project_root = Path(__file__).resolve().parents[2]
-        self._symbol_names, self._symbol_id_map = self._load_symbol_catalog()
-        self._symbol_id_to_name = {symbol_id: name for name, symbol_id in self._symbol_id_map.items()}
-        self._symbol_volume_constraints: dict[str, tuple[int, int]] = {}
-        self._symbol_volume_loaded = False
-        self._symbol_details_by_id: dict[int, dict] = {}
-        self._symbol_digits_by_name: dict[str, int] = {}
-        self._symbol_overrides: dict[str, dict] = {}
-        self._symbol_overrides_loaded = False
-        self._symbol_details_unavailable: set[int] = set()
-        self._fx_symbols = self._filter_fx_symbols(self._symbol_names)
-        self._symbol_name = (
-            "EURUSD" if "EURUSD" in self._symbol_id_map else (self._fx_symbols[0] if self._fx_symbols else "EURUSD")
-        )
-        self._symbol_id = self._resolve_symbol_id(self._symbol_name)
-        self._timeframe = "M1"
-        self._price_digits = 5
-        self._chart_ready = False
-        self._pending_candles: Optional[list[tuple[float, float, float, float, float]]] = None
-        self._chart_frozen = True
-        self._chart_timer = QTimer(self)
-        self._chart_timer.setInterval(200)
-        self._chart_timer.timeout.connect(self._flush_chart_update)
-        self._chart_timer.start()
-        self._funds_timer = QTimer(self)
-        self._funds_timer.setInterval(5000)
-        self._funds_timer.timeout.connect(self._refresh_account_balance)
-        self._positions_refresh_timer = QTimer(self)
-        self._positions_refresh_timer.setSingleShot(True)
-        self._positions_refresh_timer.setInterval(300)
-        self._positions_refresh_timer.timeout.connect(self._apply_positions_refresh)
-        self._positions_refresh_pending = False
-        self._auto_connect_timer = QTimer(self)
-        self._auto_connect_timer.setSingleShot(True)
-        self._auto_connect_timer.timeout.connect(self._toggle_connection)
-        self._autotrade_settings_path = Path("data/auto_trade_settings.json")
-        self._autotrade_loading = False
-        self._quotes_table = None
-        self._max_quote_rows = 2
-        self._quote_symbols = self._default_quote_symbols()
-        self._quote_digits = {
-            "EURUSD": 5,
-            "USDJPY": 3,
-        }
-        self._quote_symbol_ids = {name: self._resolve_symbol_id(name) for name in self._quote_symbols}
-        self._quote_rows: dict[int, int] = {}
-        self._quote_row_digits: dict[int, int] = {}
-        self._quote_last_mid: dict[int, float] = {}
-        self._quote_last_bid: dict[int, float] = {}
-        self._quote_last_ask: dict[int, float] = {}
-        self._quote_subscribed = False
-        self._quote_subscribed_ids: set[int] = set()
-        self._quote_subscribe_inflight: set[int] = set()
-        self._spot_message_handler = None
-        self._open_positions: list[object] = []
-        self._pending_symbol_list: Optional[list] = None
+        self._symbol_controller = LiveSymbolController(self)
+        initialize_live_window_state(self)
+        self._account_controller = LiveAccountController(self)
+        self._market_data_controller = LiveMarketDataController(self)
+        self._quote_controller = LiveQuoteController(self)
+        self._positions_controller = LivePositionsController(self)
 
         self._setup_ui()
         self._setup_autotrade_persistence()
@@ -1039,7 +948,7 @@ class LiveMainWindow(QMainWindow):
         self._request_positions()
 
     def _handle_trade_timeframe_changed(self, timeframe: str) -> None:
-        self._timeframe = timeframe
+        self._market_data_controller.set_trade_timeframe(timeframe)
 
     def _trading_widgets(self) -> list[QWidget]:
         return [
@@ -1288,304 +1197,55 @@ class LiveMainWindow(QMainWindow):
             self._autotrade_loading = False
 
     def _ensure_quote_handler(self) -> None:
-        if not self._service:
-            return
-        if self._spot_message_handler is None:
-            self._spot_message_handler = self._handle_spot_message
-            self._service.add_message_handler(self._spot_message_handler)
+        self._quote_controller.ensure_quote_handler()
 
     def _ensure_positions_handler(self) -> None:
-        if not self._service:
-            return
-        if self._positions_message_handler is None:
-            self._positions_message_handler = self._handle_positions_message
-            self._service.add_message_handler(self._positions_message_handler)
+        self._positions_controller.ensure_positions_handler()
 
     def _request_positions(self) -> None:
-        if self._account_switch_in_progress:
-            return
-        if not self._service or not self._app_state:
-            return
-        account_id = self._app_state.selected_account_id
-        if not account_id:
-            return
-        self.logRequested.emit(f"➡️ Request positions (account_id={account_id})")
-        try:
-            client = self._service.get_client()  # type: ignore[attr-defined]
-        except Exception:
-            return
-        self._ensure_positions_handler()
-        request = ProtoOAReconcileReq()
-        request.ctidTraderAccountId = int(account_id)
-        client.send(request)
+        self._positions_controller.request_positions()
 
     def _handle_positions_message(self, _client, msg) -> bool:
-        if getattr(msg, "payloadType", None) != ProtoOAPayloadType.PROTO_OA_RECONCILE_RES:
-            return False
-        account_id = getattr(msg, "ctidTraderAccountId", None)
-        if self._app_state and self._app_state.selected_account_id:
-            if int(account_id or 0) != int(self._app_state.selected_account_id):
-                return False
-        positions = list(getattr(msg, "position", []))
-        self.positionsUpdated.emit(positions)
-        return False
+        return self._positions_controller.handle_positions_message(_client, msg)
 
     @Slot(object)
     def _apply_positions_update(self, positions: object) -> None:
-        try:
-            pos_list = list(positions) if positions is not None else []
-        except Exception:
-            pos_list = []
-        self._open_positions = pos_list
-        self._sync_auto_position_from_positions(pos_list)
-        self._schedule_positions_refresh()
+        self._positions_controller.apply_positions_update(positions)
 
     def _update_positions_table(self, positions: list[object]) -> None:
-        if not self._positions_table:
-            return
-        table = self._positions_table
-        table.setRowCount(len(positions))
-        for row, position in enumerate(positions):
-            trade_data = getattr(position, "tradeData", None)
-            symbol_id = getattr(trade_data, "symbolId", None) if trade_data else None
-            symbol_name = self._symbol_id_to_name.get(int(symbol_id)) if symbol_id else "-"
-            side_value = getattr(trade_data, "tradeSide", None) if trade_data else None
-            if side_value == ProtoOATradeSide.BUY:
-                side_text = "BUY"
-            elif side_value == ProtoOATradeSide.SELL:
-                side_text = "SELL"
-            else:
-                side_text = "-"
-            volume = getattr(trade_data, "volume", None) if trade_data else None
-            if volume is not None:
-                try:
-                    lot_text = f"{self._volume_to_lots(float(volume)):.2f}"
-                except (TypeError, ValueError):
-                    lot_text = "-"
-            else:
-                lot_text = "-"
-            entry_price = getattr(position, "price", None)
-            entry_text = self._format_price(entry_price) if entry_price is not None else "-"
-            current_text = self._current_price_text(symbol_id=symbol_id, side_value=side_value)
-            sl_price = getattr(position, "stopLoss", None)
-            tp_price = getattr(position, "takeProfit", None)
-            sl_text = self._format_price(sl_price) if sl_price not in (None, 0) else "-"
-            tp_text = self._format_price(tp_price) if tp_price not in (None, 0) else "-"
-            open_ts = getattr(trade_data, "openTimestamp", None) if trade_data else None
-            time_text = self._format_time(open_ts) if open_ts is not None else "-"
-            pnl_text = self._calc_position_pnl(
-                position=position,
-                trade_data=trade_data,
-                symbol_id=symbol_id,
-                side_value=side_value,
-                entry_price=entry_price,
-                volume=volume,
-            )
-
-            position_id = getattr(position, "positionId", None)
-            values = [
-                symbol_name or "-",
-                side_text,
-                lot_text,
-                entry_text,
-                current_text,
-                pnl_text,
-                sl_text,
-                tp_text,
-                time_text,
-                position_id if position_id is not None else "-",
-            ]
-            for col, value in enumerate(values):
-                item = table.item(row, col)
-                if item is None:
-                    item = QTableWidgetItem(str(value))
-                    item.setTextAlignment(Qt.AlignCenter)
-                    table.setItem(row, col, item)
-                else:
-                    item.setText(str(value))
+        self._positions_controller.update_positions_table(positions)
 
     def _ensure_quote_subscription(self) -> None:
-        if self._account_switch_in_progress:
-            return
-        if not self._service or not self._app_state:
-            return
-        account_id = self._app_state.selected_account_id
-        if not account_id:
-            return
-        self.logRequested.emit(f"➡️ Subscribe quotes (account_id={account_id})")
-        try:
-            client = self._service.get_client()  # type: ignore[attr-defined]
-        except Exception:
-            return
-        desired_ids = set(self._quote_rows.keys())
-        if desired_ids and desired_ids.issubset(self._quote_subscribed_ids | self._quote_subscribe_inflight):
-            self._quote_subscribed = True
-            return
-        self._ensure_quote_handler()
-
-        from forex.utils.reactor_manager import reactor_manager
-
-        reactor_manager.ensure_running()
-        from twisted.internet import reactor
-
-        for symbol_id in self._quote_rows.keys():
-            if symbol_id in self._quote_subscribed_ids:
-                continue
-            self._quote_subscribe_inflight.add(symbol_id)
-        pending_ids = sorted(self._quote_subscribe_inflight)
-        if pending_ids:
-            reactor.callFromThread(
-                send_spot_subscribe,
-                client,
-                account_id=account_id,
-                symbol_id=pending_ids,
-                log=self.logRequested.emit,
-                subscribe_to_spot_timestamp=True,
-            )
-        self._quote_subscribed = True
+        self._quote_controller.ensure_quote_subscription()
 
     def _stop_quote_subscription(self) -> None:
-        if not self._service or not self._app_state:
-            return
-        account_id = self._app_state.selected_account_id
-        if not account_id:
-            self._quote_subscribed = False
-            self._quote_subscribed_ids.clear()
-            return
-        try:
-            client = self._service.get_client()  # type: ignore[attr-defined]
-        except Exception:
-            self._quote_subscribed = False
-            return
-
-        from forex.utils.reactor_manager import reactor_manager
-
-        reactor_manager.ensure_running()
-        from twisted.internet import reactor
-
-        unsubscribe_ids = sorted(self._quote_rows.keys())
-        if unsubscribe_ids:
-            reactor.callFromThread(
-                send_spot_unsubscribe,
-                client,
-                account_id=account_id,
-                symbol_id=unsubscribe_ids,
-                log=self.logRequested.emit,
-            )
-        self._quote_subscribed = False
-        self._quote_subscribed_ids.clear()
-        self._quote_subscribe_inflight.clear()
+        self._quote_controller.stop_quote_subscription()
 
     def _handle_spot_message(self, _client, msg) -> bool:
-        if getattr(msg, "payloadType", None) != ProtoOAPayloadType.PROTO_OA_SPOT_EVENT:
-            return False
-        account_id = getattr(msg, "ctidTraderAccountId", None)
-        if self._app_state and self._app_state.selected_account_id:
-            if account_id is not None and int(account_id) != int(self._app_state.selected_account_id):
-                return False
-        symbol_id = getattr(msg, "symbolId", None)
-        if symbol_id is None or symbol_id not in self._quote_rows:
-            return False
-        if symbol_id in self._quote_subscribe_inflight:
-            self._quote_subscribe_inflight.discard(symbol_id)
-            self._quote_subscribed_ids.add(symbol_id)
-        bid = getattr(msg, "bid", None)
-        ask = getattr(msg, "ask", None)
-        has_bid = getattr(msg, "hasBid", None)
-        has_ask = getattr(msg, "hasAsk", None)
-        if has_bid is False:
-            bid = None
-        if has_ask is False:
-            ask = None
-        spot_ts = getattr(msg, "spotTimestamp", None)
-        if spot_ts is None:
-            spot_ts = getattr(msg, "timestamp", None)
-        self.quoteUpdated.emit(int(symbol_id), bid, ask, spot_ts)
-        return False
+        return self._quote_controller.handle_spot_message(_client, msg)
 
     @Slot(int, object, object, object)
     def _handle_quote_updated(self, symbol_id: int, bid, ask, spot_ts) -> None:
-        if not self._quotes_table:
-            return
-        row = self._quote_rows.get(symbol_id)
-        if row is None:
-            return
-        self._set_quote_cell(row, 1, bid)
-        self._set_quote_cell(row, 2, ask)
-        self._set_quote_extras(row, symbol_id, bid, ask, spot_ts)
-        self._update_chart_from_quote(symbol_id, bid, ask, spot_ts)
+        self._quote_controller.handle_quote_updated(symbol_id, bid, ask, spot_ts)
 
     def _set_quote_cell(self, row: int, column: int, value) -> None:
-        if not self._quotes_table:
-            return
-        digits = self._quote_row_digits.get(
-            next((k for k, v in self._quote_rows.items() if v == row), None),
-            self._price_digits,
-        )
-        normalized = self._normalize_price(value, digits=digits)
-        if normalized == 0:
-            text = "--"
-        else:
-            text = self._format_price(value, digits=digits)
-        item = self._quotes_table.item(row, column)
-        if item is None:
-            item = QTableWidgetItem(text)
-            item.setTextAlignment(Qt.AlignCenter)
-            self._quotes_table.setItem(row, column, item)
-        else:
-            item.setText(text)
+        self._quote_controller._set_quote_cell(row, column, value)
 
     def _set_quote_extras(self, row: int, symbol_id: int, bid, ask, spot_ts) -> None:
-        if not self._quotes_table:
-            return
-        digits = self._quote_row_digits.get(int(symbol_id), self._price_digits)
-        bid_val = self._normalize_price(bid, digits=digits)
-        ask_val = self._normalize_price(ask, digits=digits)
-        if bid_val is not None:
-            self._quote_last_bid[symbol_id] = bid_val
-        if ask_val is not None:
-            self._quote_last_ask[symbol_id] = ask_val
-        time_text = self._format_spot_time(spot_ts)
-        if bid_val in (None, 0) or ask_val in (None, 0):
-            self._set_quote_text(row, 3, "--")
-            self._set_quote_text(row, 4, time_text)
-            return
-        mid = (bid_val + ask_val) / 2.0
-        self._quote_last_mid[symbol_id] = mid
-
-        digits = self._quote_row_digits.get(symbol_id, self._price_digits)
-        spread = ask_val - bid_val
-        spread_text = f"{spread:.{digits}f}"
-        self._set_quote_text(row, 3, spread_text)
-        self._set_quote_text(row, 4, time_text)
-        if self._open_positions:
-            self._schedule_positions_refresh()
+        self._quote_controller._set_quote_extras(row, symbol_id, bid, ask, spot_ts)
 
     def _set_quote_text(self, row: int, column: int, text: str) -> None:
-        if not self._quotes_table:
-            return
-        item = self._quotes_table.item(row, column)
-        if item is None:
-            item = QTableWidgetItem(text)
-            item.setTextAlignment(Qt.AlignCenter)
-            self._quotes_table.setItem(row, column, item)
-        else:
-            item.setText(text)
+        self._quote_controller._set_quote_text(row, column, text)
 
     def _schedule_positions_refresh(self) -> None:
-        if self._positions_refresh_pending:
-            return
-        self._positions_refresh_pending = True
-        self._positions_refresh_timer.start()
+        self._positions_controller.schedule_positions_refresh()
 
     def _apply_positions_refresh(self) -> None:
-        self._positions_refresh_pending = False
-        if self._open_positions:
-            self._update_positions_table(self._open_positions)
+        self._positions_controller.apply_positions_refresh()
 
     @staticmethod
     def _volume_to_lots(volume_value: float) -> float:
-        return volume_value / 10000000.0
+        return LivePositionsController.volume_to_lots(volume_value)
 
     def _calc_position_pnl(
         self,
@@ -1597,73 +1257,14 @@ class LiveMainWindow(QMainWindow):
         entry_price,
         volume,
     ) -> str:
-        # Prefer live quotes for real-time updates, fall back to cached/embedded PnL.
-        if symbol_id is not None and entry_price is not None and volume is not None:
-            try:
-                entry = float(entry_price)
-                vol = float(volume)
-            except (TypeError, ValueError):
-                entry = None
-                vol = None
-            if entry and vol and entry > 0 and vol > 0:
-                bid = self._quote_last_bid.get(int(symbol_id))
-                ask = self._quote_last_ask.get(int(symbol_id))
-                mid = self._quote_last_mid.get(int(symbol_id))
-                if side_value == ProtoOATradeSide.BUY:
-                    current = bid if bid else mid
-                elif side_value == ProtoOATradeSide.SELL:
-                    current = ask if ask else mid
-                else:
-                    current = None
-                if current is not None:
-                    pnl = (current - entry) * vol if side_value == ProtoOATradeSide.BUY else (entry - current) * vol
-                    return f"{pnl:,.2f}"
-
-        position_id = getattr(position, "positionId", None)
-        if position_id is not None:
-            cached = self._position_pnl_by_id.get(int(position_id))
-            if cached is not None:
-                return f"{cached:,.2f}"
-        for source in (position, trade_data):
-            if source is None:
-                continue
-            money_digits = getattr(source, "moneyDigits", None) or getattr(position, "moneyDigits", None)
-            for attr in ("netProfit", "netUnrealizedPnl", "unrealizedPnl", "profit", "grossProfit", "pnl"):
-                value = getattr(source, attr, None)
-                if value is None:
-                    continue
-                try:
-                    if money_digits is not None and isinstance(value, int):
-                        scaled = self._scale_money(value, int(money_digits))
-                        return f"{scaled:,.2f}"
-                    return f"{float(value):,.2f}"
-                except (TypeError, ValueError):
-                    pass
-        if symbol_id is None or entry_price is None or volume is None:
-            return "-"
-        try:
-            entry = float(entry_price)
-            vol = float(volume)
-        except (TypeError, ValueError):
-            return "-"
-        if vol <= 0 or entry <= 0:
-            return "-"
-        bid = self._quote_last_bid.get(int(symbol_id))
-        ask = self._quote_last_ask.get(int(symbol_id))
-        mid = self._quote_last_mid.get(int(symbol_id))
-        if side_value == ProtoOATradeSide.BUY:
-            current = bid if bid else mid
-            if current is None:
-                return "-"
-            pnl = (current - entry) * vol
-        elif side_value == ProtoOATradeSide.SELL:
-            current = ask if ask else mid
-            if current is None:
-                return "-"
-            pnl = (entry - current) * vol
-        else:
-            return "-"
-        return f"{pnl:,.2f}"
+        return self._positions_controller.calc_position_pnl(
+            position=position,
+            trade_data=trade_data,
+            symbol_id=symbol_id,
+            side_value=side_value,
+            entry_price=entry_price,
+            volume=volume,
+        )
 
     @staticmethod
     def _scale_money(value: int, digits: int) -> float:
@@ -2094,49 +1695,7 @@ class LiveMainWindow(QMainWindow):
         return True
 
     def _refresh_account_balance(self) -> None:
-        if self._account_switch_in_progress:
-            return
-        if not self._service or not self._app_state or not self._app_state.selected_account_id:
-            return
-        now = time.time()
-        if now - self._last_funds_fetch_ts < 4.5:
-            return
-        account_id = int(self._app_state.selected_account_id)
-        try:
-            if getattr(self, "_account_funds_uc", None) is None:
-                self._account_funds_uc = self._use_cases.create_account_funds(self._service)
-            funds_uc = self._account_funds_uc
-            if getattr(funds_uc, "in_progress", False):
-                return
-        except Exception:
-            return
-        self._last_funds_fetch_ts = now
-
-        def _on_funds(snapshot) -> None:
-            balance = getattr(snapshot, "balance", None)
-            if balance is not None:
-                self._auto_balance = float(balance)
-                if self._auto_peak_balance is None or self._auto_balance > self._auto_peak_balance:
-                    self._auto_peak_balance = self._auto_balance
-                day_key = datetime.utcnow().strftime("%Y-%m-%d")
-                if self._auto_day_key != day_key:
-                    self._auto_day_key = day_key
-                    self._auto_day_balance = self._auto_balance
-            self.logRequested.emit("✅ Funds received")
-            self.accountSummaryUpdated.emit(snapshot)
-
-        def _on_position_pnl(pnl_map: dict[int, float]) -> None:
-            if pnl_map:
-                self._position_pnl_by_id.update(pnl_map)
-                if self._open_positions:
-                    self.positionsUpdated.emit(self._open_positions)
-
-        funds_uc.set_callbacks(
-            on_funds_received=_on_funds,
-            on_position_pnl=_on_position_pnl,
-            on_log=self.logRequested.emit,
-        )
-        funds_uc.fetch(account_id)
+        self._account_controller.refresh_account_balance()
 
     def _build_chart_panel(self) -> QWidget:
         panel = QGroupBox("Live Candlestick Chart")
@@ -2358,130 +1917,16 @@ class LiveMainWindow(QMainWindow):
             return None
 
     def _refresh_accounts(self) -> None:
-        if not self._use_cases:
-            self.logRequested.emit(format_connection_message("missing_use_cases"))
-            return
-        if not self._service:
-            self.logRequested.emit("⚠️ App auth service unavailable. Cannot fetch accounts.")
-            return
-        if self._use_cases.account_list_in_progress():
-            self.logRequested.emit("⏳ 正在取得帳戶列表，請稍候")
-            return
-
-        tokens = self._load_tokens_for_accounts()
-        access_token = "" if tokens is None else str(tokens.access_token or "").strip()
-        if not access_token:
-            self.logRequested.emit("⚠️ 缺少 Access Token，請先完成 OAuth 授權")
-            return
-
-        from forex.utils.reactor_manager import reactor_manager
-
-        reactor_manager.ensure_running()
-        from twisted.internet import reactor
-
-        reactor.callFromThread(
-            self._use_cases.fetch_accounts,
-            self._service,
-            access_token,
-            self._handle_accounts_received,
-            self._handle_accounts_error,
-            self.logRequested.emit,
-        )
+        self._account_controller.refresh_accounts()
 
     def _handle_accounts_received(self, accounts: list[object]) -> None:
-        self._accounts = list(accounts or [])
-        if self._accounts:
-            try:
-                raw_items = []
-                for item in self._accounts:
-                    if isinstance(item, dict):
-                        raw_items.append(item)
-                    else:
-                        raw_items.append(
-                            {
-                                "account_id": getattr(item, "account_id", None),
-                                "is_live": getattr(item, "is_live", None),
-                                "trader_login": getattr(item, "trader_login", None),
-                                "permission_scope": getattr(item, "permission_scope", None),
-                            }
-                        )
-                self.logRequested.emit(f"✅ Accounts received: {raw_items}")
-            except Exception as exc:
-                self.logRequested.emit(f"⚠️ Failed to format accounts: {exc}")
-        if not self._account_combo:
-            return
-
-        preferred_id = None
-        if self._app_state and self._app_state.selected_account_id:
-            preferred_id = int(self._app_state.selected_account_id)
-        else:
-            tokens = self._load_tokens_for_accounts()
-            if tokens and tokens.account_id:
-                try:
-                    preferred_id = int(tokens.account_id)
-                except Exception:
-                    preferred_id = None
-
-        self._account_combo.blockSignals(True)
-        self._account_combo.clear()
-        self._account_combo.addItem("Select account", None)
-
-        def account_label(account: object) -> str:
-            account_id = getattr(account, "account_id", None)
-            is_live = getattr(account, "is_live", None)
-            trader_login = getattr(account, "trader_login", None)
-            permission_scope = getattr(account, "permission_scope", None)
-            if isinstance(account, dict):
-                account_id = account.get("account_id")
-                is_live = account.get("is_live")
-                trader_login = account.get("trader_login")
-                permission_scope = account.get("permission_scope")
-            kind = "Live" if is_live is True else ("Demo" if is_live is False else "Account")
-            label = f"{kind} {account_id}"
-            if trader_login:
-                label += f" · {trader_login}"
-            if permission_scope == 0:
-                label += " · VIEW"
-            return label
-
-        selected_index = 0
-        for idx, account in enumerate(self._accounts, start=1):
-            account_id = getattr(account, "account_id", None)
-            if isinstance(account, dict):
-                account_id = account.get("account_id")
-            if not account_id:
-                continue
-            self._account_combo.addItem(account_label(account), int(account_id))
-            if preferred_id is not None and int(account_id) == int(preferred_id):
-                selected_index = idx
-
-        self._account_combo.setCurrentIndex(selected_index)
-        self._account_combo.blockSignals(False)
-
-        selected_id = self._account_combo.currentData()
-        if selected_id is not None:
-            self._apply_selected_account(
-                int(selected_id),
-                save_token=False,
-                log=False,
-                user_initiated=False,
-            )
+        self._account_controller.handle_accounts_received(accounts)
 
     def _handle_accounts_error(self, error: str) -> None:
-        self.logRequested.emit(f"❌ Account list error: {error}")
+        self._account_controller.handle_accounts_error(error)
 
     def _handle_account_combo_changed(self, index: int) -> None:
-        if not self._account_combo:
-            return
-        account_id = self._account_combo.itemData(index)
-        if account_id is None:
-            return
-        if int(account_id) in self._unauthorized_accounts:
-            self.logRequested.emit(f"⚠️ Account {account_id} is not authorized for Open API.")
-            if self._last_authorized_account_id:
-                self._sync_account_combo(int(self._last_authorized_account_id))
-            return
-        self._apply_selected_account(int(account_id), save_token=True, log=True, user_initiated=True)
+        self._account_controller.handle_account_combo_changed(index)
 
     def _apply_selected_account(
         self,
@@ -2491,50 +1936,18 @@ class LiveMainWindow(QMainWindow):
         log: bool,
         user_initiated: bool,
     ) -> None:
-        if not self._app_state:
-            return
-        current = self._app_state.selected_account_id
-        if current is not None and int(current) == int(account_id):
-            return
-        scope = self._resolve_account_scope(int(account_id))
-        self._app_state.set_selected_account(int(account_id), scope)
-        if save_token:
-            tokens = self._load_tokens_for_accounts()
-            if tokens:
-                tokens.account_id = int(account_id)
-                try:
-                    tokens.save(TOKEN_FILE)
-                except Exception as exc:
-                    self.logRequested.emit(f"⚠️ 無法寫入 token 檔案: {exc}")
-        if log:
-            self.logRequested.emit(f"✅ 已選擇帳戶: {account_id}")
-        if user_initiated:
-            self._account_switch_in_progress = True
-            self.logRequested.emit("🔁 帳戶已切換，正在重新連線以完成授權")
-            self._schedule_full_reconnect()
+        self._account_controller.apply_selected_account(
+            account_id,
+            save_token=save_token,
+            log=log,
+            user_initiated=user_initiated,
+        )
 
     def _resolve_account_scope(self, account_id: int) -> Optional[int]:
-        for account in self._accounts:
-            if isinstance(account, dict):
-                acct_id = account.get("account_id")
-                scope = account.get("permission_scope")
-            else:
-                acct_id = getattr(account, "account_id", None)
-                scope = getattr(account, "permission_scope", None)
-            if acct_id is None:
-                continue
-            if int(acct_id) == int(account_id):
-                return None if scope is None else int(scope)
-        return None
+        return self._account_controller.resolve_account_scope(account_id)
 
     def _sync_account_combo(self, account_id: Optional[int]) -> None:
-        if not self._account_combo or account_id is None:
-            return
-        idx = self._account_combo.findData(int(account_id))
-        if idx >= 0 and idx != self._account_combo.currentIndex():
-            self._account_combo.blockSignals(True)
-            self._account_combo.setCurrentIndex(idx)
-            self._account_combo.blockSignals(False)
+        self._account_controller.sync_account_combo(account_id)
 
     @Slot()
     def _schedule_full_reconnect(self) -> None:
@@ -2583,199 +1996,19 @@ class LiveMainWindow(QMainWindow):
                 self._funds_timer.start()
 
     def _request_recent_history(self) -> None:
-        if self._account_switch_in_progress:
-            return
-        if self._history_requested:
-            return
-        if not self._service:
-            self.logRequested.emit("⚠️ App auth service unavailable. Cannot fetch candles.")
-            return
-        account_id = None if not self._app_state else self._app_state.selected_account_id
-        if not account_id:
-            self._pending_history = True
-            self.logRequested.emit("⏳ Waiting for account selection to fetch candle history")
-            return
-        self.logRequested.emit(f"➡️ Request history (account_id={account_id}, symbol_id={self._symbol_id})")
-        self._pending_history = False
-        now = time.time()
-        symbol_id = int(self._symbol_id)
-        key = (int(account_id), symbol_id, self._timeframe, 50)
-        if self._last_history_request_key == key and now - self._last_history_request_ts < 10.0:
-            return
-        if self._last_history_success_key == key and now - self._last_history_success_ts < 60.0:
-            return
-
-        if self._history_service is None:
-            self._history_service = self._use_cases.create_trendbar_history(self._service)
-
-        def handle_history(rows: list[dict]) -> None:
-            self.historyReceived.emit(rows)
-
-        self._history_service.clear_log_history()
-        def handle_error(error: str) -> None:
-            self._history_requested = False
-            self.logRequested.emit(f"❌ History error: {error}")
-
-        self._history_service.set_callbacks(
-            on_history_received=handle_history,
-            on_error=handle_error,
-            on_log=self.logRequested.emit,
-        )
-
-        from forex.utils.reactor_manager import reactor_manager
-
-        reactor_manager.ensure_running()
-        from twisted.internet import reactor
-
-        self._history_requested = True
-        self._last_history_request_key = key
-        self._last_history_request_ts = now
-        reactor.callFromThread(
-            self._history_service.fetch,
-            account_id=account_id,
-            symbol_id=symbol_id,
-            count=50,
-            timeframe=self._timeframe,
-        )
+        self._market_data_controller.request_recent_history()
 
     def _handle_history_received(self, rows: list[dict]) -> None:
-        if not rows:
-            self.logRequested.emit("⚠️ No candle data received")
-            self._history_requested = False
-            return
-        digits = self._price_digits
-        rows_sorted = sorted(rows, key=lambda r: r.get("utc_timestamp_minutes", 0))
-        candles: list[tuple[float, float, float, float, float]] = []
-        for row in rows_sorted:
-            ts_minutes = float(row.get("utc_timestamp_minutes", 0))
-            ts = ts_minutes * 60
-            open_price = self._normalize_price(row.get("open", 0), digits=digits)
-            high_price = self._normalize_price(row.get("high", 0), digits=digits)
-            low_price = self._normalize_price(row.get("low", 0), digits=digits)
-            close_price = self._normalize_price(row.get("close", 0), digits=digits)
-            if None in (open_price, high_price, low_price, close_price):
-                continue
-            open_price = round(float(open_price), digits)
-            high_price = round(float(high_price), digits)
-            low_price = round(float(low_price), digits)
-            close_price = round(float(close_price), digits)
-            candles.append(
-                (
-                    ts,
-                    float(open_price),
-                    float(high_price),
-                    float(low_price),
-                    float(close_price),
-                )
-            )
-        self._candles = candles
-        self._chart_frozen = False
-        self.set_candles(self._candles)
-        self._flush_chart_update()
-        self.logRequested.emit(f"✅ Loaded {len(candles)} candles")
-        self._history_requested = False
-        if self._app_state and self._app_state.selected_account_id:
-            key = (
-                int(self._app_state.selected_account_id),
-                int(self._symbol_id),
-                self._timeframe,
-                50,
-            )
-            self._last_history_success_key = key
-            self._last_history_success_ts = time.time()
-        self._start_live_trendbar()
+        self._market_data_controller.handle_history_received(rows)
 
     def _start_live_trendbar(self) -> None:
-        if self._trendbar_active:
-            return
-        if not self._service:
-            return
-        account_id = None if not self._app_state else self._app_state.selected_account_id
-        if not account_id:
-            return
-        if self._trendbar_service is None:
-            self._trendbar_service = self._use_cases.create_trendbar(self._service)
-
-        def handle_trendbar(data: dict) -> None:
-            self.trendbarReceived.emit(data)
-
-        self._trendbar_service.clear_log_history()
-        self._trendbar_service.set_callbacks(
-            on_trendbar=handle_trendbar,
-            on_error=lambda e: self._handle_trendbar_error(e),
-            on_log=self.logRequested.emit,
-        )
-
-        from forex.utils.reactor_manager import reactor_manager
-
-        reactor_manager.ensure_running()
-        from twisted.internet import reactor
-
-        self._trendbar_active = True
-        reactor.callFromThread(
-            self._trendbar_service.subscribe,
-            account_id=account_id,
-            symbol_id=self._symbol_id,
-            timeframe=self._timeframe,
-        )
+        self._market_data_controller.start_live_trendbar()
 
     def _stop_live_trendbar(self) -> None:
-        if not self._trendbar_service or not self._trendbar_active:
-            return
-        from forex.utils.reactor_manager import reactor_manager
-
-        reactor_manager.ensure_running()
-        from twisted.internet import reactor
-
-        reactor.callFromThread(self._trendbar_service.unsubscribe)
-        self._trendbar_active = False
+        self._market_data_controller.stop_live_trendbar()
 
     def _handle_trendbar_received(self, data: dict) -> None:
-        if not data:
-            return
-        if not getattr(self, "_logged_first_trendbar", False):
-            self._logged_first_trendbar = True
-        symbol_id = data.get("symbol_id")
-        if symbol_id is not None:
-            digits = self._quote_row_digits.get(int(symbol_id), self._price_digits)
-        else:
-            digits = self._price_digits
-        ts_minutes = float(data.get("utc_timestamp_minutes", 0))
-        ts = ts_minutes * 60
-        open_price = self._normalize_price(data.get("open", 0), digits=digits)
-        high_price = self._normalize_price(data.get("high", 0), digits=digits)
-        low_price = self._normalize_price(data.get("low", 0), digits=digits)
-        close_price = self._normalize_price(data.get("close", 0), digits=digits)
-        if None in (open_price, high_price, low_price, close_price):
-            return
-        open_price = round(float(open_price), digits)
-        high_price = round(float(high_price), digits)
-        low_price = round(float(low_price), digits)
-        close_price = round(float(close_price), digits)
-        candle = (
-            ts,
-            float(open_price),
-            float(high_price),
-            float(low_price),
-            float(close_price),
-        )
-        appended = False
-        if not self._candles:
-            self._candles = [candle]
-            appended = True
-        elif self._candles[-1][0] == candle[0]:
-            self._candles[-1] = candle
-        elif self._candles[-1][0] < candle[0]:
-            self._fill_missing_candles(candle)
-            self._candles.append(candle)
-            appended = True
-        else:
-            return
-        if len(self._candles) > 50:
-            self._candles = self._candles[-50:]
-        self.set_candles(self._candles)
-        if appended:
-            self._run_auto_trade_on_close()
+        self._market_data_controller.handle_trendbar_received(data)
 
     def _update_chart_from_quote(self, symbol_id: int, bid, ask, spot_ts) -> None:
         if self._chart_frozen:
@@ -2836,317 +2069,46 @@ class LiveMainWindow(QMainWindow):
         self._flush_chart_update()
 
     def _handle_trendbar_error(self, error: str) -> None:
-        self._trendbar_active = False
-        self.logRequested.emit(f"❌ Live candle error: {error}")
+        self._market_data_controller.handle_trendbar_error(error)
 
     def _fill_missing_candles(self, next_candle: tuple[float, float, float, float, float]) -> None:
-        if not self._candles:
-            return
-        step_seconds = self._timeframe_minutes() * 60
-        last_time = self._candles[-1][0]
-        next_time = next_candle[0]
-        if step_seconds <= 0 or next_time <= last_time + step_seconds:
-            return
-        fill_price = self._candles[-1][4]
-        t = last_time + step_seconds
-        while t < next_time:
-            self._candles.append((t, fill_price, fill_price, fill_price, fill_price))
-            t += step_seconds
+        self._market_data_controller.fill_missing_candles(next_candle)
 
     def _timeframe_minutes(self) -> int:
-        mapping = {
-            "M1": 1,
-            "M2": 2,
-            "M3": 3,
-            "M4": 4,
-            "M5": 5,
-            "M10": 10,
-            "M15": 15,
-            "M30": 30,
-            "H1": 60,
-            "H4": 240,
-            "H12": 720,
-            "D1": 1440,
-            "W1": 10080,
-            "MN1": 43200,
-        }
-        return mapping.get(self._timeframe, 1)
+        return self._market_data_controller.timeframe_minutes()
 
     def _resolve_symbol_id(self, symbol_name: str) -> int:
-        if symbol_name in self._symbol_id_map:
-            return self._symbol_id_map[symbol_name]
-        path = self._symbol_list_path()
-        if not path.exists():
-            return 1
-        try:
-            data = json.loads(path.read_text(encoding="utf-8"))
-        except Exception:
-            return 1
-        for item in data:
-            if item.get("symbol_name") == symbol_name:
-                try:
-                    return int(item.get("symbol_id", 1))
-                except (TypeError, ValueError):
-                    return 1
-        return 1
+        return self._symbol_controller.resolve_symbol_id(symbol_name)
 
     def _handle_trade_symbol_changed(self, symbol: str) -> None:
-        if not symbol:
-            return
-        if self._account_switch_in_progress:
-            return
-        self._sync_quote_symbols(symbol)
-        if symbol != self._symbol_name:
-            self._symbol_name = symbol
-            self._symbol_id = self._resolve_symbol_id(symbol)
-        self._history_requested = False
-        self._pending_history = False
-        self._last_history_request_key = None
-        self._last_history_success_key = None
-        if self._oauth_service and getattr(self._oauth_service, "status", 0) >= ConnectionStatus.ACCOUNT_AUTHENTICATED:
-            self._request_recent_history()
+        self._symbol_controller.handle_trade_symbol_changed(symbol)
 
     def _fetch_symbol_details(self, symbol_name: str) -> None:
-        if self._account_switch_in_progress:
-            return
-        if not self._service or not self._app_state or not self._app_state.selected_account_id:
-            return
-        symbol_id = int(self._resolve_symbol_id(symbol_name))
-        if symbol_id <= 0:
-            return
-        if symbol_id in self._symbol_details_by_id:
-            return
-        if symbol_id in self._symbol_details_unavailable:
-            return
-        if self._symbol_by_id_uc is None:
-            try:
-                self._symbol_by_id_uc = self._use_cases.create_symbol_by_id(self._service)
-            except Exception:
-                return
-        if getattr(self._symbol_by_id_uc, "in_progress", False):
-            return
-
-        account_id = int(self._app_state.selected_account_id)
-        self.logRequested.emit(f"➡️ Request symbol details (account_id={account_id}, symbol_id={symbol_id})")
-
-        def _on_symbols(symbols: list) -> None:
-            if not symbols:
-                return
-            merged = self._merge_symbol_details(symbols)
-            if not merged:
-                self._symbol_details_unavailable.add(symbol_id)
-
-        self._symbol_by_id_uc.set_callbacks(
-            on_symbols_received=_on_symbols,
-            on_error=lambda e: self._auto_log(f"❌ Symbol detail error: {e}"),
-            on_log=self._auto_log,
-        )
-        self._symbol_by_id_uc.fetch(
-            account_id=account_id,
-            symbol_ids=[symbol_id],
-            include_archived=False,
-        )
+        self._symbol_controller.fetch_symbol_details(symbol_name)
 
     def _merge_symbol_details(self, symbols: list[dict]) -> bool:
-        path = self._symbol_list_path()
-        existing: list[dict] = []
-        if path.exists():
-            try:
-                existing = json.loads(path.read_text(encoding="utf-8"))
-            except Exception:
-                existing = []
-
-        by_id: dict[int, dict] = {}
-        by_name: dict[str, dict] = {}
-        for item in existing:
-            if not isinstance(item, dict):
-                continue
-            sid = item.get("symbol_id")
-            name = item.get("symbol_name")
-            if isinstance(sid, int):
-                by_id[sid] = item
-            if isinstance(name, str) and name:
-                by_name[name] = item
-
-        updated = False
-        merged_any = False
-        for detail in symbols:
-            if not isinstance(detail, dict):
-                continue
-            extra_keys = set(detail.keys()) - {"symbol_id", "symbol_name"}
-            if not extra_keys:
-                continue
-            sid = detail.get("symbol_id")
-            name = detail.get("symbol_name")
-            if not isinstance(name, str) or not name.strip():
-                if isinstance(sid, int):
-                    self._symbol_details_by_id[sid] = detail
-                continue
-            target = None
-            if isinstance(sid, int):
-                target = by_id.get(sid)
-            if target is None and isinstance(name, str) and name:
-                target = by_name.get(name)
-            if target is None:
-                if not existing:
-                    if isinstance(sid, int):
-                        self._symbol_details_by_id[sid] = detail
-                    continue
-                target = {"symbol_id": sid, "symbol_name": name}
-                existing.append(target)
-                if isinstance(sid, int):
-                    by_id[sid] = target
-                by_name[name] = target
-            for key, value in detail.items():
-                if value is None:
-                    continue
-                if target.get(key) != value:
-                    target[key] = value
-                    updated = True
-            merged_any = True
-            if isinstance(sid, int):
-                self._symbol_details_by_id[sid] = detail
-            if isinstance(name, str) and name:
-                min_volume = detail.get("min_volume")
-                volume_step = detail.get("volume_step")
-                try:
-                    min_volume_int = int(min_volume) if min_volume is not None else None
-                except (TypeError, ValueError):
-                    min_volume_int = None
-                try:
-                    volume_step_int = int(volume_step) if volume_step is not None else None
-                except (TypeError, ValueError):
-                    volume_step_int = None
-                if min_volume_int is not None or volume_step_int is not None:
-                    if min_volume_int is None:
-                        min_volume_int = max(1, volume_step_int or 1)
-                    if volume_step_int is None:
-                        volume_step_int = min_volume_int
-                    if min_volume_int > 0 and volume_step_int > 0:
-                        self._symbol_volume_constraints[name] = (min_volume_int, volume_step_int)
-                        self._symbol_volume_loaded = True
-                digits = detail.get("digits")
-                if isinstance(digits, int) and digits > 0:
-                    self._symbol_digits_by_name[name] = digits
-                    self._quote_digits[name] = digits
-                    current_symbol = self._trade_symbol.currentText() if hasattr(self, "_trade_symbol") else ""
-                    if not current_symbol:
-                        current_symbol = self._symbol_name
-                    if name == current_symbol:
-                        self._price_digits = digits
-                    if isinstance(sid, int):
-                        self._quote_row_digits[sid] = digits
-
-        if updated:
-            try:
-                path.write_text(json.dumps(existing, ensure_ascii=True, indent=2), encoding="utf-8")
-            except Exception:
-                pass
-        return merged_any
+        return self._symbol_controller.merge_symbol_details(symbols)
 
     def _load_symbol_catalog(self) -> tuple[list[str], dict[str, int]]:
-        path = self._symbol_list_path()
-        if not path.exists():
-            return [], {}
-        try:
-            data = json.loads(path.read_text(encoding="utf-8"))
-        except Exception:
-            return [], {}
-        names: list[str] = []
-        mapping: dict[str, int] = {}
-        for item in data:
-            name = item.get("symbol_name")
-            if not isinstance(name, str) or not name:
-                continue
-            if name in mapping:
-                continue
-            try:
-                symbol_id = int(item.get("symbol_id", 1))
-            except (TypeError, ValueError):
-                symbol_id = 1
-            mapping[name] = symbol_id
-            names.append(name)
-        return names, mapping
+        return self._symbol_controller.load_symbol_catalog()
 
     def _filter_fx_symbols(self, names: list[str]) -> list[str]:
-        return [name for name in names if len(name) == 6 and name.isalpha() and name.isupper()]
+        return self._symbol_controller.filter_fx_symbols(names)
 
     def _default_quote_symbols(self) -> list[str]:
-        defaults = [name for name in ("EURUSD", "USDJPY") if name in self._symbol_id_map]
-        if defaults:
-            return defaults[: self._max_quote_rows]
-        if self._fx_symbols:
-            return self._fx_symbols[: self._max_quote_rows]
-        return ["EURUSD", "USDJPY"][: self._max_quote_rows]
+        return self._symbol_controller.default_quote_symbols()
 
     def _infer_quote_digits(self, symbol: str) -> int:
-        if symbol.endswith("JPY"):
-            return 3
-        return 5
+        return self._symbol_controller.infer_quote_digits(symbol)
 
     def _sync_quote_symbols(self, symbol: str) -> None:
-        next_symbols = [symbol] + [item for item in self._quote_symbols if item != symbol]
-        self._set_quote_symbols(next_symbols[: self._max_quote_rows])
+        self._symbol_controller.sync_quote_symbols(symbol)
 
     def _set_quote_symbols(self, symbols: list[str]) -> None:
-        unique: list[str] = []
-        for symbol in symbols:
-            if symbol and symbol not in unique:
-                unique.append(symbol)
-        if not unique:
-            return
-        if unique == self._quote_symbols:
-            return
-        was_subscribed = self._quote_subscribed
-        if was_subscribed:
-            self._stop_quote_subscription()
-        self._quote_symbols = unique
-        self._quote_symbol_ids = {name: self._resolve_symbol_id(name) for name in self._quote_symbols}
-        self._quote_rows.clear()
-        self._quote_row_digits.clear()
-        self._quote_last_mid.clear()
-        self._quote_subscribed_ids.clear()
-        if self._quotes_table:
-            self._rebuild_quotes_table()
-        if was_subscribed:
-            self._ensure_quote_subscription()
+        self._symbol_controller.set_quote_symbols(symbols)
 
     def _rebuild_quotes_table(self) -> None:
-        if not self._quotes_table:
-            return
-        table = self._quotes_table
-        rows = max(1, len(self._quote_symbols))
-        table.setRowCount(rows)
-        for row in range(rows):
-            for col in range(5):
-                item = table.item(row, col)
-                if item is None:
-                    item = QTableWidgetItem("-")
-                    item.setTextAlignment(Qt.AlignCenter)
-                    table.setItem(row, col, item)
-
-        for row, symbol in enumerate(self._quote_symbols):
-            symbol_item = table.item(row, 0)
-            if symbol_item is None:
-                symbol_item = QTableWidgetItem(symbol)
-                symbol_item.setTextAlignment(Qt.AlignCenter)
-                table.setItem(row, 0, symbol_item)
-            else:
-                symbol_item.setText(symbol)
-            for col in (1, 2, 3, 4):
-                cell = table.item(row, col)
-                if cell is None:
-                    cell = QTableWidgetItem("-")
-                    cell.setTextAlignment(Qt.AlignCenter)
-                    table.setItem(row, col, cell)
-                else:
-                    cell.setText("-")
-            symbol_id = self._quote_symbol_ids.get(symbol)
-            if symbol_id is not None:
-                self._quote_rows[symbol_id] = row
-                self._quote_row_digits[symbol_id] = self._quote_digits.get(
-                    symbol, self._infer_quote_digits(symbol)
-                )
+        self._symbol_controller.rebuild_quotes_table()
 
 
 if pg is not None:
