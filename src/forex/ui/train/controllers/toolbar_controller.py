@@ -81,17 +81,17 @@ class ToolbarController(QObject):
         action_fetch_account_info = QAction("帳戶資料", main_window)
         toolbar.addAction(action_fetch_account_info)
 
-        action_train_ppo = QAction("PPO訓練", main_window)
-        toolbar.addAction(action_train_ppo)
-
-        action_simulation = QAction("回放", main_window)
-        toolbar.addAction(action_simulation)
-
         action_history_download = QAction("歷史資料", main_window)
         toolbar.addAction(action_history_download)
 
         action_data_check = QAction("資料檢查", main_window)
         toolbar.addAction(action_data_check)
+
+        action_train_ppo = QAction("PPO訓練", main_window)
+        toolbar.addAction(action_train_ppo)
+
+        action_simulation = QAction("回放", main_window)
+        toolbar.addAction(action_simulation)
 
         action_toggle_log = QAction("日誌", main_window)
         action_toggle_log.setCheckable(True)
