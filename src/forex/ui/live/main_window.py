@@ -60,7 +60,7 @@ from forex.application.broker.use_cases import BrokerUseCases
 from forex.application.events import EventBus
 from forex.application.state import AppState
 from forex.config.constants import ConnectionStatus
-from forex.config.paths import SYMBOL_LIST_FILE, TOKEN_FILE
+from forex.config.paths import MODEL_DIR, SYMBOL_LIST_FILE, TOKEN_FILE
 from forex.config.settings import OAuthTokens
 from forex.ml.rl.features.feature_builder import build_features, load_scaler
 from forex.ui.live.account_controller import LiveAccountController
@@ -787,11 +787,46 @@ class LiveMainWindow(QMainWindow):
             splitter.setSizes([quotes, positions, log])
 
     def _browse_model_file(self) -> None:
+        current_text = self._model_path.text().strip()
+        current_path = self._resolve_model_path(current_text) if current_text else Path.cwd()
+        start_path = current_path if current_path.exists() else current_path.parent
         path, _ = QFileDialog.getOpenFileName(
-            self, "Select model file", self._model_path.text(), "Model (*.zip);;All files (*)"
+            self, "Select model file", str(start_path), "Model (*.zip);;All files (*)"
         )
         if path:
-            self._model_path.setText(path)
+            self._model_path.setText(self._normalize_model_path_text(path))
+
+    def _resolve_model_path(self, path_text: str) -> Path:
+        raw = str(path_text).strip()
+        if raw.startswith("models/"):
+            suffix = raw[len("models/") :]
+            return (Path(MODEL_DIR).expanduser().resolve() / suffix).resolve()
+        path = Path(raw).expanduser()
+        if path.is_absolute():
+            return path
+        return (Path.cwd() / path).resolve()
+
+    def _normalize_model_path_text(self, path_text: str) -> str:
+        raw = str(path_text).strip()
+        if not raw:
+            return ""
+        if raw.startswith("models/"):
+            return raw.replace("\\", "/")
+        path = Path(raw).expanduser()
+        if not path.is_absolute():
+            return raw
+        model_dir = Path(MODEL_DIR).expanduser().resolve()
+        resolved = path.resolve()
+        try:
+            relative_model = resolved.relative_to(model_dir)
+            return f"models/{relative_model.as_posix()}"
+        except Exception:
+            pass
+        try:
+            relative = resolved.relative_to(Path.cwd().resolve())
+        except Exception:
+            return str(path)
+        return relative.as_posix()
 
     def _auto_log(self, message: str) -> None:
         if self._auto_log_panel:
@@ -836,10 +871,15 @@ class LiveMainWindow(QMainWindow):
             self._auto_log("🛑 Auto trading stopped")
 
     def _load_auto_model(self) -> bool:
-        path = self._model_path.text().strip()
-        if not path:
+        raw_path = self._model_path.text().strip()
+        if not raw_path:
             self._auto_log("⚠️ Model path is empty")
             return False
+        model_path = self._resolve_model_path(raw_path)
+        if not model_path.exists():
+            self._auto_log(f"⚠️ Model file not found: {model_path}")
+            return False
+        path = str(model_path)
         try:
             import importlib
             import sys
@@ -866,7 +906,7 @@ class LiveMainWindow(QMainWindow):
             self._auto_log(f"❌ Failed to load model: {exc}{hint}")
             return False
         self._auto_feature_scaler = None
-        scaler_path = Path(path).with_suffix(".scaler.json")
+        scaler_path = model_path.with_suffix(".scaler.json")
         if scaler_path.exists():
             try:
                 self._auto_feature_scaler = load_scaler(scaler_path)
@@ -1140,7 +1180,7 @@ class LiveMainWindow(QMainWindow):
         if self._autotrade_loading:
             return
         payload = {
-            "model_path": self._model_path.text().strip(),
+            "model_path": self._normalize_model_path_text(self._model_path.text().strip()),
             "symbol": self._trade_symbol.currentText(),
             "timeframe": self._trade_timeframe.currentText(),
             "sizing_mode": "risk" if self._lot_risk.isChecked() else "fixed",
@@ -1176,7 +1216,7 @@ class LiveMainWindow(QMainWindow):
         try:
             model_path = str(data.get("model_path", "")).strip()
             if model_path:
-                self._model_path.setText(model_path)
+                self._model_path.setText(self._normalize_model_path_text(model_path))
             symbol = str(data.get("symbol", "")).strip()
             if symbol:
                 idx = self._trade_symbol.findText(symbol)
