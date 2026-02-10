@@ -214,12 +214,13 @@ class LiveSymbolController:
 
     def default_quote_symbols(self) -> list[str]:
         w = self._window
-        defaults = [name for name in ("EURUSD", "USDJPY") if name in w._symbol_id_map]
+        preferred = ("EURUSD", "USDJPY", "GBPUSD", "AUDUSD")
+        defaults = [name for name in preferred if name in w._symbol_id_map]
         if defaults:
             return defaults[: w._max_quote_rows]
         if w._fx_symbols:
             return w._fx_symbols[: w._max_quote_rows]
-        return ["EURUSD", "USDJPY"][: w._max_quote_rows]
+        return list(preferred[: w._max_quote_rows])
 
     @staticmethod
     def infer_quote_digits(symbol: str) -> int:
