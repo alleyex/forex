@@ -3,6 +3,7 @@ from __future__ import annotations
 import argparse
 import json
 from pathlib import Path
+import numpy as np
 from stable_baselines3 import PPO
 from stable_baselines3.common.vec_env import DummyVecEnv
 from stable_baselines3.common.monitor import Monitor
@@ -10,7 +11,13 @@ from stable_baselines3.common.callbacks import BaseCallback, CallbackList, EvalC
 from stable_baselines3.common.evaluation import evaluate_policy
 
 from forex.ml.rl.envs.trading_env import TradingConfig, TradingEnv
-from forex.ml.rl.features.feature_builder import build_features, load_csv
+from forex.ml.rl.features.feature_builder import (
+    apply_scaler,
+    build_feature_frame,
+    fit_scaler,
+    load_csv,
+    save_scaler,
+)
 from forex.config.paths import DEFAULT_MODEL_PATH
 
 
@@ -102,22 +109,38 @@ def main() -> None:
     parser.add_argument("--optuna-out", default="", help="Optional JSON path for best Optuna params.")
     parser.add_argument("--optuna-log", default="", help="Optional CSV path to log Optuna trials.")
     parser.add_argument("--model-out", default=DEFAULT_MODEL_PATH, help="Output model path.")
+    parser.add_argument(
+        "--feature-scaler-out",
+        default="",
+        help="Optional JSON path to save feature scaler (default: model_out with .scaler.json).",
+    )
     parser.add_argument("--resume", action="store_true", help="Resume training from existing model.")
     args = parser.parse_args()
 
     df = load_csv(args.data)
-    feature_set = build_features(df)
-
-    total_rows = len(feature_set.features)
+    features_frame, closes, _timestamps = build_feature_frame(df)
+    total_rows = len(features_frame)
     eval_size = int(total_rows * args.eval_split)
     if eval_size < 1 or total_rows - eval_size < 1:
         raise ValueError("Not enough data for train/eval split.")
     split_idx = total_rows - eval_size
 
-    train_features = feature_set.features[:split_idx]
-    train_closes = feature_set.closes[:split_idx]
-    eval_features = feature_set.features[split_idx:]
-    eval_closes = feature_set.closes[split_idx:]
+    train_frame = features_frame.iloc[:split_idx]
+    eval_frame = features_frame.iloc[split_idx:]
+    train_closes = closes.iloc[:split_idx].to_numpy(dtype=np.float32)
+    eval_closes = closes.iloc[split_idx:].to_numpy(dtype=np.float32)
+
+    scaler = fit_scaler(train_frame)
+    train_features = apply_scaler(train_frame, scaler).to_numpy(dtype=np.float32)
+    eval_features = apply_scaler(eval_frame, scaler).to_numpy(dtype=np.float32)
+
+    scaler_path = args.feature_scaler_out.strip()
+    if not scaler_path:
+        scaler_path = str(Path(args.model_out).with_suffix(".scaler.json"))
+    scaler_path = str(Path(scaler_path).expanduser())
+    scaler_dir = Path(scaler_path).parent
+    scaler_dir.mkdir(parents=True, exist_ok=True)
+    save_scaler(scaler, scaler_path)
 
     random_start = not args.no_random_start
     discrete_positions = tuple(

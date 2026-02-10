@@ -120,4 +120,8 @@ class TradingEnv(gym.Env if gym else object):
 
     def _get_obs(self) -> np.ndarray:
         obs = self._features[self._idx]
-        return np.concatenate([obs, np.array([self._position], dtype=np.float32)]).astype(np.float32)
+        denom = float(self._config.max_position) if self._config.max_position else 1.0
+        if denom <= 0.0:
+            denom = 1.0
+        position_norm = self._position / denom
+        return np.concatenate([obs, np.array([position_norm], dtype=np.float32)]).astype(np.float32)

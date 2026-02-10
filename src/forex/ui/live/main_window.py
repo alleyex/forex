@@ -67,7 +67,7 @@ from forex.infrastructure.broker.ctrader.services.spot_subscription import (
     send_spot_subscribe,
     send_spot_unsubscribe,
 )
-from forex.ml.rl.features.feature_builder import build_features
+from forex.ml.rl.features.feature_builder import build_features, load_scaler
 from forex.ui.shared.controllers.connection_controller import ConnectionController
 from forex.ui.shared.utils.formatters import (
     format_app_auth_status,
@@ -121,6 +121,7 @@ class LiveMainWindow(QMainWindow):
         self._order_service: Optional[OrderServiceLike] = None
         self._auto_enabled = False
         self._auto_model = None
+        self._auto_feature_scaler = None
         self._auto_position = 0.0
         self._auto_position_id: Optional[int] = None
         self._auto_last_action_ts: Optional[float] = None
@@ -965,6 +966,16 @@ class LiveMainWindow(QMainWindow):
                 hint = " (try Python>=3.10 or stable-baselines3<=2.3.x)"
             self._auto_log(f"❌ Failed to load model: {exc}{hint}")
             return False
+        self._auto_feature_scaler = None
+        scaler_path = Path(path).with_suffix(".scaler.json")
+        if scaler_path.exists():
+            try:
+                self._auto_feature_scaler = load_scaler(scaler_path)
+                self._auto_log(f"✅ Feature scaler loaded: {scaler_path.name}")
+            except Exception as exc:
+                self._auto_log(f"⚠️ Failed to load feature scaler: {exc}")
+        else:
+            self._auto_log("⚠️ Feature scaler not found; using raw features")
         self._auto_log(f"✅ Model loaded: {Path(path).name}")
         return True
 
@@ -1797,14 +1808,23 @@ class LiveMainWindow(QMainWindow):
             }
         )
         try:
-            feature_set = build_features(df)
+            feature_set = build_features(df, scaler=self._auto_feature_scaler)
         except Exception as exc:
             self._auto_log(f"❌ Feature build failed: {exc}")
             return
         if feature_set.features.shape[0] <= 0:
             return
+        max_position = 1.0
+        if hasattr(self, "_max_position"):
+            try:
+                max_position = float(self._max_position.value())
+            except Exception:
+                max_position = 1.0
+        if max_position <= 0.0:
+            max_position = 1.0
+        position_norm = self._auto_position / max_position
         obs = np.concatenate(
-            [feature_set.features[-1], np.array([self._auto_position], dtype=np.float32)]
+            [feature_set.features[-1], np.array([position_norm], dtype=np.float32)]
         ).astype(np.float32)
         try:
             action, _ = self._auto_model.predict(obs, deterministic=True)

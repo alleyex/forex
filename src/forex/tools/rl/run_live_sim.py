@@ -9,7 +9,12 @@ import numpy as np
 from stable_baselines3 import PPO
 
 from forex.ml.rl.envs.trading_env import TradingConfig
-from forex.ml.rl.features.feature_builder import build_features, load_csv
+from forex.ml.rl.features.feature_builder import (
+    apply_scaler,
+    build_feature_frame,
+    load_csv,
+    load_scaler,
+)
 from forex.config.paths import DEFAULT_MODEL_PATH
 
 
@@ -21,8 +26,10 @@ class SimState:
     position_changes: int = 0
 
 
-def _build_obs(features: np.ndarray, index: int, position: float) -> np.ndarray:
-    return np.concatenate([features[index], np.array([position], dtype=np.float32)]).astype(np.float32)
+def _build_obs(features: np.ndarray, index: int, position: float, max_position: float = 1.0) -> np.ndarray:
+    denom = max(1e-6, float(max_position))
+    position_norm = position / denom
+    return np.concatenate([features[index], np.array([position_norm], dtype=np.float32)]).astype(np.float32)
 
 
 def _streak_stats(values: list[float]) -> tuple[int, int]:
@@ -49,6 +56,16 @@ def main() -> None:
     parser = argparse.ArgumentParser(description="Run PPO inference and simulate trades on historical data.")
     parser.add_argument("--data", required=True, help="Path to raw history CSV.")
     parser.add_argument("--model", default=DEFAULT_MODEL_PATH, help="Path to trained PPO model.")
+    parser.add_argument(
+        "--feature-scaler",
+        default="",
+        help="Optional feature scaler JSON (default: model path with .scaler.json).",
+    )
+    parser.add_argument(
+        "--stochastic",
+        action="store_true",
+        help="Use stochastic actions (deterministic=False) for diagnostics.",
+    )
     parser.add_argument("--log-every", type=int, default=200, help="Log every N steps.")
     parser.add_argument("--max-steps", type=int, default=0, help="Limit steps (0 = full length).")
     parser.add_argument("--transaction-cost-bps", type=float, default=1.0, help="Transaction cost in bps.")
@@ -65,10 +82,17 @@ def main() -> None:
     args = parser.parse_args()
 
     df = load_csv(args.data)
-    feature_set = build_features(df)
-    features = feature_set.features
-    closes = feature_set.closes
-    timestamps = feature_set.timestamps
+    features_frame, closes, timestamps = build_feature_frame(df)
+    scaler_path = args.feature_scaler.strip()
+    if not scaler_path:
+        scaler_path = str(Path(args.model).with_suffix(".scaler.json"))
+    scaler = None
+    scaler_file = Path(scaler_path)
+    if scaler_file.exists():
+        scaler = load_scaler(scaler_file)
+        features_frame = apply_scaler(features_frame, scaler)
+    features = features_frame.to_numpy(dtype=np.float32)
+    closes = closes.to_numpy(dtype=np.float32)
 
     config = TradingConfig(
         transaction_cost_bps=args.transaction_cost_bps,
@@ -138,8 +162,8 @@ def main() -> None:
         if stop_requested:
             break
         last_idx = idx
-        obs = _build_obs(features, idx, state.position)
-        action, _ = model.predict(obs, deterministic=True)
+        obs = _build_obs(features, idx, state.position, max_position=config.max_position)
+        action, _ = model.predict(obs, deterministic=not args.stochastic)
         target_position = float(np.clip(action[0], -1.0, 1.0))
 
         action_sum += target_position
