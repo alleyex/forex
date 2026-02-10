@@ -1363,13 +1363,19 @@ class LiveMainWindow(QMainWindow):
             return None
         if numeric == 0:
             return 0.0
-        if digits is not None:
-            scale = 10 ** digits
-            if abs(numeric) >= scale:
-                return numeric / scale
+        is_int_like = isinstance(value, int) or numeric.is_integer()
+        if is_int_like:
+            # cTrader spot/trendbar raw prices are often scaled by 1e5 regardless of display digits.
+            # Prioritize 1e5 for large integer payloads to avoid JPY quotes being over-scaled.
+            if abs(numeric) >= 1_000_000:
+                return numeric / 100000.0
+            if digits is not None:
+                scale = 10 ** digits
+                if abs(numeric) >= scale:
+                    return numeric / scale
+            if abs(numeric) >= 100000:
+                return numeric / 100000.0
         if isinstance(value, int):
-            return numeric / 100000.0
-        if numeric.is_integer() and abs(numeric) >= 100000:
             return numeric / 100000.0
         return numeric
 
