@@ -1097,7 +1097,7 @@ class LiveMainWindow(QMainWindow):
             if signal is not None:
                 signal.connect(self._save_autotrade_settings)
 
-        _bind(self._model_path, "editingFinished")
+        _bind(self._model_path, "textChanged")
         _bind(self._trade_symbol, "currentTextChanged")
         _bind(self._trade_timeframe, "currentTextChanged")
         _bind(self._lot_fixed, "toggled")
