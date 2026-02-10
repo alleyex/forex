@@ -78,7 +78,7 @@ class ToolbarController(QObject):
         action_toggle_connection = QAction("連線", main_window)
         toolbar.addAction(action_toggle_connection)
 
-        action_fetch_account_info = QAction("基本資料", main_window)
+        action_fetch_account_info = QAction("帳戶資料", main_window)
         toolbar.addAction(action_fetch_account_info)
 
         action_train_ppo = QAction("PPO訓練", main_window)
