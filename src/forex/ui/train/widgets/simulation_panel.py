@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import json
+from pathlib import Path
 from typing import Optional
 
 try:
@@ -52,6 +54,7 @@ class SimulationParamsPanel(QWidget):
 
     def __init__(self, parent: Optional[QWidget] = None) -> None:
         super().__init__(parent)
+        self._loading_params = False
         self._summary_state = {
             "total_return": None,
             "max_drawdown": None,
@@ -60,6 +63,8 @@ class SimulationParamsPanel(QWidget):
             "equity": None,
         }
         self._setup_ui()
+        self._bind_persistence()
+        self._load_params()
 
     def _setup_ui(self) -> None:
         self.setProperty("class", SIMULATION_PARAMS)
@@ -247,6 +252,7 @@ class SimulationParamsPanel(QWidget):
             self._model_path.setToolTip(path)
 
     def _emit_start(self) -> None:
+        self._save_params()
         self.start_requested.emit(self.get_params())
 
     def get_params(self) -> dict:
@@ -258,6 +264,67 @@ class SimulationParamsPanel(QWidget):
             "transaction_cost_bps": float(self._transaction_cost.value()),
             "slippage_bps": float(self._slippage.value()),
         }
+
+    def _bind_persistence(self) -> None:
+        self._data_path.textChanged.connect(self._on_data_path_changed)
+        self._model_path.textChanged.connect(self._on_model_path_changed)
+        self._log_every.valueChanged.connect(lambda _v: self._save_params())
+        self._max_steps.valueChanged.connect(lambda _v: self._save_params())
+        self._transaction_cost.valueChanged.connect(lambda _v: self._save_params())
+        self._slippage.valueChanged.connect(lambda _v: self._save_params())
+
+    def _on_data_path_changed(self, text: str) -> None:
+        self._data_path.setToolTip(text)
+        self._save_params()
+
+    def _on_model_path_changed(self, text: str) -> None:
+        self._model_path.setToolTip(text)
+        self._save_params()
+
+    @staticmethod
+    def _params_path() -> Path:
+        return Path("data/simulation/simulation_params.json")
+
+    def _save_params(self) -> None:
+        if self._loading_params:
+            return
+        path = self._params_path()
+        path.parent.mkdir(parents=True, exist_ok=True)
+        try:
+            path.write_text(
+                json.dumps(self.get_params(), ensure_ascii=True, indent=2),
+                encoding="utf-8",
+            )
+        except OSError:
+            return
+
+    def _load_params(self) -> None:
+        path = self._params_path()
+        if not path.exists():
+            return
+        try:
+            data = json.loads(path.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError):
+            return
+        if not isinstance(data, dict):
+            return
+
+        self._loading_params = True
+        try:
+            if "data" in data:
+                self._data_path.setText(str(data["data"]))
+            if "model" in data:
+                self._model_path.setText(str(data["model"]))
+            if "log_every" in data:
+                self._log_every.setValue(int(data["log_every"]))
+            if "max_steps" in data:
+                self._max_steps.setValue(int(data["max_steps"]))
+            if "transaction_cost_bps" in data:
+                self._transaction_cost.setValue(float(data["transaction_cost_bps"]))
+            if "slippage_bps" in data:
+                self._slippage.setValue(float(data["slippage_bps"]))
+        finally:
+            self._loading_params = False
 
     def reset_summary(self) -> None:
         self._summary_state = {
