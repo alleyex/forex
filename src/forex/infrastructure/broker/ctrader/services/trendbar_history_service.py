@@ -15,6 +15,7 @@ from ctrader_open_api.messages.OpenApiModelMessages_pb2 import ProtoOAPayloadTyp
 
 from forex.infrastructure.broker.base import BaseCallbacks, LogHistoryMixin, OperationStateMixin, build_callbacks
 from forex.infrastructure.broker.ctrader.services.app_auth_service import AppAuthService
+from forex.infrastructure.broker.ctrader.services.base import CTraderRequestLifecycleMixin
 from forex.infrastructure.broker.ctrader.services.message_helpers import (
     dispatch_payload,
     format_error,
@@ -51,7 +52,11 @@ class TrendbarHistoryCallbacks(BaseCallbacks):
     on_history_received: Optional[Callable[[list], None]] = None
 
 
-class TrendbarHistoryService(LogHistoryMixin[TrendbarHistoryCallbacks], OperationStateMixin):
+class TrendbarHistoryService(
+    CTraderRequestLifecycleMixin,
+    LogHistoryMixin[TrendbarHistoryCallbacks],
+    OperationStateMixin,
+):
     """
     取得指定週期的 K 線歷史資料
     """
@@ -262,7 +267,12 @@ class TrendbarHistoryService(LogHistoryMixin[TrendbarHistoryCallbacks], Operatio
             return
         self._send_timer = None
         self._last_request_ts = time.monotonic()
-        self._client.send(self._pending_request)
+        try:
+            self._client.send(self._pending_request)
+        except Exception as exc:
+            self._emit_error(str(exc))
+            self._cleanup()
+            return
         self._log(
             f"📥 取得 M5 歷史資料：{self._last_request_count} 筆 "
             f"({self._last_request_mode}, window={self._last_request_window}, "
@@ -394,8 +404,7 @@ class TrendbarHistoryService(LogHistoryMixin[TrendbarHistoryCallbacks], Operatio
         self._cleanup()
 
     def _cleanup(self) -> None:
-        self._end_operation()
-        self._app_auth_service.remove_message_handler(self._handle_message)
+        self._cleanup_request_lifecycle(timeout_tracker=None, handler=self._handle_message)
         if self._send_timer is not None:
             self._send_timer.cancel()
             self._send_timer = None

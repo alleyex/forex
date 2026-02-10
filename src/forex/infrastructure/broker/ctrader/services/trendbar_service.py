@@ -15,6 +15,7 @@ from ctrader_open_api.messages.OpenApiModelMessages_pb2 import ProtoOAPayloadTyp
 
 from forex.infrastructure.broker.base import BaseCallbacks, LogHistoryMixin, OperationStateMixin, build_callbacks
 from forex.infrastructure.broker.ctrader.services.app_auth_service import AppAuthService
+from forex.infrastructure.broker.ctrader.services.base import CTraderRequestLifecycleMixin
 from forex.infrastructure.broker.ctrader.services.message_helpers import (
     dispatch_payload,
     format_confirm,
@@ -57,7 +58,11 @@ class TrendbarServiceCallbacks(BaseCallbacks):
     on_trendbar: Optional[Callable[[dict], None]] = None
 
 
-class TrendbarService(LogHistoryMixin[TrendbarServiceCallbacks], OperationStateMixin):
+class TrendbarService(
+    CTraderRequestLifecycleMixin,
+    LogHistoryMixin[TrendbarServiceCallbacks],
+    OperationStateMixin,
+):
     """
     訂閱即時 K 線推播
     """
@@ -108,7 +113,7 @@ class TrendbarService(LogHistoryMixin[TrendbarServiceCallbacks], OperationStateM
             self._client = self._app_auth_service.get_client()
         except Exception as exc:
             self._emit_error(str(exc))
-            self._app_auth_service.remove_message_handler(self._handle_message)
+            self._cleanup_request_lifecycle(timeout_tracker=None, handler=self._handle_message)
             return
 
         self._start_operation()
@@ -135,12 +140,10 @@ class TrendbarService(LogHistoryMixin[TrendbarServiceCallbacks], OperationStateM
             client = self._app_auth_service.get_client()
         except Exception as exc:
             self._emit_error(str(exc))
-            self._app_auth_service.remove_message_handler(self._handle_message)
-            self._end_operation()
+            self._cleanup_request_lifecycle(timeout_tracker=None, handler=self._handle_message)
             return
         client.send(request)
-        self._app_auth_service.remove_message_handler(self._handle_message)
-        self._end_operation()
+        self._cleanup_request_lifecycle(timeout_tracker=None, handler=self._handle_message)
         self._log(
             format_sent_unsubscribe(
                 f"已取消 K 線訂閱：{self._symbol_id} ({self._period_name})"
@@ -375,7 +378,12 @@ class TrendbarService(LogHistoryMixin[TrendbarServiceCallbacks], OperationStateM
     def _send_trendbar_request(self) -> None:
         if not self._pending_trendbar_request or not self._client:
             return
-        self._client.send(self._pending_trendbar_request)
+        try:
+            self._client.send(self._pending_trendbar_request)
+        except Exception as exc:
+            self._emit_error(str(exc))
+            self._cleanup_request_lifecycle(timeout_tracker=None, handler=self._handle_message)
+            return
         self._log(
             format_sent_subscribe(
                 f"已送出 K 線訂閱：{self._symbol_id} ({self._period_name})"

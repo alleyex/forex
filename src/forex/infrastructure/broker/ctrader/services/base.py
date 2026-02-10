@@ -85,16 +85,22 @@ class CTraderRequestLifecycleMixin:
         timeout_tracker.start(timeout_seconds or runtime.request_timeout)
         send_request()
 
-    def _cleanup_request_lifecycle(self, *, timeout_tracker: TimeoutTrackerLike, handler) -> None:
+    def _cleanup_request_lifecycle(
+        self,
+        *,
+        timeout_tracker: Optional[TimeoutTrackerLike],
+        handler,
+    ) -> None:
         self._end_operation()
         self._app_auth_service.remove_message_handler(handler)
-        timeout_tracker.cancel()
+        if timeout_tracker is not None:
+            timeout_tracker.cancel()
 
     def _send_request_with_client(
         self,
         *,
         request,
-        timeout_tracker: TimeoutTrackerLike,
+        timeout_tracker: Optional[TimeoutTrackerLike],
         handler,
     ) -> bool:
         try:

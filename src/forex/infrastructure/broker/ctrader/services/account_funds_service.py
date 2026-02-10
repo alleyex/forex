@@ -16,8 +16,8 @@ from ctrader_open_api.messages.OpenApiModelMessages_pb2 import ProtoOAPayloadTyp
 
 from forex.infrastructure.broker.base import BaseCallbacks, LogHistoryMixin, OperationStateMixin, build_callbacks
 from forex.infrastructure.broker.errors import ErrorCode, error_message
-from forex.config.runtime import load_config, retry_policy_from_config
 from forex.infrastructure.broker.ctrader.services.app_auth_service import AppAuthService
+from forex.infrastructure.broker.ctrader.services.base import CTraderRequestLifecycleMixin
 from forex.infrastructure.broker.ctrader.services.message_helpers import (
     format_error,
     is_already_subscribed,
@@ -109,7 +109,11 @@ class AccountFundsServiceCallbacks(BaseCallbacks):
     on_position_pnl: Optional[Callable[[dict[int, float]], None]] = None
 
 
-class AccountFundsService(LogHistoryMixin[AccountFundsServiceCallbacks], OperationStateMixin):
+class AccountFundsService(
+    CTraderRequestLifecycleMixin,
+    LogHistoryMixin[AccountFundsServiceCallbacks],
+    OperationStateMixin,
+):
     """
     取得帳戶資金狀態（餘額、淨值、保證金）
     """
@@ -152,7 +156,6 @@ class AccountFundsService(LogHistoryMixin[AccountFundsServiceCallbacks], Operati
         self._await_trader = True
         self._await_reconcile = True
         self._await_assets = True
-        self._metrics_started_at = time.monotonic()
 
         try:
             self._client = self._app_auth_service.get_client()
@@ -161,14 +164,15 @@ class AccountFundsService(LogHistoryMixin[AccountFundsServiceCallbacks], Operati
             self._end_operation()
             return
 
-        runtime = load_config()
-        self._timeout_tracker.configure_retry(
-            retry_policy_from_config(runtime),
-            self._retry_request,
+        self._begin_request_lifecycle(
+            timeout_tracker=self._timeout_tracker,
+            timeout_seconds=timeout_seconds,
+            retry_request=self._retry_request,
+            handler=self._handle_message,
+            send_request=self._send_initial_requests,
         )
-        self._app_auth_service.add_message_handler(self._handle_message)
-        self._timeout_tracker.start(timeout_seconds or runtime.request_timeout)
 
+    def _send_initial_requests(self) -> None:
         self._send_trader_request()
         self._send_reconcile_request()
         self._send_asset_list_request()
@@ -404,9 +408,7 @@ class AccountFundsService(LogHistoryMixin[AccountFundsServiceCallbacks], Operati
         self._cleanup()
 
     def _cleanup(self) -> None:
-        self._end_operation()
-        self._app_auth_service.remove_message_handler(self._handle_message)
-        self._timeout_tracker.cancel()
+        self._cleanup_request_lifecycle(timeout_tracker=self._timeout_tracker, handler=self._handle_message)
 
     def _on_timeout(self) -> None:
         if not self._in_progress:
@@ -422,9 +424,7 @@ class AccountFundsService(LogHistoryMixin[AccountFundsServiceCallbacks], Operati
         metrics.inc("ctrader.account_funds.retry")
         if not self._client or self._account_id is None:
             return
-        self._send_trader_request()
-        self._send_reconcile_request()
-        self._send_asset_list_request()
+        self._send_initial_requests()
 
     @staticmethod
     def _scale_money(value: int, digits: int) -> float:

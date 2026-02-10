@@ -13,6 +13,7 @@ from ctrader_open_api.messages.OpenApiModelMessages_pb2 import ProtoOAPayloadTyp
 from forex.infrastructure.broker.base import BaseCallbacks, LogHistoryMixin, OperationStateMixin, build_callbacks
 from forex.infrastructure.broker.errors import ErrorCode, error_message
 from forex.infrastructure.broker.ctrader.services.app_auth_service import AppAuthService
+from forex.infrastructure.broker.ctrader.services.base import CTraderRequestLifecycleMixin
 from forex.infrastructure.broker.ctrader.services.message_helpers import (
     dispatch_payload,
     format_error,
@@ -39,7 +40,11 @@ class SymbolByIdServiceCallbacks(BaseCallbacks):
     on_symbols_received: Optional[Callable[[list], None]] = None
 
 
-class SymbolByIdService(LogHistoryMixin[SymbolByIdServiceCallbacks], OperationStateMixin):
+class SymbolByIdService(
+    CTraderRequestLifecycleMixin,
+    LogHistoryMixin[SymbolByIdServiceCallbacks],
+    OperationStateMixin,
+):
     """
     Fetch full symbol details by id.
     """
@@ -90,14 +95,13 @@ class SymbolByIdService(LogHistoryMixin[SymbolByIdServiceCallbacks], OperationSt
         if hasattr(request, "includeArchivedSymbols"):
             request.includeArchivedSymbols = bool(include_archived)
         self._log(format_request("正在取得 symbol details..."))
-        try:
-            client: Client = self._app_auth_service.get_client()
-        except Exception as exc:
-            self._emit_error(str(exc))
-            self._end_operation()
-            return
         self._app_auth_service.add_message_handler(self._handle_message)
-        client.send(request)
+        if not self._send_request_with_client(
+            request=request,
+            timeout_tracker=None,
+            handler=self._handle_message,
+        ):
+            return
 
     def _handle_message(self, client: Client, msg: SymbolByIdMessage) -> bool:
         if not self._in_progress:
@@ -111,8 +115,7 @@ class SymbolByIdService(LogHistoryMixin[SymbolByIdServiceCallbacks], OperationSt
         )
 
     def _on_symbols_received(self, msg: SymbolByIdMessage) -> None:
-        self._end_operation()
-        self._app_auth_service.remove_message_handler(self._handle_message)
+        self._cleanup_request_lifecycle(timeout_tracker=None, handler=self._handle_message)
         symbols = self._parse_symbols(getattr(msg, "symbol", []))
         self._log(format_success(f"已接收 symbol details: {len(symbols)} 筆"))
         if self._callbacks.on_symbols_received:
@@ -121,8 +124,7 @@ class SymbolByIdService(LogHistoryMixin[SymbolByIdServiceCallbacks], OperationSt
     def _on_error(self, msg: SymbolByIdMessage) -> None:
         if is_already_subscribed(msg.errorCode, msg.description):
             return
-        self._end_operation()
-        self._app_auth_service.remove_message_handler(self._handle_message)
+        self._cleanup_request_lifecycle(timeout_tracker=None, handler=self._handle_message)
         self._emit_error(format_error(msg.errorCode, msg.description))
 
     @staticmethod
