@@ -63,6 +63,22 @@ class TrendbarHistoryService(
 
     _MIN_TIMESTAMP_MS = 0
     _MAX_TIMESTAMP_MS = 2147483646000
+    _PERIOD_LABELS = {
+        ProtoOATrendbarPeriod.M1: "M1",
+        ProtoOATrendbarPeriod.M2: "M2",
+        ProtoOATrendbarPeriod.M3: "M3",
+        ProtoOATrendbarPeriod.M4: "M4",
+        ProtoOATrendbarPeriod.M5: "M5",
+        ProtoOATrendbarPeriod.M10: "M10",
+        ProtoOATrendbarPeriod.M15: "M15",
+        ProtoOATrendbarPeriod.M30: "M30",
+        ProtoOATrendbarPeriod.H1: "H1",
+        ProtoOATrendbarPeriod.H4: "H4",
+        ProtoOATrendbarPeriod.H12: "H12",
+        ProtoOATrendbarPeriod.D1: "D1",
+        ProtoOATrendbarPeriod.W1: "W1",
+        ProtoOATrendbarPeriod.MN1: "MN1",
+    }
 
     def __init__(self, app_auth_service: AppAuthService):
         self._app_auth_service = app_auth_service
@@ -273,8 +289,9 @@ class TrendbarHistoryService(
             self._emit_error(str(exc))
             self._cleanup()
             return
+        period_label = self._period_label()
         self._log(
-            f"📥 取得 M5 歷史資料：{self._last_request_count} 筆 "
+            f"📥 取得 {period_label} 歷史資料：{self._last_request_count} 筆 "
             f"({self._last_request_mode}, window={self._last_request_window}, "
             f"from={self._pending_request.fromTimestamp}, to={self._pending_request.toTimestamp})"
         )
@@ -307,8 +324,9 @@ class TrendbarHistoryService(
             return
         if not bars and not self._retried_m1:
             self._retried_m1 = True
+            prev_period_label = self._period_label()
             self._period = ProtoOATrendbarPeriod.M1
-            self._log("⚠️ M5 為空，改用 M1 嘗試")
+            self._log(f"⚠️ {prev_period_label} 為空，改用 M1 嘗試")
             self._prepare_request(
                 self._last_request_count,
                 use_seconds=False,
@@ -408,3 +426,6 @@ class TrendbarHistoryService(
         if self._send_timer is not None:
             self._send_timer.cancel()
             self._send_timer = None
+
+    def _period_label(self) -> str:
+        return self._PERIOD_LABELS.get(self._period, f"period={self._period}")
