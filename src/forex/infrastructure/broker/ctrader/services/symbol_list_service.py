@@ -11,8 +11,8 @@ from ctrader_open_api.messages.OpenApiModelMessages_pb2 import ProtoOAPayloadTyp
 
 from forex.infrastructure.broker.base import BaseCallbacks, LogHistoryMixin, OperationStateMixin, build_callbacks
 from forex.infrastructure.broker.errors import ErrorCode, error_message
-from forex.config.runtime import load_config, retry_policy_from_config
 from forex.infrastructure.broker.ctrader.services.app_auth_service import AppAuthService
+from forex.infrastructure.broker.ctrader.services.base import CTraderRequestLifecycleMixin
 from forex.infrastructure.broker.ctrader.services.message_helpers import (
     dispatch_payload,
     format_error,
@@ -41,7 +41,11 @@ class SymbolListServiceCallbacks(BaseCallbacks):
     on_symbols_received: Optional[Callable[[list], None]] = None
 
 
-class SymbolListService(LogHistoryMixin[SymbolListServiceCallbacks], OperationStateMixin):
+class SymbolListService(
+    CTraderRequestLifecycleMixin,
+    LogHistoryMixin[SymbolListServiceCallbacks],
+    OperationStateMixin,
+):
     """
     Fetch symbol list for a given account.
     """
@@ -84,30 +88,25 @@ class SymbolListService(LogHistoryMixin[SymbolListServiceCallbacks], OperationSt
 
         self._account_id = int(account_id)
         self._include_archived = bool(include_archived)
-        runtime = load_config()
-        self._metrics_started_at = time.monotonic()
-        self._timeout_tracker.configure_retry(
-            retry_policy_from_config(runtime),
-            self._retry_request,
+        self._begin_request_lifecycle(
+            timeout_tracker=self._timeout_tracker,
+            timeout_seconds=timeout_seconds,
+            retry_request=self._retry_request,
+            handler=self._handle_message,
+            send_request=self._send_request,
         )
-        self._app_auth_service.add_message_handler(self._handle_message)
-        self._timeout_tracker.start(timeout_seconds or runtime.request_timeout)
-        self._send_request()
 
     def _send_request(self) -> None:
         request = ProtoOASymbolsListReq()
         request.ctidTraderAccountId = int(self._account_id or 0)
         request.includeArchivedSymbols = bool(self._include_archived)
         self._log(format_request("正在取得 symbol list..."))
-        try:
-            client = self._app_auth_service.get_client()
-        except Exception as exc:
-            self._emit_error(str(exc))
-            self._end_operation()
-            self._app_auth_service.remove_message_handler(self._handle_message)
-            self._timeout_tracker.cancel()
+        if not self._send_request_with_client(
+            request=request,
+            timeout_tracker=self._timeout_tracker,
+            handler=self._handle_message,
+        ):
             return
-        client.send(request)
 
     def _handle_message(self, client: Client, msg: SymbolListMessage) -> bool:
         if not self._in_progress:
@@ -121,9 +120,7 @@ class SymbolListService(LogHistoryMixin[SymbolListServiceCallbacks], OperationSt
         )
 
     def _on_symbols_received(self, msg: SymbolListMessage) -> None:
-        self._end_operation()
-        self._app_auth_service.remove_message_handler(self._handle_message)
-        self._timeout_tracker.cancel()
+        self._cleanup_request_lifecycle(timeout_tracker=self._timeout_tracker, handler=self._handle_message)
         symbols = self._parse_symbols(msg.symbol)
         self._log(format_success(f"已接收 symbol: {len(symbols)} 筆"))
         metrics.inc("ctrader.symbol_list.success")
@@ -134,17 +131,14 @@ class SymbolListService(LogHistoryMixin[SymbolListServiceCallbacks], OperationSt
             self._callbacks.on_symbols_received(symbols)
 
     def _on_error(self, msg: SymbolListMessage) -> None:
-        self._end_operation()
-        self._app_auth_service.remove_message_handler(self._handle_message)
-        self._timeout_tracker.cancel()
+        self._cleanup_request_lifecycle(timeout_tracker=self._timeout_tracker, handler=self._handle_message)
         metrics.inc("ctrader.symbol_list.error")
         self._emit_error(format_error(msg.errorCode, msg.description))
 
     def _on_timeout(self) -> None:
         if not self._in_progress:
             return
-        self._end_operation()
-        self._app_auth_service.remove_message_handler(self._handle_message)
+        self._cleanup_request_lifecycle(timeout_tracker=self._timeout_tracker, handler=self._handle_message)
         metrics.inc("ctrader.symbol_list.timeout")
         self._emit_error(error_message(ErrorCode.TIMEOUT, "取得 symbol list 逾時"))
 

@@ -11,8 +11,8 @@ from ctrader_open_api.messages.OpenApiModelMessages_pb2 import ProtoOAPayloadTyp
 
 from forex.infrastructure.broker.base import BaseCallbacks, LogHistoryMixin, OperationStateMixin, build_callbacks
 from forex.infrastructure.broker.errors import ErrorCode, error_message
-from forex.config.runtime import load_config, retry_policy_from_config
 from forex.infrastructure.broker.ctrader.services.app_auth_service import AppAuthService
+from forex.infrastructure.broker.ctrader.services.base import CTraderRequestLifecycleMixin
 from forex.infrastructure.broker.ctrader.services.message_helpers import (
     dispatch_payload,
     format_error,
@@ -45,7 +45,11 @@ class CtidProfileServiceCallbacks(BaseCallbacks):
     on_profile_received: Optional[Callable[[CtidProfile], None]] = None
 
 
-class CtidProfileService(LogHistoryMixin[CtidProfileServiceCallbacks], OperationStateMixin):
+class CtidProfileService(
+    CTraderRequestLifecycleMixin,
+    LogHistoryMixin[CtidProfileServiceCallbacks],
+    OperationStateMixin,
+):
     """
     透過存取權杖取得 CTID Profile
     """
@@ -83,29 +87,24 @@ class CtidProfileService(LogHistoryMixin[CtidProfileServiceCallbacks], Operation
         if not self._start_operation():
             return
 
-        runtime = load_config()
-        self._metrics_started_at = time.monotonic()
-        self._timeout_tracker.configure_retry(
-            retry_policy_from_config(runtime),
-            self._retry_request,
+        self._begin_request_lifecycle(
+            timeout_tracker=self._timeout_tracker,
+            timeout_seconds=timeout_seconds,
+            retry_request=self._retry_request,
+            handler=self._handle_message,
+            send_request=self._send_request,
         )
-        self._app_auth_service.add_message_handler(self._handle_message)
-        self._timeout_tracker.start(timeout_seconds or runtime.request_timeout)
-        self._send_request()
 
     def _send_request(self) -> None:
         request = ProtoOAGetCtidProfileByTokenReq()
         request.accessToken = self._access_token
         self._log(format_request("正在取得 CTID Profile..."))
-        try:
-            client = self._app_auth_service.get_client()
-        except Exception as exc:
-            self._emit_error(str(exc))
-            self._end_operation()
-            self._app_auth_service.remove_message_handler(self._handle_message)
-            self._timeout_tracker.cancel()
+        if not self._send_request_with_client(
+            request=request,
+            timeout_tracker=self._timeout_tracker,
+            handler=self._handle_message,
+        ):
             return
-        client.send(request)
 
     def _handle_message(self, client: Client, msg: ProfileResponseMessage) -> bool:
         if not self._in_progress:
@@ -119,9 +118,7 @@ class CtidProfileService(LogHistoryMixin[CtidProfileServiceCallbacks], Operation
         )
 
     def _on_profile_received(self, msg: ProfileResponseMessage) -> None:
-        self._end_operation()
-        self._app_auth_service.remove_message_handler(self._handle_message)
-        self._timeout_tracker.cancel()
+        self._cleanup_request_lifecycle(timeout_tracker=self._timeout_tracker, handler=self._handle_message)
         profile = getattr(msg, "profile", None)
         user_id = None if profile is None else int(getattr(profile, "userId", 0))
         data = CtidProfile(user_id=user_id if user_id else None)
@@ -134,17 +131,14 @@ class CtidProfileService(LogHistoryMixin[CtidProfileServiceCallbacks], Operation
             self._callbacks.on_profile_received(data)
 
     def _on_error(self, msg: ProfileResponseMessage) -> None:
-        self._end_operation()
-        self._app_auth_service.remove_message_handler(self._handle_message)
-        self._timeout_tracker.cancel()
+        self._cleanup_request_lifecycle(timeout_tracker=self._timeout_tracker, handler=self._handle_message)
         metrics.inc("ctrader.ctid_profile.error")
         self._emit_error(format_error(msg.errorCode, msg.description))
 
     def _on_timeout(self) -> None:
         if not self._in_progress:
             return
-        self._end_operation()
-        self._app_auth_service.remove_message_handler(self._handle_message)
+        self._cleanup_request_lifecycle(timeout_tracker=self._timeout_tracker, handler=self._handle_message)
         metrics.inc("ctrader.ctid_profile.timeout")
         self._emit_error(error_message(ErrorCode.TIMEOUT, "取得 CTID Profile 逾時"))
 

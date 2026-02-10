@@ -20,6 +20,7 @@ from forex.ui.train.layout.main_window_builder import (
 from forex.ui.train.layout.panel_switcher import PanelSwitcher
 
 from forex.ui.shared.controllers.connection_controller import ConnectionController
+from forex.ui.shared.controllers.service_binding import clear_log_history_safe, set_callbacks_safe
 from forex.ui.train.controllers.history_download_controller import HistoryDownloadController
 from forex.ui.train.controllers.account_info_controller import AccountInfoController
 from forex.ui.train.controllers.ppo_training_controller import PPOTrainingController
@@ -75,8 +76,6 @@ class MainWindow(QMainWindow):
         self._price_digits = 5
         self._ppo_controller: Optional[PPOTrainingController] = None
         self._simulation_controller: Optional[SimulationController] = None
-        self._trendbar_controller = None
-        self._history_download_controller = None
         self._account_info_controller: Optional[AccountInfoController] = None
         self._dock_controller: Optional[DockManagerController] = None
         self._panel_switcher: Optional[PanelSwitcher] = None
@@ -564,12 +563,9 @@ class MainWindow(QMainWindow):
             self._account_info_controller.set_service(service)
         if self._trendbar_controller:
             self._trendbar_controller.reset()
-        if hasattr(self._service, "clear_log_history"):
-            try:
-                self._service.clear_log_history()
-            except Exception:
-                pass
-        self._service.set_callbacks(
+        clear_log_history_safe(self._service)
+        set_callbacks_safe(
+            self._service,
             on_app_auth_success=lambda c: self.appAuthSucceeded.emit(c),
             on_log=self.logRequested.emit,
             on_status_changed=lambda s: self.appAuthStatusChanged.emit(int(s)),
@@ -585,12 +581,9 @@ class MainWindow(QMainWindow):
         self._oauth_service = service
         if self._connection_controller and self._connection_controller.oauth_service is not service:
             self._connection_controller.seed_services(self._service, service)
-        if hasattr(self._oauth_service, "clear_log_history"):
-            try:
-                self._oauth_service.clear_log_history()
-            except Exception:
-                pass
-        self._oauth_service.set_callbacks(
+        clear_log_history_safe(self._oauth_service)
+        set_callbacks_safe(
+            self._oauth_service,
             on_oauth_success=lambda t: self.oauthSucceeded.emit(t),
             on_log=self.logRequested.emit,
             on_status_changed=lambda s: self.oauthStatusChanged.emit(int(s)),

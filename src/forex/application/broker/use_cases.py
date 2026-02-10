@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Callable, Generic, Optional, TypeVar
+from typing import Any, Callable, Generic, Optional, Protocol, TypeVar
 
 from forex.application.broker.adapters import (
     AccountFundsServiceAdapter,
@@ -28,6 +28,17 @@ from forex.config.paths import TOKEN_FILE
 
 
 TUseCase = TypeVar("TUseCase")
+TFetchUseCase = TypeVar("TFetchUseCase", bound="_FetchUseCase")
+
+
+class _FetchUseCase(Protocol):
+    in_progress: bool
+
+    def set_callbacks(self, **callbacks: Any) -> None:
+        ...
+
+    def clear_log_history(self) -> None:
+        ...
 
 
 @dataclass
@@ -59,11 +70,11 @@ class BrokerUseCases:
 
     def __init__(self, provider: BrokerUseCaseFactory):
         self._provider = provider
-        self._account_list_cache: _UseCaseCache[AccountListUseCase] = _UseCaseCache()
-        self._ctid_profile_cache: _UseCaseCache[CtidProfileUseCase] = _UseCaseCache()
-        self._account_funds_cache: _UseCaseCache[AccountFundsUseCase] = _UseCaseCache()
-        self._symbol_list_cache: _UseCaseCache[SymbolListUseCase] = _UseCaseCache()
-        self._symbol_by_id_cache: _UseCaseCache[SymbolByIdUseCase] = _UseCaseCache()
+        self._account_list_cache: _UseCaseCache[AccountListUseCaseLike] = _UseCaseCache()
+        self._ctid_profile_cache: _UseCaseCache[CtidProfileUseCaseLike] = _UseCaseCache()
+        self._account_funds_cache: _UseCaseCache[AccountFundsUseCaseLike] = _UseCaseCache()
+        self._symbol_list_cache: _UseCaseCache[SymbolListUseCaseLike] = _UseCaseCache()
+        self._symbol_by_id_cache: _UseCaseCache[SymbolByIdUseCaseLike] = _UseCaseCache()
 
     def create_app_auth(self, host_type: str, token_file: str = TOKEN_FILE) -> AppAuthServiceLike:
         return self._provider.create_app_auth(host_type, token_file)
@@ -115,20 +126,42 @@ class BrokerUseCases:
     def create_order_service(self, app_auth_service: AppAuthServiceLike) -> OrderServiceLike:
         return self._provider.create_order_service(app_auth_service=app_auth_service)
 
+    @staticmethod
+    def _cache_in_progress(cache: _UseCaseCache[_FetchUseCase]) -> bool:
+        return bool(cache.use_case and cache.use_case.in_progress)
+
+    @staticmethod
+    def _run_cached_fetch(
+        *,
+        cache: _UseCaseCache[TFetchUseCase],
+        owner: AppAuthServiceLike,
+        create: Callable[[], TFetchUseCase],
+        fetch: Callable[[TFetchUseCase], None],
+        callbacks: dict[str, Any],
+        update: Optional[Callable[[TFetchUseCase], None]] = None,
+    ) -> bool:
+        use_case = cache.get(owner, create, update=update)
+        if use_case.in_progress:
+            return False
+        use_case.clear_log_history()
+        use_case.set_callbacks(**callbacks)
+        fetch(use_case)
+        return True
+
     def account_list_in_progress(self) -> bool:
-        return bool(self._account_list_cache.use_case and self._account_list_cache.use_case.in_progress)
+        return self._cache_in_progress(self._account_list_cache)
 
     def ctid_profile_in_progress(self) -> bool:
-        return bool(self._ctid_profile_cache.use_case and self._ctid_profile_cache.use_case.in_progress)
+        return self._cache_in_progress(self._ctid_profile_cache)
 
     def account_funds_in_progress(self) -> bool:
-        return bool(self._account_funds_cache.use_case and self._account_funds_cache.use_case.in_progress)
+        return self._cache_in_progress(self._account_funds_cache)
 
     def symbol_list_in_progress(self) -> bool:
-        return bool(self._symbol_list_cache.use_case and self._symbol_list_cache.use_case.in_progress)
+        return self._cache_in_progress(self._symbol_list_cache)
 
     def symbol_by_id_in_progress(self) -> bool:
-        return bool(self._symbol_by_id_cache.use_case and self._symbol_by_id_cache.use_case.in_progress)
+        return self._cache_in_progress(self._symbol_by_id_cache)
 
     def fetch_accounts(
         self,
@@ -139,23 +172,18 @@ class BrokerUseCases:
         on_log=None,
         timeout_seconds: Optional[int] = None,
     ) -> bool:
-        account_list_uc = self._account_list_cache.get(
-            app_auth_service,
-            lambda: self.create_account_list(app_auth_service, access_token),
+        return self._run_cached_fetch(
+            cache=self._account_list_cache,
+            owner=app_auth_service,
+            create=lambda: self.create_account_list(app_auth_service, access_token),
             update=lambda uc: uc.set_access_token(access_token),
+            callbacks={
+                "on_accounts_received": on_accounts_received,
+                "on_error": on_error,
+                "on_log": on_log,
+            },
+            fetch=lambda uc: uc.fetch(timeout_seconds),
         )
-
-        if account_list_uc.in_progress:
-            return False
-
-        account_list_uc.clear_log_history()
-        account_list_uc.set_callbacks(
-            on_accounts_received=on_accounts_received,
-            on_error=on_error,
-            on_log=on_log,
-        )
-        account_list_uc.fetch(timeout_seconds)
-        return True
 
     def fetch_ctid_profile(
         self,
@@ -166,23 +194,18 @@ class BrokerUseCases:
         on_log=None,
         timeout_seconds: Optional[int] = None,
     ) -> bool:
-        profile_uc = self._ctid_profile_cache.get(
-            app_auth_service,
-            lambda: self.create_ctid_profile(app_auth_service, access_token),
+        return self._run_cached_fetch(
+            cache=self._ctid_profile_cache,
+            owner=app_auth_service,
+            create=lambda: self.create_ctid_profile(app_auth_service, access_token),
             update=lambda uc: uc.set_access_token(access_token),
+            callbacks={
+                "on_profile_received": on_profile_received,
+                "on_error": on_error,
+                "on_log": on_log,
+            },
+            fetch=lambda uc: uc.fetch(timeout_seconds),
         )
-
-        if profile_uc.in_progress:
-            return False
-
-        profile_uc.clear_log_history()
-        profile_uc.set_callbacks(
-            on_profile_received=on_profile_received,
-            on_error=on_error,
-            on_log=on_log,
-        )
-        profile_uc.fetch(timeout_seconds)
-        return True
 
     def fetch_account_funds(
         self,
@@ -193,22 +216,17 @@ class BrokerUseCases:
         on_log=None,
         timeout_seconds: Optional[int] = None,
     ) -> bool:
-        account_funds_uc = self._account_funds_cache.get(
-            app_auth_service,
-            lambda: self.create_account_funds(app_auth_service),
+        return self._run_cached_fetch(
+            cache=self._account_funds_cache,
+            owner=app_auth_service,
+            create=lambda: self.create_account_funds(app_auth_service),
+            callbacks={
+                "on_funds_received": on_funds_received,
+                "on_error": on_error,
+                "on_log": on_log,
+            },
+            fetch=lambda uc: uc.fetch(account_id, timeout_seconds),
         )
-
-        if account_funds_uc.in_progress:
-            return False
-
-        account_funds_uc.clear_log_history()
-        account_funds_uc.set_callbacks(
-            on_funds_received=on_funds_received,
-            on_error=on_error,
-            on_log=on_log,
-        )
-        account_funds_uc.fetch(account_id, timeout_seconds)
-        return True
 
     def fetch_symbols(
         self,
@@ -220,26 +238,21 @@ class BrokerUseCases:
         on_log=None,
         timeout_seconds: Optional[int] = None,
     ) -> bool:
-        symbol_list_uc = self._symbol_list_cache.get(
-            app_auth_service,
-            lambda: self.create_symbol_list(app_auth_service),
+        return self._run_cached_fetch(
+            cache=self._symbol_list_cache,
+            owner=app_auth_service,
+            create=lambda: self.create_symbol_list(app_auth_service),
+            callbacks={
+                "on_symbols_received": on_symbols_received,
+                "on_error": on_error,
+                "on_log": on_log,
+            },
+            fetch=lambda uc: uc.fetch(
+                account_id=account_id,
+                include_archived=include_archived,
+                timeout_seconds=timeout_seconds,
+            ),
         )
-
-        if symbol_list_uc.in_progress:
-            return False
-
-        symbol_list_uc.clear_log_history()
-        symbol_list_uc.set_callbacks(
-            on_symbols_received=on_symbols_received,
-            on_error=on_error,
-            on_log=on_log,
-        )
-        symbol_list_uc.fetch(
-            account_id=account_id,
-            include_archived=include_archived,
-            timeout_seconds=timeout_seconds,
-        )
-        return True
 
     def fetch_symbol_by_id(
         self,
@@ -252,119 +265,72 @@ class BrokerUseCases:
         on_log=None,
         timeout_seconds: Optional[int] = None,
     ) -> bool:
-        symbol_by_id_uc = self._symbol_by_id_cache.get(
-            app_auth_service,
-            lambda: self.create_symbol_by_id(app_auth_service),
+        return self._run_cached_fetch(
+            cache=self._symbol_by_id_cache,
+            owner=app_auth_service,
+            create=lambda: self.create_symbol_by_id(app_auth_service),
+            callbacks={
+                "on_symbols_received": on_symbols_received,
+                "on_error": on_error,
+                "on_log": on_log,
+            },
+            fetch=lambda uc: uc.fetch(
+                account_id=account_id,
+                symbol_ids=symbol_ids,
+                include_archived=include_archived,
+                timeout_seconds=timeout_seconds,
+            ),
         )
 
-        if symbol_by_id_uc.in_progress:
-            return False
 
-        symbol_by_id_uc.clear_log_history()
-        symbol_by_id_uc.set_callbacks(
-            on_symbols_received=on_symbols_received,
-            on_error=on_error,
-            on_log=on_log,
-        )
-        symbol_by_id_uc.fetch(
-            account_id=account_id,
-            symbol_ids=symbol_ids,
-            include_archived=include_archived,
-            timeout_seconds=timeout_seconds,
-        )
-        return True
+class _AdapterUseCaseBase:
+    def __init__(self, adapter: Any):
+        self._adapter = adapter
+
+    @property
+    def in_progress(self) -> bool:
+        return self._adapter.in_progress
+
+    def clear_log_history(self) -> None:
+        self._adapter.clear_log_history()
+
+    def set_callbacks(self, **callbacks: Any) -> None:
+        self._adapter.set_callbacks(**callbacks)
 
 
-class AccountListUseCase:
+class AccountListUseCase(_AdapterUseCaseBase):
     def __init__(self, adapter: AccountListServiceAdapter):
-        self._adapter = adapter
-
-    @property
-    def in_progress(self) -> bool:
-        return self._adapter.in_progress
+        super().__init__(adapter)
 
     def set_access_token(self, access_token: str) -> None:
         self._adapter.set_access_token(access_token)
-
-    def set_callbacks(self, on_accounts_received=None, on_error=None, on_log=None) -> None:
-        self._adapter.set_callbacks(
-            on_accounts_received=on_accounts_received,
-            on_error=on_error,
-            on_log=on_log,
-        )
-
-    def clear_log_history(self) -> None:
-        self._adapter.clear_log_history()
 
     def fetch(self, timeout_seconds: Optional[int] = None) -> None:
         self._adapter.fetch(timeout_seconds)
 
 
-class CtidProfileUseCase:
+class CtidProfileUseCase(_AdapterUseCaseBase):
     def __init__(self, adapter: CtidProfileServiceAdapter):
-        self._adapter = adapter
-
-    @property
-    def in_progress(self) -> bool:
-        return self._adapter.in_progress
+        super().__init__(adapter)
 
     def set_access_token(self, access_token: str) -> None:
         self._adapter.set_access_token(access_token)
-
-    def set_callbacks(self, on_profile_received=None, on_error=None, on_log=None) -> None:
-        self._adapter.set_callbacks(
-            on_profile_received=on_profile_received,
-            on_error=on_error,
-            on_log=on_log,
-        )
-
-    def clear_log_history(self) -> None:
-        self._adapter.clear_log_history()
 
     def fetch(self, timeout_seconds: Optional[int] = None) -> None:
         self._adapter.fetch(timeout_seconds)
 
 
-class AccountFundsUseCase:
+class AccountFundsUseCase(_AdapterUseCaseBase):
     def __init__(self, adapter: AccountFundsServiceAdapter):
-        self._adapter = adapter
-
-    @property
-    def in_progress(self) -> bool:
-        return self._adapter.in_progress
-
-    def set_callbacks(self, on_funds_received=None, on_position_pnl=None, on_error=None, on_log=None) -> None:
-        self._adapter.set_callbacks(
-            on_funds_received=on_funds_received,
-            on_position_pnl=on_position_pnl,
-            on_error=on_error,
-            on_log=on_log,
-        )
-
-    def clear_log_history(self) -> None:
-        self._adapter.clear_log_history()
+        super().__init__(adapter)
 
     def fetch(self, account_id: int, timeout_seconds: Optional[int] = None) -> None:
         self._adapter.fetch(account_id, timeout_seconds)
 
 
-class SymbolListUseCase:
+class SymbolListUseCase(_AdapterUseCaseBase):
     def __init__(self, adapter: SymbolListServiceAdapter):
-        self._adapter = adapter
-
-    @property
-    def in_progress(self) -> bool:
-        return self._adapter.in_progress
-
-    def set_callbacks(self, on_symbols_received=None, on_error=None, on_log=None) -> None:
-        self._adapter.set_callbacks(
-            on_symbols_received=on_symbols_received,
-            on_error=on_error,
-            on_log=on_log,
-        )
-
-    def clear_log_history(self) -> None:
-        self._adapter.clear_log_history()
+        super().__init__(adapter)
 
     def fetch(
         self,
@@ -379,23 +345,9 @@ class SymbolListUseCase:
         )
 
 
-class SymbolByIdUseCase:
+class SymbolByIdUseCase(_AdapterUseCaseBase):
     def __init__(self, adapter: SymbolByIdServiceAdapter):
-        self._adapter = adapter
-
-    @property
-    def in_progress(self) -> bool:
-        return self._adapter.in_progress
-
-    def set_callbacks(self, on_symbols_received=None, on_error=None, on_log=None) -> None:
-        self._adapter.set_callbacks(
-            on_symbols_received=on_symbols_received,
-            on_error=on_error,
-            on_log=on_log,
-        )
-
-    def clear_log_history(self) -> None:
-        self._adapter.clear_log_history()
+        super().__init__(adapter)
 
     def fetch(
         self,

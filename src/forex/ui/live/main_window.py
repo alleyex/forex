@@ -69,6 +69,7 @@ from forex.infrastructure.broker.ctrader.services.spot_subscription import (
 )
 from forex.ml.rl.features.feature_builder import build_features, load_scaler
 from forex.ui.shared.controllers.connection_controller import ConnectionController
+from forex.ui.shared.controllers.service_binding import clear_log_history_safe, set_callbacks_safe
 from forex.ui.shared.utils.formatters import (
     format_app_auth_status,
     format_connection_message,
@@ -235,16 +236,12 @@ class LiveMainWindow(QMainWindow):
         self._service = service
         if self._connection_controller and self._connection_controller.service is not service:
             self._connection_controller.seed_services(service, self._oauth_service)
-        if hasattr(self._service, "clear_log_history"):
-            try:
-                self._service.clear_log_history()
-            except Exception:
-                pass
-        if hasattr(self._service, "set_callbacks"):
-            self._service.set_callbacks(
-                on_log=self.logRequested.emit,
-                on_status_changed=lambda s: self.appAuthStatusChanged.emit(int(s)),
-            )
+        clear_log_history_safe(self._service)
+        set_callbacks_safe(
+            self._service,
+            on_log=self.logRequested.emit,
+            on_status_changed=lambda s: self.appAuthStatusChanged.emit(int(s)),
+        )
         if getattr(self._service, "status", None) is not None:
             self._app_auth_label.setText(
                 format_app_auth_status(ConnectionStatus(self._service.status))
@@ -255,18 +252,14 @@ class LiveMainWindow(QMainWindow):
         self._oauth_service = service
         if self._connection_controller and self._connection_controller.oauth_service is not service:
             self._connection_controller.seed_services(self._service, service)
-        if hasattr(self._oauth_service, "clear_log_history"):
-            try:
-                self._oauth_service.clear_log_history()
-            except Exception:
-                pass
-        if hasattr(self._oauth_service, "set_callbacks"):
-            self._oauth_service.set_callbacks(
-                on_log=self.logRequested.emit,
-                on_error=lambda e: self.oauthError.emit(str(e)),
-                on_oauth_success=lambda t: self.oauthSuccess.emit(t),
-                on_status_changed=lambda s: self.oauthStatusChanged.emit(int(s)),
-            )
+        clear_log_history_safe(self._oauth_service)
+        set_callbacks_safe(
+            self._oauth_service,
+            on_log=self.logRequested.emit,
+            on_error=lambda e: self.oauthError.emit(str(e)),
+            on_oauth_success=lambda t: self.oauthSuccess.emit(t),
+            on_status_changed=lambda s: self.oauthStatusChanged.emit(int(s)),
+        )
         if getattr(self._oauth_service, "status", None) is not None:
             status = ConnectionStatus(self._oauth_service.status)
             self._oauth_label.setText(format_oauth_status(status))

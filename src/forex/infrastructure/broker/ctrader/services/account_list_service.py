@@ -11,8 +11,8 @@ from ctrader_open_api.messages.OpenApiModelMessages_pb2 import ProtoOAPayloadTyp
 
 from forex.infrastructure.broker.base import BaseCallbacks, LogHistoryMixin, OperationStateMixin, build_callbacks
 from forex.infrastructure.broker.errors import ErrorCode, error_message
-from forex.config.runtime import load_config, retry_policy_from_config
 from forex.infrastructure.broker.ctrader.services.app_auth_service import AppAuthService
+from forex.infrastructure.broker.ctrader.services.base import CTraderRequestLifecycleMixin
 from forex.infrastructure.broker.ctrader.services.message_helpers import (
     dispatch_payload,
     format_error,
@@ -46,7 +46,11 @@ class AccountListServiceCallbacks(BaseCallbacks):
     on_accounts_received: Optional[Callable[[list], None]] = None
 
 
-class AccountListService(LogHistoryMixin[AccountListServiceCallbacks], OperationStateMixin):
+class AccountListService(
+    CTraderRequestLifecycleMixin,
+    LogHistoryMixin[AccountListServiceCallbacks],
+    OperationStateMixin,
+):
     """
     透過存取權杖取得帳戶列表
 
@@ -91,30 +95,25 @@ class AccountListService(LogHistoryMixin[AccountListServiceCallbacks], Operation
         if not self._start_operation():
             return
 
-        runtime = load_config()
-        self._metrics_started_at = time.monotonic()
-        self._timeout_tracker.configure_retry(
-            retry_policy_from_config(runtime),
-            self._retry_request,
+        self._begin_request_lifecycle(
+            timeout_tracker=self._timeout_tracker,
+            timeout_seconds=timeout_seconds,
+            retry_request=self._retry_request,
+            handler=self._handle_message,
+            send_request=self._send_request,
         )
-        self._app_auth_service.add_message_handler(self._handle_message)
-        self._timeout_tracker.start(timeout_seconds or runtime.request_timeout)
-        self._send_request()
 
     def _send_request(self) -> None:
         """發送帳戶列表請求"""
         request = ProtoOAGetAccountListByAccessTokenReq()
         request.accessToken = self._access_token
         self._log(format_request("正在取得帳戶列表..."))
-        try:
-            client = self._app_auth_service.get_client()
-        except Exception as exc:
-            self._emit_error(str(exc))
-            self._end_operation()
-            self._app_auth_service.remove_message_handler(self._handle_message)
-            self._timeout_tracker.cancel()
+        if not self._send_request_with_client(
+            request=request,
+            timeout_tracker=self._timeout_tracker,
+            handler=self._handle_message,
+        ):
             return
-        client.send(request)
 
     def _handle_message(self, client: Client, msg: AccountListMessage) -> bool:
         """處理帳戶列表回應"""
@@ -130,9 +129,7 @@ class AccountListService(LogHistoryMixin[AccountListServiceCallbacks], Operation
 
     def _on_accounts_received(self, msg: AccountListMessage) -> None:
         """帳戶列表接收成功"""
-        self._end_operation()
-        self._app_auth_service.remove_message_handler(self._handle_message)
-        self._timeout_tracker.cancel()
+        self._cleanup_request_lifecycle(timeout_tracker=self._timeout_tracker, handler=self._handle_message)
         permission_scope = getattr(msg, "permissionScope", None)
         accounts = self._parse_accounts(msg.ctidTraderAccount, permission_scope)
         self._log(format_success(f"已接收帳戶: {len(accounts)} 個"))
@@ -145,17 +142,14 @@ class AccountListService(LogHistoryMixin[AccountListServiceCallbacks], Operation
 
     def _on_error(self, msg: AccountListMessage) -> None:
         """帳戶列表接收失敗"""
-        self._end_operation()
-        self._app_auth_service.remove_message_handler(self._handle_message)
-        self._timeout_tracker.cancel()
+        self._cleanup_request_lifecycle(timeout_tracker=self._timeout_tracker, handler=self._handle_message)
         metrics.inc("ctrader.account_list.error")
         self._emit_error(format_error(msg.errorCode, msg.description))
 
     def _on_timeout(self) -> None:
         if not self._in_progress:
             return
-        self._end_operation()
-        self._app_auth_service.remove_message_handler(self._handle_message)
+        self._cleanup_request_lifecycle(timeout_tracker=self._timeout_tracker, handler=self._handle_message)
         metrics.inc("ctrader.account_list.timeout")
         self._emit_error(error_message(ErrorCode.TIMEOUT, "取得帳戶列表逾時"))
 
