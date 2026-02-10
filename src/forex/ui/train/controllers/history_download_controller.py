@@ -21,7 +21,7 @@ from forex.utils.reactor_manager import reactor_manager
 
 
 class HistoryDownloadController(QObject):
-    DEFAULT_HISTORY_COUNT = 100000
+    DEFAULT_HISTORY_COUNT = 25000
     def __init__(
         self,
         *,
