@@ -17,6 +17,7 @@ class ToolbarActions:
     action_train_ppo: QAction
     action_simulation: QAction
     action_history_download: QAction
+    action_data_check: QAction
     action_toggle_log: QAction
 
 
@@ -33,6 +34,7 @@ class ToolbarController(QObject):
         on_train_ppo: Callable[[], None],
         on_simulation: Callable[[], None],
         on_history_download: Callable[[], None],
+        on_data_check: Callable[[], None],
         on_toggle_log: Optional[Callable[[bool], None]] = None,
     ) -> None:
         super().__init__(parent)
@@ -44,6 +46,7 @@ class ToolbarController(QObject):
         self._actions.action_train_ppo.triggered.connect(on_train_ppo)
         self._actions.action_simulation.triggered.connect(on_simulation)
         self._actions.action_history_download.triggered.connect(on_history_download)
+        self._actions.action_data_check.triggered.connect(on_data_check)
         if on_toggle_log is not None:
             self._actions.action_toggle_log.toggled.connect(on_toggle_log)
 
@@ -87,6 +90,9 @@ class ToolbarController(QObject):
         action_history_download = QAction("歷史資料", main_window)
         toolbar.addAction(action_history_download)
 
+        action_data_check = QAction("資料檢查", main_window)
+        toolbar.addAction(action_data_check)
+
         action_toggle_log = QAction("日誌", main_window)
         action_toggle_log.setCheckable(True)
         action_toggle_log.setChecked(True)
@@ -101,5 +107,6 @@ class ToolbarController(QObject):
             action_train_ppo=action_train_ppo,
             action_simulation=action_simulation,
             action_history_download=action_history_download,
+            action_data_check=action_data_check,
             action_toggle_log=action_toggle_log,
         )

@@ -22,6 +22,7 @@ from forex.ui.train.state.simulation_state import SimulationState
 from forex.ui.train.state.training_state import TrainingState
 from forex.ui.train.state.trendbar_state import TrendbarState
 from forex.ui.shared.widgets.log_widget import LogWidget
+from forex.ui.train.widgets.history_integrity_panel import HistoryIntegrityPanel
 from forex.ui.train.widgets.simulation_panel import SimulationPanel, SimulationParamsPanel
 from forex.ui.train.widgets.trade_panel import TradePanel
 from forex.ui.train.widgets.training_panel import TrainingPanel, TrainingParamsPanel
@@ -33,6 +34,7 @@ class PanelBundle:
     training_panel: TrainingPanel
     training_params_panel: TrainingParamsPanel
     simulation_panel: SimulationPanel
+    history_integrity_panel: HistoryIntegrityPanel
     simulation_params_panel: SimulationParamsPanel
     log_panel: LogWidget
     training_state: TrainingState
@@ -72,6 +74,7 @@ def build_panels(
     training_panel = TrainingPanel()
     training_params_panel = TrainingParamsPanel()
     simulation_panel = SimulationPanel()
+    history_integrity_panel = HistoryIntegrityPanel()
     simulation_params_panel = SimulationParamsPanel()
 
     log_panel = LogWidget(
@@ -117,6 +120,7 @@ def build_panels(
         training_panel=training_panel,
         training_params_panel=training_params_panel,
         simulation_panel=simulation_panel,
+        history_integrity_panel=history_integrity_panel,
         simulation_params_panel=simulation_params_panel,
         log_panel=log_panel,
         training_state=training_state,
@@ -135,6 +139,7 @@ def build_stack(
     trade_panel: TradePanel,
     training_panel: TrainingPanel,
     simulation_panel: SimulationPanel,
+    history_integrity_panel: HistoryIntegrityPanel,
 ) -> StackBundle:
     stack = QStackedWidget()
     trade_container = QWidget()
@@ -146,6 +151,7 @@ def build_stack(
     stack.addWidget(trade_container)
     stack.addWidget(training_panel)
     stack.addWidget(simulation_panel)
+    stack.addWidget(history_integrity_panel)
     main_window.setCentralWidget(stack)
     return StackBundle(stack=stack, trade_container=trade_container)
 
@@ -171,6 +177,7 @@ def build_panel_switcher(
     trade_container: QWidget,
     training_panel: TrainingPanel,
     simulation_panel: SimulationPanel,
+    history_integrity_panel: HistoryIntegrityPanel,
     dock_controller: DockManagerController,
 ) -> PanelSwitcher:
     return PanelSwitcher(
@@ -179,6 +186,7 @@ def build_panel_switcher(
             trade=trade_container,
             training=training_panel,
             simulation=simulation_panel,
+            data_check=history_integrity_panel,
         ),
         dock_manager=dock_controller.manager,
     )
@@ -209,6 +217,7 @@ def build_toolbar(
     on_train_ppo: Callable[[], None],
     on_simulation: Callable[[], None],
     on_history_download: Callable[[], None],
+    on_data_check: Callable[[], None],
     on_toggle_log: Callable[[bool], None],
 ) -> ToolbarBundle:
     toolbar_controller = ToolbarController(
@@ -221,6 +230,7 @@ def build_toolbar(
         on_train_ppo=on_train_ppo,
         on_simulation=on_simulation,
         on_history_download=on_history_download,
+        on_data_check=on_data_check,
         on_toggle_log=on_toggle_log,
     )
     dock_controller.bind_log_action(toolbar_controller.action_toggle_log)

@@ -13,6 +13,7 @@ class PanelSet:
     trade: QWidget
     training: QWidget
     simulation: QWidget
+    data_check: QWidget
 
 
 class PanelSwitcher:
@@ -33,6 +34,9 @@ class PanelSwitcher:
         elif panel == "simulation":
             self._stack.setCurrentWidget(self._panels.simulation)
             self._dock_manager.set_panel_mode("simulation")
+        elif panel == "data_check":
+            self._stack.setCurrentWidget(self._panels.data_check)
+            self._dock_manager.set_panel_mode("trade")
         else:
             self._stack.setCurrentWidget(self._panels.trade)
             self._dock_manager.set_panel_mode("trade")

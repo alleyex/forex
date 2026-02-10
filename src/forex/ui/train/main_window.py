@@ -157,6 +157,7 @@ class MainWindow(QMainWindow):
         self._training_panel = bundle.training_panel
         self._training_params_panel = bundle.training_params_panel
         self._simulation_panel = bundle.simulation_panel
+        self._history_integrity_panel = bundle.history_integrity_panel
         self._simulation_params_panel = bundle.simulation_params_panel
         self._log_panel = bundle.log_panel
         self._training_state = bundle.training_state
@@ -174,6 +175,7 @@ class MainWindow(QMainWindow):
             trade_panel=self._trade_panel,
             training_panel=self._training_panel,
             simulation_panel=self._simulation_panel,
+            history_integrity_panel=self._history_integrity_panel,
         )
         self._stack = stack_bundle.stack
         self._trade_container = stack_bundle.trade_container
@@ -194,6 +196,7 @@ class MainWindow(QMainWindow):
             trade_container=self._trade_container,
             training_panel=self._training_panel,
             simulation_panel=self._simulation_panel,
+            history_integrity_panel=self._history_integrity_panel,
             dock_controller=self._dock_controller,
         )
 
@@ -249,6 +252,7 @@ class MainWindow(QMainWindow):
             on_train_ppo=self._on_train_ppo_clicked,
             on_simulation=self._on_simulation_clicked,
             on_history_download=self._open_history_download_dialog,
+            on_data_check=self._open_data_check_dialog,
             on_toggle_log=self._dock_controller.toggle_log,
         )
         self._toolbar_controller = toolbar_bundle.toolbar_controller
@@ -327,6 +331,10 @@ class MainWindow(QMainWindow):
         if controller is None:
             return
         controller.open_download_dialog(self._trendbar_symbol_id)
+
+    @Slot()
+    def _open_data_check_dialog(self) -> None:
+        self._show_panel("data_check", show_log=None)
 
     def _on_symbol_list_requested(self) -> None:
         controller = self._get_history_download_controller()
