@@ -50,10 +50,13 @@ class LiveMarketDataController:
         w._pending_history = False
         now = time.time()
         symbol_id = int(w._symbol_id)
-        key = (int(account_id), symbol_id, w._timeframe, 50)
+        history_count = self.history_lookback_count()
+        key = (int(account_id), symbol_id, w._timeframe, history_count)
         if w._last_history_request_key == key and now - w._last_history_request_ts < 10.0:
             return
-        if w._last_history_success_key == key and now - w._last_history_success_ts < 60.0:
+        timeframe_seconds = max(60, self.timeframe_minutes() * 60)
+        success_cooldown = max(30.0, min(300.0, timeframe_seconds / 2.0))
+        if w._last_history_success_key == key and now - w._last_history_success_ts < success_cooldown:
             return
 
         if w._history_service is None:
@@ -87,7 +90,7 @@ class LiveMarketDataController:
             w._history_service.fetch,
             account_id=account_id,
             symbol_id=symbol_id,
-            count=50,
+            count=history_count,
             timeframe=w._timeframe,
         )
 
@@ -115,6 +118,7 @@ class LiveMarketDataController:
             low_price = round(float(low_price), digits)
             close_price = round(float(close_price), digits)
             candles.append((ts, float(open_price), float(high_price), float(low_price), float(close_price)))
+        previous_last_ts = w._candles[-1][0] if w._candles else None
         w._candles = candles
         w._chart_frozen = False
         w.set_candles(w._candles)
@@ -123,13 +127,51 @@ class LiveMarketDataController:
         w._history_requested = False
         w._awaiting_history_after_symbol_change = False
         if w._app_state and w._app_state.selected_account_id:
-            key = (int(w._app_state.selected_account_id), int(w._symbol_id), w._timeframe, 50)
+            key = (
+                int(w._app_state.selected_account_id),
+                int(w._symbol_id),
+                w._timeframe,
+                self.history_lookback_count(),
+            )
             w._last_history_success_key = key
             w._last_history_success_ts = time.time()
-        self.start_live_trendbar()
+        if not getattr(w, "_history_only_chart_mode", False):
+            self.start_live_trendbar()
+
+        latest_ts = w._candles[-1][0] if w._candles else None
+        if (
+            getattr(w, "_history_only_chart_mode", False)
+            and latest_ts is not None
+            and previous_last_ts is not None
+            and latest_ts > previous_last_ts
+            and getattr(w, "_auto_enabled", False)
+        ):
+            w._run_auto_trade_on_close()
+
+    def history_lookback_count(self) -> int:
+        # Keep enough bars per timeframe for feature stability and model context.
+        mapping = {
+            "M1": 200,
+            "M2": 200,
+            "M3": 200,
+            "M4": 200,
+            "M5": 200,
+            "M10": 220,
+            "M15": 240,
+            "M30": 260,
+            "H1": 300,
+            "H4": 300,
+            "H12": 300,
+            "D1": 240,
+            "W1": 220,
+            "MN1": 180,
+        }
+        return mapping.get(self._window._timeframe, 200)
 
     def start_live_trendbar(self) -> None:
         w = self._window
+        if getattr(w, "_history_only_chart_mode", False):
+            return
         if w._trendbar_active:
             return
         if not w._service:
@@ -199,11 +241,21 @@ class LiveMarketDataController:
             ts_min_int = int(ts_minutes)
             # Drop malformed trendbars that are not aligned to timeframe boundary.
             if ts_min_int % step_minutes != 0:
+                if hasattr(w, "_auto_debug_log"):
+                    w._auto_debug_log(
+                        f"drop trendbar: misaligned bucket ts={ts_min_int} step={step_minutes}"
+                    )
                 return
             now_minutes = int(time.time() // 60)
             current_bucket = (now_minutes // step_minutes) * step_minutes
-            # Guard against broker stream anomalies emitting future buckets.
-            if ts_min_int > current_bucket:
+            # Allow slight local/server clock skew; only reject clearly abnormal future buckets.
+            max_future_skew = max(step_minutes, 2)
+            if ts_min_int > current_bucket + max_future_skew:
+                if hasattr(w, "_auto_debug_log"):
+                    w._auto_debug_log(
+                        "drop trendbar: future bucket "
+                        f"ts={ts_min_int} current={current_bucket} skew={max_future_skew}"
+                    )
                 return
         ts = ts_minutes * 60
         open_price = w._normalize_price(data.get("open", 0), digits=digits)
@@ -228,9 +280,16 @@ class LiveMarketDataController:
             w._candles.append(candle)
             appended = True
         else:
+            if hasattr(w, "_auto_debug_log"):
+                w._auto_debug_log(
+                    "drop trendbar: out-of-order "
+                    f"incoming={int(candle[0])} last={int(w._candles[-1][0])}"
+                )
             return
         if len(w._candles) > 50:
             w._candles = w._candles[-50:]
+        # Mark only validated/accepted trendbars as "alive" feed.
+        w._auto_last_trendbar_ts = time.time()
         w.set_candles(w._candles)
         if appended:
             w._run_auto_trade_on_close()

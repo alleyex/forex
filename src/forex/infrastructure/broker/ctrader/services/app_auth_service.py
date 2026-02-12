@@ -24,6 +24,7 @@ from forex.infrastructure.broker.ctrader.services.message_helpers import (
     format_success,
     format_unhandled,
     is_already_subscribed,
+    is_non_subscribed_trendbar_unsubscribe,
 )
 from forex.utils.metrics import metrics
 
@@ -284,6 +285,7 @@ class AppAuthService(CTraderAuthServiceBase[AppAuthServiceCallbacks, AppAuthMess
             MessageType.ERROR_RESPONSE: self._handle_error_response,
             MessageType.HEARTBEAT: self._handle_heartbeat_event,
             ProtoOAPayloadType.PROTO_OA_SPOT_EVENT: self._handle_spot_event,
+            ProtoOAPayloadType.PROTO_OA_SYMBOL_CHANGED_EVENT: self._handle_symbol_changed_event,
             ProtoOAPayloadType.PROTO_OA_ERROR_RES: self._handle_trading_error,
             ProtoOAPayloadType.PROTO_OA_UNSUBSCRIBE_SPOTS_RES: self._handle_unsubscribe_spots,
         }
@@ -311,6 +313,10 @@ class AppAuthService(CTraderAuthServiceBase[AppAuthServiceCallbacks, AppAuthMess
 
     def _handle_spot_event(self, client: Client, msg) -> None:
         """處理報價事件（避免未處理訊息噪音）"""
+        return
+
+    def _handle_symbol_changed_event(self, client: Client, msg) -> None:
+        """處理商品變更事件（目前僅消化事件避免未處理訊息噪音）。"""
         return
 
     def _handle_unsubscribe_spots(self, client: Client, msg) -> None:
@@ -341,6 +347,8 @@ class AppAuthService(CTraderAuthServiceBase[AppAuthServiceCallbacks, AppAuthMess
         """處理錯誤回應"""
         if is_already_subscribed(msg.errorCode, msg.description):
             return
+        if is_non_subscribed_trendbar_unsubscribe(msg.errorCode, msg.description):
+            return
         self._end_operation()
         self._set_status(ConnectionStatus.DISCONNECTED)
         metrics.inc("ctrader.app_auth.error")
@@ -349,6 +357,8 @@ class AppAuthService(CTraderAuthServiceBase[AppAuthServiceCallbacks, AppAuthMess
     def _handle_trading_error(self, client: Client, msg) -> None:
         """處理交易相關錯誤回應（避免重複訂閱噪音）"""
         if is_already_subscribed(msg.errorCode, msg.description):
+            return
+        if is_non_subscribed_trendbar_unsubscribe(msg.errorCode, msg.description):
             return
         self._emit_error(format_error(msg.errorCode, msg.description))
 

@@ -7,6 +7,7 @@ from dataclasses import dataclass
 from typing import Callable, Optional, Protocol
 import time
 import uuid
+import threading
 
 from ctrader_open_api import Client
 from ctrader_open_api.messages.OpenApiMessages_pb2 import ProtoOANewOrderReq, ProtoOAClosePositionReq
@@ -57,6 +58,8 @@ class OrderService(CTraderServiceBase[OrderServiceCallbacks]):
         self._client_order_id: Optional[str] = None
         self._position_id: Optional[int] = None
         self._last_requested_volume: Optional[int] = None
+        self._order_timeout_seconds: int = 20
+        self._order_timeout_timer: Optional[threading.Timer] = None
         self._log(f"OrderService loaded from {__file__}")
 
     def set_callbacks(
@@ -135,6 +138,7 @@ class OrderService(CTraderServiceBase[OrderServiceCallbacks]):
         if client is None:
             return None
         self._bind_handler(self._handle_message)
+        self._arm_order_timeout()
         client.send(request)
         return self._client_order_id
 
@@ -168,6 +172,7 @@ class OrderService(CTraderServiceBase[OrderServiceCallbacks]):
         if client is None:
             return False
         self._bind_handler(self._handle_message)
+        self._arm_order_timeout()
         client.send(request)
         return True
 
@@ -194,11 +199,14 @@ class OrderService(CTraderServiceBase[OrderServiceCallbacks]):
         position_id = getattr(position, "positionId", None) if position else None
         deal_position_id = getattr(deal, "positionId", None) if deal else None
 
-        if self._client_order_id and client_order_id != self._client_order_id:
+        # Some execution events may omit clientOrderId even for successful fills.
+        # Only reject when server explicitly provides a non-matching ID.
+        if self._client_order_id and client_order_id and client_order_id != self._client_order_id:
             return
         if self._position_id and position_id not in (self._position_id, None) and deal_position_id != self._position_id:
             return
 
+        self._cancel_order_timeout()
         self._end_operation()
         self._unbind_handler(self._handle_message)
         self._log(format_success("Order executed"))
@@ -230,6 +238,7 @@ class OrderService(CTraderServiceBase[OrderServiceCallbacks]):
         return vol
 
     def _on_order_error(self, msg: ExecutionMessage) -> None:
+        self._cancel_order_timeout()
         self._end_operation()
         self._unbind_handler(self._handle_message)
         error_code = getattr(msg, "errorCode", "")
@@ -245,6 +254,7 @@ class OrderService(CTraderServiceBase[OrderServiceCallbacks]):
         self._emit_error(format_error(error_code, description))
 
     def _on_error(self, msg: ExecutionMessage) -> None:
+        self._cancel_order_timeout()
         self._end_operation()
         self._unbind_handler(self._handle_message)
         error_code = getattr(msg, "errorCode", "")
@@ -260,3 +270,28 @@ class OrderService(CTraderServiceBase[OrderServiceCallbacks]):
     @staticmethod
     def _generate_client_order_id() -> str:
         return f"auto-{int(time.time())}-{uuid.uuid4().hex[:6]}"
+
+    def _arm_order_timeout(self) -> None:
+        self._cancel_order_timeout()
+        timer = threading.Timer(self._order_timeout_seconds, self._on_order_timeout)
+        timer.daemon = True
+        self._order_timeout_timer = timer
+        timer.start()
+
+    def _cancel_order_timeout(self) -> None:
+        if self._order_timeout_timer is None:
+            return
+        try:
+            self._order_timeout_timer.cancel()
+        except Exception:
+            pass
+        self._order_timeout_timer = None
+
+    def _on_order_timeout(self) -> None:
+        # Safety valve: avoid getting stuck in in_progress forever when
+        # broker doesn't send a matching execution/error callback.
+        if not self._in_progress:
+            return
+        self._log(format_error("TIMEOUT", f"Order request timed out after {self._order_timeout_seconds}s"))
+        self._end_operation()
+        self._unbind_handler(self._handle_message)

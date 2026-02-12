@@ -3,14 +3,10 @@ from __future__ import annotations
 from typing import Optional
 from datetime import datetime
 import time
-import json
 from pathlib import Path
 
-from ctrader_open_api.messages.OpenApiModelMessages_pb2 import ProtoOAPayloadType, ProtoOATradeSide
-import numpy as np
-import pandas as pd
-from PySide6.QtCore import Qt, Signal, Slot, QTimer, QMetaObject, QThread
-from PySide6.QtGui import QAction
+from PySide6.QtCore import Qt, Signal, Slot, QTimer, QMetaObject, QThread, QSize
+from PySide6.QtGui import QAction, QIcon
 from PySide6.QtWidgets import (
     QButtonGroup,
     QCheckBox,
@@ -32,7 +28,6 @@ from PySide6.QtWidgets import (
     QSpinBox,
     QTabWidget,
     QTableWidget,
-    QTableWidgetItem,
     QToolButton,
     QToolBar,
     QSizePolicy,
@@ -55,19 +50,30 @@ else:
     except Exception:
         pass
 
-from forex.application.broker.protocols import AppAuthServiceLike, OAuthServiceLike, OrderServiceLike
+from forex.application.broker.protocols import AppAuthServiceLike, OAuthServiceLike
 from forex.application.broker.use_cases import BrokerUseCases
 from forex.application.events import EventBus
 from forex.application.state import AppState
 from forex.config.constants import ConnectionStatus
 from forex.config.paths import MODEL_DIR, SYMBOL_LIST_FILE, TOKEN_FILE
 from forex.config.settings import OAuthTokens
-from forex.ml.rl.features.feature_builder import build_features, load_scaler
 from forex.ui.live.account_controller import LiveAccountController
+from forex.ui.live.auto_lifecycle_service import LiveAutoLifecycleService
+from forex.ui.live.auto_log_service import LiveAutoLogService
+from forex.ui.live.auto_recovery_service import LiveAutoRecoveryService
+from forex.ui.live.auto_runtime_service import LiveAutoRuntimeService
+from forex.ui.live.auto_settings_persistence import LiveAutoSettingsPersistence
+from forex.ui.live.auto_settings_validator import AutoTradeSettingsValidator
+from forex.ui.live.autotrade_coordinator import LiveAutoTradeCoordinator
+from forex.ui.live.chart_coordinator import LiveChartCoordinator
 from forex.ui.live.market_data_controller import LiveMarketDataController
 from forex.ui.live.positions_controller import LivePositionsController
 from forex.ui.live.quote_controller import LiveQuoteController
+from forex.ui.live.symbol_list_service import LiveSymbolListService
+from forex.ui.live.value_formatter_service import LiveValueFormatterService
+from forex.ui.live.layout_coordinator import LiveLayoutCoordinator
 from forex.ui.live.symbol_controller import LiveSymbolController
+from forex.ui.live.ui_builder import LiveUIBuilder
 from forex.ui.live.window_state import initialize_live_window_state
 from forex.ui.shared.controllers.connection_controller import ConnectionController
 from forex.ui.shared.controllers.service_binding import clear_log_history_safe, set_callbacks_safe
@@ -93,7 +99,11 @@ class LiveMainWindow(QMainWindow):
     historyReceived = Signal(list)
     trendbarReceived = Signal(dict)
     quoteUpdated = Signal(int, object, object, object)
+    _CARD_LINE_TITLE_COLOR = "#3a4452"
+    _CARD_LINE_TITLE_FONT_SIZE_PX = 10
+    _CARD_LINE_TITLE_OFFSET_PX = -20
 
+    # Initialization
     def __init__(
         self,
         *,
@@ -113,9 +123,21 @@ class LiveMainWindow(QMainWindow):
         self._symbol_controller = LiveSymbolController(self)
         initialize_live_window_state(self)
         self._account_controller = LiveAccountController(self)
+        self._autotrade_coordinator = LiveAutoTradeCoordinator(self)
+        self._chart_coordinator = LiveChartCoordinator(self)
         self._market_data_controller = LiveMarketDataController(self)
         self._quote_controller = LiveQuoteController(self)
         self._positions_controller = LivePositionsController(self)
+        self._value_formatter = LiveValueFormatterService(self)
+        self._symbol_list_service = LiveSymbolListService(self)
+        self._layout_coordinator = LiveLayoutCoordinator(self)
+        self._auto_lifecycle_service = LiveAutoLifecycleService(self)
+        self._auto_log_service = LiveAutoLogService(self)
+        self._auto_recovery_service = LiveAutoRecoveryService(self)
+        self._auto_runtime_service = LiveAutoRuntimeService(self)
+        self._auto_settings_persistence = LiveAutoSettingsPersistence(self)
+        self._auto_settings_validator = AutoTradeSettingsValidator(self)
+        self._ui_builder = LiveUIBuilder(self)
 
         self._setup_ui()
         self._setup_autotrade_persistence()
@@ -136,6 +158,7 @@ class LiveMainWindow(QMainWindow):
 
         self._ensure_positions_handler()
 
+    # Service Wiring
     def set_service(self, service: AppAuthServiceLike) -> None:
         if self._service and self._spot_message_handler:
             try:
@@ -174,6 +197,7 @@ class LiveMainWindow(QMainWindow):
             self._oauth_label.setText(format_oauth_status(status))
             self._handle_oauth_status(int(status))
 
+    # UI Construction
     def _setup_ui(self) -> None:
         self.setWindowTitle("Forex Trading App - Live")
         self.setMinimumSize(1280, 720)
@@ -203,6 +227,8 @@ class LiveMainWindow(QMainWindow):
 
         quotes_panel = self._build_quotes_panel()
         positions_panel = self._build_positions_panel()
+        self._quotes_panel_widget = quotes_panel
+        self._positions_panel_widget = positions_panel
         bottom_splitter = QSplitter(Qt.Horizontal)
         bottom_splitter.addWidget(quotes_panel)
         bottom_splitter.addWidget(positions_panel)
@@ -234,15 +260,13 @@ class LiveMainWindow(QMainWindow):
         panel = QGroupBox("Positions")
         layout = QVBoxLayout(panel)
 
-        account_row = QHBoxLayout()
-        account_label = QLabel("Account")
-        account_label.setObjectName("accountSelectorLabel")
         account_combo = QComboBox()
         account_combo.setObjectName("accountSelector")
         account_combo.setMinimumWidth(220)
         account_combo.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
         account_combo.addItem("Select account", None)
         account_combo.currentIndexChanged.connect(self._handle_account_combo_changed)
+        account_combo.setVisible(False)
         self._account_combo = account_combo
 
         refresh_button = QToolButton()
@@ -251,13 +275,8 @@ class LiveMainWindow(QMainWindow):
         refresh_button.setIcon(self.style().standardIcon(QStyle.SP_BrowserReload))
         refresh_button.setToolTip("Refresh accounts")
         refresh_button.clicked.connect(self._refresh_accounts)
+        refresh_button.setVisible(False)
         self._account_refresh_button = refresh_button
-
-        account_row.addWidget(account_label)
-        account_row.addWidget(account_combo)
-        account_row.addWidget(refresh_button)
-        account_row.addStretch(1)
-        layout.addLayout(account_row)
 
         summary = QFrame()
         summary.setObjectName("accountSummary")
@@ -318,6 +337,7 @@ class LiveMainWindow(QMainWindow):
         layout.addWidget(summary)
 
         table = QTableWidget(0, 10)
+        table.setObjectName("positionsTable")
         table.setHorizontalHeaderLabels(
             ["Symbol", "Side", "Volume", "Entry", "Current", "P/L", "SL", "TP", "Open Time", "Pos ID"]
         )
@@ -327,6 +347,50 @@ class LiveMainWindow(QMainWindow):
         table.setSelectionMode(QTableWidget.SingleSelection)
         table.setAlternatingRowColors(True)
         table.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
+        table.setStyleSheet(
+            """
+            QTableWidget#positionsTable QScrollBar:vertical {
+                background: transparent;
+                width: 8px;
+                margin: 2px;
+            }
+            QTableWidget#positionsTable QScrollBar::handle:vertical {
+                background: rgba(210, 220, 232, 0.18);
+                min-height: 24px;
+                border-radius: 4px;
+            }
+            QTableWidget#positionsTable QScrollBar::handle:vertical:hover {
+                background: rgba(210, 220, 232, 0.30);
+            }
+            QTableWidget#positionsTable QScrollBar::add-line:vertical,
+            QTableWidget#positionsTable QScrollBar::sub-line:vertical,
+            QTableWidget#positionsTable QScrollBar::add-page:vertical,
+            QTableWidget#positionsTable QScrollBar::sub-page:vertical {
+                background: transparent;
+                height: 0px;
+            }
+            QTableWidget#positionsTable QScrollBar:horizontal {
+                background: transparent;
+                height: 8px;
+                margin: 2px;
+            }
+            QTableWidget#positionsTable QScrollBar::handle:horizontal {
+                background: rgba(210, 220, 232, 0.18);
+                min-width: 24px;
+                border-radius: 4px;
+            }
+            QTableWidget#positionsTable QScrollBar::handle:horizontal:hover {
+                background: rgba(210, 220, 232, 0.30);
+            }
+            QTableWidget#positionsTable QScrollBar::add-line:horizontal,
+            QTableWidget#positionsTable QScrollBar::sub-line:horizontal,
+            QTableWidget#positionsTable QScrollBar::add-page:horizontal,
+            QTableWidget#positionsTable QScrollBar::sub-page:horizontal {
+                background: transparent;
+                width: 0px;
+            }
+            """
+        )
 
         layout.addWidget(table)
         self._positions_table = table
@@ -338,6 +402,7 @@ class LiveMainWindow(QMainWindow):
 
         rows = max(1, len(self._quote_symbols))
         table = QTableWidget(rows, 5)
+        table.setObjectName("quotesTable")
         table.setHorizontalHeaderLabels(["Symbol", "Bid", "Ask", "Spread", "Time"])
         table.verticalHeader().setVisible(False)
         table.setEditTriggers(QTableWidget.NoEditTriggers)
@@ -345,6 +410,50 @@ class LiveMainWindow(QMainWindow):
         table.setSelectionMode(QTableWidget.SingleSelection)
         table.setAlternatingRowColors(True)
         table.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
+        table.setStyleSheet(
+            """
+            QTableWidget#quotesTable QScrollBar:vertical {
+                background: transparent;
+                width: 8px;
+                margin: 2px;
+            }
+            QTableWidget#quotesTable QScrollBar::handle:vertical {
+                background: rgba(210, 220, 232, 0.18);
+                min-height: 24px;
+                border-radius: 4px;
+            }
+            QTableWidget#quotesTable QScrollBar::handle:vertical:hover {
+                background: rgba(210, 220, 232, 0.30);
+            }
+            QTableWidget#quotesTable QScrollBar::add-line:vertical,
+            QTableWidget#quotesTable QScrollBar::sub-line:vertical,
+            QTableWidget#quotesTable QScrollBar::add-page:vertical,
+            QTableWidget#quotesTable QScrollBar::sub-page:vertical {
+                background: transparent;
+                height: 0px;
+            }
+            QTableWidget#quotesTable QScrollBar:horizontal {
+                background: transparent;
+                height: 8px;
+                margin: 2px;
+            }
+            QTableWidget#quotesTable QScrollBar::handle:horizontal {
+                background: rgba(210, 220, 232, 0.18);
+                min-width: 24px;
+                border-radius: 4px;
+            }
+            QTableWidget#quotesTable QScrollBar::handle:horizontal:hover {
+                background: rgba(210, 220, 232, 0.30);
+            }
+            QTableWidget#quotesTable QScrollBar::add-line:horizontal,
+            QTableWidget#quotesTable QScrollBar::sub-line:horizontal,
+            QTableWidget#quotesTable QScrollBar::add-page:horizontal,
+            QTableWidget#quotesTable QScrollBar::sub-page:horizontal {
+                background: transparent;
+                width: 0px;
+            }
+            """
+        )
 
         layout.addWidget(table)
         self._quotes_table = table
@@ -352,440 +461,44 @@ class LiveMainWindow(QMainWindow):
         return panel
 
     def _build_autotrade_panel(self) -> QWidget:
-        panel = QGroupBox("Auto Trading")
-        layout = QVBoxLayout(panel)
-        layout.setContentsMargins(12, 12, 12, 12)
-        layout.setSpacing(10)
+        return self._ui_builder.build_autotrade_panel()
 
-        tabs = QTabWidget()
-        tabs.setDocumentMode(True)
-        tabs.setMovable(False)
-        tabs.setUsesScrollButtons(False)
-        tabs.tabBar().setExpanding(False)
-        layout.addWidget(tabs)
-        self._autotrade_tabs = tabs
-
-        def _tab_form(title: str, object_name: str | None = None) -> QFormLayout:
-            tab = QWidget()
-            if object_name:
-                tab.setObjectName(object_name)
-            if object_name == "tradeTab":
-                self._trade_tab = tab
-            if object_name == "advancedTab":
-                self._advanced_tab = tab
-            tab_layout = QVBoxLayout(tab)
-            tab_layout.setContentsMargins(12, 10, 18, 24)
-            tab_layout.setSpacing(8)
-            form = QFormLayout()
-            form.setHorizontalSpacing(16)
-            form.setVerticalSpacing(10)
-            form.setLabelAlignment(Qt.AlignLeft | Qt.AlignVCenter)
-            form.setFormAlignment(Qt.AlignTop | Qt.AlignLeft)
-            form.setRowWrapPolicy(QFormLayout.DontWrapRows)
-            form.setFieldGrowthPolicy(QFormLayout.AllNonFixedFieldsGrow)
-            tab_layout.addLayout(form)
-            tab_layout.addStretch(1)
-            tabs.addTab(tab, title)
-            return form
-
-        def _card(title: str) -> tuple[QFrame, QFormLayout]:
-            card = QFrame()
-            card.setObjectName("card")
-            card_layout = QVBoxLayout(card)
-            card_layout.setContentsMargins(12, 10, 12, 10)
-            card_layout.setSpacing(6)
-            title_label = QLabel(title)
-            title_label.setObjectName("cardTitle")
-            card_layout.addWidget(title_label)
-            card_form = QFormLayout()
-            card_form.setHorizontalSpacing(16)
-            card_form.setVerticalSpacing(10)
-            card_form.setLabelAlignment(Qt.AlignLeft | Qt.AlignVCenter)
-            card_form.setFormAlignment(Qt.AlignTop | Qt.AlignLeft)
-            card_form.setRowWrapPolicy(QFormLayout.DontWrapRows)
-            card_form.setFieldGrowthPolicy(QFormLayout.AllNonFixedFieldsGrow)
-            card_layout.addLayout(card_form)
-            return card, card_form
-
-        form_model = _tab_form("Model", object_name="modelTab")
-        form_trade = _tab_form("Trade", object_name="tradeTab")
-        tabs.setStyleSheet(
-            """
-            QWidget#modelTab QLabel[section="true"],
-            QWidget#tradeTab QLabel[section="true"],
-            QWidget#advancedTab QLabel[section="true"] {
-                color: #a8b1bc;
-                font-weight: 600;
-                letter-spacing: 0.5px;
-                padding-top: 6px;
-                padding-bottom: 2px;
-            }
-            QWidget#modelTab QLabel,
-            QWidget#tradeTab QLabel,
-            QWidget#advancedTab QLabel {
-                color: #d3d8e0;
-            }
-            QWidget#modelTab QLabel[spacer="true"],
-            QWidget#tradeTab QLabel[spacer="true"],
-            QWidget#advancedTab QLabel[spacer="true"] {
-                min-height: 10px;
-                min-width: 0px;
-            }
-            QWidget#modelTab QLabel[section="true"],
-            QWidget#tradeTab QLabel[section="true"],
-            QWidget#advancedTab QLabel[section="true"] {
-                color: #9aa6b2;
-                min-width: 0px;
-            }
-            QWidget#modelTab QFrame[divider="true"],
-            QWidget#tradeTab QFrame[divider="true"],
-            QWidget#advancedTab QFrame[divider="true"] {
-                border: none;
-                border-top: 1px solid #343c46;
-                margin-top: 6px;
-                margin-bottom: 6px;
-            }
-            QWidget#modelTab QComboBox,
-            QWidget#modelTab QDoubleSpinBox,
-            QWidget#modelTab QSpinBox,
-            QWidget#modelTab QLineEdit,
-            QWidget#tradeTab QComboBox,
-            QWidget#tradeTab QDoubleSpinBox,
-            QWidget#tradeTab QSpinBox,
-            QWidget#tradeTab QLineEdit,
-            QWidget#advancedTab QComboBox,
-            QWidget#advancedTab QDoubleSpinBox,
-            QWidget#advancedTab QSpinBox,
-            QWidget#advancedTab QLineEdit {
-                min-height: 30px;
-                padding: 2px 8px;
-            }
-            QWidget#modelTab QRadioButton,
-            QWidget#modelTab QCheckBox,
-            QWidget#tradeTab QRadioButton,
-            QWidget#tradeTab QCheckBox,
-            QWidget#advancedTab QRadioButton,
-            QWidget#advancedTab QCheckBox {
-                spacing: 8px;
-            }
-            QWidget#modelTab QRadioButton::indicator,
-            QWidget#modelTab QCheckBox::indicator,
-            QWidget#tradeTab QRadioButton::indicator,
-            QWidget#tradeTab QCheckBox::indicator,
-            QWidget#advancedTab QRadioButton::indicator,
-            QWidget#advancedTab QCheckBox::indicator {
-                width: 16px;
-                height: 16px;
-            }
-            QWidget#modelTab QFrame#card,
-            QWidget#tradeTab QFrame#card,
-            QWidget#advancedTab QFrame#card {
-                background: #262d36;
-                border: 1px solid #343c46;
-                border-radius: 10px;
-            }
-            QWidget#modelTab QLabel#cardTitle {
-                color: #cdd6e1;
-                font-weight: 600;
-                letter-spacing: 0.2px;
-                padding-bottom: 2px;
-            }
-            QWidget#modelTab QFrame#card QLineEdit,
-            QWidget#modelTab QFrame#card QComboBox,
-            QWidget#modelTab QFrame#card QDoubleSpinBox,
-            QWidget#modelTab QFrame#card QSpinBox {
-                background: #1f252d;
-                border: 1px solid #343c46;
-                border-radius: 8px;
-            }
-            QWidget#modelTab QFrame#card QPushButton,
-            QWidget#modelTab QFrame#card QToolButton {
-                min-height: 30px;
-            }
-            QWidget#modelTab QToolButton#modelBrowseIcon {
-                background: transparent;
-                border: none;
-                padding: 0px;
-            }
-            QWidget#modelTab QToolButton#modelBrowseIcon:hover {
-                background: #2a323c;
-                border-radius: 8px;
-            }
-            """
-        )
-        model_row = QWidget()
-        model_layout = QVBoxLayout(model_row)
-        model_layout.setContentsMargins(0, 0, 0, 0)
-        model_layout.setSpacing(6)
-        model_field_row = QWidget()
-        model_field_layout = QHBoxLayout(model_field_row)
-        model_field_layout.setContentsMargins(0, 0, 0, 0)
-        model_field_layout.setSpacing(6)
-        self._model_path = QLineEdit("ppo-forex.zip")
-        self._model_path.setPlaceholderText("ppo-forex.zip")
-        self._browse_model_dir_button = QToolButton()
-        self._browse_model_dir_button.setIcon(self.style().standardIcon(QStyle.SP_FileIcon))
-        self._browse_model_dir_button.setToolTip("Select model file")
-        self._browse_model_dir_button.setObjectName("modelBrowseIcon")
-        self._browse_model_dir_button.setText("")
-        self._browse_model_dir_button.setToolButtonStyle(Qt.ToolButtonIconOnly)
-        field_height = 30
-        self._model_path.setFixedHeight(field_height)
-        self._browse_model_dir_button.setFixedHeight(field_height)
-        self._browse_model_dir_button.clicked.connect(self._browse_model_file)
-        model_field_layout.addWidget(self._model_path, 1)
-        model_field_layout.addWidget(self._browse_model_dir_button)
-        model_layout.addWidget(model_field_row)
-
-        self._auto_trade_toggle = QPushButton("Start")
-        self._auto_trade_toggle.setCheckable(True)
-        self._auto_trade_toggle.toggled.connect(self._toggle_auto_trade)
-        self._auto_trade_toggle.setFixedHeight(field_height)
-
-        model_card, model_card_form = _card("Model & Control")
-        model_card_form.addRow("Model file", model_row)
-        model_card_form.addRow("Auto Trade", self._auto_trade_toggle)
-        form_model.addRow(model_card)
-        self._trade_symbol = QComboBox()
-        self._sync_trade_symbol_choices(preferred_symbol=self._symbol_name)
-        self._refresh_symbol_button = QToolButton()
-        self._refresh_symbol_button.setIcon(self.style().standardIcon(QStyle.SP_BrowserReload))
-        self._refresh_symbol_button.setToolTip("Refresh symbol list")
-        self._refresh_symbol_button.setFixedHeight(field_height)
-        self._refresh_symbol_button.clicked.connect(self._refresh_symbol_list)
-        symbol_row = QWidget()
-        symbol_layout = QHBoxLayout(symbol_row)
-        symbol_layout.setContentsMargins(0, 0, 0, 0)
-        symbol_layout.setSpacing(6)
-        symbol_layout.addWidget(self._trade_symbol)
-        symbol_layout.addWidget(self._refresh_symbol_button)
-        basic_card, basic_card_form = _card("Basic Settings")
-        basic_card_form.addRow("Symbol", symbol_row)
-        self._trade_symbol.currentTextChanged.connect(self._handle_trade_symbol_changed)
-
-        self._trade_timeframe = QComboBox()
-        self._trade_timeframe.addItems(["M1", "M5", "M15", "M30", "H1", "H4"])
-        basic_card_form.addRow("Timeframe", self._trade_timeframe)
-        self._trade_timeframe.currentTextChanged.connect(self._handle_trade_timeframe_changed)
-        form_model.addRow(basic_card)
-
-        trade_card, trade_card_form = _card("Position Sizing")
-        lot_row = QWidget()
-        lot_layout = QVBoxLayout(lot_row)
-        lot_layout.setContentsMargins(0, 0, 0, 0)
-        lot_layout.setSpacing(4)
-        self._lot_fixed = QRadioButton("Fixed lot")
-        self._lot_risk = QRadioButton("Risk %")
-        self._lot_fixed.setChecked(True)
-        lot_group = QButtonGroup(panel)
-        lot_group.addButton(self._lot_fixed)
-        lot_group.addButton(self._lot_risk)
-        lot_layout.addWidget(self._lot_fixed)
-        lot_layout.addWidget(self._lot_risk)
-        trade_card_form.addRow("Sizing", lot_row)
-
-        self._lot_value = QDoubleSpinBox()
-        self._lot_value.setDecimals(2)
-        self._lot_value.setRange(0.01, 100.0)
-        self._lot_value.setSingleStep(0.01)
-        self._lot_value.setValue(0.1)
-        self._lot_value.setSuffix(" lots")
-        trade_card_form.addRow("Lot / Risk%", self._lot_value)
-        self._lot_fixed.toggled.connect(self._sync_lot_value_style)
-        self._lot_risk.toggled.connect(self._sync_lot_value_style)
-        self._sync_lot_value_style()
-
-        self._max_positions = QSpinBox()
-        self._max_positions.setRange(1, 20)
-        self._max_positions.setValue(1)
-        trade_card_form.addRow("Max positions", self._max_positions)
-        form_trade.addRow(trade_card)
-
-        risk_card, risk_card_form = _card("Risk Controls")
-        self._stop_loss = QDoubleSpinBox()
-        self._stop_loss.setDecimals(0)
-        self._stop_loss.setRange(0.0, 1000000.0)
-        self._stop_loss.setSingleStep(10.0)
-        self._stop_loss.setValue(500.0)
-        self._stop_loss.setSuffix(" pt")
-        risk_card_form.addRow("Stop loss (points)", self._stop_loss)
-
-        self._take_profit = QDoubleSpinBox()
-        self._take_profit.setDecimals(0)
-        self._take_profit.setRange(0.0, 1000000.0)
-        self._take_profit.setSingleStep(10.0)
-        self._take_profit.setValue(800.0)
-        self._take_profit.setSuffix(" pt")
-        risk_card_form.addRow("Take profit (points)", self._take_profit)
-
-        self._risk_guard = QCheckBox("Enable")
-        risk_card_form.addRow("Risk guard", self._risk_guard)
-
-        self._max_drawdown = QDoubleSpinBox()
-        self._max_drawdown.setDecimals(1)
-        self._max_drawdown.setRange(0.0, 100.0)
-        self._max_drawdown.setSingleStep(0.5)
-        self._max_drawdown.setValue(10.0)
-        self._max_drawdown.setSuffix(" %")
-        risk_card_form.addRow("Max DD %", self._max_drawdown)
-
-        self._daily_loss = QDoubleSpinBox()
-        self._daily_loss.setDecimals(1)
-        self._daily_loss.setRange(0.0, 100.0)
-        self._daily_loss.setSingleStep(0.5)
-        self._daily_loss.setValue(5.0)
-        self._daily_loss.setSuffix(" %")
-        risk_card_form.addRow("Daily loss %", self._daily_loss)
-        form_trade.addRow(risk_card)
-
-        form_adv = _tab_form("Advanced", object_name="advancedTab")
-        advanced_card, advanced_card_form = _card("Advanced Settings")
-        self._min_signal_interval = QSpinBox()
-        self._min_signal_interval.setRange(0, 3600)
-        self._min_signal_interval.setValue(5)
-        advanced_card_form.addRow("Min interval (s)", self._min_signal_interval)
-
-        self._slippage_bps = QDoubleSpinBox()
-        self._slippage_bps.setDecimals(2)
-        self._slippage_bps.setRange(0.0, 50.0)
-        self._slippage_bps.setValue(0.5)
-        advanced_card_form.addRow("Slippage bps", self._slippage_bps)
-
-        self._fee_bps = QDoubleSpinBox()
-        self._fee_bps.setDecimals(2)
-        self._fee_bps.setRange(0.0, 50.0)
-        self._fee_bps.setValue(1.0)
-        advanced_card_form.addRow("Fee bps", self._fee_bps)
-
-        self._confidence = QDoubleSpinBox()
-        self._confidence.setDecimals(2)
-        self._confidence.setRange(0.0, 1.0)
-        self._confidence.setSingleStep(0.05)
-        self._confidence.setValue(0.0)
-        advanced_card_form.addRow("Confidence", self._confidence)
-        form_adv.addRow(advanced_card)
-
-        self._auto_log_panel = LogWidget(
-            title="Auto Trade",
-            with_timestamp=True,
-            monospace=True,
-            font_point_delta=1,
-        )
-        self._auto_log_panel.setMinimumHeight(140)
-        self._auto_log_panel.setMaximumHeight(180)
-        layout.addWidget(self._auto_log_panel)
-        # width management disabled for autotrade fields
-
-        return panel
-
+    # Layout Coordination
     def _init_splitter_sizes(self, splitter: QSplitter) -> None:
-        total = splitter.width()
-        if total <= 0:
-            return
-        # Match the quotes panel width so the autotrade panel lines up.
-        left = None
-        bottom = getattr(self, "_bottom_splitter", None)
-        if bottom is not None:
-            sizes = bottom.sizes()
-            if sizes:
-                left = sizes[0]
-        if left is None:
-            left = max(220, int(total * 0.25))
-        left = max(220, left)
-        right = max(260, total - left)
-        splitter.setSizes([left, right])
+        self._layout_coordinator.init_splitter_sizes(splitter)
 
     def _sync_field_widths(self) -> None:
-        return
+        self._layout_coordinator.sync_field_widths()
 
     def resizeEvent(self, event) -> None:
         super().resizeEvent(event)
         if not getattr(self, "_panel_alignment_done", False):
             self._align_panels_at_startup()
+        if getattr(self, "_main_splitter_done", False):
+            self._apply_main_splitter_sizes()
 
     def _sync_top_splitter_sizes(self) -> None:
-        top = getattr(self, "_top_splitter", None)
-        bottom = getattr(self, "_bottom_splitter", None)
-        if top is None or bottom is None:
-            return
-        total = top.width()
-        if total <= 0:
-            return
-        sizes = bottom.sizes()
-        if not sizes:
-            return
-        left = min(max(220, sizes[0]), max(220, total - 220))
-        right = total - left
-        if right <= 0:
-            return
-        top.setSizes([left, right])
+        self._layout_coordinator.sync_top_splitter_sizes()
 
     def _sync_bottom_splitter_sizes(self) -> None:
-        top = getattr(self, "_top_splitter", None)
-        bottom = getattr(self, "_bottom_splitter", None)
-        if top is None or bottom is None:
-            return
-        total = bottom.width()
-        if total <= 0:
-            return
-        sizes = top.sizes()
-        if not sizes:
-            return
-        left = min(max(220, sizes[0]), max(220, total - 320))
-        mid = max(320, int(total * 0.50))
-        right = total - left - mid
-        if right < 200:
-            right = 200
-            mid = max(320, total - left - right)
-        if left + mid + right <= total:
-            bottom.setSizes([left, mid, right])
+        self._layout_coordinator.sync_bottom_splitter_sizes()
 
     def _align_panels_at_startup(self) -> None:
-        if getattr(self, "_panel_alignment_done", False):
-            return
-        top = getattr(self, "_top_splitter", None)
-        bottom = getattr(self, "_bottom_splitter", None)
-        if top is None or bottom is None:
-            return
-        # First size bottom so quotes width is known, then align top to it.
-        self._init_bottom_splitter_sizes(bottom)
-        self._init_splitter_sizes(top)
-        QTimer.singleShot(0, lambda: self._init_bottom_splitter_sizes(bottom))
-        QTimer.singleShot(0, lambda: self._init_splitter_sizes(top))
-        self._panel_alignment_done = True
+        self._layout_coordinator.align_panels_at_startup()
 
     def _init_main_splitter_sizes(self) -> None:
-        if getattr(self, "_main_splitter_done", False):
-            return
-        splitter = getattr(self, "_main_splitter", None)
-        if splitter is None:
-            return
-        total = splitter.height()
-        if total <= 0:
-            return
-        # Give the bottom (quotes/positions/log) a little more height.
-        top = int(total * 0.60) - 10
-        bottom = total - top
-        top = max(200, top)
-        bottom = max(180, bottom)
-        if top + bottom > total:
-            bottom = max(180, total - top)
-        if top + bottom <= total:
-            splitter.setSizes([top, bottom])
-            self._main_splitter_done = True
+        self._layout_coordinator.init_main_splitter_sizes()
+
+    def _bottom_preferred_height(self) -> int:
+        return self._layout_coordinator.bottom_preferred_height()
+
+    def _apply_main_splitter_sizes(self) -> None:
+        self._layout_coordinator.apply_main_splitter_sizes()
 
     def _init_bottom_splitter_sizes(self, splitter: QSplitter) -> None:
-        total = splitter.width()
-        if total <= 0:
-            return
-        quotes = max(220, int(total * 0.25))
-        positions = max(420, int(total * 0.50))
-        log = max(260, total - quotes - positions)
-        if quotes + positions + log > total:
-            log = max(200, total - quotes - positions)
-        if quotes + positions + log <= total:
-            splitter.setSizes([quotes, positions, log])
+        self._layout_coordinator.init_bottom_splitter_sizes(splitter)
 
+    # Model Path Helpers
     def _browse_model_file(self) -> None:
         current_text = self._model_path.text().strip()
         current_path = self._resolve_model_path(current_text) if current_text else Path.cwd()
@@ -828,171 +541,67 @@ class LiveMainWindow(QMainWindow):
             return str(path)
         return relative.as_posix()
 
-    def _auto_log(self, message: str) -> None:
-        if self._auto_log_panel:
-            self._auto_log_panel.append(message)
-        self.logRequested.emit(message)
+    # Auto Trade Logging / Debug
+    def _infer_auto_log_level(self, message: str) -> str:
+        return self._auto_log_service.infer_level(message)
 
+    def _auto_log(self, message: str, *, level: Optional[str] = None) -> None:
+        self._auto_log_service.emit(message, level=level)
+
+    def _auto_debug_enabled(self) -> bool:
+        return bool(getattr(self, "_auto_debug", None) and self._auto_debug.isChecked())
+
+    def _auto_debug_log(self, message: str) -> None:
+        if not self._auto_debug_enabled():
+            return
+        self._auto_log(message, level="DEBUG")
+
+    def _auto_debug_fields(self, event: str, **fields) -> None:
+        lines = [str(event)]
+        for key, value in fields.items():
+            lines.append(f"  {key}={value}")
+        self._auto_debug_log("\n".join(lines))
+
+    # Auto Trade Recovery / Polling
+    def _auto_watchdog_tick(self) -> None:
+        self._auto_recovery_service.auto_watchdog_tick()
+
+    def _history_poll_tick(self) -> None:
+        self._auto_recovery_service.history_poll_tick()
+
+    def _start_history_polling(self) -> None:
+        if getattr(self, "_history_poll_timer", None) and not self._history_poll_timer.isActive():
+            self._history_poll_timer.start()
+
+    def _stop_history_polling(self) -> None:
+        if getattr(self, "_history_poll_timer", None) and self._history_poll_timer.isActive():
+            self._history_poll_timer.stop()
+
+    def _set_quote_chart_mode(self, enabled: bool) -> None:
+        self._chart_coordinator.set_quote_chart_mode(enabled)
+
+    # Auto Trade Lifecycle / Runtime
     def _toggle_auto_trade(self, enabled: bool) -> None:
-        if enabled:
-            if self._app_state and self._app_state.selected_account_scope == 0:
-                self._auto_log("⚠️ 帳戶權限為僅檢視，無法啟用交易")
-                self._auto_trade_toggle.setChecked(False)
-                return
-            if not self._load_auto_model():
-                self._auto_trade_toggle.setChecked(False)
-                return
-            self._auto_enabled = True
-            self._auto_trade_toggle.setText("Stop")
-            self._auto_position = 0.0
-            self._auto_position_id = None
-            self._auto_last_action_ts = None
-            self._auto_peak_balance = None
-            self._auto_day_balance = None
-            self._auto_day_key = None
-            trade_symbol = self._trade_symbol.currentText()
-            if trade_symbol and trade_symbol != self._symbol_name:
-                self._symbol_name = trade_symbol
-                self._symbol_id = self._resolve_symbol_id(trade_symbol)
-                self._price_digits = self._quote_digits.get(
-                    trade_symbol, self._infer_quote_digits(trade_symbol)
-                )
-                self._history_requested = False
-                self._pending_history = False
-                self._stop_live_trendbar()
-                if self._oauth_service and getattr(self._oauth_service, "status", 0) >= ConnectionStatus.ACCOUNT_AUTHENTICATED:
-                    self._request_recent_history()
-            self._ensure_order_service()
-            self._refresh_account_balance()
-            self._auto_log("✅ Auto trading started")
-        else:
-            self._auto_enabled = False
-            self._auto_trade_toggle.setText("Start")
-            self._auto_log("🛑 Auto trading stopped")
+        self._auto_lifecycle_service.toggle(enabled)
 
     def _load_auto_model(self) -> bool:
-        raw_path = self._model_path.text().strip()
-        if not raw_path:
-            self._auto_log("⚠️ Model path is empty")
-            return False
-        model_path = self._resolve_model_path(raw_path)
-        if not model_path.exists():
-            self._auto_log(f"⚠️ Model file not found: {model_path}")
-            return False
-        path = str(model_path)
-        try:
-            import importlib
-            import sys
-            import typing
-
-            # PySide6 can inject typing.Self on Python 3.10 which breaks torch.
-            if hasattr(typing, "Self"):
-                delattr(typing, "Self")
-            if "typing_extensions" in sys.modules:
-                importlib.reload(sys.modules["typing_extensions"])
-        except Exception:
-            pass
-        try:
-            from stable_baselines3 import PPO
-        except Exception as exc:
-            self._auto_log(f"❌ Failed to import PPO: {exc}")
-            return False
-        try:
-            self._auto_model = PPO.load(path)
-        except Exception as exc:
-            hint = ""
-            if "typing.Self" in str(exc):
-                hint = " (try Python>=3.10 or stable-baselines3<=2.3.x)"
-            self._auto_log(f"❌ Failed to load model: {exc}{hint}")
-            return False
-        self._auto_feature_scaler = None
-        scaler_path = model_path.with_suffix(".scaler.json")
-        if scaler_path.exists():
-            try:
-                self._auto_feature_scaler = load_scaler(scaler_path)
-                self._auto_log(f"✅ Feature scaler loaded: {scaler_path.name}")
-            except Exception as exc:
-                self._auto_log(f"⚠️ Failed to load feature scaler: {exc}")
-        else:
-            self._auto_log("⚠️ Feature scaler not found; using raw features")
-        self._auto_log(f"✅ Model loaded: {Path(path).name}")
-        return True
+        return self._auto_runtime_service.load_auto_model()
 
     def _ensure_order_service(self) -> None:
-        if self._order_service or not self._service:
-            return
-        self._order_service = self._use_cases.create_order_service(self._service)
-        if self._app_state:
-            scope = self._app_state.selected_account_scope
-            set_scope = getattr(self._order_service, "set_permission_scope", None)
-            if callable(set_scope):
-                set_scope(scope)
-        self._order_service.set_callbacks(
-            on_execution=self._handle_order_execution,
-            on_error=lambda e: self._auto_log(f"❌ Order error: {e}"),
-            on_log=self._auto_log,
-        )
+        self._auto_runtime_service.ensure_order_service()
 
     def _handle_order_execution(self, payload: dict) -> None:
-        position_id = payload.get("position_id")
-        if position_id:
-            self._auto_position_id = int(position_id)
-        order = payload.get("order")
-        position = payload.get("position")
-        deal = payload.get("deal")
-        symbol_id = (
-            getattr(order, "symbolId", None)
-            or getattr(position, "symbolId", None)
-            or getattr(deal, "symbolId", None)
-        )
-        symbol_name = self._symbol_id_to_name.get(int(symbol_id)) if symbol_id else None
-        volume = (
-            getattr(order, "volume", None)
-            or getattr(position, "volume", None)
-            or getattr(deal, "volume", None)
-        )
-        if not volume:
-            volume = payload.get("requested_volume")
-        lot = None
-        volume_text = None
-        if volume is not None:
-            try:
-                volume_value = float(volume)
-                lot = self._volume_to_lots(volume_value)
-                volume_text = f"{int(volume_value)}"
-            except (TypeError, ValueError):
-                lot = None
-        trade_side = getattr(order, "tradeSide", None)
-        if trade_side == ProtoOATradeSide.BUY:
-            side_text = "BUY"
-        elif trade_side == ProtoOATradeSide.SELL:
-            side_text = "SELL"
-        else:
-            side_text = None
-        parts = []
-        if side_text:
-            parts.append(side_text)
-        if lot is not None:
-            parts.append(f"{lot:.3f} lot")
-        if volume_text:
-            parts.append(f"(volume {volume_text})")
-        if symbol_name:
-            parts.append(symbol_name)
-        if position_id:
-            parts.append(f"(pos {position_id})")
-        if parts:
-            self._auto_log(f"✅ Order executed: {' '.join(parts)}")
-        self._request_positions()
+        self._auto_runtime_service.handle_order_execution(payload)
 
     def _handle_trade_timeframe_changed(self, timeframe: str) -> None:
         self._market_data_controller.set_trade_timeframe(timeframe)
 
+    # Auto Trade UI State / Persistence
     def _trading_widgets(self) -> list[QWidget]:
         return [
             self._auto_trade_toggle,
             self._trade_symbol,
             self._trade_timeframe,
-            self._refresh_symbol_button,
             self._lot_fixed,
             self._lot_risk,
             self._lot_value,
@@ -1006,6 +615,12 @@ class LiveMainWindow(QMainWindow):
             self._slippage_bps,
             self._fee_bps,
             self._confidence,
+            self._position_step,
+            self._near_full_hold,
+            self._same_side_rebalance,
+            self._scale_lot_by_signal,
+            self._auto_debug,
+            self._quote_affects_chart,
         ]
 
     def _apply_trade_permission(self, scope: Optional[int]) -> None:
@@ -1042,222 +657,44 @@ class LiveMainWindow(QMainWindow):
             self._request_recent_history()
 
     def _refresh_symbol_list(self) -> None:
-        if not self._service or not self._app_state or not self._app_state.selected_account_id:
-            self._auto_log("⚠️ Account not ready; cannot refresh symbol list.")
-            return
-        try:
-            if self._symbol_list_uc is None:
-                self._symbol_list_uc = self._use_cases.create_symbol_list(self._service)
-            if getattr(self._symbol_list_uc, "in_progress", False):
-                return
-        except Exception:
-            return
-
-        account_id = int(self._app_state.selected_account_id)
-
-        def _on_symbols(symbols: list) -> None:
-            if not symbols:
-                self._queue_symbol_list_apply(symbols)
-                return
-            path = self._symbol_list_path()
-            try:
-                path.write_text(json.dumps(symbols, ensure_ascii=True, indent=2), encoding="utf-8")
-            except Exception as exc:
-                self.logRequested.emit(f"⚠️ Failed to write symbol list: {exc}")
-            self._queue_symbol_list_apply(symbols)
-
-        self._symbol_list_uc.set_callbacks(
-            on_symbols_received=_on_symbols,
-            on_error=lambda e: self._auto_log(f"❌ Symbol list error: {e}"),
-            on_log=self._auto_log,
-        )
-        self._symbol_list_uc.fetch(account_id)
+        self._symbol_list_service.refresh_symbol_list()
 
     def _queue_symbol_list_apply(self, symbols: list) -> None:
-        self._pending_symbol_list = symbols
-        app = QApplication.instance()
-        if app is not None and QThread.currentThread() == app.thread():
-            self._apply_symbol_list_update()
-            return
-        QMetaObject.invokeMethod(self, "_apply_symbol_list_update", Qt.QueuedConnection)
+        self._symbol_list_service.queue_symbol_list_apply(symbols)
 
     @Slot()
     def _apply_symbol_list_update(self) -> None:
-        symbols = self._pending_symbol_list or []
-        if not symbols:
-            return
-        names = []
-        mapping = {}
-        for item in symbols:
-            name = item.get("symbol_name") if isinstance(item, dict) else None
-            symbol_id = item.get("symbol_id") if isinstance(item, dict) else None
-            if not name or symbol_id is None:
-                continue
-            if name in mapping:
-                continue
-            try:
-                mapping[name] = int(symbol_id)
-            except (TypeError, ValueError):
-                continue
-            names.append(name)
-        self._symbol_names = names
-        self._symbol_id_map = mapping
-        self._symbol_id_to_name = {symbol_id: name for name, symbol_id in mapping.items()}
-        self._fx_symbols = self._filter_fx_symbols(self._symbol_names)
-        current = self._trade_symbol.currentText()
-        self._sync_trade_symbol_choices(preferred_symbol=current)
-        self._auto_log(f"✅ Symbol list refreshed: {len(self._fx_symbols)} symbols")
-        current_symbol = self._trade_symbol.currentText() if hasattr(self, "_trade_symbol") else ""
-        if not current_symbol:
-            current_symbol = self._symbol_name
+        self._symbol_list_service.apply_symbol_list_update()
 
     def _trade_symbol_choices(self) -> list[str]:
-        choices: list[str] = []
-        for symbol in self._quote_symbols:
-            if isinstance(symbol, str) and symbol and symbol not in choices:
-                choices.append(symbol)
-        if choices:
-            return choices
-        return ["EURUSD", "USDJPY"]
+        return self._symbol_list_service.trade_symbol_choices()
 
     def _sync_trade_symbol_choices(self, preferred_symbol: Optional[str] = None) -> None:
-        if not hasattr(self, "_trade_symbol") or self._trade_symbol is None:
-            return
-        combo = self._trade_symbol
-        choices = self._trade_symbol_choices()
-        current = preferred_symbol or combo.currentText() or self._symbol_name
-        combo.blockSignals(True)
-        combo.clear()
-        combo.addItems(choices)
-        if current in choices:
-            target = current
-        elif self._symbol_name in choices:
-            target = self._symbol_name
-        else:
-            target = choices[0]
-        combo.setCurrentText(target)
-        combo.blockSignals(False)
-        if target and target != self._symbol_name:
-            self._symbol_name = target
-            self._symbol_id = self._resolve_symbol_id(target)
+        self._symbol_list_service.sync_trade_symbol_choices(preferred_symbol=preferred_symbol)
 
     def _sync_lot_value_style(self) -> None:
-        if self._lot_risk.isChecked():
-            self._lot_value.setSuffix(" %")
-            self._lot_value.setSingleStep(0.1)
-            self._lot_value.setRange(0.1, 50.0)
-        else:
-            self._lot_value.setSuffix(" lots")
-            self._lot_value.setSingleStep(0.01)
-            self._lot_value.setRange(0.01, 100.0)
+        self._auto_settings_persistence.sync_lot_value_style()
 
     def _setup_autotrade_persistence(self) -> None:
-        self._load_autotrade_settings()
-
-        def _bind(widget, signal_name: str):
-            signal = getattr(widget, signal_name, None)
-            if signal is not None:
-                signal.connect(self._save_autotrade_settings)
-
-        _bind(self._model_path, "textChanged")
-        _bind(self._trade_symbol, "currentTextChanged")
-        _bind(self._trade_timeframe, "currentTextChanged")
-        _bind(self._lot_fixed, "toggled")
-        _bind(self._lot_risk, "toggled")
-        _bind(self._lot_value, "valueChanged")
-        _bind(self._max_positions, "valueChanged")
-        _bind(self._stop_loss, "valueChanged")
-        _bind(self._take_profit, "valueChanged")
-        _bind(self._risk_guard, "toggled")
-        _bind(self._max_drawdown, "valueChanged")
-        _bind(self._daily_loss, "valueChanged")
-        _bind(self._min_signal_interval, "valueChanged")
-        _bind(self._slippage_bps, "valueChanged")
-        _bind(self._fee_bps, "valueChanged")
-        _bind(self._confidence, "valueChanged")
+        self._auto_settings_persistence.setup()
 
     def _save_autotrade_settings(self) -> None:
-        if self._autotrade_loading:
-            return
-        payload = {
-            "model_path": self._normalize_model_path_text(self._model_path.text().strip()),
-            "symbol": self._trade_symbol.currentText(),
-            "timeframe": self._trade_timeframe.currentText(),
-            "sizing_mode": "risk" if self._lot_risk.isChecked() else "fixed",
-            "lot_value": float(self._lot_value.value()),
-            "max_positions": int(self._max_positions.value()),
-            "stop_loss": float(self._stop_loss.value()),
-            "take_profit": float(self._take_profit.value()),
-            "risk_guard": bool(self._risk_guard.isChecked()),
-            "max_drawdown": float(self._max_drawdown.value()),
-            "daily_loss": float(self._daily_loss.value()),
-            "min_signal_interval": int(self._min_signal_interval.value()),
-            "slippage_bps": float(self._slippage_bps.value()),
-            "fee_bps": float(self._fee_bps.value()),
-            "confidence": float(self._confidence.value()),
-        }
-        try:
-            self._autotrade_settings_path.parent.mkdir(parents=True, exist_ok=True)
-            self._autotrade_settings_path.write_text(
-                json.dumps(payload, ensure_ascii=True, indent=2),
-                encoding="utf-8",
-            )
-        except Exception:
-            pass
+        self._auto_settings_persistence.save()
 
     def _load_autotrade_settings(self) -> None:
-        if not self._autotrade_settings_path.exists():
-            return
-        try:
-            data = json.loads(self._autotrade_settings_path.read_text(encoding="utf-8"))
-        except Exception:
-            return
-        self._autotrade_loading = True
-        try:
-            model_path = str(data.get("model_path", "")).strip()
-            if model_path:
-                self._model_path.setText(self._normalize_model_path_text(model_path))
-            symbol = str(data.get("symbol", "")).strip()
-            if symbol:
-                idx = self._trade_symbol.findText(symbol)
-                if idx >= 0:
-                    self._trade_symbol.setCurrentIndex(idx)
-            timeframe = str(data.get("timeframe", "")).strip()
-            if timeframe:
-                idx = self._trade_timeframe.findText(timeframe)
-                if idx >= 0:
-                    self._trade_timeframe.setCurrentIndex(idx)
-            sizing_mode = str(data.get("sizing_mode", "fixed")).lower()
-            self._lot_risk.setChecked(sizing_mode == "risk")
-            self._lot_fixed.setChecked(sizing_mode != "risk")
-            if "lot_value" in data:
-                self._lot_value.setValue(float(data.get("lot_value", self._lot_value.value())))
-            if "max_positions" in data:
-                self._max_positions.setValue(int(data.get("max_positions", self._max_positions.value())))
-            if "stop_loss" in data:
-                self._stop_loss.setValue(float(data.get("stop_loss", self._stop_loss.value())))
-            if "take_profit" in data:
-                self._take_profit.setValue(float(data.get("take_profit", self._take_profit.value())))
-            if "risk_guard" in data:
-                self._risk_guard.setChecked(bool(data.get("risk_guard", False)))
-            if "max_drawdown" in data:
-                self._max_drawdown.setValue(float(data.get("max_drawdown", self._max_drawdown.value())))
-            if "daily_loss" in data:
-                self._daily_loss.setValue(float(data.get("daily_loss", self._daily_loss.value())))
-            if "min_signal_interval" in data:
-                self._min_signal_interval.setValue(
-                    int(data.get("min_signal_interval", self._min_signal_interval.value()))
-                )
-            if "slippage_bps" in data:
-                self._slippage_bps.setValue(float(data.get("slippage_bps", self._slippage_bps.value())))
-            if "fee_bps" in data:
-                self._fee_bps.setValue(float(data.get("fee_bps", self._fee_bps.value())))
-            if "confidence" in data:
-                self._confidence.setValue(float(data.get("confidence", self._confidence.value())))
-            self._sync_lot_value_style()
-        finally:
-            self._autotrade_loading = False
+        self._auto_settings_persistence.load()
 
+    # Auto Trade Hooks Used by Controllers/Services
+    def _run_auto_trade_on_close(self) -> None:
+        self._autotrade_coordinator.run_auto_trade_on_close()
+
+    def _sync_auto_position_from_positions(self, positions: list[object]) -> None:
+        self._autotrade_coordinator.sync_auto_position_from_positions(positions)
+
+    def _refresh_account_balance(self) -> None:
+        self._autotrade_coordinator.refresh_account_balance()
+
+    # Quotes / Positions Controllers
     def _ensure_quote_handler(self) -> None:
         self._quote_controller.ensure_quote_handler()
 
@@ -1267,37 +704,11 @@ class LiveMainWindow(QMainWindow):
     def _request_positions(self) -> None:
         self._positions_controller.request_positions()
 
-    def _handle_positions_message(self, _client, msg) -> bool:
-        return self._positions_controller.handle_positions_message(_client, msg)
-
-    @Slot(object)
-    def _apply_positions_update(self, positions: object) -> None:
-        self._positions_controller.apply_positions_update(positions)
-
-    def _update_positions_table(self, positions: list[object]) -> None:
-        self._positions_controller.update_positions_table(positions)
-
     def _ensure_quote_subscription(self) -> None:
         self._quote_controller.ensure_quote_subscription()
 
     def _stop_quote_subscription(self) -> None:
         self._quote_controller.stop_quote_subscription()
-
-    def _handle_spot_message(self, _client, msg) -> bool:
-        return self._quote_controller.handle_spot_message(_client, msg)
-
-    @Slot(int, object, object, object)
-    def _handle_quote_updated(self, symbol_id: int, bid, ask, spot_ts) -> None:
-        self._quote_controller.handle_quote_updated(symbol_id, bid, ask, spot_ts)
-
-    def _set_quote_cell(self, row: int, column: int, value) -> None:
-        self._quote_controller._set_quote_cell(row, column, value)
-
-    def _set_quote_extras(self, row: int, symbol_id: int, bid, ask, spot_ts) -> None:
-        self._quote_controller._set_quote_extras(row, symbol_id, bid, ask, spot_ts)
-
-    def _set_quote_text(self, row: int, column: int, text: str) -> None:
-        self._quote_controller._set_quote_text(row, column, text)
 
     def _schedule_positions_refresh(self) -> None:
         self._positions_controller.schedule_positions_refresh()
@@ -1309,556 +720,25 @@ class LiveMainWindow(QMainWindow):
     def _volume_to_lots(volume_value: float) -> float:
         return LivePositionsController.volume_to_lots(volume_value)
 
-    def _calc_position_pnl(
-        self,
-        *,
-        position: Optional[object],
-        trade_data: Optional[object],
-        symbol_id: Optional[int],
-        side_value: Optional[int],
-        entry_price,
-        volume,
-    ) -> str:
-        return self._positions_controller.calc_position_pnl(
-            position=position,
-            trade_data=trade_data,
-            symbol_id=symbol_id,
-            side_value=side_value,
-            entry_price=entry_price,
-            volume=volume,
-        )
-
-    @staticmethod
-    def _scale_money(value: int, digits: int) -> float:
-        if digits <= 0:
-            return float(value)
-        return float(value) / (10**digits)
-
-    @staticmethod
-    def _format_money(value: Optional[float], digits: int) -> str:
-        if value is None:
-            return "-"
-        if digits <= 0:
-            return str(int(round(value)))
-        return f"{value:.{digits}f}"
-
-    def _update_account_summary(self, snapshot) -> None:
-        if not self._account_summary_labels:
-            return
-        money_digits = getattr(snapshot, "money_digits", None)
-        if money_digits is None:
-            money_digits = 2
-        balance = getattr(snapshot, "balance", None)
-        equity = getattr(snapshot, "equity", None)
-        free_margin = getattr(snapshot, "free_margin", None)
-        used_margin = getattr(snapshot, "used_margin", None)
-        margin_level = getattr(snapshot, "margin_level", None)
-        currency = getattr(snapshot, "currency", None) or "-"
-        net_pnl = None
-        if balance is not None and equity is not None:
-            net_pnl = float(equity) - float(balance)
-
-        self._account_summary_labels["balance"].setText(self._format_money(balance, money_digits))
-        self._account_summary_labels["equity"].setText(self._format_money(equity, money_digits))
-        self._account_summary_labels["free_margin"].setText(self._format_money(free_margin, money_digits))
-        self._account_summary_labels["used_margin"].setText(self._format_money(used_margin, money_digits))
-        if margin_level is None:
-            self._account_summary_labels["margin_level"].setText("-")
-        else:
-            self._account_summary_labels["margin_level"].setText(f"{margin_level:.1f}%")
-        self._account_summary_labels["net_pnl"].setText(self._format_money(net_pnl, money_digits))
-        self._account_summary_labels["currency"].setText(str(currency))
-
-    @Slot(object)
-    def _apply_account_summary_update(self, snapshot: object) -> None:
-        self._update_account_summary(snapshot)
-
     def _current_price_text(self, *, symbol_id: Optional[int], side_value: Optional[int]) -> str:
-        if symbol_id is None:
-            return "-"
-        bid = self._quote_last_bid.get(int(symbol_id))
-        ask = self._quote_last_ask.get(int(symbol_id))
-        mid = self._quote_last_mid.get(int(symbol_id))
-        current = None
-        if side_value == ProtoOATradeSide.BUY:
-            current = bid if bid else mid
-        elif side_value == ProtoOATradeSide.SELL:
-            current = ask if ask else mid
-        else:
-            current = mid
-        if current is None:
-            return "-"
-        digits = self._quote_row_digits.get(int(symbol_id), self._price_digits)
-        return self._format_price(current, digits=digits)
+        return self._value_formatter.current_price_text(symbol_id=symbol_id, side_value=side_value)
 
     def _format_spot_time(self, spot_ts) -> str:
-        if spot_ts in (None, 0, "0", "0.0"):
-            return datetime.utcnow().strftime("%H:%M:%S")
-        try:
-            ts_val = float(spot_ts)
-        except (TypeError, ValueError):
-            return datetime.utcnow().strftime("%H:%M:%S")
-        if ts_val > 1e12:
-            ts_val = ts_val / 1000.0
-        return datetime.utcfromtimestamp(ts_val).strftime("%H:%M:%S")
+        return self._value_formatter.format_spot_time(spot_ts)
 
     def _format_time(self, timestamp) -> str:
-        if timestamp in (None, 0, "0", "0.0"):
-            return datetime.utcnow().strftime("%H:%M:%S")
-        try:
-            ts_val = float(timestamp)
-        except (TypeError, ValueError):
-            return datetime.utcnow().strftime("%H:%M:%S")
-        if ts_val > 1e12:
-            ts_val = ts_val / 1000.0
-        return datetime.utcfromtimestamp(ts_val).strftime("%H:%M:%S")
+        return self._value_formatter.format_time(timestamp)
 
     def _symbol_list_path(self) -> Path:
         return self._project_root / SYMBOL_LIST_FILE
 
     def _normalize_price(self, value, *, digits: Optional[int] = None) -> Optional[float]:
-        if value is None:
-            return None
-        try:
-            numeric = float(value)
-        except (TypeError, ValueError):
-            return None
-        if numeric == 0:
-            return 0.0
-        is_int_like = isinstance(value, int) or numeric.is_integer()
-        if is_int_like:
-            # cTrader spot/trendbar raw prices are often scaled by 1e5 regardless of display digits.
-            # Prioritize 1e5 for large integer payloads to avoid JPY quotes being over-scaled.
-            if abs(numeric) >= 1_000_000:
-                return numeric / 100000.0
-            if digits is not None:
-                scale = 10 ** digits
-                if abs(numeric) >= scale:
-                    return numeric / scale
-            if abs(numeric) >= 100000:
-                return numeric / 100000.0
-        if isinstance(value, int):
-            return numeric / 100000.0
-        return numeric
+        return self._value_formatter.normalize_price(value, digits=digits)
 
     def _format_price(self, value, *, digits: Optional[int] = None) -> str:
-        normalized = self._normalize_price(value, digits=digits)
-        if normalized is None:
-            return "-"
-        use_digits = self._price_digits if digits is None else digits
-        return f"{normalized:.{use_digits}f}"
+        return self._value_formatter.format_price(value, digits=digits)
 
-    def _run_auto_trade_on_close(self) -> None:
-        if not self._auto_enabled or not self._auto_model:
-            return
-        if not self._app_state or not self._app_state.selected_account_id:
-            return
-        now_ts = datetime.utcnow().timestamp()
-        min_interval = int(self._min_signal_interval.value()) if hasattr(self, "_min_signal_interval") else 0
-        if self._auto_last_action_ts and now_ts - self._auto_last_action_ts < min_interval:
-            return
-        if len(self._candles) < 30:
-            return
-
-        df = pd.DataFrame(
-            {
-                "timestamp": [datetime.utcfromtimestamp(c[0]).strftime("%H:%M") for c in self._candles],
-                "open": [c[1] for c in self._candles],
-                "high": [c[2] for c in self._candles],
-                "low": [c[3] for c in self._candles],
-                "close": [c[4] for c in self._candles],
-            }
-        )
-        try:
-            feature_set = build_features(df, scaler=self._auto_feature_scaler)
-        except Exception as exc:
-            self._auto_log(f"❌ Feature build failed: {exc}")
-            return
-        if feature_set.features.shape[0] <= 0:
-            return
-        max_position = 1.0
-        if hasattr(self, "_max_position"):
-            try:
-                max_position = float(self._max_position.value())
-            except Exception:
-                max_position = 1.0
-        if max_position <= 0.0:
-            max_position = 1.0
-        position_norm = self._auto_position / max_position
-        obs = np.concatenate(
-            [feature_set.features[-1], np.array([position_norm], dtype=np.float32)]
-        ).astype(np.float32)
-        try:
-            action, _ = self._auto_model.predict(obs, deterministic=True)
-        except Exception as exc:
-            self._auto_log(f"❌ Model inference failed: {exc}")
-            return
-        target_position = float(np.clip(action[0], -1.0, 1.0))
-        self._execute_target_position(target_position)
-        self._auto_last_action_ts = now_ts
-
-    def _execute_target_position(self, target: float) -> None:
-        if not self._app_state or not self._app_state.selected_account_id:
-            return
-        account_id = int(self._app_state.selected_account_id)
-        symbol_name = self._trade_symbol.currentText() if hasattr(self, "_trade_symbol") else self._symbol_name
-        symbol_id = int(self._resolve_symbol_id(symbol_name))
-        self._ensure_order_service()
-        if not self._order_service or getattr(self._order_service, "in_progress", False):
-            return
-        self._refresh_account_balance()
-
-        threshold = 0.05
-        desired = 0.0 if abs(target) < threshold else target
-        desired_side = "buy" if desired > 0 else "sell"
-
-        if desired == 0.0 and self._auto_position_id:
-            volume = self._calc_volume()
-            self._order_service.close_position(
-                account_id=account_id,
-                position_id=int(self._auto_position_id),
-                volume=volume,
-            )
-            self._auto_position = 0.0
-            self._auto_position_id = None
-            return
-
-        if desired == 0.0:
-            self._auto_position = 0.0
-            return
-
-        if not self._risk_guard_allows():
-            self._auto_log("⚠️ Risk guard blocked new trades.")
-            return
-
-        if self._auto_position_id and (
-            (self._auto_position > 0 and desired > 0)
-            or (self._auto_position < 0 and desired < 0)
-        ):
-            self._auto_position = desired
-            return
-
-        if self._auto_position_id:
-            volume = self._calc_volume()
-            self._order_service.close_position(
-                account_id=account_id,
-                position_id=int(self._auto_position_id),
-                volume=volume,
-            )
-            self._auto_position_id = None
-
-        volume = self._calc_volume()
-        stop_loss_points, take_profit_points = self._calc_sl_tp_pips()
-        self._order_service.place_market_order(
-            account_id=account_id,
-            symbol_id=symbol_id,
-            trade_side=desired_side,
-            volume=volume,
-            relative_stop_loss=stop_loss_points,
-            relative_take_profit=take_profit_points,
-            label="auto-ppo",
-        )
-        self._auto_position = desired
-
-    def _calc_volume(self) -> int:
-        lot = float(self._lot_value.value())
-        if self._lot_risk.isChecked():
-            balance = self._auto_balance
-            if balance:
-                lot = max(0.01, (balance * (lot / 100.0)) / 100000.0)
-            else:
-                self._auto_log("⚠️ Balance unavailable; using fixed lot.")
-        units = int(max(1, round(lot * 100000)))
-        raw_volume = units * 100  # protocol volume is in 0.01 of a unit
-        symbol_name = ""
-        try:
-            symbol_name = self._trade_symbol.currentText()
-        except Exception:
-            symbol_name = self._symbol_name
-        self._fetch_symbol_details(symbol_name)
-        min_volume, volume_step = self._get_volume_constraints(symbol_name)
-        volume = max(raw_volume, min_volume)
-        if volume_step > 1:
-            volume = (volume // volume_step) * volume_step
-            if volume < min_volume:
-                volume = min_volume
-        if volume != raw_volume:
-            self._auto_log(
-                f"⚠️ Volume adjusted {raw_volume} → {volume} (min {min_volume}, step {volume_step})."
-            )
-        return volume
-
-    def _get_volume_constraints(self, symbol_name: str) -> tuple[int, int]:
-        if not self._symbol_volume_loaded:
-            self._load_symbol_volume_constraints()
-        if symbol_name in self._symbol_volume_constraints:
-            return self._symbol_volume_constraints[symbol_name]
-        if not self._symbol_overrides_loaded:
-            self._load_symbol_overrides()
-        if symbol_name in self._symbol_overrides:
-            override = self._symbol_overrides[symbol_name]
-            min_volume = override.get("min_volume")
-            volume_step = override.get("volume_step")
-            try:
-                min_volume_int = int(min_volume) if min_volume is not None else None
-            except (TypeError, ValueError):
-                min_volume_int = None
-            try:
-                volume_step_int = int(volume_step) if volume_step is not None else None
-            except (TypeError, ValueError):
-                volume_step_int = None
-            if min_volume_int is not None or volume_step_int is not None:
-                if min_volume_int is None:
-                    min_volume_int = max(1, volume_step_int or 1)
-                if volume_step_int is None:
-                    volume_step_int = min_volume_int
-                if min_volume_int > 0 and volume_step_int > 0:
-                    self._symbol_volume_constraints[symbol_name] = (
-                        min_volume_int,
-                        volume_step_int,
-                    )
-                    return min_volume_int, volume_step_int
-        symbol_id = self._symbol_id_map.get(symbol_name)
-        if symbol_id is not None:
-            detail = self._symbol_details_by_id.get(int(symbol_id))
-            if isinstance(detail, dict):
-                min_volume = detail.get("min_volume")
-                volume_step = detail.get("volume_step")
-                try:
-                    min_volume_int = int(min_volume) if min_volume is not None else None
-                except (TypeError, ValueError):
-                    min_volume_int = None
-                try:
-                    volume_step_int = int(volume_step) if volume_step is not None else None
-                except (TypeError, ValueError):
-                    volume_step_int = None
-                if min_volume_int is not None or volume_step_int is not None:
-                    if min_volume_int is None:
-                        min_volume_int = max(1, volume_step_int or 1)
-                    if volume_step_int is None:
-                        volume_step_int = min_volume_int
-                    if min_volume_int > 0 and volume_step_int > 0:
-                        self._symbol_volume_constraints[symbol_name] = (
-                            min_volume_int,
-                            volume_step_int,
-                        )
-                        return min_volume_int, volume_step_int
-        return 100000, 100000
-
-    def _load_symbol_overrides(self) -> None:
-        self._symbol_overrides_loaded = True
-        path = self._project_root / "symbol_overrides.json"
-        if not path.exists():
-            return
-        try:
-            data = json.loads(path.read_text(encoding="utf-8"))
-        except Exception:
-            return
-        if isinstance(data, dict):
-            self._symbol_overrides = {
-                str(k): v for k, v in data.items() if isinstance(v, dict)
-            }
-
-    def _load_symbol_volume_constraints(self) -> None:
-        self._symbol_volume_loaded = True
-        path = self._symbol_list_path()
-        if not path.exists():
-            return
-        try:
-            data = json.loads(path.read_text(encoding="utf-8"))
-        except Exception:
-            return
-        for item in data:
-            name = item.get("symbol_name")
-            if not isinstance(name, str) or not name:
-                continue
-            min_volume = item.get("min_volume", item.get("minVolume"))
-            volume_step = item.get("volume_step", item.get("volumeStep"))
-            digits = item.get("digits")
-            try:
-                min_volume_int = int(min_volume) if min_volume is not None else None
-            except (TypeError, ValueError):
-                min_volume_int = None
-            try:
-                volume_step_int = int(volume_step) if volume_step is not None else None
-            except (TypeError, ValueError):
-                volume_step_int = None
-            try:
-                digits_int = int(digits) if digits is not None else None
-            except (TypeError, ValueError):
-                digits_int = None
-            if min_volume_int is None and volume_step_int is None:
-                if digits_int is None:
-                    continue
-            if min_volume_int is None:
-                min_volume_int = max(1, volume_step_int or 1)
-            if volume_step_int is None:
-                volume_step_int = min_volume_int
-            if min_volume_int <= 0 or volume_step_int <= 0:
-                min_volume_int = None
-                volume_step_int = None
-            if min_volume_int is not None and volume_step_int is not None:
-                self._symbol_volume_constraints[name] = (min_volume_int, volume_step_int)
-            if digits_int is not None and digits_int > 0:
-                self._symbol_digits_by_name[name] = digits_int
-                self._quote_digits[name] = digits_int
-
-    def _calc_sl_tp_pips(self) -> tuple[Optional[int], Optional[int]]:
-        sl_points = float(self._stop_loss.value())
-        tp_points = float(self._take_profit.value())
-        stop_loss = None
-        take_profit = None
-        if sl_points > 0:
-            stop_loss = int(round(sl_points))
-        if tp_points > 0:
-            take_profit = int(round(tp_points))
-        return stop_loss, take_profit
-
-    def _sync_auto_position_from_positions(self, positions: list[object]) -> None:
-        if not self._auto_enabled:
-            return
-        symbol_name = ""
-        try:
-            symbol_name = self._trade_symbol.currentText()
-        except Exception:
-            symbol_name = self._symbol_name
-        symbol_id = self._resolve_symbol_id(symbol_name) if symbol_name else None
-        matched = []
-        for position in positions:
-            trade_data = getattr(position, "tradeData", None)
-            pos_symbol_id = getattr(trade_data, "symbolId", None) if trade_data else None
-            if symbol_id is not None and pos_symbol_id is not None and int(pos_symbol_id) != int(symbol_id):
-                continue
-            matched.append(position)
-        if not matched:
-            self._auto_position_id = None
-            self._auto_position = 0.0
-            return
-        primary = matched[0]
-        trade_data = getattr(primary, "tradeData", None)
-        side_value = getattr(trade_data, "tradeSide", None) if trade_data else None
-        position_id = getattr(primary, "positionId", None)
-        if position_id:
-            self._auto_position_id = int(position_id)
-        if side_value == ProtoOATradeSide.BUY:
-            self._auto_position = 1.0
-        elif side_value == ProtoOATradeSide.SELL:
-            self._auto_position = -1.0
-
-    def _risk_guard_allows(self) -> bool:
-        if not self._risk_guard.isChecked():
-            return True
-        if self._auto_balance is None or self._auto_peak_balance is None or self._auto_day_balance is None:
-            return True
-        max_dd = float(self._max_drawdown.value()) / 100.0
-        daily_loss = float(self._daily_loss.value()) / 100.0
-        if self._auto_peak_balance > 0:
-            drawdown = (self._auto_peak_balance - self._auto_balance) / self._auto_peak_balance
-            if drawdown >= max_dd > 0:
-                return False
-        if self._auto_day_balance > 0:
-            day_loss = (self._auto_day_balance - self._auto_balance) / self._auto_day_balance
-            if day_loss >= daily_loss > 0:
-                return False
-        return True
-
-    def _refresh_account_balance(self) -> None:
-        self._account_controller.refresh_account_balance()
-
-    def _build_chart_panel(self) -> QWidget:
-        panel = QGroupBox("Live Candlestick Chart")
-        layout = QVBoxLayout(panel)
-
-        if pg is None:
-            notice = QLabel("PyQtGraph is not installed. Please install pyqtgraph to view the chart.")
-            notice.setProperty("class", "placeholder")
-            layout.addWidget(notice)
-            return panel
-
-        plot = pg.PlotWidget(axisItems={"bottom": TimeAxisItem(orientation="bottom")})
-        plot.setBackground("#1f2328")
-        plot.showGrid(x=True, y=True, alpha=0.15)
-        plot.setLabel("bottom", "time")
-        plot.setLabel("left", "price")
-        plot.enableAutoRange(False, False)
-        plot.setXRange(0, 1, padding=0)
-        plot.setYRange(0, 1, padding=0)
-        axis_pen = pg.mkPen("#5b6370")
-        axis_text = pg.mkPen("#c9d1d9")
-        plot.getAxis("bottom").setPen(axis_pen)
-        plot.getAxis("bottom").setTextPen(axis_text)
-        plot.getAxis("left").setPen(axis_pen)
-        plot.getAxis("left").setTextPen(axis_text)
-        layout.addWidget(plot)
-
-        self._candlestick_item = CandlestickItem([])
-        plot.addItem(self._candlestick_item)
-        self._last_price_line = pg.InfiniteLine(
-            angle=0,
-            pen=pg.mkPen("#9ca3af", width=1, style=Qt.DashLine),
-            movable=False,
-        )
-        plot.addItem(self._last_price_line)
-        self._last_price_label = pg.TextItem(color="#e5e7eb", anchor=(0, 0.5))
-        self._last_price_label.setZValue(10)
-        plot.addItem(self._last_price_label)
-        self._chart_plot = plot
-
-        return panel
-
-    def set_candles(self, candles: list[tuple[float, float, float, float, float]]) -> None:
-        self._pending_candles = candles
-
-    def _flush_chart_update(self) -> None:
-        if self._pending_candles is None:
-            return
-        candles = self._pending_candles
-        self._pending_candles = None
-        if not self._candlestick_item or not self._chart_plot:
-            return
-        if self._chart_frozen:
-            return
-        if not candles:
-            if self._chart_ready:
-                self._candlestick_item.setData([])
-                if self._last_price_line:
-                    self._last_price_line.hide()
-                if self._last_price_label:
-                    self._last_price_label.hide()
-            return
-        if not self._chart_ready:
-            self._chart_ready = True
-        self._candlestick_item.setData(candles)
-        self._chart_plot.enableAutoRange(False, False)
-        step_seconds = self._timeframe_minutes() * 60
-        extra_space = step_seconds * 5 if step_seconds > 0 else 0
-        self._chart_plot.setXRange(
-            candles[0][0],
-            candles[-1][0] + extra_space,
-            padding=0.0,
-        )
-        lows = [candle[3] for candle in candles]
-        highs = [candle[2] for candle in candles]
-        min_price = min(lows)
-        max_price = max(highs)
-        if min_price == max_price:
-            pad = max(0.0001, min_price * 0.0001)
-            self._chart_plot.setYRange(min_price - pad, max_price + pad, padding=0.0)
-        else:
-            self._chart_plot.setYRange(min_price, max_price, padding=0.1)
-        last_close = candles[-1][4]
-        if self._last_price_line:
-            self._last_price_line.setValue(last_close)
-            self._last_price_line.show()
-        if self._last_price_label:
-            label = f"{last_close:.{self._price_digits}f}"
-            self._last_price_label.setText(label)
-            step_seconds = self._timeframe_minutes() * 60
-            x_offset = step_seconds if step_seconds > 0 else 0
-            y_offset = (max(highs) - min(lows)) * 0.015 if highs and lows else 0
-            self._last_price_label.setPos(candles[-1][0] + x_offset, last_close + y_offset)
-            self._last_price_label.show()
-
+    # Connection / Account Orchestration
     def _setup_toolbar(self) -> None:
         toolbar = QToolBar("Live toolbar", self)
         toolbar.setMovable(False)
@@ -1897,11 +777,11 @@ class LiveMainWindow(QMainWindow):
         self.oauthError.connect(self._handle_oauth_error)
         self.oauthSuccess.connect(self._handle_oauth_success)
         self.appStateChanged.connect(self._handle_app_state_changed)
-        self.positionsUpdated.connect(self._apply_positions_update)
-        self.accountSummaryUpdated.connect(self._apply_account_summary_update)
+        self.positionsUpdated.connect(self._positions_controller.apply_positions_update)
+        self.accountSummaryUpdated.connect(self._positions_controller.apply_account_summary_update)
         self.historyReceived.connect(self._handle_history_received)
         self.trendbarReceived.connect(self._handle_trendbar_received)
-        self.quoteUpdated.connect(self._handle_quote_updated)
+        self.quoteUpdated.connect(self._quote_controller.handle_quote_updated)
 
     @Slot()
     def _toggle_connection(self) -> None:
@@ -1938,6 +818,7 @@ class LiveMainWindow(QMainWindow):
                     self._schedule_full_reconnect()
                     return
             self._request_recent_history()
+            self._start_history_polling()
             self._ensure_quote_subscription()
             self._request_positions()
             self._refresh_account_balance()
@@ -1952,6 +833,7 @@ class LiveMainWindow(QMainWindow):
             self._pending_history = False
             self._account_switch_in_progress = True
             self._stop_live_trendbar()
+            self._stop_history_polling()
             self._stop_quote_subscription()
             if self._funds_timer.isActive():
                 self._funds_timer.stop()
@@ -2057,12 +939,16 @@ class LiveMainWindow(QMainWindow):
         self._apply_trade_permission(state.selected_account_scope)
         if state.selected_account_id:
             self._request_recent_history()
+            self._start_history_polling()
             self._ensure_quote_subscription()
             self._request_positions()
             self._refresh_account_balance()
             if not self._funds_timer.isActive():
                 self._funds_timer.start()
+        else:
+            self._stop_history_polling()
 
+    # Market Data / Chart Runtime
     def _request_recent_history(self) -> None:
         self._market_data_controller.request_recent_history()
 
@@ -2079,159 +965,96 @@ class LiveMainWindow(QMainWindow):
         self._market_data_controller.handle_trendbar_received(data)
 
     def _update_chart_from_quote(self, symbol_id: int, bid, ask, spot_ts) -> None:
-        self._update_chart_last_price_from_quote(symbol_id, bid, ask)
-        if self._trendbar_active:
-            # While trendbar is active, allow quote to refine only the current
-            # open candle (same bucket) but never create/advance candles.
-            self._update_current_candle_from_quote(symbol_id, bid, ask, spot_ts)
-            return
-        if getattr(self, "_awaiting_history_after_symbol_change", False):
-            return
-        if self._chart_frozen:
-            # If history is unavailable but live quotes are flowing, allow
-            # the chart to bootstrap from quotes so the UI isn't blank.
-            if self._candles:
-                return
-            self._chart_frozen = False
-        if int(symbol_id) != int(self._symbol_id):
-            return
-        digits = self._quote_row_digits.get(int(symbol_id), self._price_digits)
-        bid_val = self._normalize_price(bid, digits=digits)
-        ask_val = self._normalize_price(ask, digits=digits)
-        price = None
-        if bid_val and ask_val:
-            price = (bid_val + ask_val) / 2.0
-        elif bid_val:
-            price = bid_val
-        elif ask_val:
-            price = ask_val
-        if price is None:
-            return
-        ts_val = spot_ts
-        if ts_val is None or ts_val == 0:
-            ts_seconds = int(time.time())
-        else:
-            try:
-                ts_seconds = int(float(ts_val))
-            except (TypeError, ValueError):
-                ts_seconds = int(time.time())
-            if ts_seconds > 10**12:
-                ts_seconds = ts_seconds // 1000
-        step_seconds = self._timeframe_minutes() * 60
-        if step_seconds <= 0:
-            step_seconds = 60
-        bucket = (ts_seconds // step_seconds) * step_seconds
-        price = round(float(price), digits)
-        candle = (bucket, price, price, price, price)
-        if not self._candles:
-            self._candles = [candle]
-            self.set_candles(self._candles)
-            self._flush_chart_update()
-            return
-        last_time = self._candles[-1][0]
-        if bucket == last_time:
-            open_price, high_price, low_price, _ = self._candles[-1][1:5]
-            high_price = max(high_price, price)
-            low_price = min(low_price, price)
-            self._candles[-1] = (bucket, open_price, high_price, low_price, price)
-        elif bucket > last_time:
-            self._fill_missing_candles(candle)
-            self._candles.append(candle)
-            if len(self._candles) > 50:
-                self._candles = self._candles[-50:]
-        else:
-            return
-        self.set_candles(self._candles)
-        self._flush_chart_update()
+        self._chart_coordinator.update_chart_from_quote(symbol_id, bid, ask, spot_ts)
 
     def _update_current_candle_from_quote(self, symbol_id: int, bid, ask, spot_ts) -> None:
-        if int(symbol_id) != int(self._symbol_id):
-            return
-        if not self._candles:
-            return
-        digits = self._quote_row_digits.get(int(symbol_id), self._price_digits)
-        bid_val = self._normalize_price(bid, digits=digits)
-        ask_val = self._normalize_price(ask, digits=digits)
-        price = None
-        if bid_val and ask_val:
-            price = (bid_val + ask_val) / 2.0
-        elif bid_val:
-            price = bid_val
-        elif ask_val:
-            price = ask_val
-        if price is None:
-            return
-        ts_val = spot_ts
-        if ts_val is None or ts_val == 0:
-            ts_seconds = int(time.time())
-        else:
-            try:
-                ts_seconds = int(float(ts_val))
-            except (TypeError, ValueError):
-                ts_seconds = int(time.time())
-            if ts_seconds > 10**12:
-                ts_seconds = ts_seconds // 1000
-        step_seconds = self._timeframe_minutes() * 60
-        if step_seconds <= 0:
-            return
-        bucket = (ts_seconds // step_seconds) * step_seconds
-        now_bucket = (int(time.time()) // step_seconds) * step_seconds
-        if bucket > now_bucket:
-            return
-        last_time = self._candles[-1][0]
-        if bucket < last_time:
-            return
-        price = round(float(price), digits)
-        if bucket > last_time:
-            prev_close = self._candles[-1][4]
-            open_price = prev_close
-            high_price = max(open_price, price)
-            low_price = min(open_price, price)
-            self._candles.append((bucket, open_price, high_price, low_price, price))
-            if len(self._candles) > 50:
-                self._candles = self._candles[-50:]
-            self.set_candles(self._candles)
-            self._flush_chart_update()
-            return
-        open_price, high_price, low_price, _close = self._candles[-1][1:5]
-        high_price = max(high_price, price)
-        low_price = min(low_price, price)
-        self._candles[-1] = (last_time, open_price, high_price, low_price, price)
-        self.set_candles(self._candles)
-        self._flush_chart_update()
+        self._chart_coordinator.update_current_candle_from_quote(symbol_id, bid, ask, spot_ts)
 
     def _update_chart_last_price_from_quote(self, symbol_id: int, bid, ask) -> None:
-        if not self._chart_plot or not self._last_price_line or not self._last_price_label:
-            return
-        if int(symbol_id) != int(self._symbol_id):
-            return
-        digits = self._quote_row_digits.get(int(symbol_id), self._price_digits)
-        bid_val = self._normalize_price(bid, digits=digits)
-        ask_val = self._normalize_price(ask, digits=digits)
-        live_price = None
-        if bid_val and ask_val:
-            live_price = (bid_val + ask_val) / 2.0
-        elif bid_val:
-            live_price = bid_val
-        elif ask_val:
-            live_price = ask_val
-        if live_price is None:
-            return
-        self._last_price_line.setValue(live_price)
-        self._last_price_line.show()
-        label = f"{live_price:.{self._price_digits}f}"
-        self._last_price_label.setText(label)
-        if self._candles:
-            step_seconds = self._timeframe_minutes() * 60
-            x_offset = step_seconds if step_seconds > 0 else 0
-            highs = [candle[2] for candle in self._candles]
-            lows = [candle[3] for candle in self._candles]
-            y_offset = (max(highs) - min(lows)) * 0.015 if highs and lows else 0
-            self._last_price_label.setPos(self._candles[-1][0] + x_offset, live_price + y_offset)
-        self._last_price_label.show()
+        self._chart_coordinator.update_chart_last_price_from_quote(symbol_id, bid, ask)
+
+    def _handle_chart_range_changed(self, *_args) -> None:
+        self._chart_coordinator.handle_chart_range_changed(*_args)
+
+    def _handle_chart_auto_button_clicked(self, *_args) -> None:
+        self._chart_coordinator.handle_chart_auto_button_clicked(*_args)
+
+    def _guard_chart_range(self) -> None:
+        self._chart_coordinator.guard_chart_range()
+
+    def _reapply_chart_window_from_latest(self) -> None:
+        self._chart_coordinator.reapply_chart_window_from_latest()
+
+    @staticmethod
+    def _compute_chart_y_range(candles: list[tuple[float, float, float, float, float]]) -> tuple[float, float]:
+        return LiveChartCoordinator.compute_chart_y_range(candles)
 
     def _handle_trendbar_error(self, error: str) -> None:
         self._market_data_controller.handle_trendbar_error(error)
+
+    # Chart Construction / Updates
+    def _build_chart_panel(self) -> QWidget:
+        panel = QGroupBox("Live Candlestick Chart")
+        layout = QVBoxLayout(panel)
+
+        if pg is None:
+            notice = QLabel("PyQtGraph is not installed. Please install pyqtgraph to view the chart.")
+            notice.setProperty("class", "placeholder")
+            layout.addWidget(notice)
+            return panel
+
+        plot = pg.PlotWidget(axisItems={"bottom": TimeAxisItem(orientation="bottom")})
+        plot.setBackground("#1f2328")
+        plot.showGrid(x=True, y=True, alpha=0.15)
+        plot.setLabel("bottom", "time")
+        plot.setLabel("left", "price")
+        plot.enableAutoRange(False, False)
+        plot.setXRange(0, 1, padding=0)
+        plot.setYRange(0, 1, padding=0)
+        axis_pen = pg.mkPen("#5b6370")
+        axis_text = pg.mkPen("#c9d1d9")
+        plot.getAxis("bottom").setPen(axis_pen)
+        plot.getAxis("bottom").setTextPen(axis_text)
+        plot.getAxis("left").setPen(axis_pen)
+        plot.getAxis("left").setTextPen(axis_text)
+        try:
+            plot_item = plot.getPlotItem()
+            plot.getViewBox().sigRangeChangedFinished.connect(self._handle_chart_range_changed)
+            auto_button = getattr(plot_item, "autoBtn", None)
+            if auto_button is not None and hasattr(auto_button, "clicked"):
+                # Override pyqtgraph default auto-range behavior: it can include
+                # non-candle items and flatten the chart. We fully handle "A"
+                # with our own 50-candle normalization.
+                try:
+                    auto_button.clicked.disconnect(plot_item.autoBtnClicked)
+                except Exception:
+                    pass
+                auto_button.clicked.connect(self._handle_chart_auto_button_clicked)
+        except Exception:
+            pass
+        layout.addWidget(plot)
+
+        self._candlestick_item = CandlestickItem([])
+        plot.addItem(self._candlestick_item)
+        self._last_price_line = pg.InfiniteLine(
+            angle=0,
+            pen=pg.mkPen("#9ca3af", width=1, style=Qt.DashLine),
+            movable=False,
+        )
+        plot.addItem(self._last_price_line)
+        # Anchor on the left so the text grows to the right and stays off candles.
+        self._last_price_label = pg.TextItem(color="#e5e7eb", anchor=(0, 0.5))
+        self._last_price_label.setZValue(10)
+        plot.addItem(self._last_price_label)
+        self._chart_plot = plot
+
+        return panel
+
+    def set_candles(self, candles: list[tuple[float, float, float, float, float]]) -> None:
+        self._chart_coordinator.set_candles(candles)
+
+    def _flush_chart_update(self) -> None:
+        self._chart_coordinator.flush_chart_update()
 
     def _fill_missing_candles(self, next_candle: tuple[float, float, float, float, float]) -> None:
         self._market_data_controller.fill_missing_candles(next_candle)
@@ -2239,6 +1062,7 @@ class LiveMainWindow(QMainWindow):
     def _timeframe_minutes(self) -> int:
         return self._market_data_controller.timeframe_minutes()
 
+    # Symbol Facade
     def _resolve_symbol_id(self, symbol_name: str) -> int:
         return self._symbol_controller.resolve_symbol_id(symbol_name)
 
@@ -2247,9 +1071,6 @@ class LiveMainWindow(QMainWindow):
 
     def _fetch_symbol_details(self, symbol_name: str) -> None:
         self._symbol_controller.fetch_symbol_details(symbol_name)
-
-    def _merge_symbol_details(self, symbols: list[dict]) -> bool:
-        return self._symbol_controller.merge_symbol_details(symbols)
 
     def _load_symbol_catalog(self) -> tuple[list[str], dict[str, int]]:
         return self._symbol_controller.load_symbol_catalog()
@@ -2262,12 +1083,6 @@ class LiveMainWindow(QMainWindow):
 
     def _infer_quote_digits(self, symbol: str) -> int:
         return self._symbol_controller.infer_quote_digits(symbol)
-
-    def _sync_quote_symbols(self, symbol: str) -> None:
-        self._symbol_controller.sync_quote_symbols(symbol)
-
-    def _set_quote_symbols(self, symbols: list[str]) -> None:
-        self._symbol_controller.set_quote_symbols(symbols)
 
     def _rebuild_quotes_table(self) -> None:
         self._symbol_controller.rebuild_quotes_table()
@@ -2289,6 +1104,7 @@ if pg is not None:
             super().__init__()
             self._data = data
             self._picture = QtGui.QPicture()
+            self._bounds = QtCore.QRectF(0.0, 0.0, 1.0, 1.0)
             self._generate_picture()
 
         def setData(self, data: list[tuple[float, float, float, float, float]]) -> None:
@@ -2301,9 +1117,18 @@ if pg is not None:
             self._picture = QtGui.QPicture()
             painter = QtGui.QPainter(self._picture)
             if not self._data:
+                self._bounds = QtCore.QRectF(0.0, 0.0, 1.0, 1.0)
                 painter.end()
                 return
             width = self._infer_half_width()
+            times = [float(point[0]) for point in self._data]
+            lows = [float(point[3]) for point in self._data]
+            highs = [float(point[2]) for point in self._data]
+            min_x = min(times) - width
+            max_x = max(times) + width
+            min_y = min(lows)
+            max_y = max(highs)
+            self._bounds = QtCore.QRectF(min_x, min_y, max(max_x - min_x, 1.0), max(max_y - min_y, 1e-8))
             for time, open_price, high, low, close in self._data:
                 wick_pen = pg.mkPen("#9ca3af", width=1)
                 painter.setPen(wick_pen)
@@ -2341,6 +1166,13 @@ if pg is not None:
             painter.drawPicture(0, 0, self._picture)
 
         def boundingRect(self) -> QtCore.QRectF:
-            if self._picture.isNull():
-                return QtCore.QRectF(0, 0, 1, 1)
-            return QtCore.QRectF(self._picture.boundingRect())
+            return QtCore.QRectF(self._bounds)
+
+        def dataBounds(self, ax: int, frac: float = 1.0, orthoRange=None):
+            if not self._data:
+                return None
+            if ax == 0:
+                return [self._bounds.left(), self._bounds.right()]
+            if ax == 1:
+                return [self._bounds.top(), self._bounds.bottom()]
+            return None

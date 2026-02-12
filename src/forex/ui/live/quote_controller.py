@@ -21,7 +21,7 @@ class LiveQuoteController:
         if not w._service:
             return
         if w._spot_message_handler is None:
-            w._spot_message_handler = w._handle_spot_message
+            w._spot_message_handler = self.handle_spot_message
             w._service.add_message_handler(w._spot_message_handler)
 
     def ensure_quote_subscription(self) -> None:
@@ -133,12 +133,12 @@ class LiveQuoteController:
         row = w._quote_rows.get(symbol_id)
         if row is None:
             return
-        self._set_quote_cell(row, 1, bid)
-        self._set_quote_cell(row, 2, ask)
-        self._set_quote_extras(row, symbol_id, bid, ask, spot_ts)
+        self.set_quote_cell(row, 1, bid)
+        self.set_quote_cell(row, 2, ask)
+        self.set_quote_extras(row, symbol_id, bid, ask, spot_ts)
         w._update_chart_from_quote(symbol_id, bid, ask, spot_ts)
 
-    def _set_quote_cell(self, row: int, column: int, value) -> None:
+    def set_quote_cell(self, row: int, column: int, value) -> None:
         w = self._window
         if not w._quotes_table:
             return
@@ -159,7 +159,7 @@ class LiveQuoteController:
         else:
             item.setText(text)
 
-    def _set_quote_extras(self, row: int, symbol_id: int, bid, ask, spot_ts) -> None:
+    def set_quote_extras(self, row: int, symbol_id: int, bid, ask, spot_ts) -> None:
         w = self._window
         if not w._quotes_table:
             return
@@ -172,8 +172,8 @@ class LiveQuoteController:
             w._quote_last_ask[symbol_id] = ask_val
         time_text = w._format_spot_time(spot_ts)
         if bid_val in (None, 0) or ask_val in (None, 0):
-            self._set_quote_text(row, 3, "--")
-            self._set_quote_text(row, 4, time_text)
+            self.set_quote_text(row, 3, "--")
+            self.set_quote_text(row, 4, time_text)
             return
         mid = (bid_val + ask_val) / 2.0
         w._quote_last_mid[symbol_id] = mid
@@ -181,12 +181,12 @@ class LiveQuoteController:
         digits = w._quote_row_digits.get(symbol_id, w._price_digits)
         spread = ask_val - bid_val
         spread_text = f"{spread:.{digits}f}"
-        self._set_quote_text(row, 3, spread_text)
-        self._set_quote_text(row, 4, time_text)
+        self.set_quote_text(row, 3, spread_text)
+        self.set_quote_text(row, 4, time_text)
         if w._open_positions:
             w._schedule_positions_refresh()
 
-    def _set_quote_text(self, row: int, column: int, text: str) -> None:
+    def set_quote_text(self, row: int, column: int, text: str) -> None:
         w = self._window
         if not w._quotes_table:
             return

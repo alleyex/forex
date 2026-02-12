@@ -27,6 +27,13 @@ def initialize_live_window_state(window) -> None:
     window._auto_peak_balance = None
     window._auto_day_balance = None
     window._auto_day_key = None
+    window._auto_started_ts = 0.0
+    window._auto_last_decision_ts = 0.0
+    window._auto_last_watchdog_warn_ts = 0.0
+    window._auto_last_trendbar_ts = 0.0
+    window._auto_last_resubscribe_ts = 0.0
+    window._auto_order_busy_since = None
+    window._auto_order_busy_warn_ts = 0.0
     window._auto_log_panel = None
     window._positions_table = None
     window._positions_message_handler = None
@@ -67,15 +74,31 @@ def initialize_live_window_state(window) -> None:
     window._pending_candles = None
     window._chart_frozen = True
     window._awaiting_history_after_symbol_change = False
+    window._chart_adjusting_range = False
+    window._chart_data_y_low = None
+    window._chart_data_y_high = None
 
     window._chart_timer = QTimer(window)
     window._chart_timer.setInterval(200)
     window._chart_timer.timeout.connect(window._flush_chart_update)
+    window._chart_timer.timeout.connect(window._guard_chart_range)
     window._chart_timer.start()
+
+    window._history_only_chart_mode = True
+    # Keep quote ticks as display-only by default: they update quote table and
+    # last-price overlay, but must not mutate candle bodies used by auto-trade.
+    window._quote_affects_chart_candles = False
+    window._history_poll_timer = QTimer(window)
+    window._history_poll_timer.setInterval(10000)
+    window._history_poll_timer.timeout.connect(window._history_poll_tick)
 
     window._funds_timer = QTimer(window)
     window._funds_timer.setInterval(5000)
     window._funds_timer.timeout.connect(window._refresh_account_balance)
+
+    window._auto_watchdog_timer = QTimer(window)
+    window._auto_watchdog_timer.setInterval(30000)
+    window._auto_watchdog_timer.timeout.connect(window._auto_watchdog_tick)
 
     window._positions_refresh_timer = QTimer(window)
     window._positions_refresh_timer.setSingleShot(True)

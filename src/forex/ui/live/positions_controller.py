@@ -17,7 +17,7 @@ class LivePositionsController:
         if not w._service:
             return
         if w._positions_message_handler is None:
-            w._positions_message_handler = w._handle_positions_message
+            w._positions_message_handler = self.handle_positions_message
             w._service.add_message_handler(w._positions_message_handler)
 
     def request_positions(self) -> None:
@@ -125,7 +125,6 @@ class LivePositionsController:
                     table.setItem(row, col, item)
                 else:
                     item.setText(str(value))
-
     def schedule_positions_refresh(self) -> None:
         w = self._window
         if w._positions_refresh_pending:
@@ -143,6 +142,11 @@ class LivePositionsController:
     def volume_to_lots(volume_value: float) -> float:
         return volume_value / 10000000.0
 
+    @staticmethod
+    def protocol_volume_to_units(volume_value: float) -> float:
+        # cTrader protocol volume is in 0.01 of a unit.
+        return volume_value / 100.0
+
     def calc_position_pnl(
         self,
         *,
@@ -158,7 +162,7 @@ class LivePositionsController:
         if symbol_id is not None and entry_price is not None and volume is not None:
             try:
                 entry = float(entry_price)
-                vol = float(volume)
+                vol = self.protocol_volume_to_units(float(volume))
             except (TypeError, ValueError):
                 entry = None
                 vol = None
@@ -191,7 +195,7 @@ class LivePositionsController:
                     continue
                 try:
                     if money_digits is not None and isinstance(value, int):
-                        scaled = w._scale_money(value, int(money_digits))
+                        scaled = self.scale_money(value, int(money_digits))
                         return f"{scaled:,.2f}"
                     return f"{float(value):,.2f}"
                 except (TypeError, ValueError):
@@ -200,7 +204,7 @@ class LivePositionsController:
             return "-"
         try:
             entry = float(entry_price)
-            vol = float(volume)
+            vol = self.protocol_volume_to_units(float(volume))
         except (TypeError, ValueError):
             return "-"
         if vol <= 0 or entry <= 0:
@@ -221,3 +225,48 @@ class LivePositionsController:
         else:
             return "-"
         return f"{pnl:,.2f}"
+
+    @staticmethod
+    def scale_money(value: int, digits: int) -> float:
+        if digits <= 0:
+            return float(value)
+        return float(value) / (10**digits)
+
+    @staticmethod
+    def format_money(value: Optional[float], digits: int) -> str:
+        if value is None:
+            return "-"
+        if digits <= 0:
+            return str(int(round(value)))
+        return f"{value:.{digits}f}"
+
+    def update_account_summary(self, snapshot) -> None:
+        w = self._window
+        if not w._account_summary_labels:
+            return
+        money_digits = getattr(snapshot, "money_digits", None)
+        if money_digits is None:
+            money_digits = 2
+        balance = getattr(snapshot, "balance", None)
+        equity = getattr(snapshot, "equity", None)
+        free_margin = getattr(snapshot, "free_margin", None)
+        used_margin = getattr(snapshot, "used_margin", None)
+        margin_level = getattr(snapshot, "margin_level", None)
+        currency = getattr(snapshot, "currency", None) or "-"
+        net_pnl = None
+        if balance is not None and equity is not None:
+            net_pnl = float(equity) - float(balance)
+
+        w._account_summary_labels["balance"].setText(self.format_money(balance, money_digits))
+        w._account_summary_labels["equity"].setText(self.format_money(equity, money_digits))
+        w._account_summary_labels["free_margin"].setText(self.format_money(free_margin, money_digits))
+        w._account_summary_labels["used_margin"].setText(self.format_money(used_margin, money_digits))
+        if margin_level is None:
+            w._account_summary_labels["margin_level"].setText("-")
+        else:
+            w._account_summary_labels["margin_level"].setText(f"{margin_level:.1f}%")
+        w._account_summary_labels["net_pnl"].setText(self.format_money(net_pnl, money_digits))
+        w._account_summary_labels["currency"].setText(str(currency))
+
+    def apply_account_summary_update(self, snapshot: object) -> None:
+        self.update_account_summary(snapshot)

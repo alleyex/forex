@@ -62,3 +62,28 @@ def test_set_trade_timeframe_ignores_same_value() -> None:
 
     assert window.stop_live_trendbar_calls == 0
     assert window.request_recent_history_calls == 0
+
+
+def test_history_lookback_count_by_timeframe() -> None:
+    window = _DummyWindow()
+    controller = LiveMarketDataController(window)
+
+    window._timeframe = "M1"
+    assert controller.history_lookback_count() == 200
+
+    window._timeframe = "M15"
+    assert controller.history_lookback_count() == 240
+
+    window._timeframe = "H1"
+    assert controller.history_lookback_count() == 300
+
+    window._timeframe = "H4"
+    assert controller.history_lookback_count() == 300
+
+
+def test_history_lookback_count_defaults_for_unknown_timeframe() -> None:
+    window = _DummyWindow()
+    controller = LiveMarketDataController(window)
+
+    window._timeframe = "UNKNOWN"
+    assert controller.history_lookback_count() == 200
