@@ -431,9 +431,6 @@ class SimulationPanel(QWidget):
         if self._charts_available:
             self._curve.setData([], [])
 
-    def reset_stream(self) -> None:
-        self.reset_plot()
-
     def append_equity_point(self, step: int, equity: float) -> None:
         self.ingest_equity(step, equity)
 

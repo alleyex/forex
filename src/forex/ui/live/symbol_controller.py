@@ -41,7 +41,6 @@ class LiveSymbolController:
             w._stop_live_trendbar()
             # Clear previous symbol chart immediately to avoid transient mixed-scale spikes.
             w._chart_frozen = True
-            w._awaiting_history_after_symbol_change = True
             w._candles = []
             w.set_candles([])
             w._flush_chart_update()
@@ -51,9 +50,6 @@ class LiveSymbolController:
         w._last_history_success_key = None
         if runtime_ready:
             w._request_recent_history()
-        else:
-            # No authenticated history fetch path yet; allow quote bootstrap.
-            w._awaiting_history_after_symbol_change = False
 
     def fetch_symbol_details(self, symbol_name: str) -> None:
         w = self._window
@@ -239,38 +235,6 @@ class LiveSymbolController:
         if symbol.endswith("JPY"):
             return 3
         return 5
-
-    def sync_quote_symbols(self, symbol: str) -> None:
-        w = self._window
-        next_symbols = [symbol] + [item for item in w._quote_symbols if item != symbol]
-        self.set_quote_symbols(next_symbols[: w._max_quote_rows])
-
-    def set_quote_symbols(self, symbols: list[str]) -> None:
-        w = self._window
-        unique: list[str] = []
-        for symbol in symbols:
-            if symbol and symbol not in unique:
-                unique.append(symbol)
-        if not unique:
-            return
-        if unique == w._quote_symbols:
-            return
-        was_subscribed = w._quote_subscribed
-        if was_subscribed:
-            w._stop_quote_subscription()
-        w._quote_symbols = unique
-        w._quote_symbol_ids = {name: self.resolve_symbol_id(name) for name in w._quote_symbols}
-        w._quote_rows.clear()
-        w._quote_row_digits.clear()
-        w._quote_last_mid.clear()
-        w._quote_subscribed_ids.clear()
-        sync_trade_symbols = getattr(w, "_sync_trade_symbol_choices", None)
-        if callable(sync_trade_symbols):
-            sync_trade_symbols()
-        if w._quotes_table:
-            self.rebuild_quotes_table()
-        if was_subscribed:
-            w._ensure_quote_subscription()
 
     def rebuild_quotes_table(self) -> None:
         w = self._window

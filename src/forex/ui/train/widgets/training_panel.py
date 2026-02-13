@@ -435,7 +435,6 @@ class TrainingParamsPanel(QWidget):
         tabs.addTab(training_tab, "Training")
         tabs.addTab(env_tab, "Environment")
         tabs.addTab(optuna_tab, "Optuna")
-        self._tabs = tabs
         tabs.currentChanged.connect(self._on_tab_changed)
         left_layout.addWidget(tabs)
 
@@ -829,39 +828,6 @@ class TrainingPanel(QWidget):
         self._metrics_selector.setVisible(False)
         self._optuna_selector.setVisible(True)
 
-    def ingest_log_line(self, line: str) -> None:
-        if not self._charts_available:
-            return
-        csv_parsed = self._parse_csv_line(line)
-        if csv_parsed:
-            step, key, value = csv_parsed
-            self._current_step = step
-            if key in self._metric_labels:
-                self._append_point(key, float(step), value)
-            return
-        step = self._parse_int("total_timesteps", line)
-        if step is None:
-            step = self._parse_int("num_timesteps", line)
-        if step is not None:
-            self._current_step = step
-        parsed = self._parse_kv_line(line)
-        if not parsed:
-            return
-        key, value = parsed
-        if key in self._metric_labels:
-            self._append_point(key, float(self._current_step), value)
-
-    def ingest_optuna_log_line(self, line: str) -> None:
-        if not self._charts_available:
-            return
-        parsed = self._parse_optuna_csv_line(line)
-        if not parsed:
-            return
-        trial, trial_value, best_value, duration = parsed
-        self._append_optuna_point("trial_value", trial, trial_value)
-        self._append_optuna_point("best_value", trial, best_value)
-        self._append_optuna_point("duration_sec", trial, duration)
-
     def _append_point(self, key: str, step: float, value: float) -> None:
         data = self._metric_data[key]
         data["x"].append(step)
@@ -880,11 +846,6 @@ class TrainingPanel(QWidget):
         data["y"].append(value)
         if key in self._optuna_curves and key in self._optuna_visible:
             self._optuna_curves[key].setData(list(data["x"]), list(data["y"]))
-
-    def set_optuna_curve_visible(self, key: str, visible: bool) -> None:
-        if not self._charts_available:
-            return
-        self._toggle_optuna_curve(key, visible)
 
     def _toggle_curve(self, key: str, visible: bool) -> None:
         data = self._metric_data[key]

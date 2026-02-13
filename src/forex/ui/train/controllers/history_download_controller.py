@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import time
 from pathlib import Path
 from typing import Optional
 
@@ -40,32 +39,6 @@ class HistoryDownloadController(QObject):
         self._presenter = presenter
         self._download_pipeline: Optional[HistoryDownloadPipeline] = None
         self._dialog: Optional[HistoryDownloadDialog] = None
-
-    def request_quick_download(self, symbol_id: int, *, timeframe: str = "M5") -> None:
-        account_id = self._get_account_id()
-        if account_id is None:
-            return
-
-        pipeline = self._ensure_pipeline()
-        bars_per_day = 24 * 12
-        two_years_bars = 365 * 2 * bars_per_day
-        now_ms = int(time.time() * 1000)
-        from_ts = now_ms - int(two_years_bars * 5 * 60 * 1000)
-
-        reactor_manager.ensure_running()
-        from twisted.internet import reactor
-        reactor.callFromThread(
-            pipeline.fetch_to_raw,
-            account_id,
-            symbol_id,
-            self.DEFAULT_HISTORY_COUNT,
-            timeframe=timeframe,
-            from_ts=from_ts,
-            to_ts=now_ms,
-            on_saved=lambda path: self._presenter.emit_async("history_saved", path=path),
-            on_error=lambda e: self._presenter.emit_async("history_error", error=e),
-            on_log=self._presenter.emit_async_message,
-        )
 
     def open_download_dialog(self, default_symbol_id: int) -> None:
         account_id = self._get_account_id()
@@ -124,22 +97,6 @@ class HistoryDownloadController(QObject):
             output_path=params["output_path"],
             on_saved=lambda path: self._presenter.emit_async("history_saved", path=path),
             on_error=lambda e: self._presenter.emit_async("history_error", error=e),
-            on_log=self._presenter.emit_async_message,
-        )
-
-    def request_symbol_list(self) -> None:
-        account_id = self._get_account_id()
-        if account_id is None:
-            return
-
-        self._presenter.emit("symbol_list_fetching")
-        self._use_cases.fetch_symbols(
-            app_auth_service=self._app_auth_service,
-            account_id=account_id,
-            on_symbols_received=lambda symbols: QTimer.singleShot(
-                0, self, lambda: self._save_symbol_list(account_id, symbols)
-            ),
-            on_error=lambda e: self._presenter.emit_async("symbol_list_error", error=e),
             on_log=self._presenter.emit_async_message,
         )
 

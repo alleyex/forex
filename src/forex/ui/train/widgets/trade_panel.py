@@ -4,7 +4,7 @@ from __future__ import annotations
 from datetime import datetime, timezone
 from typing import Optional
 
-from PySide6.QtCore import Qt, Signal
+from PySide6.QtCore import Qt
 from PySide6.QtWidgets import (
     QFormLayout,
     QFrame,
@@ -19,11 +19,6 @@ from forex.domain.accounts import Account, AccountFundsSnapshot
 
 
 class TradePanel(QWidget):
-    trendbar_toggle_requested = Signal()
-    history_download_requested = Signal()
-    account_info_requested = Signal()
-    symbol_list_requested = Signal()
-
     def __init__(self) -> None:
         super().__init__()
         self._field_labels: dict[str, QLabel] = {}
@@ -387,9 +382,6 @@ class TradePanel(QWidget):
             "swap_rollover_3days",
             self._format_enum(symbol.get("swap_rollover_3days"), _DAYS_OF_WEEK),
         )
-
-    def set_trendbar_active(self, active: bool) -> None:
-        return
 
     def resizeEvent(self, event) -> None:
         super().resizeEvent(event)

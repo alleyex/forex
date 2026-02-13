@@ -98,7 +98,6 @@ class LiveMarketDataController:
 
         def handle_error(error: str) -> None:
             w._history_requested = False
-            w._awaiting_history_after_symbol_change = False
             w.logRequested.emit(f"❌ History error: {error}")
 
         w._history_service.set_callbacks(
@@ -128,7 +127,6 @@ class LiveMarketDataController:
         if not rows:
             w.logRequested.emit("⚠️ No candle data received")
             w._history_requested = False
-            w._awaiting_history_after_symbol_change = False
             return
         digits = w._price_digits
         step_seconds = max(60, self.timeframe_minutes() * 60)
@@ -165,7 +163,6 @@ class LiveMarketDataController:
         w._flush_chart_update()
         w.logRequested.emit(f"✅ Loaded {len(candles)} candles")
         w._history_requested = False
-        w._awaiting_history_after_symbol_change = False
         if w._app_state and w._app_state.selected_account_id:
             key = (
                 int(w._app_state.selected_account_id),

@@ -274,13 +274,6 @@ class MainWindow(QMainWindow):
         self._connection_presenter.refresh_status_labels()
 
     @Slot()
-    def _on_trendbar_toggle_requested(self) -> None:
-        controller = self._get_trendbar_controller()
-        if controller is None:
-            return
-        controller.toggle(self._trendbar_symbol_id)
-
-    @Slot()
     def _on_train_ppo_clicked(self) -> None:
         self._show_panel("training", show_log=True)
 
@@ -315,15 +308,6 @@ class MainWindow(QMainWindow):
         controller.stop()
 
     @Slot()
-    def _on_history_download_requested(self) -> None:
-        if not self._ensure_account_info_connection():
-            return
-        controller = self._get_history_download_controller()
-        if controller is None:
-            return
-        controller.request_quick_download(self._trendbar_symbol_id, timeframe="M5")
-
-    @Slot()
     def _open_history_download_dialog(self) -> None:
         if not self._ensure_account_info_connection():
             return
@@ -335,12 +319,6 @@ class MainWindow(QMainWindow):
     @Slot()
     def _open_data_check_dialog(self) -> None:
         self._show_panel("data_check", show_log=None)
-
-    def _on_symbol_list_requested(self) -> None:
-        controller = self._get_history_download_controller()
-        if controller is None:
-            return
-        controller.request_symbol_list()
 
     def _get_history_download_controller(self) -> Optional[HistoryDownloadController]:
         if not self._use_cases:

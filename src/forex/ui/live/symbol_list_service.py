@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import json
 from typing import Optional
 
 from PySide6.QtCore import QMetaObject, Qt, QThread, Slot
@@ -12,39 +11,6 @@ class LiveSymbolListService:
 
     def __init__(self, window) -> None:
         self._window = window
-
-    def refresh_symbol_list(self) -> None:
-        w = self._window
-        if not w._service or not w._app_state or not w._app_state.selected_account_id:
-            w._auto_log("⚠️ Account not ready; cannot refresh symbol list.")
-            return
-        try:
-            if w._symbol_list_uc is None:
-                w._symbol_list_uc = w._use_cases.create_symbol_list(w._service)
-            if getattr(w._symbol_list_uc, "in_progress", False):
-                return
-        except Exception:
-            return
-
-        account_id = int(w._app_state.selected_account_id)
-
-        def _on_symbols(symbols: list) -> None:
-            if not symbols:
-                self.queue_symbol_list_apply(symbols)
-                return
-            path = w._symbol_list_path()
-            try:
-                path.write_text(json.dumps(symbols, ensure_ascii=True, indent=2), encoding="utf-8")
-            except Exception as exc:
-                w.logRequested.emit(f"⚠️ Failed to write symbol list: {exc}")
-            self.queue_symbol_list_apply(symbols)
-
-        w._symbol_list_uc.set_callbacks(
-            on_symbols_received=_on_symbols,
-            on_error=lambda e: w._auto_log(f"❌ Symbol list error: {e}"),
-            on_log=w._auto_log,
-        )
-        w._symbol_list_uc.fetch(account_id)
 
     def queue_symbol_list_apply(self, symbols: list) -> None:
         w = self._window
@@ -117,4 +83,3 @@ class LiveSymbolListService:
         if target and target != w._symbol_name:
             w._symbol_name = target
             w._symbol_id = w._resolve_symbol_id(target)
-

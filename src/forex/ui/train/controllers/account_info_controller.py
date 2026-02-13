@@ -28,9 +28,6 @@ class AccountInfoController(QObject):
         self._use_cases = use_cases
         self._service = service
 
-    def set_use_cases(self, use_cases: Optional[BrokerUseCases]) -> None:
-        self._use_cases = use_cases
-
     def set_service(self, service: Optional[AppAuthServiceLike]) -> None:
         self._service = service
 

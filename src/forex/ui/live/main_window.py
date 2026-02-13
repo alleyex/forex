@@ -18,10 +18,8 @@ from PySide6.QtWidgets import (
     QGridLayout,
     QSplitter,
     QTableWidget,
-    QToolButton,
     QToolBar,
     QSizePolicy,
-    QStyle,
     QVBoxLayout,
     QWidget,
     QApplication,
@@ -260,15 +258,6 @@ class LiveMainWindow(QMainWindow):
         account_combo.setVisible(False)
         self._account_combo = account_combo
 
-        refresh_button = QToolButton()
-        refresh_button.setObjectName("accountRefresh")
-        refresh_button.setAutoRaise(True)
-        refresh_button.setIcon(self.style().standardIcon(QStyle.SP_BrowserReload))
-        refresh_button.setToolTip("Refresh accounts")
-        refresh_button.clicked.connect(self._refresh_accounts)
-        refresh_button.setVisible(False)
-        self._account_refresh_button = refresh_button
-
         summary = QFrame()
         summary.setObjectName("accountSummary")
         summary_layout = QGridLayout(summary)
@@ -455,12 +444,6 @@ class LiveMainWindow(QMainWindow):
         return self._ui_builder.build_autotrade_panel()
 
     # Layout Coordination
-    def _init_splitter_sizes(self, splitter: QSplitter) -> None:
-        self._layout_coordinator.init_splitter_sizes(splitter)
-
-    def _sync_field_widths(self) -> None:
-        self._layout_coordinator.sync_field_widths()
-
     def resizeEvent(self, event) -> None:
         super().resizeEvent(event)
         if not getattr(self, "_panel_alignment_done", False):
@@ -468,26 +451,14 @@ class LiveMainWindow(QMainWindow):
         if getattr(self, "_main_splitter_done", False):
             self._apply_main_splitter_sizes()
 
-    def _sync_top_splitter_sizes(self) -> None:
-        self._layout_coordinator.sync_top_splitter_sizes()
-
-    def _sync_bottom_splitter_sizes(self) -> None:
-        self._layout_coordinator.sync_bottom_splitter_sizes()
-
     def _align_panels_at_startup(self) -> None:
         self._layout_coordinator.align_panels_at_startup()
 
     def _init_main_splitter_sizes(self) -> None:
         self._layout_coordinator.init_main_splitter_sizes()
 
-    def _bottom_preferred_height(self) -> int:
-        return self._layout_coordinator.bottom_preferred_height()
-
     def _apply_main_splitter_sizes(self) -> None:
         self._layout_coordinator.apply_main_splitter_sizes()
-
-    def _init_bottom_splitter_sizes(self, splitter: QSplitter) -> None:
-        self._layout_coordinator.init_bottom_splitter_sizes(splitter)
 
     # Model Path Helpers
     def _browse_model_file(self) -> None:
@@ -533,9 +504,6 @@ class LiveMainWindow(QMainWindow):
         return relative.as_posix()
 
     # Auto Trade Logging / Debug
-    def _infer_auto_log_level(self, message: str) -> str:
-        return self._auto_log_service.infer_level(message)
-
     def _auto_log(self, message: str, *, level: Optional[str] = None) -> None:
         self._auto_log_service.emit(message, level=level)
 
@@ -586,9 +554,6 @@ class LiveMainWindow(QMainWindow):
 
     def _ensure_order_service(self) -> None:
         self._auto_runtime_service.ensure_order_service()
-
-    def _handle_order_execution(self, payload: dict) -> None:
-        self._auto_runtime_service.handle_order_execution(payload)
 
     def _handle_trade_timeframe_changed(self, timeframe: str) -> None:
         self._market_data_controller.set_trade_timeframe(timeframe)
@@ -657,18 +622,9 @@ class LiveMainWindow(QMainWindow):
         if self._is_broker_runtime_ready():
             self._session_orchestrator.try_resume_runtime_loops(reason="trade_permission_updated")
 
-    def _refresh_symbol_list(self) -> None:
-        self._symbol_list_service.refresh_symbol_list()
-
-    def _queue_symbol_list_apply(self, symbols: list) -> None:
-        self._symbol_list_service.queue_symbol_list_apply(symbols)
-
     @Slot()
     def _apply_symbol_list_update(self) -> None:
         self._symbol_list_service.apply_symbol_list_update()
-
-    def _trade_symbol_choices(self) -> list[str]:
-        return self._symbol_list_service.trade_symbol_choices()
 
     def _sync_trade_symbol_choices(self, preferred_symbol: Optional[str] = None) -> None:
         self._symbol_list_service.sync_trade_symbol_choices(preferred_symbol=preferred_symbol)
@@ -678,12 +634,6 @@ class LiveMainWindow(QMainWindow):
 
     def _setup_autotrade_persistence(self) -> None:
         self._auto_settings_persistence.setup()
-
-    def _save_autotrade_settings(self) -> None:
-        self._auto_settings_persistence.save()
-
-    def _load_autotrade_settings(self) -> None:
-        self._auto_settings_persistence.load()
 
     # Auto Trade Hooks Used by Controllers/Services
     def _run_auto_trade_on_close(self) -> None:
@@ -758,9 +708,6 @@ class LiveMainWindow(QMainWindow):
 
     def _is_broker_runtime_ready(self) -> bool:
         return self._session_orchestrator.broker_runtime_ready()
-
-    def _suspend_runtime_loops(self) -> None:
-        self._session_orchestrator.suspend_runtime_loops()
 
     def _update_reconnect_status(self, *, reason: str = "status_refresh") -> None:
         # Keep reconnect phase state machine updated, but hide status text in UI.
@@ -887,24 +834,6 @@ class LiveMainWindow(QMainWindow):
 
     def _handle_account_combo_changed(self, index: int) -> None:
         self._account_controller.handle_account_combo_changed(index)
-
-    def _apply_selected_account(
-        self,
-        account_id: int,
-        *,
-        save_token: bool,
-        log: bool,
-        user_initiated: bool,
-    ) -> None:
-        self._account_controller.apply_selected_account(
-            account_id,
-            save_token=save_token,
-            log=log,
-            user_initiated=user_initiated,
-        )
-
-    def _resolve_account_scope(self, account_id: int) -> Optional[int]:
-        return self._account_controller.resolve_account_scope(account_id)
 
     def _sync_account_combo(self, account_id: Optional[int]) -> None:
         self._account_controller.sync_account_combo(account_id)
@@ -1083,12 +1012,6 @@ class LiveMainWindow(QMainWindow):
     def _update_chart_from_quote(self, symbol_id: int, bid, ask, spot_ts) -> None:
         self._chart_coordinator.update_chart_from_quote(symbol_id, bid, ask, spot_ts)
 
-    def _update_current_candle_from_quote(self, symbol_id: int, bid, ask, spot_ts) -> None:
-        self._chart_coordinator.update_current_candle_from_quote(symbol_id, bid, ask, spot_ts)
-
-    def _update_chart_last_price_from_quote(self, symbol_id: int, bid, ask) -> None:
-        self._chart_coordinator.update_chart_last_price_from_quote(symbol_id, bid, ask)
-
     def _handle_chart_range_changed(self, *_args) -> None:
         self._chart_coordinator.handle_chart_range_changed(*_args)
 
@@ -1097,16 +1020,6 @@ class LiveMainWindow(QMainWindow):
 
     def _guard_chart_range(self) -> None:
         self._chart_coordinator.guard_chart_range()
-
-    def _reapply_chart_window_from_latest(self) -> None:
-        self._chart_coordinator.reapply_chart_window_from_latest()
-
-    @staticmethod
-    def _compute_chart_y_range(candles: list[tuple[float, float, float, float, float]]) -> tuple[float, float]:
-        return LiveChartCoordinator.compute_chart_y_range(candles)
-
-    def _handle_trendbar_error(self, error: str) -> None:
-        self._market_data_controller.handle_trendbar_error(error)
 
     # Chart Construction / Updates
     def _build_chart_panel(self) -> QWidget:
@@ -1171,9 +1084,6 @@ class LiveMainWindow(QMainWindow):
 
     def _flush_chart_update(self) -> None:
         self._chart_coordinator.flush_chart_update()
-
-    def _fill_missing_candles(self, next_candle: tuple[float, float, float, float, float]) -> None:
-        self._market_data_controller.fill_missing_candles(next_candle)
 
     def _timeframe_minutes(self) -> int:
         return self._market_data_controller.timeframe_minutes()

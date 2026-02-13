@@ -43,7 +43,6 @@ def initialize_live_window_state(window) -> None:
     window._position_pnl_by_id = {}
     window._accounts = []
     window._account_combo = None
-    window._account_refresh_button = None
     window._account_switch_in_progress = False
     window._last_authorized_account_id = None
     window._unauthorized_accounts = set()
@@ -79,7 +78,6 @@ def initialize_live_window_state(window) -> None:
     window._chart_ready = False
     window._pending_candles = None
     window._chart_frozen = True
-    window._awaiting_history_after_symbol_change = False
     window._chart_adjusting_range = False
     window._chart_data_y_low = None
     window._chart_data_y_high = None
