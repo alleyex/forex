@@ -663,7 +663,7 @@ class LiveMainWindow(QMainWindow):
         self._last_history_request_key = None
         self._last_history_success_key = None
         self._stop_live_trendbar()
-        if self._oauth_service and getattr(self._oauth_service, "status", 0) >= ConnectionStatus.ACCOUNT_AUTHENTICATED:
+        if self._is_broker_runtime_ready():
             self._request_recent_history()
 
     def _refresh_symbol_list(self) -> None:
@@ -762,8 +762,53 @@ class LiveMainWindow(QMainWindow):
         status_bar = self.statusBar()
         self._app_auth_label = QLabel(format_app_auth_status(None))
         self._oauth_label = QLabel(format_oauth_status(None))
+        self._reconnect_label = QLabel("Reconnect: Idle")
         status_bar.addWidget(self._app_auth_label)
         status_bar.addWidget(self._oauth_label)
+        status_bar.addWidget(self._reconnect_label)
+        self._update_reconnect_status()
+
+    def _is_broker_runtime_ready(self) -> bool:
+        if getattr(self, "_account_authorization_blocked", False):
+            return False
+        app_status = int(getattr(self._service, "status", 0) or 0)
+        oauth_status = int(getattr(self._oauth_service, "status", 0) or 0)
+        return (
+            app_status >= int(ConnectionStatus.APP_AUTHENTICATED)
+            and oauth_status >= int(ConnectionStatus.ACCOUNT_AUTHENTICATED)
+        )
+
+    def _suspend_runtime_loops(self) -> None:
+        self._auto_enabled = False
+        self._chart_frozen = True
+        self._pending_candles = None
+        self._history_requested = False
+        self._pending_history = False
+        self._account_switch_in_progress = True
+        self._stop_live_trendbar()
+        self._stop_history_polling()
+        self._stop_quote_subscription()
+        if self._funds_timer.isActive():
+            self._funds_timer.stop()
+        if self._auto_trade_toggle and self._auto_trade_toggle.isChecked():
+            self._auto_trade_toggle.setChecked(False)
+
+    def _update_reconnect_status(self) -> None:
+        app_status = int(getattr(self._service, "status", 0) or 0)
+        oauth_status = int(getattr(self._oauth_service, "status", 0) or 0)
+        if getattr(self, "_account_authorization_blocked", False):
+            text = "Reconnect: Lockout (Unauthorized account)"
+        elif app_status == int(ConnectionStatus.CONNECTING):
+            text = "Reconnect: Connecting"
+        elif app_status < int(ConnectionStatus.CONNECTED):
+            text = "Reconnect: Disconnected"
+        elif app_status < int(ConnectionStatus.APP_AUTHENTICATED):
+            text = "Reconnect: App Auth"
+        elif oauth_status < int(ConnectionStatus.ACCOUNT_AUTHENTICATED):
+            text = "Reconnect: OAuth / Account Auth"
+        else:
+            text = "Reconnect: Ready"
+        self._reconnect_label.setText(text)
 
     def _setup_connection_controller(self) -> None:
         controller = ConnectionController(
@@ -797,6 +842,13 @@ class LiveMainWindow(QMainWindow):
     @Slot(str)
     def _on_log_requested(self, _message: str) -> None:
         self._ui_diag_log_total += 1
+        message = str(_message or "")
+        if self._is_not_authorized_message(message):
+            now = time.time()
+            # Throttle lockout trigger for bursts of identical broker errors.
+            if now - float(getattr(self, "_last_auth_error_log_ts", 0.0)) >= 1.0:
+                self._last_auth_error_log_ts = now
+                self._enter_account_authorization_lockout()
 
     @Slot()
     def _toggle_connection(self) -> None:
@@ -808,12 +860,35 @@ class LiveMainWindow(QMainWindow):
     @Slot(int)
     def _handle_app_auth_status(self, status: int) -> None:
         self._app_auth_label.setText(format_app_auth_status(ConnectionStatus(status)))
+        if int(status) < int(ConnectionStatus.APP_AUTHENTICATED):
+            oauth = self._oauth_service
+            if oauth is not None and int(getattr(oauth, "status", 0) or 0) != int(ConnectionStatus.DISCONNECTED):
+                try:
+                    oauth.disconnect()
+                except Exception:
+                    pass
+            self._oauth_label.setText("OAuth 狀態: ⏳ 等待 App 認證")
+            self._suspend_runtime_loops()
+        elif self._oauth_service:
+            oauth_status = int(getattr(self._oauth_service, "status", 0) or 0)
+            self._oauth_label.setText(format_oauth_status(ConnectionStatus(oauth_status)))
+            if oauth_status < int(ConnectionStatus.ACCOUNT_AUTHENTICATED):
+                try:
+                    self._oauth_service.connect()
+                except Exception as exc:
+                    self.logRequested.emit(f"⚠️ OAuth reconnect failed: {exc}")
+        self._update_reconnect_status()
 
     @Slot(int)
     def _handle_oauth_status(self, status: int) -> None:
         self._oauth_label.setText(format_oauth_status(ConnectionStatus(status)))
         self.logRequested.emit(f"ℹ️ OAuth status -> {ConnectionStatus(status).name}")
+        if int(getattr(self._service, "status", 0) or 0) < int(ConnectionStatus.APP_AUTHENTICATED):
+            self._account_switch_in_progress = True
+            self._update_reconnect_status()
+            return
         if status >= ConnectionStatus.ACCOUNT_AUTHENTICATED:
+            self._account_authorization_blocked = False
             last_auth_id = getattr(self._oauth_service, "last_authenticated_account_id", None)
             if last_auth_id is not None:
                 self._last_authorized_account_id = int(last_auth_id)
@@ -840,18 +915,8 @@ class LiveMainWindow(QMainWindow):
             if not self._funds_timer.isActive():
                 self._funds_timer.start()
         else:
-            self._auto_enabled = False
-            self._auto_trade_toggle.setChecked(False)
-            self._chart_frozen = True
-            self._pending_candles = None
-            self._history_requested = False
-            self._pending_history = False
-            self._account_switch_in_progress = True
-            self._stop_live_trendbar()
-            self._stop_history_polling()
-            self._stop_quote_subscription()
-            if self._funds_timer.isActive():
-                self._funds_timer.stop()
+            self._suspend_runtime_loops()
+        self._update_reconnect_status()
 
     def _handle_oauth_success(self, tokens: OAuthTokens) -> None:
         if tokens and tokens.account_id:
@@ -862,6 +927,7 @@ class LiveMainWindow(QMainWindow):
         message = str(error)
         self.logRequested.emit(message)
         if "Trading account is not authorized" not in message:
+            self._update_reconnect_status()
             return
         token_account = getattr(getattr(self._oauth_service, "tokens", None), "account_id", None)
         if token_account:
@@ -871,8 +937,45 @@ class LiveMainWindow(QMainWindow):
                 pass
         self._account_switch_in_progress = False
         self.logRequested.emit("⚠️ Selected account is not authorized for Open API.")
+        self._enter_account_authorization_lockout()
+        self._update_reconnect_status()
         if self._last_authorized_account_id and token_account and int(token_account) != int(self._last_authorized_account_id):
             self.logRequested.emit("ℹ️ 帳戶未授權，請切回可用帳戶並手動重新連線")
+
+    @staticmethod
+    def _is_not_authorized_message(message: str) -> bool:
+        lower = str(message or "").lower()
+        return "trading account is not authorized" in lower
+
+    def _enter_account_authorization_lockout(self) -> None:
+        now = time.time()
+        if self._account_authorization_blocked and now - self._last_auth_block_log_ts < 30.0:
+            return
+        self._account_authorization_blocked = True
+        self._last_auth_block_log_ts = now
+        self._account_switch_in_progress = True
+
+        # Stop repeating network loops immediately to avoid timeout/error spam.
+        self._history_requested = False
+        self._pending_history = False
+        self._last_history_request_key = None
+        self._last_history_success_key = None
+        self._trendbar_active = False
+        self._quote_subscribed = False
+        self._quote_subscribed_ids.clear()
+        self._quote_subscribe_inflight.clear()
+        self._stop_history_polling()
+        if self._funds_timer and self._funds_timer.isActive():
+            self._funds_timer.stop()
+        if self._auto_watchdog_timer and self._auto_watchdog_timer.isActive():
+            self._auto_watchdog_timer.stop()
+        if self._auto_enabled and self._auto_trade_toggle and self._auto_trade_toggle.isChecked():
+            self._auto_trade_toggle.setChecked(False)
+        self.logRequested.emit(
+            "⛔ Authorization lockout: stopped funds/history/trendbar loops. "
+            "Please switch to an authorized account and reconnect."
+        )
+        self._update_reconnect_status()
 
     def _load_tokens_for_accounts(self) -> Optional[OAuthTokens]:
         try:
@@ -937,10 +1040,21 @@ class LiveMainWindow(QMainWindow):
         QTimer.singleShot(500, _do_reconnect)
 
     def _handle_app_state_changed(self, state: AppState) -> None:
+        app_status = int(getattr(self._service, "status", 0) or 0)
+        if app_status < ConnectionStatus.APP_AUTHENTICATED:
+            self._account_switch_in_progress = True
+            now = time.time()
+            if now - float(getattr(self, "_last_oauth_not_ready_log_ts", 0.0)) >= 10.0:
+                self._last_oauth_not_ready_log_ts = now
+                self.logRequested.emit("⏳ AppState change ignored: App auth not authenticated yet")
+            return
         oauth_status = int(getattr(self._oauth_service, "status", 0) or 0)
         if oauth_status < ConnectionStatus.ACCOUNT_AUTHENTICATED:
             self._account_switch_in_progress = True
-            self.logRequested.emit("⏳ AppState change ignored: OAuth not authenticated yet")
+            now = time.time()
+            if now - float(getattr(self, "_last_oauth_not_ready_log_ts", 0.0)) >= 10.0:
+                self._last_oauth_not_ready_log_ts = now
+                self.logRequested.emit("⏳ AppState change ignored: OAuth not authenticated yet")
             return
         if state.selected_account_id and self._oauth_service:
             last_auth_id = getattr(self._oauth_service, "last_authenticated_account_id", None)

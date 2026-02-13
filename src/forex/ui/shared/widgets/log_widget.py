@@ -2,6 +2,7 @@
 可重用的日誌顯示元件
 """
 from datetime import datetime
+import time
 import re
 from PySide6.QtCore import Qt, Signal, Slot, QThread
 from PySide6.QtGui import QAction, QColor, QFontDatabase, QIcon, QTextCharFormat, QSyntaxHighlighter
@@ -115,6 +116,11 @@ class LogWidget(QWidget):
         self._unhandled_type_pattern = re.compile(r"未處理的訊息類型[:：]\s*(\d+)")
         self._error_invalid_pattern = re.compile(r"錯誤\s+INVALID_REQUEST[:：]\s*(.+)", re.IGNORECASE)
         self._current_filter = "全部"
+        self._repeat_suppression_window_s = 5.0
+        self._last_entry_text = ""
+        self._last_entry_ts = 0.0
+        self._last_repeat_notice_ts = 0.0
+        self._repeat_suppressed_count = 0
         self._setup_ui(title)
         self.appendRequested.connect(self._append_on_ui_thread, Qt.QueuedConnection)
     
@@ -289,6 +295,8 @@ class LogWidget(QWidget):
         if self._with_timestamp:
             ts = datetime.now().strftime("%H:%M:%S")
             message = format_timestamped_message(message, ts)
+        if self._should_suppress_repeated_message(message):
+            return
         level = self._extract_level(message)
         self._entries.append((level, message))
         refresh_required = False
@@ -302,9 +310,33 @@ class LogWidget(QWidget):
         if current_filter == "全部" or current_filter == level:
             self._append_to_view(message)
 
+    def _should_suppress_repeated_message(self, message: str) -> bool:
+        now = time.time()
+        same_as_last = message == self._last_entry_text
+        within_window = (now - self._last_entry_ts) <= self._repeat_suppression_window_s
+        self._last_entry_text = message
+        self._last_entry_ts = now
+        if not (same_as_last and within_window):
+            return False
+        self._repeat_suppressed_count += 1
+        # Emit an occasional summary line instead of flooding identical rows.
+        if now - self._last_repeat_notice_ts >= self._repeat_suppression_window_s:
+            self._last_repeat_notice_ts = now
+            summary = f"[INFO] repeated_message_suppressed | count={self._repeat_suppressed_count}"
+            self._entries.append(("INFO", summary))
+            if len(self._entries) > self._max_entries:
+                self._entries = self._entries[-self._max_entries :]
+            if self._current_filter == "全部" or self._current_filter == "INFO":
+                self._append_to_view(summary)
+        return True
+
     def clear_logs(self) -> None:
         """清除所有日誌"""
         self._entries.clear()
+        self._last_entry_text = ""
+        self._last_entry_ts = 0.0
+        self._last_repeat_notice_ts = 0.0
+        self._repeat_suppressed_count = 0
         self._text_edit.clear()
 
     def _extract_level(self, message: str) -> str:

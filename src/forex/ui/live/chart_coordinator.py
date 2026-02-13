@@ -5,9 +5,6 @@ import time
 
 from PySide6.QtCore import QTimer
 
-from forex.config.constants import ConnectionStatus
-
-
 class LiveChartCoordinator:
     """Encapsulates live chart update and range-control behavior."""
 
@@ -16,29 +13,21 @@ class LiveChartCoordinator:
 
     def set_quote_chart_mode(self, enabled: bool) -> None:
         w = self._window
+        ready_fn = getattr(w, "_is_broker_runtime_ready", None)
+        runtime_ready = bool(ready_fn()) if callable(ready_fn) else True
         enabled = bool(enabled)
         w._quote_affects_chart_candles = enabled
         w._history_only_chart_mode = not enabled
         if enabled:
             w._auto_log("ℹ️ Quote-candle mode enabled (chart candles can be refined by live feed).")
             w._stop_history_polling()
-            if (
-                w._oauth_service
-                and getattr(w._oauth_service, "status", 0) >= ConnectionStatus.ACCOUNT_AUTHENTICATED
-                and w._app_state
-                and w._app_state.selected_account_id
-            ):
+            if runtime_ready and w._app_state and w._app_state.selected_account_id:
                 w._request_recent_history()
                 w._start_live_trendbar()
         else:
             w._auto_log("ℹ️ History-only chart mode enabled (recommended for stable model input).")
             w._stop_live_trendbar()
-            if (
-                w._oauth_service
-                and getattr(w._oauth_service, "status", 0) >= ConnectionStatus.ACCOUNT_AUTHENTICATED
-                and w._app_state
-                and w._app_state.selected_account_id
-            ):
+            if runtime_ready and w._app_state and w._app_state.selected_account_id:
                 w._request_recent_history()
                 w._start_history_polling()
 
@@ -214,6 +203,11 @@ class LiveChartCoordinator:
                 w._candles = w._candles[-50:]
             self.set_candles(w._candles)
             self.flush_chart_update()
+            # In quote-candle mode, quote ticks can advance to a new time bucket
+            # before trendbar append is observed. Trigger one decision cycle on
+            # bucket rollover so auto-trade does not go "quiet" spuriously.
+            if getattr(w, "_auto_enabled", False):
+                w._run_auto_trade_on_close()
             return
         open_price, high_price, low_price, _close = w._candles[-1][1:5]
         high_price = max(high_price, price)
@@ -372,4 +366,3 @@ class LiveChartCoordinator:
             y_low -= pad
             y_high += pad
         return y_low, y_high
-

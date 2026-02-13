@@ -4,6 +4,7 @@ import time
 from datetime import datetime
 from typing import Optional
 
+from forex.config.constants import ConnectionStatus
 from forex.config.paths import TOKEN_FILE
 
 
@@ -13,6 +14,12 @@ class LiveAccountController:
 
     def refresh_account_balance(self) -> None:
         w = self._window
+        if getattr(w, "_account_authorization_blocked", False):
+            return
+        if not w._service or int(getattr(w._service, "status", 0) or 0) < int(ConnectionStatus.APP_AUTHENTICATED):
+            return
+        if not w._oauth_service or int(getattr(w._oauth_service, "status", 0) or 0) < int(ConnectionStatus.ACCOUNT_AUTHENTICATED):
+            return
         if w._account_switch_in_progress:
             return
         if not w._service or not w._app_state or not w._app_state.selected_account_id:

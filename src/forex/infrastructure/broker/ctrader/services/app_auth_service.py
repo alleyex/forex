@@ -27,6 +27,7 @@ from forex.infrastructure.broker.ctrader.services.message_helpers import (
     is_non_subscribed_trendbar_unsubscribe,
 )
 from forex.utils.metrics import metrics
+from forex.utils.reactor_manager import reactor_manager
 
 
 @dataclass
@@ -66,6 +67,7 @@ class AppAuthService(CTraderAuthServiceBase[AppAuthServiceCallbacks, AppAuthMess
         port: int,
         heartbeat_interval: float = 10.0,
         heartbeat_timeout: float = 30.0,
+        connect_timeout: float = 20.0,
         reconnect_delay: float = 3.0,
         auto_reconnect: bool = True,
         heartbeat_log_interval: float = 60.0,
@@ -79,6 +81,9 @@ class AppAuthService(CTraderAuthServiceBase[AppAuthServiceCallbacks, AppAuthMess
         self._raw_client_send = None
         self._heartbeat_interval = heartbeat_interval
         self._heartbeat_timeout = heartbeat_timeout
+        self._connect_timeout = connect_timeout
+        self._connect_started_ts: Optional[float] = None
+        self._connect_watchdog_timer: Optional[threading.Timer] = None
         self._heartbeat_stop = threading.Event()
         self._heartbeat_thread: Optional[threading.Thread] = None
         self._last_message_ts: Optional[float] = None
@@ -114,6 +119,7 @@ class AppAuthService(CTraderAuthServiceBase[AppAuthServiceCallbacks, AppAuthMess
             port=EndPoints.PROTOBUF_PORT,
             heartbeat_interval=runtime.heartbeat_interval,
             heartbeat_timeout=runtime.heartbeat_timeout,
+            connect_timeout=max(10.0, runtime.heartbeat_timeout),
             reconnect_delay=runtime.reconnect_delay,
             auto_reconnect=runtime.auto_reconnect,
             heartbeat_log_interval=runtime.heartbeat_log_interval,
@@ -161,6 +167,8 @@ class AppAuthService(CTraderAuthServiceBase[AppAuthServiceCallbacks, AppAuthMess
             return
 
         self._set_status(ConnectionStatus.CONNECTING)
+        self._connect_started_ts = time.time()
+        self._start_connect_watchdog()
 
         self._metrics_connect_started = time.monotonic()
         self._client = Client(self._host, self._port, TcpProtocol)
@@ -172,7 +180,9 @@ class AppAuthService(CTraderAuthServiceBase[AppAuthServiceCallbacks, AppAuthMess
         self._last_message_ts = time.time()
 
         self._log("🚀 正在連線到 cTrader...")
-        self._client.startService()
+        reactor_manager.ensure_running()
+        from twisted.internet import reactor
+        reactor.callFromThread(self._client.startService)
 
     def disconnect(self) -> None:
         """手動中斷連線"""
@@ -181,6 +191,7 @@ class AppAuthService(CTraderAuthServiceBase[AppAuthServiceCallbacks, AppAuthMess
         self._end_operation()
         self.clear_message_handlers()
         self._cancel_reconnect_timer()
+        self._cancel_connect_watchdog()
         if self._client is not None:
             try:
                 self._client.stopService()
@@ -189,6 +200,7 @@ class AppAuthService(CTraderAuthServiceBase[AppAuthServiceCallbacks, AppAuthMess
         self._client = None
         self._send_wrapped = False
         self._set_status(ConnectionStatus.DISCONNECTED)
+        self._connect_started_ts = None
         self._log("🔌 已手動斷線")
 
     def get_credentials(self) -> AppCredentials:
@@ -217,7 +229,12 @@ class AppAuthService(CTraderAuthServiceBase[AppAuthServiceCallbacks, AppAuthMess
     def _handle_connected(self, client: Client) -> None:
         """TCP 連線建立後的回調"""
         if self._client is not client:
-            self._client = client
+            # Ignore stale callbacks from old clients to avoid re-entering
+            # duplicate auth flows during reconnect races.
+            return
+        # Any delayed reconnect timer from previous disconnects is obsolete now.
+        self._cancel_reconnect_timer()
+        self._cancel_connect_watchdog()
         self._set_status(ConnectionStatus.CONNECTED)
         metrics.inc("ctrader.app_auth.connected")
         self._last_message_ts = time.time()
@@ -230,10 +247,12 @@ class AppAuthService(CTraderAuthServiceBase[AppAuthServiceCallbacks, AppAuthMess
         if self._client is not client:
             return
         self._set_status(ConnectionStatus.DISCONNECTED)
+        self._connect_started_ts = None
         self._stop_heartbeat_loop()
         self._end_operation()
         self.clear_message_handlers()
         self._cancel_reconnect_timer()
+        self._cancel_connect_watchdog()
         self._client = None
         self._send_wrapped = False
         metrics.inc("ctrader.app_auth.disconnected")
@@ -333,6 +352,8 @@ class AppAuthService(CTraderAuthServiceBase[AppAuthServiceCallbacks, AppAuthMess
         if self._client is None:
             self._client = client
         self._end_operation()
+        self._cancel_connect_watchdog()
+        self._connect_started_ts = None
         self._set_status(ConnectionStatus.APP_AUTHENTICATED)
         self._log(format_success("應用程式已授權！"))
         metrics.inc("ctrader.app_auth.success")
@@ -348,6 +369,13 @@ class AppAuthService(CTraderAuthServiceBase[AppAuthServiceCallbacks, AppAuthMess
         if is_already_subscribed(msg.errorCode, msg.description):
             return
         if is_non_subscribed_trendbar_unsubscribe(msg.errorCode, msg.description):
+            return
+        # After app auth is already established, generic ERROR_RESPONSE payloads
+        # can belong to downstream account/trading flows. Do not tear down app
+        # transport in that case; let higher-level handlers manage the error.
+        if self._status >= ConnectionStatus.APP_AUTHENTICATED and not self._in_progress:
+            metrics.inc("ctrader.app_auth.error.passive")
+            self._emit_error(format_error(msg.errorCode, msg.description))
             return
         self._end_operation()
         self._set_status(ConnectionStatus.DISCONNECTED)
@@ -446,9 +474,64 @@ class AppAuthService(CTraderAuthServiceBase[AppAuthServiceCallbacks, AppAuthMess
                 pass
         self._reconnect_timer = None
 
-    def _reconnect(self) -> None:
-        if self._status == ConnectionStatus.CONNECTING:
+    def _start_connect_watchdog(self) -> None:
+        self._cancel_connect_watchdog()
+        self._connect_watchdog_timer = threading.Timer(self._connect_timeout, self._on_connect_timeout)
+        self._connect_watchdog_timer.daemon = True
+        self._connect_watchdog_timer.start()
+
+    def _cancel_connect_watchdog(self) -> None:
+        if self._connect_watchdog_timer and self._connect_watchdog_timer.is_alive():
+            try:
+                self._connect_watchdog_timer.cancel()
+            except Exception:
+                pass
+        self._connect_watchdog_timer = None
+
+    def _on_connect_timeout(self) -> None:
+        if self._status != ConnectionStatus.CONNECTING:
             return
+        self._log(f"⚠️ 連線逾時（>{self._connect_timeout:.0f}s），準備重連")
+        try:
+            if self._client is not None:
+                self._client.stopService()
+        except Exception:
+            pass
+        self._set_status(ConnectionStatus.DISCONNECTED)
+        self._end_operation()
+        self._client = None
+        self._send_wrapped = False
+        self._connect_started_ts = None
+        if self._auto_reconnect:
+            self._schedule_reconnect("連線逾時")
+
+    def _reconnect(self) -> None:
+        reactor_manager.ensure_running()
+        from twisted.internet import reactor
+        reactor.callFromThread(self._reconnect_on_reactor)
+
+    def _reconnect_on_reactor(self) -> None:
+        if self._status in (
+            ConnectionStatus.CONNECTED,
+            ConnectionStatus.APP_AUTHENTICATED,
+            ConnectionStatus.ACCOUNT_AUTHENTICATED,
+        ) and self._client is not None:
+            # Already recovered by another reconnect path; ignore stale timer fire.
+            return
+        if self._status == ConnectionStatus.CONNECTING:
+            started = self._connect_started_ts or 0.0
+            if started and (time.time() - started) < self._connect_timeout:
+                return
+            try:
+                if self._client is not None:
+                    self._client.stopService()
+            except Exception:
+                pass
+            self._client = None
+            self._send_wrapped = False
+            self._end_operation()
+            self._set_status(ConnectionStatus.DISCONNECTED)
+            self._connect_started_ts = None
         if self._client is not None:
             try:
                 self._client.stopService()

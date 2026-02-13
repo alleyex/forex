@@ -48,6 +48,10 @@ def initialize_live_window_state(window) -> None:
     window._last_authorized_account_id = None
     window._unauthorized_accounts = set()
     window._pending_full_reconnect = False
+    window._account_authorization_blocked = False
+    window._last_auth_block_log_ts = 0.0
+    window._last_auth_error_log_ts = 0.0
+    window._last_oauth_not_ready_log_ts = 0.0
     window._account_funds_uc = None
     window._symbol_list_uc = None
     window._symbol_by_id_uc = None

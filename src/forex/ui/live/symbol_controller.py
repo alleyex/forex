@@ -28,6 +28,8 @@ class LiveSymbolController:
 
     def handle_trade_symbol_changed(self, symbol: str) -> None:
         w = self._window
+        ready_fn = getattr(w, "_is_broker_runtime_ready", None)
+        runtime_ready = bool(ready_fn()) if callable(ready_fn) else True
         if not symbol:
             return
         if w._account_switch_in_progress:
@@ -47,7 +49,7 @@ class LiveSymbolController:
         w._pending_history = False
         w._last_history_request_key = None
         w._last_history_success_key = None
-        if w._oauth_service and getattr(w._oauth_service, "status", 0) >= 3:
+        if runtime_ready:
             w._request_recent_history()
         else:
             # No authenticated history fetch path yet; allow quote bootstrap.

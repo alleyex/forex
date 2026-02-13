@@ -2,9 +2,6 @@ from __future__ import annotations
 
 import time
 
-from forex.config.constants import ConnectionStatus
-
-
 class LiveAutoRecoveryService:
     """Owns watchdog and history-poll recovery logic for auto trade."""
 
@@ -13,6 +10,8 @@ class LiveAutoRecoveryService:
 
     def auto_watchdog_tick(self) -> None:
         w = self._window
+        ready_fn = getattr(w, "_is_broker_runtime_ready", None)
+        runtime_ready = bool(ready_fn()) if callable(ready_fn) else True
         if not w._auto_enabled:
             return
         now = time.time()
@@ -82,12 +81,7 @@ class LiveAutoRecoveryService:
             )
             w._stop_live_trendbar()
             w._trendbar_service = None
-            if (
-                w._oauth_service
-                and getattr(w._oauth_service, "status", 0) >= ConnectionStatus.ACCOUNT_AUTHENTICATED
-                and w._app_state
-                and w._app_state.selected_account_id
-            ):
+            if runtime_ready and w._app_state and w._app_state.selected_account_id:
                 w._history_requested = False
                 w._pending_history = False
                 w._request_recent_history()
@@ -108,12 +102,7 @@ class LiveAutoRecoveryService:
             w._stop_live_trendbar()
             w._trendbar_service = None
             w._auto_last_trendbar_ts = now
-            if (
-                w._oauth_service
-                and getattr(w._oauth_service, "status", 0) >= ConnectionStatus.ACCOUNT_AUTHENTICATED
-                and w._app_state
-                and w._app_state.selected_account_id
-            ):
+            if runtime_ready and w._app_state and w._app_state.selected_account_id:
                 w._history_requested = False
                 w._pending_history = False
                 w._request_recent_history()
@@ -134,6 +123,12 @@ class LiveAutoRecoveryService:
 
     def history_poll_tick(self) -> None:
         w = self._window
+        ready_fn = getattr(w, "_is_broker_runtime_ready", None)
+        runtime_ready = bool(ready_fn()) if callable(ready_fn) else True
+        if getattr(w, "_account_authorization_blocked", False):
+            return
+        if not runtime_ready:
+            return
         if w._history_requested and w._last_history_request_ts > 0:
             now = time.time()
             request_age = now - w._last_history_request_ts

@@ -119,7 +119,11 @@ class DecisionInspectorWidget(QWidget):
             cell_layout.setContentsMargins(0, 0, 0, 0)
             cell_layout.setSpacing(4)
 
-            key_label = QLabel(f"{label_text}:", cell)
+            shown_label = label_text
+            if field == "decision_time":
+                shown_label = self._time_label_with_local_offset()
+
+            key_label = QLabel(f"{shown_label}:", cell)
             key_label.setAlignment(Qt.AlignLeft | Qt.AlignVCenter)
             key_label.setStyleSheet("color:#9aa6b2; font-weight:500;")
 
@@ -136,6 +140,20 @@ class DecisionInspectorWidget(QWidget):
         grid.setColumnStretch(0, 1)
         grid.setColumnStretch(1, 1)
         return box
+
+    @staticmethod
+    def _time_label_with_local_offset() -> str:
+        now = datetime.now().astimezone()
+        offset = now.utcoffset()
+        if offset is None:
+            return "Time (±H)"
+        hours_value = offset.total_seconds() / 3600.0
+        rounded = round(hours_value)
+        if abs(hours_value - rounded) < 1e-9:
+            offset_text = f"{int(rounded):+d}"
+        else:
+            offset_text = f"{hours_value:+.2f}".rstrip("0").rstrip(".")
+        return f"Time ({offset_text})"
 
     @Slot(str)
     def append(self, message: str) -> None:

@@ -26,6 +26,12 @@ class LiveQuoteController:
 
     def ensure_quote_subscription(self) -> None:
         w = self._window
+        ready_fn = getattr(w, "_is_broker_runtime_ready", None)
+        runtime_ready = bool(ready_fn()) if callable(ready_fn) else True
+        if getattr(w, "_account_authorization_blocked", False):
+            return
+        if not runtime_ready:
+            return
         if w._account_switch_in_progress:
             return
         if not w._service or not w._app_state:

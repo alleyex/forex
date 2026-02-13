@@ -2,15 +2,14 @@ from __future__ import annotations
 
 import time
 
-from forex.config.constants import ConnectionStatus
-
-
 class LiveMarketDataController:
     def __init__(self, window) -> None:
         self._window = window
 
     def set_trade_timeframe(self, timeframe: str) -> None:
         w = self._window
+        ready_fn = getattr(w, "_is_broker_runtime_ready", None)
+        runtime_ready = bool(ready_fn()) if callable(ready_fn) else True
         next_timeframe = str(timeframe or "").strip().upper()
         if not next_timeframe or next_timeframe == w._timeframe:
             return
@@ -24,16 +23,17 @@ class LiveMarketDataController:
         w._candles = []
         w.set_candles([])
         w._flush_chart_update()
-        if (
-            w._oauth_service
-            and getattr(w._oauth_service, "status", 0) >= ConnectionStatus.ACCOUNT_AUTHENTICATED
-            and w._app_state
-            and w._app_state.selected_account_id
-        ):
+        if runtime_ready and w._app_state and w._app_state.selected_account_id:
             w._request_recent_history()
 
     def request_recent_history(self) -> None:
         w = self._window
+        ready_fn = getattr(w, "_is_broker_runtime_ready", None)
+        runtime_ready = bool(ready_fn()) if callable(ready_fn) else True
+        if getattr(w, "_account_authorization_blocked", False):
+            return
+        if not runtime_ready:
+            return
         if w._account_switch_in_progress:
             return
         if w._history_requested:
@@ -170,6 +170,12 @@ class LiveMarketDataController:
 
     def start_live_trendbar(self) -> None:
         w = self._window
+        ready_fn = getattr(w, "_is_broker_runtime_ready", None)
+        runtime_ready = bool(ready_fn()) if callable(ready_fn) else True
+        if getattr(w, "_account_authorization_blocked", False):
+            return
+        if not runtime_ready:
+            return
         if getattr(w, "_history_only_chart_mode", False):
             return
         if w._trendbar_active:
@@ -208,6 +214,11 @@ class LiveMarketDataController:
     def stop_live_trendbar(self) -> None:
         w = self._window
         if not w._trendbar_service or not w._trendbar_active:
+            return
+        # If account authorization is known invalid, skip network unsubscribe to
+        # avoid broker INVALID_REQUEST spam from stale/non-subscribed periods.
+        if getattr(w, "_account_authorization_blocked", False):
+            w._trendbar_active = False
             return
         from forex.utils.reactor_manager import reactor_manager
 

@@ -5,9 +5,6 @@ import threading
 
 from PySide6.QtCore import QObject, Signal
 
-from forex.config.constants import ConnectionStatus
-
-
 class _AutoStartBridge(QObject):
     finished = Signal(int, bool)
 
@@ -57,6 +54,8 @@ class LiveAutoLifecycleService:
 
     def _on_model_loaded(self, start_token: int, ok: bool) -> None:
         w = self._window
+        ready_fn = getattr(w, "_is_broker_runtime_ready", None)
+        runtime_ready = bool(ready_fn()) if callable(ready_fn) else True
         if start_token != int(w._auto_start_token):
             return
         w._auto_start_in_progress = False
@@ -96,7 +95,7 @@ class LiveAutoLifecycleService:
             w._history_requested = False
             w._pending_history = False
             w._stop_live_trendbar()
-            if w._oauth_service and getattr(w._oauth_service, "status", 0) >= ConnectionStatus.ACCOUNT_AUTHENTICATED:
+            if runtime_ready:
                 w._request_recent_history()
         w._ensure_order_service()
         if not w._order_service:
