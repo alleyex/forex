@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Iterable, Optional, Protocol
+from typing import Iterable, Optional
 
 from forex.application.broker.protocols import (
     AccountFundsLike,
@@ -12,35 +12,6 @@ from forex.application.broker.protocols import (
     SymbolListUseCaseLike,
 )
 from forex.domain.accounts import Account, AccountFundsSnapshot, AccountProfile
-from forex.domain.symbols import Symbol
-
-
-class AccountInfoLike(Protocol):
-    account_id: int
-    is_live: Optional[bool]
-    trader_login: Optional[int]
-    permission_scope: Optional[int]
-    last_closing_deal_timestamp: Optional[int]
-    last_balance_update_timestamp: Optional[int]
-
-class SymbolInfoLike(Protocol):
-    symbol_id: int
-    symbol_name: str
-
-
-def to_account(info: AccountInfoLike) -> Account:
-    return Account(
-        account_id=int(info.account_id),
-        is_live=info.is_live,
-        trader_login=info.trader_login,
-        permission_scope=getattr(info, "permission_scope", None),
-        last_closing_deal_timestamp=getattr(info, "last_closing_deal_timestamp", None),
-        last_balance_update_timestamp=getattr(info, "last_balance_update_timestamp", None),
-    )
-
-
-def to_accounts(infos: Iterable[AccountInfoLike]) -> list[Account]:
-    return [to_account(info) for info in infos]
 
 
 def to_accounts_from_dicts(raw_accounts: Iterable[dict]) -> list[Account]:
@@ -96,29 +67,6 @@ def to_funds_snapshot(funds: AccountFundsLike) -> AccountFundsSnapshot:
 
 def to_profile(profile: AccountProfileLike) -> AccountProfile:
     return AccountProfile(user_id=getattr(profile, "user_id", None))
-
-
-def to_symbol(info: SymbolInfoLike) -> Symbol:
-    return Symbol(symbol_id=int(info.symbol_id), name=str(info.symbol_name))
-
-
-def to_symbols(infos: Iterable[SymbolInfoLike]) -> list[Symbol]:
-    return [to_symbol(info) for info in infos]
-
-
-def to_symbols_from_dicts(raw_symbols: Iterable[dict]) -> list[Symbol]:
-    symbols: list[Symbol] = []
-    for item in raw_symbols:
-        try:
-            symbols.append(
-                Symbol(
-                    symbol_id=int(item.get("symbol_id", 0)),
-                    name=str(item.get("symbol_name", "")),
-                )
-            )
-        except Exception:
-            continue
-    return symbols
 
 
 class AccountListServiceAdapter:

@@ -152,7 +152,6 @@ class OAuthDialog(BaseAuthDialog):
         self._event_bus = event_bus
         self._app_state = app_state
         self._state = OAuthDialogState()
-        self._accept_after_accounts = False
         self._auto_auth_after_accounts = False
 
         self._service: Optional[OAuthServiceLike] = oauth_service

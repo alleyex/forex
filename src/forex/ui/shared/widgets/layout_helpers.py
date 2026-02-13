@@ -6,13 +6,9 @@ from PySide6.QtCore import Qt
 from PySide6.QtWidgets import (
     QFormLayout,
     QHBoxLayout,
-    QLabel,
     QPushButton,
     QLineEdit,
-    QVBoxLayout,
     QWidget,
-    QGroupBox,
-    QFrame,
 )
 
 
@@ -86,61 +82,3 @@ def build_browse_row(
     layout.addWidget(line_edit, stretch=1)
     layout.addWidget(button)
     return row
-
-
-def build_section_box(
-    title: str,
-    *,
-    layout: Optional[QVBoxLayout] = None,
-    margins: Sequence[int] = (12, 10, 12, 12),
-    spacing: int = 8,
-    class_name: Optional[str] = None,
-) -> QGroupBox:
-    box = QGroupBox(title)
-    if class_name:
-        box.setProperty("class", class_name)
-    if layout is None:
-        layout = QVBoxLayout(box)
-    layout.setContentsMargins(*margins)
-    layout.setSpacing(spacing)
-    box.setLayout(layout)
-    return box
-
-
-def build_card(
-    *,
-    margins: Sequence[int] = (12, 10, 12, 12),
-    spacing: int = 8,
-    class_name: str = "card",
-) -> tuple[QFrame, QVBoxLayout]:
-    frame = QFrame()
-    frame.setFrameShape(QFrame.StyledPanel)
-    frame.setProperty("class", class_name)
-    layout = QVBoxLayout(frame)
-    layout.setContentsMargins(*margins)
-    layout.setSpacing(spacing)
-    return frame, layout
-
-
-def build_label_field_row(
-    label_text: str,
-    field_widget: QWidget,
-    *,
-    label_width: Optional[int] = None,
-    label_alignment: Qt.AlignmentFlag = Qt.AlignLeft | Qt.AlignVCenter,
-    spacing: int = 12,
-) -> QWidget:
-    row = QWidget()
-    layout = QHBoxLayout(row)
-    layout.setContentsMargins(0, 0, 0, 0)
-    layout.setSpacing(spacing)
-
-    label = QLabel(label_text)
-    label.setAlignment(label_alignment)
-    if label_width is not None:
-        label.setFixedWidth(label_width)
-
-    layout.addWidget(label)
-    layout.addWidget(field_widget, stretch=1)
-    return row
-

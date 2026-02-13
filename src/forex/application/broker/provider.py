@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
-from typing import List, Optional
+from typing import Optional
 
 from forex.application.broker.protocols import BrokerUseCaseFactory
 from forex.config.paths import TOKEN_FILE
@@ -70,7 +70,3 @@ def get_provider(name: str = DEFAULT_PROVIDER) -> BrokerProvider:
         return _registry[name]
     except KeyError as exc:
         raise ValueError(f"Provider '{name}' is not registered") from exc
-
-
-def available_providers() -> List[str]:
-    return sorted(_registry.keys())

@@ -24,14 +24,6 @@ class AppState:
         self.oauth_status = status
         self._notify()
 
-    def update_selected_account(self, account_id: Optional[int]) -> None:
-        self.selected_account_id = account_id
-        self._notify()
-
-    def update_selected_account_scope(self, scope: Optional[int]) -> None:
-        self.selected_account_scope = scope
-        self._notify()
-
     def set_selected_account(self, account_id: Optional[int], scope: Optional[int] = None) -> None:
         self.selected_account_id = account_id
         self.selected_account_scope = scope

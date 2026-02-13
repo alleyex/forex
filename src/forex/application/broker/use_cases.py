@@ -157,9 +157,6 @@ class BrokerUseCases:
     def account_funds_in_progress(self) -> bool:
         return self._cache_in_progress(self._account_funds_cache)
 
-    def symbol_list_in_progress(self) -> bool:
-        return self._cache_in_progress(self._symbol_list_cache)
-
     def symbol_by_id_in_progress(self) -> bool:
         return self._cache_in_progress(self._symbol_by_id_cache)
 
