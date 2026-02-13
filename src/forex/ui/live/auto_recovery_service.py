@@ -147,5 +147,8 @@ class LiveAutoRecoveryService:
                 w._pending_history = False
                 w._last_history_request_key = None
                 w._history_service = None
+            else:
+                # Skip duplicate poll requests while an in-flight history request
+                # is still within its expected response window.
+                return
         w._request_recent_history()
-

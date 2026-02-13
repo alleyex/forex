@@ -5,7 +5,7 @@ from datetime import datetime
 import time
 from pathlib import Path
 
-from PySide6.QtCore import Qt, Signal, Slot, QTimer, QMetaObject, QThread, QSize
+from PySide6.QtCore import Qt, Signal, Slot, QTimer, QMetaObject, QThread, QSize, QCoreApplication
 from PySide6.QtGui import QAction, QIcon
 from PySide6.QtWidgets import (
     QButtonGroup,
@@ -560,7 +560,13 @@ class LiveMainWindow(QMainWindow):
         lines = [str(event)]
         for key, value in fields.items():
             lines.append(f"  {key}={value}")
-        self._auto_debug_log("\n".join(lines))
+        payload = "\n".join(lines)
+        if self._auto_debug_enabled():
+            self._auto_log(payload, level="DEBUG")
+            return
+        panel = getattr(self, "_auto_log_panel", None)
+        if panel is not None and hasattr(panel, "append"):
+            panel.append(f"[DEBUG] {payload}")
 
     # Auto Trade Recovery / Polling
     def _auto_watchdog_tick(self) -> None:
@@ -630,6 +636,10 @@ class LiveMainWindow(QMainWindow):
                 widget.setEnabled(trading_allowed)
 
         if self._autotrade_tabs:
+            if getattr(self, "_basic_tab", None):
+                basic_idx = self._autotrade_tabs.indexOf(self._basic_tab)
+                if basic_idx >= 0:
+                    self._autotrade_tabs.setTabEnabled(basic_idx, trading_allowed)
             if getattr(self, "_trade_tab", None):
                 trade_idx = self._autotrade_tabs.indexOf(self._trade_tab)
                 if trade_idx >= 0:
@@ -771,6 +781,7 @@ class LiveMainWindow(QMainWindow):
         self._connection_controller = controller
 
     def _connect_signals(self) -> None:
+        self.logRequested.connect(self._on_log_requested)
         self.logRequested.connect(self._log_panel.append)
         self.appAuthStatusChanged.connect(self._handle_app_auth_status)
         self.oauthStatusChanged.connect(self._handle_oauth_status)
@@ -781,7 +792,11 @@ class LiveMainWindow(QMainWindow):
         self.accountSummaryUpdated.connect(self._positions_controller.apply_account_summary_update)
         self.historyReceived.connect(self._handle_history_received)
         self.trendbarReceived.connect(self._handle_trendbar_received)
-        self.quoteUpdated.connect(self._quote_controller.handle_quote_updated)
+        self.quoteUpdated.connect(self._handle_quote_updated)
+
+    @Slot(str)
+    def _on_log_requested(self, _message: str) -> None:
+        self._ui_diag_log_total += 1
 
     @Slot()
     def _toggle_connection(self) -> None:
@@ -953,6 +968,7 @@ class LiveMainWindow(QMainWindow):
         self._market_data_controller.request_recent_history()
 
     def _handle_history_received(self, rows: list[dict]) -> None:
+        self._ui_diag_history_total += 1
         self._market_data_controller.handle_history_received(rows)
 
     def _start_live_trendbar(self) -> None:
@@ -962,7 +978,88 @@ class LiveMainWindow(QMainWindow):
         self._market_data_controller.stop_live_trendbar()
 
     def _handle_trendbar_received(self, data: dict) -> None:
+        self._ui_diag_trendbar_total += 1
         self._market_data_controller.handle_trendbar_received(data)
+
+    @Slot(int, object, object, object)
+    def _handle_quote_updated(self, symbol_id: int, bid, ask, spot_ts) -> None:
+        self._ui_diag_quote_total += 1
+        self._quote_controller.handle_quote_updated(symbol_id, bid, ask, spot_ts)
+
+    def _ui_heartbeat_tick(self) -> None:
+        now = time.perf_counter()
+        interval_s = 1.0
+        if getattr(self, "_ui_heartbeat_timer", None):
+            interval_s = max(0.1, float(self._ui_heartbeat_timer.interval()) / 1000.0)
+
+        if self._ui_heartbeat_expected_ts <= 0:
+            self._ui_heartbeat_expected_ts = now + interval_s
+            self._ui_heartbeat_last_report_ts = now
+            return
+
+        lag_ms = max(0.0, (now - self._ui_heartbeat_expected_ts) * 1000.0)
+        self._ui_heartbeat_expected_ts = now + interval_s
+        if lag_ms > self._ui_heartbeat_max_lag_ms:
+            self._ui_heartbeat_max_lag_ms = lag_ms
+
+        qt_pending = False
+        try:
+            qt_pending = bool(QCoreApplication.hasPendingEvents())
+        except Exception:
+            qt_pending = False
+
+        if qt_pending:
+            self._ui_heartbeat_pending_streak += 1
+        else:
+            self._ui_heartbeat_pending_streak = 0
+
+        queue_hint = 0
+        queue_hint += int(self._pending_candles is not None)
+        queue_hint += int(bool(self._history_requested))
+        queue_hint += int(bool(self._positions_refresh_pending))
+        queue_hint += len(getattr(self, "_quote_subscribe_inflight", set()) or set())
+        queue_hint += int(qt_pending)
+
+        if lag_ms >= 1500.0 and now - self._ui_heartbeat_last_warn_ts >= 30.0:
+            self._ui_heartbeat_last_warn_ts = now
+            self.logRequested.emit(
+                "⚠️ UI heartbeat lag spike: "
+                f"lag={lag_ms:.0f}ms queue_hint={queue_hint} "
+                f"pending_streak={self._ui_heartbeat_pending_streak}"
+            )
+
+        elapsed = now - self._ui_heartbeat_last_report_ts
+        if elapsed < 60.0:
+            return
+
+        logs_delta = self._ui_diag_log_total - self._ui_diag_last_log_total
+        history_delta = self._ui_diag_history_total - self._ui_diag_last_history_total
+        trendbar_delta = self._ui_diag_trendbar_total - self._ui_diag_last_trendbar_total
+        quote_delta = self._ui_diag_quote_total - self._ui_diag_last_quote_total
+
+        self._ui_diag_last_log_total = self._ui_diag_log_total
+        self._ui_diag_last_history_total = self._ui_diag_history_total
+        self._ui_diag_last_trendbar_total = self._ui_diag_trendbar_total
+        self._ui_diag_last_quote_total = self._ui_diag_quote_total
+        self._ui_heartbeat_last_report_ts = now
+
+        logs_pm = (logs_delta / elapsed) * 60.0 if elapsed > 0 else 0.0
+        history_pm = (history_delta / elapsed) * 60.0 if elapsed > 0 else 0.0
+        trendbar_pm = (trendbar_delta / elapsed) * 60.0 if elapsed > 0 else 0.0
+        quote_pm = (quote_delta / elapsed) * 60.0 if elapsed > 0 else 0.0
+
+        log_entries = len(getattr(self._log_panel, "_entries", [])) if self._log_panel else 0
+        auto_entries = len(getattr(self._auto_log_panel, "_recent_raw", [])) if self._auto_log_panel else 0
+
+        self.logRequested.emit(
+            "🫀 UI heartbeat: "
+            f"lag_now={lag_ms:.0f}ms lag_max={self._ui_heartbeat_max_lag_ms:.0f}ms "
+            f"queue_hint={queue_hint} pending_streak={self._ui_heartbeat_pending_streak} "
+            f"log_rate={logs_pm:.0f}/min history_rate={history_pm:.1f}/min "
+            f"trendbar_rate={trendbar_pm:.1f}/min quote_rate={quote_pm:.1f}/min "
+            f"log_entries={log_entries} auto_entries={auto_entries}"
+        )
+        self._ui_heartbeat_max_lag_ms = 0.0
 
     def _update_chart_from_quote(self, symbol_id: int, bid, ask, spot_ts) -> None:
         self._chart_coordinator.update_chart_from_quote(symbol_id, bid, ask, spot_ts)

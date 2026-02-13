@@ -1,8 +1,15 @@
 from __future__ import annotations
 
 import time
+import threading
+
+from PySide6.QtCore import QObject, Signal
 
 from forex.config.constants import ConnectionStatus
+
+
+class _AutoStartBridge(QObject):
+    finished = Signal(int, bool)
 
 
 class LiveAutoLifecycleService:
@@ -10,6 +17,8 @@ class LiveAutoLifecycleService:
 
     def __init__(self, window) -> None:
         self._window = window
+        self._start_bridge = _AutoStartBridge()
+        self._start_bridge.finished.connect(self._on_model_loaded)
 
     def toggle(self, enabled: bool) -> None:
         if enabled:
@@ -19,6 +28,9 @@ class LiveAutoLifecycleService:
 
     def _start(self) -> None:
         w = self._window
+        if w._auto_start_in_progress:
+            return
+        self._set_loading_ui(False)
         if w._app_state and w._app_state.selected_account_scope == 0:
             w._auto_log("⚠️ 帳戶權限為僅檢視，無法啟用交易")
             w._auto_trade_toggle.setChecked(False)
@@ -29,11 +41,38 @@ class LiveAutoLifecycleService:
                 w._auto_log(f"⚠️ Invalid auto trade setting: {err}")
             w._auto_trade_toggle.setChecked(False)
             return
-        if not w._load_auto_model():
-            w._auto_trade_toggle.setChecked(False)
+        w._auto_start_in_progress = True
+        w._auto_start_token += 1
+        start_token = int(w._auto_start_token)
+        if w._auto_trade_toggle:
+            w._auto_trade_toggle.setEnabled(False)
+        self._set_loading_ui(True, "Loading model...")
+        w._auto_log("⏳ Loading model in background...")
+
+        def _load_model_worker() -> None:
+            ok = bool(w._load_auto_model())
+            self._start_bridge.finished.emit(start_token, ok)
+
+        threading.Thread(target=_load_model_worker, daemon=True).start()
+
+    def _on_model_loaded(self, start_token: int, ok: bool) -> None:
+        w = self._window
+        if start_token != int(w._auto_start_token):
+            return
+        w._auto_start_in_progress = False
+        self._set_loading_ui(False)
+        if w._auto_trade_toggle:
+            w._auto_trade_toggle.setEnabled(True)
+        if not ok:
+            if w._auto_trade_toggle and w._auto_trade_toggle.isChecked():
+                w._auto_trade_toggle.blockSignals(True)
+                w._auto_trade_toggle.setChecked(False)
+                w._auto_trade_toggle.blockSignals(False)
+            return
+        if w._auto_trade_toggle and not w._auto_trade_toggle.isChecked():
+            # User/system disabled auto trade while model was loading.
             return
         w._auto_enabled = True
-        w._auto_trade_toggle.setText("Stop")
         w._auto_position = 0.0
         w._auto_position_id = None
         w._auto_last_action_ts = None
@@ -80,10 +119,21 @@ class LiveAutoLifecycleService:
 
     def _stop(self) -> None:
         w = self._window
+        w._auto_start_token += 1
+        w._auto_start_in_progress = False
+        self._set_loading_ui(False)
+        if w._auto_trade_toggle:
+            w._auto_trade_toggle.setEnabled(True)
         w._auto_enabled = False
-        w._auto_trade_toggle.setText("Start")
         if w._auto_watchdog_timer and w._auto_watchdog_timer.isActive():
             w._auto_watchdog_timer.stop()
         w._auto_order_busy_since = None
         w._auto_log("🛑 Auto trading stopped")
 
+    def _set_loading_ui(self, visible: bool, text: str = "") -> None:
+        w = self._window
+        status = getattr(w, "_auto_start_status", None)
+        if status is not None:
+            if text:
+                status.setText(text)
+            status.setVisible(bool(visible))

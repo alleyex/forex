@@ -19,6 +19,8 @@ def initialize_live_window_state(window) -> None:
     window._order_service = None
     window._auto_enabled = False
     window._auto_model = None
+    window._auto_start_in_progress = False
+    window._auto_start_token = 0
     window._auto_feature_scaler = None
     window._auto_position = 0.0
     window._auto_position_id = None
@@ -79,7 +81,8 @@ def initialize_live_window_state(window) -> None:
     window._chart_data_y_high = None
 
     window._chart_timer = QTimer(window)
-    window._chart_timer.setInterval(200)
+    # Reduce repaint pressure on long-running sessions.
+    window._chart_timer.setInterval(500)
     window._chart_timer.timeout.connect(window._flush_chart_update)
     window._chart_timer.timeout.connect(window._guard_chart_range)
     window._chart_timer.start()
@@ -109,6 +112,25 @@ def initialize_live_window_state(window) -> None:
     window._auto_connect_timer = QTimer(window)
     window._auto_connect_timer.setSingleShot(True)
     window._auto_connect_timer.timeout.connect(window._toggle_connection)
+
+    window._ui_heartbeat_expected_ts = 0.0
+    window._ui_heartbeat_last_report_ts = 0.0
+    window._ui_heartbeat_last_warn_ts = 0.0
+    window._ui_heartbeat_max_lag_ms = 0.0
+    window._ui_heartbeat_pending_streak = 0
+    window._ui_diag_log_total = 0
+    window._ui_diag_history_total = 0
+    window._ui_diag_trendbar_total = 0
+    window._ui_diag_quote_total = 0
+    window._ui_diag_last_log_total = 0
+    window._ui_diag_last_history_total = 0
+    window._ui_diag_last_trendbar_total = 0
+    window._ui_diag_last_quote_total = 0
+
+    window._ui_heartbeat_timer = QTimer(window)
+    window._ui_heartbeat_timer.setInterval(1000)
+    window._ui_heartbeat_timer.timeout.connect(window._ui_heartbeat_tick)
+    window._ui_heartbeat_timer.start()
 
     window._autotrade_settings_path = Path("data/auto_trade_settings.json")
     window._autotrade_loading = False

@@ -10,6 +10,7 @@ from PySide6.QtWidgets import (
     QFormLayout,
     QGroupBox,
     QHBoxLayout,
+    QLabel,
     QLineEdit,
     QPushButton,
     QRadioButton,
@@ -21,7 +22,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from forex.ui.shared.widgets.log_widget import LogWidget
+from forex.ui.live.decision_inspector_widget import DecisionInspectorWidget
 
 
 class LiveUIBuilder:
@@ -42,6 +43,7 @@ class LiveUIBuilder:
         tabs.setMovable(False)
         tabs.setUsesScrollButtons(False)
         tabs.tabBar().setExpanding(False)
+        tabs.tabBar().setDrawBase(False)
         layout.addWidget(tabs)
         w._autotrade_tabs = tabs
 
@@ -49,6 +51,8 @@ class LiveUIBuilder:
             tab = QWidget()
             if object_name:
                 tab.setObjectName(object_name)
+            if object_name == "basicTab":
+                w._basic_tab = tab
             if object_name == "tradeTab":
                 w._trade_tab = tab
             if object_name == "advancedTab":
@@ -92,9 +96,28 @@ class LiveUIBuilder:
             return card, card_form
 
         model_tab, model_tab_layout, form_model = _tab_form("Model Lab", object_name="modelTab")
+        _basic_tab, _basic_tab_layout, form_basic = _tab_form("Basic", object_name="basicTab")
         _trade_tab, _trade_tab_layout, form_trade = _tab_form("Trade", object_name="tradeTab")
         tabs_style = """
+            QTabWidget::pane {
+                border: none;
+                top: 0px;
+                }
+            QTabWidget::tab-bar {
+                left: 0px;
+            }
+            QTabBar::base {
+                border: none;
+                background: transparent;
+            }
+            QTabBar::tab {
+                margin: 0px;
+            }
+            QTabBar::tab:!selected {
+                margin-top: 0px;
+            }
             QWidget#modelTab QLabel[section="true"],
+            QWidget#basicTab QLabel[section="true"],
             QWidget#tradeTab QLabel[section="true"],
             QWidget#advancedTab QLabel[section="true"] {
                 color: #a8b1bc;
@@ -104,23 +127,27 @@ class LiveUIBuilder:
                 padding-bottom: 2px;
             }
             QWidget#modelTab QLabel,
+            QWidget#basicTab QLabel,
             QWidget#tradeTab QLabel,
             QWidget#advancedTab QLabel {
                 color: #d3d8e0;
             }
             QWidget#modelTab QLabel[spacer="true"],
+            QWidget#basicTab QLabel[spacer="true"],
             QWidget#tradeTab QLabel[spacer="true"],
             QWidget#advancedTab QLabel[spacer="true"] {
                 min-height: 10px;
                 min-width: 0px;
             }
             QWidget#modelTab QLabel[section="true"],
+            QWidget#basicTab QLabel[section="true"],
             QWidget#tradeTab QLabel[section="true"],
             QWidget#advancedTab QLabel[section="true"] {
                 color: #9aa6b2;
                 min-width: 0px;
             }
             QWidget#modelTab QFrame[divider="true"],
+            QWidget#basicTab QFrame[divider="true"],
             QWidget#tradeTab QFrame[divider="true"],
             QWidget#advancedTab QFrame[divider="true"] {
                 border: none;
@@ -132,6 +159,10 @@ class LiveUIBuilder:
             QWidget#modelTab QDoubleSpinBox,
             QWidget#modelTab QSpinBox,
             QWidget#modelTab QLineEdit,
+            QWidget#basicTab QComboBox,
+            QWidget#basicTab QDoubleSpinBox,
+            QWidget#basicTab QSpinBox,
+            QWidget#basicTab QLineEdit,
             QWidget#tradeTab QComboBox,
             QWidget#tradeTab QDoubleSpinBox,
             QWidget#tradeTab QSpinBox,
@@ -145,6 +176,8 @@ class LiveUIBuilder:
             }
             QWidget#modelTab QRadioButton,
             QWidget#modelTab QCheckBox,
+            QWidget#basicTab QRadioButton,
+            QWidget#basicTab QCheckBox,
             QWidget#tradeTab QRadioButton,
             QWidget#tradeTab QCheckBox,
             QWidget#advancedTab QRadioButton,
@@ -153,6 +186,8 @@ class LiveUIBuilder:
             }
             QWidget#modelTab QRadioButton::indicator,
             QWidget#modelTab QCheckBox::indicator,
+            QWidget#basicTab QRadioButton::indicator,
+            QWidget#basicTab QCheckBox::indicator,
             QWidget#tradeTab QRadioButton::indicator,
             QWidget#tradeTab QCheckBox::indicator,
             QWidget#advancedTab QRadioButton::indicator,
@@ -161,6 +196,7 @@ class LiveUIBuilder:
                 height: 16px;
             }
             QWidget#modelTab QGroupBox#card,
+            QWidget#basicTab QGroupBox#card,
             QWidget#tradeTab QGroupBox#card,
             QWidget#advancedTab QGroupBox#card {
                 background: #262d36;
@@ -168,6 +204,7 @@ class LiveUIBuilder:
                 border-radius: 10px;
                 margin-top: 6px;
             }
+            QWidget#basicTab QGroupBox#card::title,
             QWidget#tradeTab QGroupBox#card::title,
             QWidget#advancedTab QGroupBox#card::title {
                 color: #cdd6e1;
@@ -190,6 +227,7 @@ class LiveUIBuilder:
                 left: 12px;
             }
             QWidget#modelTab QGroupBox#card[titleTone="line"]::title,
+            QWidget#basicTab QGroupBox#card[titleTone="line"]::title,
             QWidget#tradeTab QGroupBox#card[titleTone="line"]::title,
             QWidget#advancedTab QGroupBox#card[titleTone="line"]::title {
                 color: __CARD_LINE_TITLE_COLOR__;
@@ -203,6 +241,14 @@ class LiveUIBuilder:
             QWidget#modelTab QGroupBox#card QComboBox,
             QWidget#modelTab QGroupBox#card QDoubleSpinBox,
             QWidget#modelTab QGroupBox#card QSpinBox {
+                background: #1f252d;
+                border: 1px solid #343c46;
+                border-radius: 8px;
+            }
+            QWidget#basicTab QGroupBox#card QLineEdit,
+            QWidget#basicTab QGroupBox#card QComboBox,
+            QWidget#basicTab QGroupBox#card QDoubleSpinBox,
+            QWidget#basicTab QGroupBox#card QSpinBox {
                 background: #1f252d;
                 border: 1px solid #343c46;
                 border-radius: 8px;
@@ -273,22 +319,30 @@ class LiveUIBuilder:
             }
             """
         )
-        field_height = 30
-        w._model_path.setFixedHeight(field_height)
-        w._browse_model_dir_button.setFixedHeight(field_height)
+        field_height = 34
+        w._model_path.setMinimumHeight(field_height)
+        w._browse_model_dir_button.setMinimumHeight(field_height)
         w._browse_model_dir_button.clicked.connect(w._browse_model_file)
         model_field_layout.addWidget(w._model_path, 1)
         model_field_layout.addWidget(w._browse_model_dir_button)
         model_layout.addWidget(model_field_row)
 
-        w._auto_trade_toggle = QPushButton("Start")
-        w._auto_trade_toggle.setCheckable(True)
+        w._auto_trade_toggle = QCheckBox("Enable")
         w._auto_trade_toggle.toggled.connect(w._toggle_auto_trade)
-        w._auto_trade_toggle.setFixedHeight(field_height)
+        auto_trade_row = QWidget()
+        auto_trade_layout = QHBoxLayout(auto_trade_row)
+        auto_trade_layout.setContentsMargins(0, 0, 0, 0)
+        auto_trade_layout.setSpacing(8)
+        auto_trade_layout.addWidget(w._auto_trade_toggle)
+        w._auto_start_status = QLabel("Loading model...")
+        w._auto_start_status.setStyleSheet("color:#9aa6b2; font-weight:500;")
+        w._auto_start_status.setVisible(False)
+        auto_trade_layout.addWidget(w._auto_start_status)
+        auto_trade_layout.addStretch(1)
 
         model_card, model_card_form = _card("Model Lab", title_tone="line")
         model_card_form.addRow("Model file", model_row)
-        model_card_form.addRow("Auto Trade", w._auto_trade_toggle)
+        model_card_form.addRow("Auto Trade", auto_trade_row)
         form_model.addRow(model_card)
         w._trade_symbol = QComboBox()
         w._sync_trade_symbol_choices(preferred_symbol=w._symbol_name)
@@ -305,7 +359,7 @@ class LiveUIBuilder:
         w._trade_timeframe.addItems(["M1", "M5", "M15", "M30", "H1", "H4"])
         basic_card_form.addRow("Timeframe", w._trade_timeframe)
         w._trade_timeframe.currentTextChanged.connect(w._handle_trade_timeframe_changed)
-        form_model.addRow(basic_card)
+        form_basic.addRow(basic_card)
 
         trade_card, trade_card_form = _card("Position Sizing", title_tone="line")
         lot_row = QWidget()
@@ -429,15 +483,13 @@ class LiveUIBuilder:
         advanced_card_form.addRow("Quotes affect candles", w._quote_affects_chart)
         form_adv.addRow(advanced_card)
 
-        w._auto_log_panel = LogWidget(
+        w._auto_log_panel = DecisionInspectorWidget(
             title="Auto Trade",
             with_timestamp=True,
-            monospace=True,
-            font_point_delta=1,
+            max_entries=200,
         )
-        w._auto_log_panel.setMinimumHeight(140)
-        w._auto_log_panel.setMaximumHeight(180)
+        w._auto_log_panel.setMinimumHeight(340)
+        w._auto_log_panel.setMaximumHeight(16777215)
         model_tab_layout.addWidget(w._auto_log_panel)
 
         return panel
-

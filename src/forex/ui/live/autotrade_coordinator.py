@@ -637,4 +637,3 @@ class LiveAutoTradeCoordinator:
 
     def refresh_account_balance(self) -> None:
         self._window._account_controller.refresh_account_balance()
-
