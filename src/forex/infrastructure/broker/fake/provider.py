@@ -1,9 +1,63 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
-from typing import Optional
+from dataclasses import dataclass, field
+from typing import Callable, Optional
 
 from forex.application.broker.provider import BrokerProvider
+from forex.infrastructure.broker.base import BaseCallbacks, build_callbacks
+
+Callback = Callable[..., None]
+
+
+@dataclass
+class FakeAppAuthCallbacks(BaseCallbacks):
+    on_app_auth_success: Optional[Callback] = None
+
+
+@dataclass
+class FakeOAuthCallbacks(BaseCallbacks):
+    on_oauth_success: Optional[Callback] = None
+
+
+@dataclass
+class FakeOAuthLoginCallbacks(BaseCallbacks):
+    on_oauth_login_success: Optional[Callback] = None
+
+
+@dataclass
+class FakeAccountListCallbacks(BaseCallbacks):
+    on_accounts_received: Optional[Callback] = None
+
+
+@dataclass
+class FakeCtidProfileCallbacks(BaseCallbacks):
+    on_profile_received: Optional[Callback] = None
+
+
+@dataclass
+class FakeAccountFundsCallbacks(BaseCallbacks):
+    on_funds_received: Optional[Callback] = None
+    on_position_pnl: Optional[Callback] = None
+
+
+@dataclass
+class FakeTrendbarCallbacks(BaseCallbacks):
+    on_trendbar: Optional[Callback] = None
+
+
+@dataclass
+class FakeTrendbarHistoryCallbacks(BaseCallbacks):
+    on_history_received: Optional[Callback] = None
+
+
+@dataclass
+class FakeSymbolsCallbacks(BaseCallbacks):
+    on_symbols_received: Optional[Callback] = None
+
+
+@dataclass
+class FakeOrderCallbacks(BaseCallbacks):
+    on_execution: Optional[Callback] = None
 
 
 @dataclass
@@ -12,26 +66,31 @@ class FakeAppAuthService:
     token_file: str
     status: int = 0
     is_app_authenticated: bool = False
+    _callbacks: FakeAppAuthCallbacks = field(default_factory=FakeAppAuthCallbacks, repr=False)
 
     def set_callbacks(self, on_app_auth_success=None, on_error=None, on_log=None, on_status_changed=None) -> None:
-        self._on_app_auth_success = on_app_auth_success
-        self._on_error = on_error
-        self._on_log = on_log
-        self._on_status_changed = on_status_changed
+        self._callbacks = build_callbacks(
+            FakeAppAuthCallbacks,
+            on_app_auth_success=on_app_auth_success,
+            on_error=on_error,
+            on_log=on_log,
+            on_status_changed=on_status_changed,
+        )
 
     def connect(self) -> None:
         self.is_app_authenticated = True
-        if self._on_app_auth_success:
-            self._on_app_auth_success(self)
+        cb = self._callbacks.on_app_auth_success
+        if cb:
+            cb(self)
 
     def disconnect(self) -> None:
         self.is_app_authenticated = False
 
     def add_message_handler(self, handler) -> None:
-        pass
+        _ = handler
 
     def remove_message_handler(self, handler) -> None:
-        pass
+        _ = handler
 
 
 @dataclass
@@ -39,16 +98,22 @@ class FakeOAuthService:
     app_auth_service: FakeAppAuthService
     token_file: str
     status: int = 0
+    _callbacks: FakeOAuthCallbacks = field(default_factory=FakeOAuthCallbacks, repr=False)
 
     def set_callbacks(self, on_oauth_success=None, on_error=None, on_log=None, on_status_changed=None) -> None:
-        self._on_oauth_success = on_oauth_success
-        self._on_error = on_error
-        self._on_log = on_log
-        self._on_status_changed = on_status_changed
+        self._callbacks = build_callbacks(
+            FakeOAuthCallbacks,
+            on_oauth_success=on_oauth_success,
+            on_error=on_error,
+            on_log=on_log,
+            on_status_changed=on_status_changed,
+        )
 
     def connect(self, timeout_seconds: Optional[int] = None) -> None:
-        if self._on_oauth_success:
-            self._on_oauth_success(self)
+        _ = timeout_seconds
+        cb = self._callbacks.on_oauth_success
+        if cb:
+            cb(self)
 
     def disconnect(self) -> None:
         pass
@@ -58,20 +123,23 @@ class FakeOAuthService:
 class FakeOAuthLoginService:
     token_file: str
     redirect_uri: Optional[str]
-    _on_oauth_login_success: Optional[callable] = None
-    _on_error: Optional[callable] = None
-    _on_log: Optional[callable] = None
+    _callbacks: FakeOAuthLoginCallbacks = field(default_factory=FakeOAuthLoginCallbacks, repr=False)
 
     def set_callbacks(self, on_oauth_login_success=None, on_error=None, on_log=None) -> None:
-        self._on_oauth_login_success = on_oauth_login_success
-        self._on_error = on_error
-        self._on_log = on_log
+        self._callbacks = build_callbacks(
+            FakeOAuthLoginCallbacks,
+            on_oauth_login_success=on_oauth_login_success,
+            on_error=on_error,
+            on_log=on_log,
+        )
 
     def connect(self) -> None:
-        if self._on_oauth_login_success:
-            self._on_oauth_login_success(self)
+        cb = self._callbacks.on_oauth_login_success
+        if cb:
+            cb(self)
 
     def exchange_code(self, code: str):
+        _ = code
         return self
 
 
@@ -80,21 +148,27 @@ class FakeAccountListService:
     app_auth_service: FakeAppAuthService
     access_token: str
     in_progress: bool = False
+    _callbacks: FakeAccountListCallbacks = field(default_factory=FakeAccountListCallbacks, repr=False)
 
     def set_access_token(self, access_token: str) -> None:
         self.access_token = access_token
 
     def set_callbacks(self, on_accounts_received=None, on_error=None, on_log=None) -> None:
-        self._on_accounts_received = on_accounts_received
-        self._on_error = on_error
-        self._on_log = on_log
+        self._callbacks = build_callbacks(
+            FakeAccountListCallbacks,
+            on_accounts_received=on_accounts_received,
+            on_error=on_error,
+            on_log=on_log,
+        )
 
     def clear_log_history(self) -> None:
         pass
 
     def fetch(self, timeout_seconds: Optional[int] = None) -> None:
-        if self._on_accounts_received:
-            self._on_accounts_received([])
+        _ = timeout_seconds
+        cb = self._callbacks.on_accounts_received
+        if cb:
+            cb([])
 
 
 @dataclass
@@ -103,21 +177,27 @@ class FakeCtidProfileService:
     access_token: str
     in_progress: bool = False
     user_id: Optional[int] = None
+    _callbacks: FakeCtidProfileCallbacks = field(default_factory=FakeCtidProfileCallbacks, repr=False)
 
     def set_access_token(self, access_token: str) -> None:
         self.access_token = access_token
 
     def set_callbacks(self, on_profile_received=None, on_error=None, on_log=None) -> None:
-        self._on_profile_received = on_profile_received
-        self._on_error = on_error
-        self._on_log = on_log
+        self._callbacks = build_callbacks(
+            FakeCtidProfileCallbacks,
+            on_profile_received=on_profile_received,
+            on_error=on_error,
+            on_log=on_log,
+        )
 
     def clear_log_history(self) -> None:
         pass
 
     def fetch(self, timeout_seconds: Optional[int] = None) -> None:
-        if self._on_profile_received:
-            self._on_profile_received(self)
+        _ = timeout_seconds
+        cb = self._callbacks.on_profile_received
+        if cb:
+            cb(self)
 
 
 @dataclass
@@ -151,35 +231,46 @@ class FakeAccountFundsService:
     limited_risk_margin_calculation_strategy: Optional[int] = None
     fair_stop_out: Optional[bool] = None
     stop_out_strategy: Optional[int] = None
+    _callbacks: FakeAccountFundsCallbacks = field(default_factory=FakeAccountFundsCallbacks, repr=False)
 
-    def set_callbacks(self, on_funds_received=None, on_error=None, on_log=None) -> None:
-        self._on_funds_received = on_funds_received
-        self._on_error = on_error
-        self._on_log = on_log
+    def set_callbacks(self, on_funds_received=None, on_position_pnl=None, on_error=None, on_log=None) -> None:
+        self._callbacks = build_callbacks(
+            FakeAccountFundsCallbacks,
+            on_funds_received=on_funds_received,
+            on_position_pnl=on_position_pnl,
+            on_error=on_error,
+            on_log=on_log,
+        )
 
     def clear_log_history(self) -> None:
         pass
 
     def fetch(self, account_id: int, timeout_seconds: Optional[int] = None) -> None:
-        if self._on_funds_received:
-            self._on_funds_received(self)
+        _ = account_id, timeout_seconds
+        cb = self._callbacks.on_funds_received
+        if cb:
+            cb(self)
 
 
 @dataclass
 class FakeTrendbarService:
     app_auth_service: FakeAppAuthService
     in_progress: bool = False
+    _callbacks: FakeTrendbarCallbacks = field(default_factory=FakeTrendbarCallbacks, repr=False)
 
     def set_callbacks(self, on_trendbar=None, on_error=None, on_log=None) -> None:
-        self._on_trendbar = on_trendbar
-        self._on_error = on_error
-        self._on_log = on_log
+        self._callbacks = build_callbacks(
+            FakeTrendbarCallbacks,
+            on_trendbar=on_trendbar,
+            on_error=on_error,
+            on_log=on_log,
+        )
 
     def clear_log_history(self) -> None:
         pass
 
     def subscribe(self, account_id: int, symbol_id: int, timeframe: str = "M1") -> None:
-        pass
+        _ = account_id, symbol_id, timeframe
 
     def unsubscribe(self) -> None:
         pass
@@ -188,11 +279,15 @@ class FakeTrendbarService:
 @dataclass
 class FakeTrendbarHistoryService:
     app_auth_service: FakeAppAuthService
+    _callbacks: FakeTrendbarHistoryCallbacks = field(default_factory=FakeTrendbarHistoryCallbacks, repr=False)
 
     def set_callbacks(self, on_history_received=None, on_error=None, on_log=None) -> None:
-        self._on_history_received = on_history_received
-        self._on_error = on_error
-        self._on_log = on_log
+        self._callbacks = build_callbacks(
+            FakeTrendbarHistoryCallbacks,
+            on_history_received=on_history_received,
+            on_error=on_error,
+            on_log=on_log,
+        )
 
     def clear_log_history(self) -> None:
         pass
@@ -206,19 +301,25 @@ class FakeTrendbarHistoryService:
         from_ts: Optional[int] = None,
         to_ts: Optional[int] = None,
     ) -> None:
-        if self._on_history_received:
-            self._on_history_received([])
+        _ = account_id, symbol_id, count, timeframe, from_ts, to_ts
+        cb = self._callbacks.on_history_received
+        if cb:
+            cb([])
 
 
 @dataclass
 class FakeSymbolListService:
     app_auth_service: FakeAppAuthService
     in_progress: bool = False
+    _callbacks: FakeSymbolsCallbacks = field(default_factory=FakeSymbolsCallbacks, repr=False)
 
     def set_callbacks(self, on_symbols_received=None, on_error=None, on_log=None) -> None:
-        self._on_symbols_received = on_symbols_received
-        self._on_error = on_error
-        self._on_log = on_log
+        self._callbacks = build_callbacks(
+            FakeSymbolsCallbacks,
+            on_symbols_received=on_symbols_received,
+            on_error=on_error,
+            on_log=on_log,
+        )
 
     def clear_log_history(self) -> None:
         pass
@@ -229,19 +330,25 @@ class FakeSymbolListService:
         include_archived: bool = False,
         timeout_seconds: Optional[int] = None,
     ) -> None:
-        if self._on_symbols_received:
-            self._on_symbols_received([])
+        _ = account_id, include_archived, timeout_seconds
+        cb = self._callbacks.on_symbols_received
+        if cb:
+            cb([])
 
 
 @dataclass
 class FakeSymbolByIdService:
     app_auth_service: FakeAppAuthService
     in_progress: bool = False
+    _callbacks: FakeSymbolsCallbacks = field(default_factory=FakeSymbolsCallbacks, repr=False)
 
     def set_callbacks(self, on_symbols_received=None, on_error=None, on_log=None) -> None:
-        self._on_symbols_received = on_symbols_received
-        self._on_error = on_error
-        self._on_log = on_log
+        self._callbacks = build_callbacks(
+            FakeSymbolsCallbacks,
+            on_symbols_received=on_symbols_received,
+            on_error=on_error,
+            on_log=on_log,
+        )
 
     def clear_log_history(self) -> None:
         pass
@@ -253,8 +360,10 @@ class FakeSymbolByIdService:
         include_archived: bool = False,
         timeout_seconds: Optional[int] = None,
     ) -> None:
-        if self._on_symbols_received:
-            self._on_symbols_received([])
+        _ = account_id, symbol_ids, include_archived, timeout_seconds
+        cb = self._callbacks.on_symbols_received
+        if cb:
+            cb([])
 
 
 @dataclass
@@ -262,11 +371,15 @@ class FakeOrderService:
     app_auth_service: FakeAppAuthService
     in_progress: bool = False
     _permission_scope: Optional[int] = None
+    _callbacks: FakeOrderCallbacks = field(default_factory=FakeOrderCallbacks, repr=False)
 
     def set_callbacks(self, on_execution=None, on_error=None, on_log=None) -> None:
-        self._on_execution = on_execution
-        self._on_error = on_error
-        self._on_log = on_log
+        self._callbacks = build_callbacks(
+            FakeOrderCallbacks,
+            on_execution=on_execution,
+            on_error=on_error,
+            on_log=on_log,
+        )
 
     def set_permission_scope(self, scope: Optional[int]) -> None:
         self._permission_scope = None if scope is None else int(scope)
@@ -285,8 +398,20 @@ class FakeOrderService:
         client_order_id: Optional[str] = None,
         slippage_points: Optional[int] = None,
     ) -> Optional[str]:
-        if self._on_execution:
-            self._on_execution(
+        _ = (
+            account_id,
+            symbol_id,
+            trade_side,
+            volume,
+            stop_loss,
+            take_profit,
+            label,
+            comment,
+            slippage_points,
+        )
+        cb = self._callbacks.on_execution
+        if cb:
+            cb(
                 {
                     "client_order_id": client_order_id,
                     "position_id": None,
@@ -298,8 +423,10 @@ class FakeOrderService:
         return client_order_id
 
     def close_position(self, *, account_id: int, position_id: int, volume: int) -> bool:
-        if self._on_execution:
-            self._on_execution(
+        _ = account_id, volume
+        cb = self._callbacks.on_execution
+        if cb:
+            cb(
                 {
                     "client_order_id": None,
                     "position_id": position_id,
