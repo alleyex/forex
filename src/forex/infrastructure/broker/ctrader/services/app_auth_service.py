@@ -222,6 +222,20 @@ class AppAuthService(CTraderAuthServiceBase[AppAuthServiceCallbacks, AppAuthMess
     def get_credentials(self) -> AppCredentials:
         return self._credentials
 
+    def seconds_since_last_message(self) -> Optional[float]:
+        if self._last_message_ts is None:
+            return None
+        return max(0.0, time.time() - self._last_message_ts)
+
+    def is_transport_fresh(self, *, max_idle_seconds: Optional[float] = None) -> bool:
+        if self._status < ConnectionStatus.CONNECTED:
+            return False
+        age = self.seconds_since_last_message()
+        if age is None:
+            return False
+        threshold = self._heartbeat_timeout if max_idle_seconds is None else max(1.0, float(max_idle_seconds))
+        return age <= threshold
+
     def get_client(self) -> Client:
         """
         取得已認證的 Client 實例
@@ -250,6 +264,10 @@ class AppAuthService(CTraderAuthServiceBase[AppAuthServiceCallbacks, AppAuthMess
             return
         # Any delayed reconnect timer from previous disconnects is obsolete now.
         self._cancel_reconnect_timer()
+        # Reset watchdog window after TCP connects so AppAuth handshake gets
+        # a full timeout budget instead of sharing the initial DNS/TCP delay.
+        self._connect_started_ts = time.time()
+        self._start_connect_watchdog()
         self._set_status(ConnectionStatus.CONNECTED)
         self._app_auth_retry_count = 0
         self._send_failure_streak = 0
@@ -270,7 +288,6 @@ class AppAuthService(CTraderAuthServiceBase[AppAuthServiceCallbacks, AppAuthMess
         self._stop_heartbeat_loop()
         self._end_operation()
         self.clear_message_handlers()
-        self._cancel_reconnect_timer()
         self._cancel_connect_watchdog()
         self._cancel_app_auth_retry_timer()
         self._client = None
@@ -281,10 +298,14 @@ class AppAuthService(CTraderAuthServiceBase[AppAuthServiceCallbacks, AppAuthMess
         self._emit_error(error_message(ErrorCode.NETWORK, "已斷線", reason))
         if self._manual_disconnect:
             self._manual_disconnect = False
+            self._cancel_reconnect_timer()
             return
         if self._auto_reconnect:
-            self._log("🔄 偵測到斷線，將自動嘗試重新連線")
-            self._schedule_reconnect("連線中斷")
+            if self._reconnect_timer is not None and self._reconnect_timer.is_alive():
+                self._log("ℹ️ 重連已排程，等待下一次嘗試")
+            else:
+                self._log("🔄 偵測到斷線，將自動嘗試重新連線")
+                self._schedule_reconnect("連線中斷")
 
     def _send_app_auth(self, client: Client) -> None:
         """發送應用程式認證請求"""
@@ -602,7 +623,13 @@ class AppAuthService(CTraderAuthServiceBase[AppAuthServiceCallbacks, AppAuthMess
     def _on_connect_timeout(self) -> None:
         if self._status >= ConnectionStatus.APP_AUTHENTICATED:
             return
-        self._log(f"⚠️ App 認證逾時（>{self._connect_timeout:.0f}s），準備重連")
+        if self._status < ConnectionStatus.CONNECTED:
+            timeout_reason = "連線逾時"
+            timeout_log = f"⚠️ 連線逾時（>{self._connect_timeout:.0f}s），準備重連"
+        else:
+            timeout_reason = "App 認證逾時"
+            timeout_log = f"⚠️ App 認證逾時（>{self._connect_timeout:.0f}s），準備重連"
+        self._log(timeout_log)
         self._stop_client_service(self._client, context="connect_timeout")
         self._set_status(ConnectionStatus.DISCONNECTED)
         self._end_operation()
@@ -610,7 +637,7 @@ class AppAuthService(CTraderAuthServiceBase[AppAuthServiceCallbacks, AppAuthMess
         self._send_wrapped = False
         self._connect_started_ts = None
         if self._auto_reconnect:
-            self._schedule_reconnect("連線逾時")
+            self._schedule_reconnect(timeout_reason)
 
     def _reconnect(self) -> None:
         reactor_manager.ensure_running()

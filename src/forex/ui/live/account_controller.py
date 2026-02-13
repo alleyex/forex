@@ -24,6 +24,10 @@ class LiveAccountController:
             return
         if not w._service or not w._app_state or not w._app_state.selected_account_id:
             return
+        is_transport_fresh = getattr(w._service, "is_transport_fresh", None)
+        if callable(is_transport_fresh) and not bool(is_transport_fresh(max_idle_seconds=10.0)):
+            # Avoid hammering funds endpoint while transport is already stale.
+            return
         now = time.time()
         if now - w._last_funds_fetch_ts < 4.5:
             return

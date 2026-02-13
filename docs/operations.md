@@ -103,3 +103,52 @@ Retries are disabled by default. Enable with:
 export CTRADER_RETRY_MAX_ATTEMPTS=3
 export CTRADER_RETRY_BACKOFF_SECONDS=2
 ```
+
+### Reconnect Log Analysis
+
+When reconnect loops happen, export the UI log text and run:
+
+```bash
+python -m forex.tools.live.reconnect_log_analyzer /path/to/live.log
+```
+
+This prints a compact summary including:
+
+- disconnect/reconnect counts
+- max reconnect attempt observed
+- app-auth/account-auth success counts
+- funds timeout / deferred-request frequency
+- runtime stalled/resume frequency
+
+Use it to quickly compare before/after reconnect fixes instead of reading logs line by line.
+
+### Reconnect Soak Checklist (30 min)
+
+1. Start live UI with file logging:
+
+```bash
+LOG_LEVEL=INFO LOG_FILE=live_soak.log QT_OPENGL=software python main_live.py
+```
+
+2. Wait until status is authenticated and data streams are active (`funds_received`, `history_loaded`).
+3. Disconnect network for ~2-3 minutes.
+4. Restore network and let it run for at least 20 minutes.
+5. Analyze log:
+
+```bash
+python -m forex.tools.live.reconnect_log_analyzer live_soak.log
+```
+
+Optional quick regression before/after soak:
+
+```bash
+pytest -q tests/test_app_auth_service_watchdog.py tests/test_account_funds_timeout_guard.py tests/test_live_session_orchestrator.py tests/test_live_account_controller.py tests/test_reconnect_log_analyzer.py
+```
+
+Pass criteria:
+
+- `reconnect_scheduled` should not keep increasing forever after network recovery.
+- `max_attempt` should stabilize (not monotonic growth for the whole soak).
+- `app_auth_success` and `account_auth_success` should recover after network returns.
+- `funds_timeout` and deferred failures may spike during outage, but should drop after recovery.
+- `runtime_stalled` may occur during outage, but should be followed by `runtime_resume`.

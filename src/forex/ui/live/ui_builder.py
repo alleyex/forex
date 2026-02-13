@@ -31,72 +31,91 @@ class LiveUIBuilder:
         self._window = window
 
     def build_autotrade_panel(self) -> QWidget:
-        w = self._window
         panel = QGroupBox("Auto Trading")
         layout = QVBoxLayout(panel)
         layout.setContentsMargins(12, 12, 12, 12)
         layout.setSpacing(10)
 
+        tabs = self._create_tabs(layout)
+        _model_tab, model_tab_layout, form_model = self._create_tab_form(tabs, "Model Lab", object_name="modelTab")
+        _basic_tab, _basic_tab_layout, form_basic = self._create_tab_form(tabs, "Basic", object_name="basicTab")
+        _trade_tab, _trade_tab_layout, form_trade = self._create_tab_form(tabs, "Trade", object_name="tradeTab")
+        _adv_tab, _adv_tab_layout, form_adv = self._create_tab_form(tabs, "Advanced", object_name="advancedTab")
+
+        self._apply_tabs_style(tabs)
+        self._build_model_tab(form_model=form_model, model_tab_layout=model_tab_layout, panel=panel)
+        self._build_basic_tab(form_basic=form_basic)
+        self._build_trade_tab(form_trade=form_trade, panel=panel)
+        self._build_advanced_tab(form_adv=form_adv)
+
+        return panel
+
+    def _create_tabs(self, parent_layout: QVBoxLayout) -> QTabWidget:
+        w = self._window
         tabs = QTabWidget()
         tabs.setDocumentMode(True)
         tabs.setMovable(False)
         tabs.setUsesScrollButtons(False)
         tabs.tabBar().setExpanding(False)
         tabs.tabBar().setDrawBase(False)
-        layout.addWidget(tabs)
+        parent_layout.addWidget(tabs)
         w._autotrade_tabs = tabs
+        return tabs
 
-        def _tab_form(title: str, object_name: str | None = None) -> tuple[QWidget, QVBoxLayout, QFormLayout]:
-            tab = QWidget()
-            if object_name:
-                tab.setObjectName(object_name)
-            if object_name == "basicTab":
-                w._basic_tab = tab
-            if object_name == "tradeTab":
-                w._trade_tab = tab
-            if object_name == "advancedTab":
-                w._advanced_tab = tab
-            tab_layout = QVBoxLayout(tab)
-            tab_layout.setContentsMargins(12, 10, 18, 24)
-            tab_layout.setSpacing(8)
-            form = QFormLayout()
-            form.setHorizontalSpacing(16)
-            form.setVerticalSpacing(10)
-            form.setLabelAlignment(Qt.AlignLeft | Qt.AlignVCenter)
-            form.setFormAlignment(Qt.AlignTop | Qt.AlignLeft)
-            form.setRowWrapPolicy(QFormLayout.DontWrapRows)
-            form.setFieldGrowthPolicy(QFormLayout.AllNonFixedFieldsGrow)
-            tab_layout.addLayout(form)
-            tab_layout.addStretch(1)
-            tabs.addTab(tab, title)
-            return tab, tab_layout, form
+    def _create_tab_form(
+        self, tabs: QTabWidget, title: str, object_name: str | None = None
+    ) -> tuple[QWidget, QVBoxLayout, QFormLayout]:
+        w = self._window
+        tab = QWidget()
+        if object_name:
+            tab.setObjectName(object_name)
+        if object_name == "basicTab":
+            w._basic_tab = tab
+        if object_name == "tradeTab":
+            w._trade_tab = tab
+        if object_name == "advancedTab":
+            w._advanced_tab = tab
+        tab_layout = QVBoxLayout(tab)
+        tab_layout.setContentsMargins(12, 10, 18, 24)
+        tab_layout.setSpacing(8)
+        form = QFormLayout()
+        form.setHorizontalSpacing(16)
+        form.setVerticalSpacing(10)
+        form.setLabelAlignment(Qt.AlignLeft | Qt.AlignVCenter)
+        form.setFormAlignment(Qt.AlignTop | Qt.AlignLeft)
+        form.setRowWrapPolicy(QFormLayout.DontWrapRows)
+        form.setFieldGrowthPolicy(QFormLayout.AllNonFixedFieldsGrow)
+        tab_layout.addLayout(form)
+        tab_layout.addStretch(1)
+        tabs.addTab(tab, title)
+        return tab, tab_layout, form
 
-        def _card(
-            title: str,
-            *,
-            title_align: str = "left",
-            title_tone: str = "default",
-        ) -> tuple[QGroupBox, QFormLayout]:
-            card = QGroupBox(title)
-            card.setObjectName("card")
-            card.setProperty("titleAlign", title_align)
-            card.setProperty("titleTone", title_tone)
-            card_layout = QVBoxLayout(card)
-            card_layout.setContentsMargins(12, 10, 12, 10)
-            card_layout.setSpacing(6)
-            card_form = QFormLayout()
-            card_form.setHorizontalSpacing(16)
-            card_form.setVerticalSpacing(10)
-            card_form.setLabelAlignment(Qt.AlignLeft | Qt.AlignVCenter)
-            card_form.setFormAlignment(Qt.AlignTop | Qt.AlignLeft)
-            card_form.setRowWrapPolicy(QFormLayout.DontWrapRows)
-            card_form.setFieldGrowthPolicy(QFormLayout.AllNonFixedFieldsGrow)
-            card_layout.addLayout(card_form)
-            return card, card_form
+    @staticmethod
+    def _create_card(
+        title: str,
+        *,
+        title_align: str = "left",
+        title_tone: str = "default",
+    ) -> tuple[QGroupBox, QFormLayout]:
+        card = QGroupBox(title)
+        card.setObjectName("card")
+        card.setProperty("titleAlign", title_align)
+        card.setProperty("titleTone", title_tone)
+        card_layout = QVBoxLayout(card)
+        card_layout.setContentsMargins(12, 10, 12, 10)
+        card_layout.setSpacing(6)
+        card_form = QFormLayout()
+        card_form.setHorizontalSpacing(16)
+        card_form.setVerticalSpacing(10)
+        card_form.setLabelAlignment(Qt.AlignLeft | Qt.AlignVCenter)
+        card_form.setFormAlignment(Qt.AlignTop | Qt.AlignLeft)
+        card_form.setRowWrapPolicy(QFormLayout.DontWrapRows)
+        card_form.setFieldGrowthPolicy(QFormLayout.AllNonFixedFieldsGrow)
+        card_layout.addLayout(card_form)
+        return card, card_form
 
-        model_tab, model_tab_layout, form_model = _tab_form("Model Lab", object_name="modelTab")
-        _basic_tab, _basic_tab_layout, form_basic = _tab_form("Basic", object_name="basicTab")
-        _trade_tab, _trade_tab_layout, form_trade = _tab_form("Trade", object_name="tradeTab")
+    def _apply_tabs_style(self, tabs: QTabWidget) -> None:
+        w = self._window
         tabs_style = """
             QTabWidget::pane {
                 border: none;
@@ -276,6 +295,9 @@ class LiveUIBuilder:
         )
         tabs_style = tabs_style.replace("__CARD_LINE_TITLE_OFFSET_PX__", str(w._CARD_LINE_TITLE_OFFSET_PX))
         tabs.setStyleSheet(tabs_style)
+
+    def _build_model_tab(self, *, form_model: QFormLayout, model_tab_layout: QVBoxLayout, panel: QWidget) -> None:
+        w = self._window
         model_row = QWidget()
         model_layout = QVBoxLayout(model_row)
         model_layout.setContentsMargins(0, 0, 0, 0)
@@ -339,10 +361,22 @@ class LiveUIBuilder:
         auto_trade_layout.addWidget(w._auto_start_status)
         auto_trade_layout.addStretch(1)
 
-        model_card, model_card_form = _card("Model Lab", title_tone="line")
+        model_card, model_card_form = self._create_card("Model Lab", title_tone="line")
         model_card_form.addRow("Model file", model_row)
         model_card_form.addRow("Auto Trade", auto_trade_row)
         form_model.addRow(model_card)
+
+        w._auto_log_panel = DecisionInspectorWidget(
+            title="Auto Trade",
+            with_timestamp=True,
+            max_entries=200,
+        )
+        w._auto_log_panel.setMinimumHeight(340)
+        w._auto_log_panel.setMaximumHeight(16777215)
+        model_tab_layout.addWidget(w._auto_log_panel)
+
+    def _build_basic_tab(self, *, form_basic: QFormLayout) -> None:
+        w = self._window
         w._trade_symbol = QComboBox()
         w._sync_trade_symbol_choices(preferred_symbol=w._symbol_name)
         symbol_row = QWidget()
@@ -350,7 +384,7 @@ class LiveUIBuilder:
         symbol_layout.setContentsMargins(0, 0, 0, 0)
         symbol_layout.setSpacing(6)
         symbol_layout.addWidget(w._trade_symbol)
-        basic_card, basic_card_form = _card("Basic Settings", title_tone="line")
+        basic_card, basic_card_form = self._create_card("Basic Settings", title_tone="line")
         basic_card_form.addRow("Symbol", symbol_row)
         w._trade_symbol.currentTextChanged.connect(w._handle_trade_symbol_changed)
 
@@ -360,7 +394,9 @@ class LiveUIBuilder:
         w._trade_timeframe.currentTextChanged.connect(w._handle_trade_timeframe_changed)
         form_basic.addRow(basic_card)
 
-        trade_card, trade_card_form = _card("Position Sizing", title_tone="line")
+    def _build_trade_tab(self, *, form_trade: QFormLayout, panel: QWidget) -> None:
+        w = self._window
+        trade_card, trade_card_form = self._create_card("Position Sizing", title_tone="line")
         lot_row = QWidget()
         lot_layout = QVBoxLayout(lot_row)
         lot_layout.setContentsMargins(0, 0, 0, 0)
@@ -392,7 +428,7 @@ class LiveUIBuilder:
         trade_card_form.addRow("Max positions", w._max_positions)
         form_trade.addRow(trade_card)
 
-        risk_card, risk_card_form = _card("Risk Controls", title_tone="line")
+        risk_card, risk_card_form = self._create_card("Risk Controls", title_tone="line")
         w._stop_loss = QDoubleSpinBox()
         w._stop_loss.setDecimals(0)
         w._stop_loss.setRange(0.0, 1000000.0)
@@ -429,8 +465,9 @@ class LiveUIBuilder:
         risk_card_form.addRow("Daily loss %", w._daily_loss)
         form_trade.addRow(risk_card)
 
-        _adv_tab, _adv_tab_layout, form_adv = _tab_form("Advanced", object_name="advancedTab")
-        advanced_card, advanced_card_form = _card("Advanced Settings", title_tone="line")
+    def _build_advanced_tab(self, *, form_adv: QFormLayout) -> None:
+        w = self._window
+        advanced_card, advanced_card_form = self._create_card("Advanced Settings", title_tone="line")
         w._min_signal_interval = QSpinBox()
         w._min_signal_interval.setRange(0, 3600)
         w._min_signal_interval.setValue(5)
@@ -481,14 +518,3 @@ class LiveUIBuilder:
         w._quote_affects_chart.toggled.connect(w._set_quote_chart_mode)
         advanced_card_form.addRow("Quotes affect candles", w._quote_affects_chart)
         form_adv.addRow(advanced_card)
-
-        w._auto_log_panel = DecisionInspectorWidget(
-            title="Auto Trade",
-            with_timestamp=True,
-            max_entries=200,
-        )
-        w._auto_log_panel.setMinimumHeight(340)
-        w._auto_log_panel.setMaximumHeight(16777215)
-        model_tab_layout.addWidget(w._auto_log_panel)
-
-        return panel

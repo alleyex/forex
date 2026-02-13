@@ -14,6 +14,7 @@ from ctrader_open_api.messages.OpenApiMessages_pb2 import (
 )
 from ctrader_open_api.messages.OpenApiModelMessages_pb2 import ProtoOAPayloadType
 
+from forex.config.constants import ConnectionStatus
 from forex.infrastructure.broker.base import BaseCallbacks, LogHistoryMixin, OperationStateMixin, build_callbacks
 from forex.infrastructure.broker.errors import ErrorCode, error_message
 from forex.infrastructure.broker.ctrader.services.app_auth_service import AppAuthService
@@ -413,12 +414,20 @@ class AccountFundsService(
     def _on_timeout(self) -> None:
         if not self._in_progress:
             return
+        if int(getattr(self._app_auth_service, "status", 0) or 0) < int(ConnectionStatus.APP_AUTHENTICATED):
+            # During reconnect/auth handshake, pending funds requests may timeout
+            # against stale transport; silently collapse instead of spamming logs.
+            self._cleanup()
+            return
         metrics.inc("ctrader.account_funds.timeout")
         self._emit_error(error_message(ErrorCode.TIMEOUT, "取得帳戶資金逾時"))
         self._cleanup()
 
     def _retry_request(self, attempt: int) -> None:
         if not self._in_progress:
+            return
+        if int(getattr(self._app_auth_service, "status", 0) or 0) < int(ConnectionStatus.APP_AUTHENTICATED):
+            self._cleanup()
             return
         self._log(format_warning(f"帳戶資金逾時，重試第 {attempt} 次"))
         metrics.inc("ctrader.account_funds.retry")

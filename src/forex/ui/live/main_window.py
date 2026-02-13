@@ -710,8 +710,8 @@ class LiveMainWindow(QMainWindow):
         return self._session_orchestrator.broker_runtime_ready()
 
     def _update_reconnect_status(self, *, reason: str = "status_refresh") -> None:
-        # Keep reconnect phase state machine updated, but hide status text in UI.
-        self._session_orchestrator.reconnect_status_text(reason=reason)
+        # Keep reconnect phase state machine updated, while reconnect text is hidden in UI.
+        self._session_orchestrator.sync_reconnect_phase(reason=reason)
 
     def _setup_connection_controller(self) -> None:
         controller = ConnectionController(
