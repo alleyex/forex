@@ -6,6 +6,31 @@ class LiveMarketDataController:
     def __init__(self, window) -> None:
         self._window = window
 
+    def dispose_history_service(self) -> None:
+        w = self._window
+        service = getattr(w, "_history_service", None)
+        if service is not None:
+            cancel = getattr(service, "cancel", None)
+            if callable(cancel):
+                try:
+                    cancel()
+                except Exception:
+                    pass
+        w._history_service = None
+
+    def dispose_trendbar_service(self) -> None:
+        w = self._window
+        service = getattr(w, "_trendbar_service", None)
+        if service is not None:
+            cancel = getattr(service, "cancel", None)
+            if callable(cancel):
+                try:
+                    cancel()
+                except Exception:
+                    pass
+        w._trendbar_service = None
+        w._trendbar_active = False
+
     def set_trade_timeframe(self, timeframe: str) -> None:
         w = self._window
         ready_fn = getattr(w, "_is_broker_runtime_ready", None)
@@ -26,7 +51,7 @@ class LiveMarketDataController:
         if runtime_ready and w._app_state and w._app_state.selected_account_id:
             w._request_recent_history()
 
-    def request_recent_history(self) -> None:
+    def request_recent_history(self, *, force: bool = False) -> None:
         w = self._window
         ready_fn = getattr(w, "_is_broker_runtime_ready", None)
         runtime_ready = bool(ready_fn()) if callable(ready_fn) else True
@@ -52,11 +77,15 @@ class LiveMarketDataController:
         symbol_id = int(w._symbol_id)
         history_count = self.history_lookback_count()
         key = (int(account_id), symbol_id, w._timeframe, history_count)
-        if w._last_history_request_key == key and now - w._last_history_request_ts < 10.0:
+        if not force and w._last_history_request_key == key and now - w._last_history_request_ts < 10.0:
             return
         timeframe_seconds = max(60, self.timeframe_minutes() * 60)
         success_cooldown = max(30.0, min(300.0, timeframe_seconds / 2.0))
-        if w._last_history_success_key == key and now - w._last_history_success_ts < success_cooldown:
+        if (
+            not force
+            and w._last_history_success_key == key
+            and now - w._last_history_success_ts < success_cooldown
+        ):
             return
 
         if w._history_service is None:
@@ -185,6 +214,8 @@ class LiveMarketDataController:
         account_id = None if not w._app_state else w._app_state.selected_account_id
         if not account_id:
             return
+        # Stream mode should not run periodic history polling in parallel.
+        w._stop_history_polling()
         if w._trendbar_service is None:
             w._trendbar_service = w._use_cases.create_trendbar(w._service)
 
@@ -213,12 +244,14 @@ class LiveMarketDataController:
 
     def stop_live_trendbar(self) -> None:
         w = self._window
+        ready_fn = getattr(w, "_is_broker_runtime_ready", None)
+        runtime_ready = bool(ready_fn()) if callable(ready_fn) else True
         if not w._trendbar_service or not w._trendbar_active:
             return
         # If account authorization is known invalid, skip network unsubscribe to
         # avoid broker INVALID_REQUEST spam from stale/non-subscribed periods.
-        if getattr(w, "_account_authorization_blocked", False):
-            w._trendbar_active = False
+        if getattr(w, "_account_authorization_blocked", False) or not runtime_ready:
+            self.dispose_trendbar_service()
             return
         from forex.utils.reactor_manager import reactor_manager
 
@@ -287,6 +320,25 @@ class LiveMarketDataController:
         elif w._candles[-1][0] == candle[0]:
             w._candles[-1] = candle
         elif w._candles[-1][0] < candle[0]:
+            step_seconds = max(1, self.timeframe_minutes() * 60)
+            last_ts = float(w._candles[-1][0])
+            gap_seconds = float(candle[0] - last_ts)
+            if gap_seconds > step_seconds:
+                missing_count = max(1, int(gap_seconds // step_seconds) - 1)
+                if hasattr(w, "_auto_debug_log"):
+                    w._auto_debug_log(
+                        f"trendbar_gap_detected missing={missing_count} "
+                        f"last={int(last_ts)} incoming={int(candle[0])}; forcing history backfill"
+                    )
+                # Force a history backfill first so we avoid plotting isolated bars
+                # after reconnect/stalls.
+                w._history_requested = False
+                w._pending_history = False
+                w._last_history_request_key = None
+                w._last_history_success_key = None
+                self.dispose_history_service()
+                w._request_recent_history(force=True)
+                return
             self.fill_missing_candles(candle)
             w._candles.append(candle)
             appended = True

@@ -17,6 +17,11 @@ class LivePositionsController:
             return
         if w._positions_message_handler is None:
             w._positions_message_handler = self.handle_positions_message
+        has_handler = getattr(w._service, "has_message_handler", None)
+        if callable(has_handler):
+            if not has_handler(w._positions_message_handler):
+                w._service.add_message_handler(w._positions_message_handler)
+        else:
             w._service.add_message_handler(w._positions_message_handler)
 
     def request_positions(self) -> None:

@@ -170,6 +170,8 @@ class BaseAuthService(BaseService[TCb], Generic[TCb, TClient, TMsg]):
         self._message_handlers: list[MessageHandler[TClient, TMsg]] = []
 
     def add_message_handler(self, handler: MessageHandler[TClient, TMsg]) -> None:
+        if handler in self._message_handlers:
+            return
         self._message_handlers.append(handler)
 
     def remove_message_handler(self, handler: MessageHandler[TClient, TMsg]) -> None:
@@ -178,6 +180,12 @@ class BaseAuthService(BaseService[TCb], Generic[TCb, TClient, TMsg]):
 
     def clear_message_handlers(self) -> None:
         self._message_handlers.clear()
+
+    def has_message_handler(self, handler: MessageHandler[TClient, TMsg]) -> bool:
+        return handler in self._message_handlers
+
+    def message_handler_count(self) -> int:
+        return len(self._message_handlers)
 
     def _dispatch_to_handlers(self, client: TClient, msg: TMsg, *, stop_on_handled: bool = True) -> bool:
         """

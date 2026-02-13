@@ -48,7 +48,7 @@ class LiveAutoRecoveryService:
             w._history_requested = False
             w._pending_history = False
             w._last_history_request_key = None
-            w._history_service = None
+            w._dispose_history_service()
             w._request_recent_history()
 
         if silence_seconds >= silence_threshold:
@@ -80,10 +80,11 @@ class LiveAutoRecoveryService:
                 f"for {int(latest_candle_age)}s (tf={w._timeframe}). Resyncing history/trendbar..."
             )
             w._stop_live_trendbar()
-            w._trendbar_service = None
+            w._dispose_trendbar_service()
             if runtime_ready and w._app_state and w._app_state.selected_account_id:
                 w._history_requested = False
                 w._pending_history = False
+                w._dispose_history_service()
                 w._request_recent_history()
             else:
                 w._start_live_trendbar()
@@ -100,11 +101,12 @@ class LiveAutoRecoveryService:
                 f"({int(trendbar_silence)}s). Rebuilding subscription..."
             )
             w._stop_live_trendbar()
-            w._trendbar_service = None
+            w._dispose_trendbar_service()
             w._auto_last_trendbar_ts = now
             if runtime_ready and w._app_state and w._app_state.selected_account_id:
                 w._history_requested = False
                 w._pending_history = False
+                w._dispose_history_service()
                 w._request_recent_history()
             else:
                 w._start_live_trendbar()
@@ -125,6 +127,11 @@ class LiveAutoRecoveryService:
         w = self._window
         ready_fn = getattr(w, "_is_broker_runtime_ready", None)
         runtime_ready = bool(ready_fn()) if callable(ready_fn) else True
+        history_only_mode = bool(getattr(w, "_history_only_chart_mode", False))
+        # In stream mode, do not use periodic history polling.
+        if not history_only_mode:
+            w._stop_history_polling()
+            return
         if getattr(w, "_account_authorization_blocked", False):
             return
         if not runtime_ready:
@@ -141,7 +148,7 @@ class LiveAutoRecoveryService:
                 w._history_requested = False
                 w._pending_history = False
                 w._last_history_request_key = None
-                w._history_service = None
+                w._dispose_history_service()
             else:
                 # Skip duplicate poll requests while an in-flight history request
                 # is still within its expected response window.

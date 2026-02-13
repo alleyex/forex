@@ -71,6 +71,14 @@ class LiveAutoLifecycleService:
         if w._auto_trade_toggle and not w._auto_trade_toggle.isChecked():
             # User/system disabled auto trade while model was loading.
             return
+        if not runtime_ready:
+            w._auto_enabled = False
+            if w._auto_trade_toggle:
+                w._auto_trade_toggle.blockSignals(True)
+                w._auto_trade_toggle.setChecked(False)
+                w._auto_trade_toggle.blockSignals(False)
+            w._auto_log("⚠️ Broker not ready; auto trade start skipped.")
+            return
         w._auto_enabled = True
         w._auto_position = 0.0
         w._auto_position_id = None

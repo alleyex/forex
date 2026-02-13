@@ -300,6 +300,20 @@ class LiveAutoTradeCoordinator:
             (w._auto_position > 0 and desired > 0)
             or (w._auto_position < 0 and desired < 0)
         ):
+            # When desired exposure is weaker than current same-side exposure,
+            # never add more. With rebalance OFF, hold; with rebalance ON,
+            # try reducing first.
+            current_pos = float(w._auto_position)
+            if abs(desired) < (abs(current_pos) - 0.05):
+                if not same_side_rebalance_enabled:
+                    w._auto_position = desired
+                    w._auto_debug_fields(
+                        "same_side_hold_reduce_signal",
+                        current=f"{current_pos:.3f}",
+                        desired=f"{desired:.3f}",
+                        rebalance="OFF",
+                    )
+                    return False
             if (
                 same_side_rebalance_enabled
                 and same_side_count > 0

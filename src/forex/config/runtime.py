@@ -17,6 +17,9 @@ class AppConfig:
     oauth_timeout: float
     oauth_login_timeout: float
     reconnect_delay: float
+    reconnect_max_delay: float
+    reconnect_max_attempts: int
+    reconnect_jitter_ratio: float
     auto_reconnect: bool
     heartbeat_log_interval: float
     retry_max_attempts: int
@@ -68,6 +71,9 @@ def load_config() -> AppConfig:
         oauth_timeout=_get_float_env("CTRADER_OAUTH_TIMEOUT", 15.0),
         oauth_login_timeout=_get_float_env("CTRADER_OAUTH_LOGIN_TIMEOUT", 300.0),
         reconnect_delay=_get_float_env("CTRADER_RECONNECT_DELAY", 3.0),
+        reconnect_max_delay=_get_float_env("CTRADER_RECONNECT_MAX_DELAY", 60.0),
+        reconnect_max_attempts=_get_int_env("CTRADER_RECONNECT_MAX_ATTEMPTS", 0),
+        reconnect_jitter_ratio=_get_float_env("CTRADER_RECONNECT_JITTER_RATIO", 0.15),
         auto_reconnect=_get_bool_env("CTRADER_AUTO_RECONNECT", True),
         heartbeat_log_interval=_get_float_env("CTRADER_HEARTBEAT_LOG_INTERVAL", 60.0),
         retry_max_attempts=_get_int_env("CTRADER_RETRY_MAX_ATTEMPTS", 0),

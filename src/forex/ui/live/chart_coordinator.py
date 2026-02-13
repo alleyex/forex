@@ -106,15 +106,7 @@ class LiveChartCoordinator:
         if int(symbol_id) != int(w._symbol_id):
             return
         digits = w._quote_row_digits.get(int(symbol_id), w._price_digits)
-        bid_val = w._normalize_price(bid, digits=digits)
-        ask_val = w._normalize_price(ask, digits=digits)
-        price = None
-        if bid_val and ask_val:
-            price = (bid_val + ask_val) / 2.0
-        elif bid_val:
-            price = bid_val
-        elif ask_val:
-            price = ask_val
+        price = self._resolve_quote_price(symbol_id, bid, ask, digits=digits)
         if price is None:
             return
         ts_val = spot_ts
@@ -161,15 +153,7 @@ class LiveChartCoordinator:
         if not w._candles:
             return
         digits = w._quote_row_digits.get(int(symbol_id), w._price_digits)
-        bid_val = w._normalize_price(bid, digits=digits)
-        ask_val = w._normalize_price(ask, digits=digits)
-        price = None
-        if bid_val and ask_val:
-            price = (bid_val + ask_val) / 2.0
-        elif bid_val:
-            price = bid_val
-        elif ask_val:
-            price = ask_val
+        price = self._resolve_quote_price(symbol_id, bid, ask, digits=digits)
         if price is None:
             return
         ts_val = spot_ts
@@ -223,15 +207,7 @@ class LiveChartCoordinator:
         if int(symbol_id) != int(w._symbol_id):
             return
         digits = w._quote_row_digits.get(int(symbol_id), w._price_digits)
-        bid_val = w._normalize_price(bid, digits=digits)
-        ask_val = w._normalize_price(ask, digits=digits)
-        live_price = None
-        if bid_val and ask_val:
-            live_price = (bid_val + ask_val) / 2.0
-        elif bid_val:
-            live_price = bid_val
-        elif ask_val:
-            live_price = ask_val
+        live_price = self._resolve_quote_price(symbol_id, bid, ask, digits=digits)
         if live_price is None:
             return
         w._last_price_line.setValue(live_price)
@@ -252,6 +228,25 @@ class LiveChartCoordinator:
                 live_price + y_offset,
             )
         w._last_price_label.show()
+
+    def _resolve_quote_price(self, symbol_id: int, bid, ask, *, digits: int) -> float | None:
+        w = self._window
+        symbol_id = int(symbol_id)
+        bid_val = w._normalize_price(bid, digits=digits)
+        ask_val = w._normalize_price(ask, digits=digits)
+
+        if bid_val is None:
+            bid_val = w._quote_last_bid.get(symbol_id)
+        if ask_val is None:
+            ask_val = w._quote_last_ask.get(symbol_id)
+
+        if bid_val is not None and ask_val is not None:
+            return (float(bid_val) + float(ask_val)) / 2.0
+        if bid_val is not None:
+            return float(bid_val)
+        if ask_val is not None:
+            return float(ask_val)
+        return None
 
     def handle_chart_range_changed(self, *_args) -> None:
         w = self._window

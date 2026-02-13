@@ -52,6 +52,10 @@ class ConnectionController(QObject):
     def oauth_service(self) -> Optional[OAuthServiceLike]:
         return self._oauth_service
 
+    @property
+    def transition_in_progress(self) -> bool:
+        return bool(self._connection_in_progress)
+
     def set_service(self, service: AppAuthServiceLike) -> None:
         self._service = service
         if self._on_service_ready:
@@ -83,45 +87,10 @@ class ConnectionController(QObject):
             return False
         return self._oauth_service.status >= ConnectionStatus.ACCOUNT_AUTHENTICATED
 
-    @Slot()
-    def toggle_connection(self) -> None:
+    def connect_flow(self) -> None:
         if self._connection_in_progress:
             self.logRequested.emit(format_connection_message("in_progress"))
             return
-
-        if self.is_oauth_authenticated() or self.is_app_authenticated():
-            self._connection_in_progress = True
-            try:
-                oauth_service = self._oauth_service
-                if oauth_service and oauth_service.status != ConnectionStatus.DISCONNECTED:
-                    logout = getattr(oauth_service, "logout", None)
-                    if callable(logout):
-                        try:
-                            self.logRequested.emit(format_connection_message("logout_pending"))
-                            logout()
-                        except Exception:
-                            pass
-                    QTimer.singleShot(2500, lambda: oauth_service.disconnect())
-                self._oauth_service = None
-                self.oauthStatusChanged.emit(int(ConnectionStatus.DISCONNECTED))
-
-                if self._service and getattr(self._service, "status", None) != ConnectionStatus.DISCONNECTED:
-                    self._service.disconnect()
-                if self._service and hasattr(self._service, "clear_log_history"):
-                    try:
-                        self._service.clear_log_history()
-                    except Exception:
-                        pass
-                self._service = None
-                self.appAuthStatusChanged.emit(int(ConnectionStatus.DISCONNECTED))
-
-                if self._on_reset_controllers:
-                    self._on_reset_controllers()
-                self.logRequested.emit(format_connection_message("disconnected"))
-            finally:
-                self._connection_in_progress = False
-            return
-
         self._connection_in_progress = True
         try:
             self.open_app_auth_dialog(auto_connect=True)
@@ -132,6 +101,48 @@ class ConnectionController(QObject):
                 self.logRequested.emit(format_connection_message("connected_done"))
         finally:
             self._connection_in_progress = False
+
+    def disconnect_flow(self) -> None:
+        if self._connection_in_progress:
+            self.logRequested.emit(format_connection_message("in_progress"))
+            return
+        self._connection_in_progress = True
+        try:
+            oauth_service = self._oauth_service
+            if oauth_service and oauth_service.status != ConnectionStatus.DISCONNECTED:
+                logout = getattr(oauth_service, "logout", None)
+                if callable(logout):
+                    try:
+                        self.logRequested.emit(format_connection_message("logout_pending"))
+                        logout()
+                    except Exception:
+                        pass
+                QTimer.singleShot(2500, lambda: oauth_service.disconnect())
+            self._oauth_service = None
+            self.oauthStatusChanged.emit(int(ConnectionStatus.DISCONNECTED))
+
+            if self._service and getattr(self._service, "status", None) != ConnectionStatus.DISCONNECTED:
+                self._service.disconnect()
+            if self._service and hasattr(self._service, "clear_log_history"):
+                try:
+                    self._service.clear_log_history()
+                except Exception:
+                    pass
+            self._service = None
+            self.appAuthStatusChanged.emit(int(ConnectionStatus.DISCONNECTED))
+
+            if self._on_reset_controllers:
+                self._on_reset_controllers()
+            self.logRequested.emit(format_connection_message("disconnected"))
+        finally:
+            self._connection_in_progress = False
+
+    @Slot()
+    def toggle_connection(self) -> None:
+        if self.is_oauth_authenticated() or self.is_app_authenticated():
+            self.disconnect_flow()
+            return
+        self.connect_flow()
 
     def open_app_auth_dialog(self, *, auto_connect: bool = False) -> None:
         if self._app_auth_dialog_open:

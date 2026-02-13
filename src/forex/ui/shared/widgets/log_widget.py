@@ -80,6 +80,10 @@ class LogWidget(QWidget):
         "place_order",
         "close_position",
         "signal_throttled",
+        "strategy_profile",
+        "session_phase",
+        "runtime_stalled",
+        "runtime_resume",
     }
     appendRequested = Signal(str)
     """
@@ -115,6 +119,10 @@ class LogWidget(QWidget):
         self._loaded_candles_pattern = re.compile(r"Loaded\s+(\d+)\s+candles", re.IGNORECASE)
         self._unhandled_type_pattern = re.compile(r"未處理的訊息類型[:：]\s*(\d+)")
         self._error_invalid_pattern = re.compile(r"錯誤\s+INVALID_REQUEST[:：]\s*(.+)", re.IGNORECASE)
+        self._strategy_profile_pattern = re.compile(
+            r"strategy\s*profile\s*:\s*same-side\s+near-full\s+hold\s*=\s*(ON|OFF)",
+            re.IGNORECASE,
+        )
         self._current_filter = "全部"
         self._repeat_suppression_window_s = 5.0
         self._last_entry_text = ""
@@ -411,6 +419,11 @@ class LogWidget(QWidget):
             return f"invalid_request | detail={match.group(1)}"
 
         lower = body.lower()
+        match = self._strategy_profile_pattern.search(body)
+        if match:
+            near_full_hold = match.group(1).upper()
+            return f"strategy_profile | near_full_hold={near_full_hold} | threshold=0.95"
+
         if "funds received" in lower:
             return "funds_received"
         if "發送 heartbeat" in body or "sending heartbeat" in lower:
@@ -431,8 +444,10 @@ class LogWidget(QWidget):
             return body
         head, tail = body.split("|", 1)
         raw_event = head.strip()
+        raw_event = re.sub(r"^[^\w]+", "", raw_event, flags=re.UNICODE).strip()
         event = raw_event.lower().replace(" ", "_").replace("-", "_")
         event = re.sub(r"[^a-z0-9_]+", "", event)
+        event = event.strip("_")
         if event and event in self._EVENT_CATALOG:
             return f"{event} | {tail.strip()}"
         if event:

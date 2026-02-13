@@ -151,6 +151,26 @@ class TrendbarService(
             )
         )
 
+    def cancel(self) -> None:
+        """
+        Abort local trendbar lifecycle without sending network unsubscribe.
+
+        This is used during reconnect/auth-transition paths where transport is
+        already unstable and we only need to guarantee handler cleanup.
+        """
+        self._await_spot_subscribe = False
+        self._pending_trendbar_request = None
+        self._spot_subscribed = False
+        self._last_bar = None
+        self._last_bar_ts = None
+        if self._in_progress:
+            self._cleanup_request_lifecycle(timeout_tracker=None, handler=self._handle_message)
+            return
+        try:
+            self._app_auth_service.remove_message_handler(self._handle_message)
+        except Exception:
+            pass
+
     def _handle_message(self, client: Client, msg: object) -> bool:
         if not self._in_progress:
             return False

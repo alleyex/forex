@@ -430,5 +430,23 @@ class TrendbarHistoryService(
             self._send_timer.cancel()
             self._send_timer = None
 
+    def cancel(self) -> None:
+        """
+        Abort current history request lifecycle without relying on broker response.
+
+        Used by reconnect/stall recovery paths to avoid leaking in-progress
+        handlers when a request is abandoned.
+        """
+        if self._send_timer is not None:
+            self._send_timer.cancel()
+            self._send_timer = None
+        if self._in_progress:
+            self._cleanup()
+            return
+        try:
+            self._app_auth_service.remove_message_handler(self._handle_message)
+        except Exception:
+            pass
+
     def _period_label(self) -> str:
         return self._PERIOD_LABELS.get(self._period, f"period={self._period}")

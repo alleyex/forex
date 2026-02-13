@@ -22,6 +22,11 @@ class LiveQuoteController:
             return
         if w._spot_message_handler is None:
             w._spot_message_handler = self.handle_spot_message
+        has_handler = getattr(w._service, "has_message_handler", None)
+        if callable(has_handler):
+            if not has_handler(w._spot_message_handler):
+                w._service.add_message_handler(w._spot_message_handler)
+        else:
             w._service.add_message_handler(w._spot_message_handler)
 
     def ensure_quote_subscription(self) -> None:
@@ -73,17 +78,29 @@ class LiveQuoteController:
 
     def stop_quote_subscription(self) -> None:
         w = self._window
+        ready_fn = getattr(w, "_is_broker_runtime_ready", None)
+        runtime_ready = bool(ready_fn()) if callable(ready_fn) else True
         if not w._service or not w._app_state:
             return
         account_id = w._app_state.selected_account_id
         if not account_id:
             w._quote_subscribed = False
             w._quote_subscribed_ids.clear()
+            w._quote_subscribe_inflight.clear()
+            return
+        # During reconnect/auth transition, sending unsubscribe can trigger
+        # broker INVALID_REQUEST/unauthorized noise. Just clear local state.
+        if not runtime_ready:
+            w._quote_subscribed = False
+            w._quote_subscribed_ids.clear()
+            w._quote_subscribe_inflight.clear()
             return
         try:
             client = w._service.get_client()  # type: ignore[attr-defined]
         except Exception:
             w._quote_subscribed = False
+            w._quote_subscribed_ids.clear()
+            w._quote_subscribe_inflight.clear()
             return
 
         from forex.utils.reactor_manager import reactor_manager
