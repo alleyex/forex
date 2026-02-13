@@ -4,7 +4,7 @@ import time
 from types import SimpleNamespace
 
 from forex.config.constants import ConnectionStatus
-from forex.ui.live.account_controller import LiveAccountController
+from forex.ui.live.controllers.account_controller import LiveAccountController
 
 
 class _SignalSink:

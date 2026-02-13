@@ -25,16 +25,16 @@ pip install -e '.[ml]'
 
 ## Run
 
-Training UI (wrapper entrypoint):
+Training UI:
 
 ```bash
-QT_OPENGL=software LOG_LEVEL=INFO python main_train.py
+QT_OPENGL=software LOG_LEVEL=INFO forex-train
 ```
 
-Live UI (wrapper entrypoint):
+Live UI:
 
 ```bash
-QT_OPENGL=software LOG_LEVEL=INFO python main_live.py
+QT_OPENGL=software LOG_LEVEL=INFO forex-live
 ```
 
 Direct module entrypoints:
@@ -53,7 +53,7 @@ pytest -q
 
 ## Configuration
 
-Environment variables (defaults in `src/config/runtime.py`):
+Environment variables (defaults in `src/forex/config/runtime.py`):
 
 - `TOKEN_FILE`: path to token.json
 - `BROKER_PROVIDER`: `ctrader` by default

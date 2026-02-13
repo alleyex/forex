@@ -6,7 +6,7 @@ from types import SimpleNamespace
 import pytest
 
 from forex.config.constants import ConnectionStatus
-from forex.ui.live.session_orchestrator import LiveSessionOrchestrator, LiveSessionPhase
+from forex.ui.live.orchestration.session_orchestrator import LiveSessionOrchestrator, LiveSessionPhase
 
 
 @dataclass

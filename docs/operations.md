@@ -3,13 +3,13 @@
 ## Quick Start
 
 ```bash
-QT_OPENGL=software LOG_LEVEL=INFO python main_train.py
+QT_OPENGL=software LOG_LEVEL=INFO forex-train
 ```
 
 For live trading UI:
 
 ```bash
-QT_OPENGL=software LOG_LEVEL=INFO python main_live.py
+QT_OPENGL=software LOG_LEVEL=INFO forex-live
 ```
 
 ## Common Environment Variables
@@ -127,7 +127,7 @@ Use it to quickly compare before/after reconnect fixes instead of reading logs l
 1. Start live UI with file logging:
 
 ```bash
-LOG_LEVEL=INFO LOG_FILE=live_soak.log QT_OPENGL=software python main_live.py
+LOG_LEVEL=INFO LOG_FILE=runtime/live_soak.log QT_OPENGL=software forex-live
 ```
 
 2. Wait until status is authenticated and data streams are active (`funds_received`, `history_loaded`).
@@ -136,7 +136,7 @@ LOG_LEVEL=INFO LOG_FILE=live_soak.log QT_OPENGL=software python main_live.py
 5. Analyze log:
 
 ```bash
-python -m forex.tools.live.reconnect_log_analyzer live_soak.log
+python -m forex.tools.live.reconnect_log_analyzer runtime/live_soak.log
 ```
 
 Optional quick regression before/after soak:

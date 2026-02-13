@@ -21,7 +21,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from forex.ui.live.decision_inspector_widget import DecisionInspectorWidget
+from forex.ui.live.widgets.decision_inspector_widget import DecisionInspectorWidget
 
 
 class LiveUIBuilder:

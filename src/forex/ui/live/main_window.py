@@ -41,25 +41,25 @@ from forex.application.state import AppState
 from forex.config.constants import ConnectionStatus
 from forex.config.paths import MODEL_DIR, SYMBOL_LIST_FILE, TOKEN_FILE
 from forex.config.settings import OAuthTokens
-from forex.ui.live.account_controller import LiveAccountController
-from forex.ui.live.auto_lifecycle_service import LiveAutoLifecycleService
-from forex.ui.live.auto_log_service import LiveAutoLogService
-from forex.ui.live.auto_recovery_service import LiveAutoRecoveryService
-from forex.ui.live.auto_runtime_service import LiveAutoRuntimeService
-from forex.ui.live.auto_settings_persistence import LiveAutoSettingsPersistence
-from forex.ui.live.auto_settings_validator import AutoTradeSettingsValidator
-from forex.ui.live.autotrade_coordinator import LiveAutoTradeCoordinator
-from forex.ui.live.chart_items import CandlestickItem, TimeAxisItem
-from forex.ui.live.chart_coordinator import LiveChartCoordinator
-from forex.ui.live.market_data_controller import LiveMarketDataController
-from forex.ui.live.positions_controller import LivePositionsController
-from forex.ui.live.quote_controller import LiveQuoteController
-from forex.ui.live.value_formatter_service import LiveValueFormatterService
-from forex.ui.live.layout_coordinator import LiveLayoutCoordinator
-from forex.ui.live.symbol_controller import LiveSymbolController
-from forex.ui.live.session_orchestrator import LiveSessionOrchestrator
+from forex.ui.live.controllers.account_controller import LiveAccountController
+from forex.ui.live.services.auto_lifecycle_service import LiveAutoLifecycleService
+from forex.ui.live.services.auto_log_service import LiveAutoLogService
+from forex.ui.live.services.auto_recovery_service import LiveAutoRecoveryService
+from forex.ui.live.services.auto_runtime_service import LiveAutoRuntimeService
+from forex.ui.live.services.auto_settings_persistence import LiveAutoSettingsPersistence
+from forex.ui.live.services.auto_settings_validator import AutoTradeSettingsValidator
+from forex.ui.live.orchestration.autotrade_coordinator import LiveAutoTradeCoordinator
+from forex.ui.live.widgets.chart_items import CandlestickItem, TimeAxisItem
+from forex.ui.live.orchestration.chart_coordinator import LiveChartCoordinator
+from forex.ui.live.controllers.market_data_controller import LiveMarketDataController
+from forex.ui.live.controllers.positions_controller import LivePositionsController
+from forex.ui.live.controllers.quote_controller import LiveQuoteController
+from forex.ui.live.services.value_formatter_service import LiveValueFormatterService
+from forex.ui.live.orchestration.layout_coordinator import LiveLayoutCoordinator
+from forex.ui.live.controllers.symbol_controller import LiveSymbolController
+from forex.ui.live.orchestration.session_orchestrator import LiveSessionOrchestrator
 from forex.ui.live.ui_builder import LiveUIBuilder
-from forex.ui.live.window_state import initialize_live_window_state
+from forex.ui.live.state.window_state import initialize_live_window_state
 from forex.ui.shared.controllers.connection_controller import ConnectionController
 from forex.ui.shared.controllers.service_binding import clear_log_history_safe, set_callbacks_safe
 from forex.ui.shared.utils.formatters import (

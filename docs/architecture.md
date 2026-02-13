@@ -29,30 +29,32 @@
 
 ### Live UI module split (`src/forex/ui/live`)
 - `main_window.py`: composition root for live UI. Holds wiring, Qt signal connections, and delegates logic to services/controllers/coordinators.
-- `window_state.py`: initializes runtime state/timers/flags for `LiveMainWindow`.
+- `state/window_state.py`: initializes runtime state/timers/flags for `LiveMainWindow`.
 - `ui_builder.py`: builds Auto Trading panel widgets and tab UI.
+- `widgets/decision_inspector_widget.py`: live decision log panel.
+- `widgets/chart_items.py`: chart axis/candlestick graphics items.
 
 #### Coordinators (orchestrate one functional area)
-- `layout_coordinator.py`: splitter sizing, panel alignment, resize behavior.
-- `chart_coordinator.py`: chart window/range handling, quote-candle display update policy.
-- `autotrade_coordinator.py`: strategy decision flow, position execution, sizing/risk helper logic.
+- `orchestration/layout_coordinator.py`: splitter sizing, panel alignment, resize behavior.
+- `orchestration/chart_coordinator.py`: chart window/range handling, quote-candle display update policy.
+- `orchestration/autotrade_coordinator.py`: strategy decision flow, position execution, sizing/risk helper logic.
+- `orchestration/session_orchestrator.py`: auth/session phase transitions and reconnect resume logic.
 
 #### Services (focused supporting logic)
-- `auto_log_service.py`: auto-trade log level inference and normalized log output.
-- `auto_settings_validator.py`: pre-start validation for auto-trade settings.
-- `auto_settings_persistence.py`: auto-trade settings load/save and lot/risk mode UI sync.
-- `auto_runtime_service.py`: model loading and order-service setup/execution callback handling.
-- `auto_lifecycle_service.py`: auto-trade start/stop lifecycle transitions.
-- `auto_recovery_service.py`: watchdog + history-poll recovery logic.
-- `symbol_list_service.py`: symbol list refresh/apply + trade symbol combo synchronization.
-- `value_formatter_service.py`: price/time/current-price formatting utilities used by controllers.
+- `services/auto_log_service.py`: auto-trade log level inference and normalized log output.
+- `services/auto_settings_validator.py`: pre-start validation for auto-trade settings.
+- `services/auto_settings_persistence.py`: auto-trade settings load/save and lot/risk mode UI sync.
+- `services/auto_runtime_service.py`: model loading and order-service setup/execution callback handling.
+- `services/auto_lifecycle_service.py`: auto-trade start/stop lifecycle transitions.
+- `services/auto_recovery_service.py`: watchdog + history-poll recovery logic.
+- `services/value_formatter_service.py`: price/time/current-price formatting utilities used by controllers.
 
 #### Controllers (I/O + UI table/event updates)
-- `account_controller.py`: account list handling, account switching, account-scoped state.
-- `market_data_controller.py`: recent history/trendbar request & handling.
-- `quote_controller.py`: quote subscription and quote table updates.
-- `positions_controller.py`: positions subscription/request/table updates + account summary rendering.
-- `symbol_controller.py`: symbol catalog/detail lookup and quote-symbol management.
+- `controllers/account_controller.py`: account list handling, account switching, account-scoped state.
+- `controllers/market_data_controller.py`: recent history/trendbar request & handling.
+- `controllers/quote_controller.py`: quote subscription and quote table updates.
+- `controllers/positions_controller.py`: positions subscription/request/table updates + account summary rendering.
+- `controllers/symbol_controller.py`: symbol catalog/detail lookup and quote-symbol management.
 
 ## 6) Event and State
 - `forex.application.events`: EventBus for in-process signals.

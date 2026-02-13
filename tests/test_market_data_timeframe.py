@@ -3,7 +3,7 @@ from __future__ import annotations
 from types import SimpleNamespace
 
 from forex.config.constants import ConnectionStatus
-from forex.ui.live.market_data_controller import LiveMarketDataController
+from forex.ui.live.controllers.market_data_controller import LiveMarketDataController
 
 
 class _DummyWindow:

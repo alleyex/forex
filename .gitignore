@@ -1,21 +1,32 @@
 .venv/
 .DS_Store
-token.json
+
 __pycache__/
 *.py[cod]
 .mypy_cache/
 .pytest_cache/
 .ruff_cache/
-*.csv
-ml/rl/models/
-src/ml/rl/models/
-src/forex/ml/rl/models/
 *.egg-info/
-data/raw_history/
-data/
+
+*.csv
+*.log
+
+# Local runtime/config artifacts
 token.json
-__pycache__/
-*.pyc
 symbol.json
 timeframes.json
+live_soak.log
+runtime/*
+config/local/*
+!runtime/.gitkeep
+!config/local/.gitkeep
+
+# Generated data/models
+src/forex/ml/rl/models/
+data/*
+!data/.gitkeep
+!data/README.md
+data/raw_history/
+
+# Local notes
 docs/operation_outline.md
