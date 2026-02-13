@@ -646,8 +646,5 @@ class LiveAutoTradeCoordinator:
                 return False, f"daily_loss {day_loss_ratio*100:.2f}% >= {daily_loss*100:.2f}%"
         return True, "ok"
 
-    def risk_guard_allows(self) -> bool:
-        return self.risk_guard_status()[0]
-
     def refresh_account_balance(self) -> None:
         self._window._account_controller.refresh_account_balance()

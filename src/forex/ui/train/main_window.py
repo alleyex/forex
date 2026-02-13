@@ -25,8 +25,6 @@ from forex.ui.train.controllers.history_download_controller import HistoryDownlo
 from forex.ui.train.controllers.account_info_controller import AccountInfoController
 from forex.ui.train.controllers.ppo_training_controller import PPOTrainingController
 from forex.ui.train.controllers.simulation_controller import SimulationController
-from forex.ui.train.controllers.toolbar_controller import ToolbarController
-from forex.ui.train.controllers.trendbar_controller import TrendbarController
 from forex.ui.train.presenters.connection_presenter import ConnectionPresenter
 from forex.ui.train.presenters.history_download_presenter import HistoryDownloadPresenter
 
@@ -71,15 +69,12 @@ class MainWindow(QMainWindow):
         self._service = service
         self._oauth_service = oauth_service
         self._history_download_controller: Optional[HistoryDownloadController] = None
-        self._trendbar_controller: Optional[TrendbarController] = None
         self._trendbar_symbol_id = 1
-        self._price_digits = 5
         self._ppo_controller: Optional[PPOTrainingController] = None
         self._simulation_controller: Optional[SimulationController] = None
         self._account_info_controller: Optional[AccountInfoController] = None
         self._dock_controller: Optional[DockManagerController] = None
         self._panel_switcher: Optional[PanelSwitcher] = None
-        self._toolbar_controller: Optional[ToolbarController] = None
         self._connection_controller: Optional[ConnectionController] = None
         self._connection_presenter: Optional[ConnectionPresenter] = None
         self._training_state = None
@@ -88,8 +83,6 @@ class MainWindow(QMainWindow):
         self._simulation_presenter = None
         self._history_download_state = None
         self._history_download_presenter = None
-        self._trendbar_state = None
-        self._trendbar_presenter = None
 
         self._setup_ui()
         self._setup_connection_presenter()
@@ -166,8 +159,6 @@ class MainWindow(QMainWindow):
         self._simulation_presenter = bundle.simulation_presenter
         self._history_download_state = bundle.history_download_state
         self._history_download_presenter = HistoryDownloadPresenter(self._history_download_state)
-        self._trendbar_state = bundle.trendbar_state
-        self._trendbar_presenter = bundle.trendbar_presenter
 
     def _setup_stack(self) -> None:
         stack_bundle: StackBundle = build_stack(
@@ -255,7 +246,7 @@ class MainWindow(QMainWindow):
             on_data_check=self._open_data_check_dialog,
             on_toggle_log=self._dock_controller.toggle_log,
         )
-        self._toolbar_controller = toolbar_bundle.toolbar_controller
+        _ = toolbar_bundle.toolbar_controller
         self._action_toggle_connection = toolbar_bundle.action_toggle_connection
 
     def _setup_connection_presenter(self) -> None:
@@ -268,7 +259,7 @@ class MainWindow(QMainWindow):
             oauth_label=self._oauth_status_label,
             toggle_action=self._action_toggle_connection,
             app_state=self._app_state,
-            on_app_disconnected=self._reset_trendbar,
+            on_app_disconnected=self._reset_controllers,
         )
         self._connection_presenter.set_services(self._service, self._oauth_service)
         self._connection_presenter.refresh_status_labels()
@@ -341,30 +332,6 @@ class MainWindow(QMainWindow):
                 presenter=self._history_download_presenter,
             )
         return self._history_download_controller
-
-    def _get_trendbar_controller(self) -> Optional[TrendbarController]:
-        if not self._use_cases:
-            self._log_panel.append(format_connection_message("missing_use_cases"))
-            return None
-        if not self._service:
-            self._log_panel.append(format_connection_message("missing_app_auth"))
-            return None
-        if not self._is_oauth_authenticated():
-            self._log_panel.append(format_connection_message("missing_oauth"))
-            return None
-
-        if self._trendbar_controller is None:
-            if self._trendbar_presenter is None:
-                return None
-            self._trendbar_controller = TrendbarController(
-                use_cases=self._use_cases,
-                app_auth_service=self._service,
-                oauth_service=self._oauth_service,
-                parent=self,
-                presenter=self._trendbar_presenter,
-                format_price=self._format_price,
-            )
-        return self._trendbar_controller
 
     def _get_ppo_controller(self) -> Optional[PPOTrainingController]:
         if self._ppo_controller is None:
@@ -534,12 +501,6 @@ class MainWindow(QMainWindow):
             return
         self._panel_switcher.show(panel, show_log=show_log)
 
-    def _format_price(self, value: Optional[int]) -> str:
-        if value is None:
-            return "-"
-        scale = 10 ** self._price_digits
-        return f"{value / scale:.{self._price_digits}f}"
-
     def set_service(self, service: AppAuthServiceLike) -> None:
         """Set the authenticated service"""
         self._service = service
@@ -547,8 +508,6 @@ class MainWindow(QMainWindow):
             self._connection_controller.seed_services(service, self._oauth_service)
         if self._account_info_controller:
             self._account_info_controller.set_service(service)
-        if self._trendbar_controller:
-            self._trendbar_controller.reset()
         clear_log_history_safe(self._service)
         set_callbacks_safe(
             self._service,
@@ -616,16 +575,7 @@ class MainWindow(QMainWindow):
         self._connection_controller.toggle_connection()
 
     def _reset_controllers(self) -> None:
-        self._reset_trendbar()
         self._history_download_controller = None
-        self._trendbar_controller = None
-
-    def _reset_trendbar(self) -> None:
-        if self._trendbar_controller:
-            try:
-                self._trendbar_controller.reset()
-            except Exception:
-                pass
 
     def _sync_status_from_state(self, state: AppState) -> None:
         if not self._connection_presenter:

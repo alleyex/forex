@@ -27,7 +27,6 @@ from forex.infrastructure.broker.ctrader.services.message_helpers import (
 )
 from forex.infrastructure.broker.ctrader.services.spot_subscription import (
     send_spot_subscribe,
-    send_spot_unsubscribe,
 )
 
 
@@ -388,15 +387,6 @@ class TrendbarService(
             subscribe_to_spot_timestamp=True,
         )
         self._spot_subscribed = True
-
-    def _unsubscribe_spot(self) -> None:
-        send_spot_unsubscribe(
-            self._client,
-            account_id=self._account_id,
-            symbol_id=self._symbol_id,
-            log=self._log,
-        )
-        self._spot_subscribed = False
 
     def _send_trendbar_request(self) -> None:
         if not self._pending_trendbar_request or not self._client:

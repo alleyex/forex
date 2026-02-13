@@ -9,10 +9,8 @@ from typing import (
     Callable,
     Generic,
     Optional,
-    Protocol,
     TypeVar,
     cast,
-    runtime_checkable,
 )
 
 from abc import ABC
@@ -23,35 +21,18 @@ from forex.config.constants import ConnectionStatus
 # --- Type variables ---
 TClient = TypeVar("TClient")
 TMsg = TypeVar("TMsg")
-TCb = TypeVar("TCb", bound="StatusCallbacks")
+TCb = TypeVar("TCb", bound="BaseCallbacks")
 TCallbacks = TypeVar("TCallbacks", bound="BaseCallbacks")
 
 logger = logging.getLogger(__name__)
 
 
-# --- Callback Protocols (型別安全的回呼介面) ---
-@runtime_checkable
-class LoggingCallbacks(Protocol):
-    on_error: Optional[Callable[[str], None]]
-    on_log: Optional[Callable[[str], None]]
-
-
-@runtime_checkable
-class StatusCallbacks(LoggingCallbacks, Protocol):
-    on_status_changed: Optional[Callable[[ConnectionStatus], None]]
-
-
-# 如果你只想要「最小集合」的 callbacks，可以用這個資料類當預設實作
+# --- Callback dataclass ---
 @dataclass
 class BaseCallbacks:
     on_error: Optional[Callable[[str], None]] = None
     on_log: Optional[Callable[[str], None]] = None
     on_status_changed: Optional[Callable[[ConnectionStatus], None]] = None
-
-
-# Backward-compatible alias
-DefaultCallbacks = BaseCallbacks
-
 
 def build_callbacks(callback_cls: type[TCallbacks], **kwargs) -> TCallbacks:
     return callback_cls(**kwargs)
@@ -61,7 +42,7 @@ def build_callbacks(callback_cls: type[TCallbacks], **kwargs) -> TCallbacks:
 class LoggingMixin(Generic[TCb]):
     """
     提供日誌和錯誤發送功能的混入類別
-    使用此混入的類別必須定義 _callbacks 屬性（符合 StatusCallbacks）
+    使用此混入的類別必須定義 _callbacks 屬性（符合 BaseCallbacks）
     """
 
     _callbacks: TCb
@@ -104,7 +85,7 @@ class StatusMixin(Generic[TCb]):
     提供狀態管理功能的混入類別
     需要：
     - _status: ConnectionStatus
-    - _callbacks: StatusCallbacks
+    - _callbacks: BaseCallbacks
     """
 
     _status: ConnectionStatus

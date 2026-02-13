@@ -49,7 +49,6 @@ class LiveQuoteController:
             return
         desired_ids = set(w._quote_rows.keys())
         if desired_ids and desired_ids.issubset(w._quote_subscribed_ids | w._quote_subscribe_inflight):
-            w._quote_subscribed = True
             return
         self.ensure_quote_handler()
 
@@ -72,7 +71,6 @@ class LiveQuoteController:
                 log=w.logRequested.emit,
                 subscribe_to_spot_timestamp=True,
             )
-        w._quote_subscribed = True
 
     def stop_quote_subscription(self) -> None:
         w = self._window
@@ -82,21 +80,18 @@ class LiveQuoteController:
             return
         account_id = w._app_state.selected_account_id
         if not account_id:
-            w._quote_subscribed = False
             w._quote_subscribed_ids.clear()
             w._quote_subscribe_inflight.clear()
             return
         # During reconnect/auth transition, sending unsubscribe can trigger
         # broker INVALID_REQUEST/unauthorized noise. Just clear local state.
         if not runtime_ready:
-            w._quote_subscribed = False
             w._quote_subscribed_ids.clear()
             w._quote_subscribe_inflight.clear()
             return
         try:
             client = w._service.get_client()  # type: ignore[attr-defined]
         except Exception:
-            w._quote_subscribed = False
             w._quote_subscribed_ids.clear()
             w._quote_subscribe_inflight.clear()
             return
@@ -115,7 +110,6 @@ class LiveQuoteController:
                 symbol_id=unsubscribe_ids,
                 log=w.logRequested.emit,
             )
-        w._quote_subscribed = False
         w._quote_subscribed_ids.clear()
         w._quote_subscribe_inflight.clear()
 

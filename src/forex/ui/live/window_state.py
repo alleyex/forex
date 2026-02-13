@@ -52,7 +52,6 @@ def initialize_live_window_state(window) -> None:
     window._last_auth_error_log_ts = 0.0
     window._last_oauth_not_ready_log_ts = 0.0
     window._account_funds_uc = None
-    window._symbol_list_uc = None
     window._symbol_by_id_uc = None
     window._last_funds_fetch_ts = 0.0
     window._candles = []
@@ -151,12 +150,10 @@ def initialize_live_window_state(window) -> None:
     window._quote_last_mid = {}
     window._quote_last_bid = {}
     window._quote_last_ask = {}
-    window._quote_subscribed = False
     window._quote_subscribed_ids = set()
     window._quote_subscribe_inflight = set()
     window._spot_message_handler = None
     window._open_positions = []
-    window._pending_symbol_list = None
 
 
 def _default_symbol_name(window) -> str:

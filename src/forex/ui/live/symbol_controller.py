@@ -236,6 +236,38 @@ class LiveSymbolController:
             return 3
         return 5
 
+    def trade_symbol_choices(self) -> list[str]:
+        w = self._window
+        choices: list[str] = []
+        for symbol in w._quote_symbols:
+            if isinstance(symbol, str) and symbol and symbol not in choices:
+                choices.append(symbol)
+        if choices:
+            return choices
+        return ["EURUSD", "USDJPY"]
+
+    def sync_trade_symbol_choices(self, preferred_symbol: str | None = None) -> None:
+        w = self._window
+        combo = getattr(w, "_trade_symbol", None)
+        if combo is None:
+            return
+        choices = self.trade_symbol_choices()
+        current = preferred_symbol or combo.currentText() or w._symbol_name
+        combo.blockSignals(True)
+        combo.clear()
+        combo.addItems(choices)
+        if current in choices:
+            target = current
+        elif w._symbol_name in choices:
+            target = w._symbol_name
+        else:
+            target = choices[0]
+        combo.setCurrentText(target)
+        combo.blockSignals(False)
+        if target and target != w._symbol_name:
+            w._symbol_name = target
+            w._symbol_id = self.resolve_symbol_id(target)
+
     def rebuild_quotes_table(self) -> None:
         w = self._window
         if not w._quotes_table:

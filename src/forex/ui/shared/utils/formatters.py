@@ -122,29 +122,6 @@ def format_training_message(event: str, **kwargs) -> str:
     return templates.get(event, "")
 
 
-def format_trendbar_message(event: str, **kwargs) -> str:
-    templates = {
-        "app_auth_missing": "⚠️ 尚未完成 App 認證",
-        "app_auth_disconnected": "⚠️ App 認證已中斷，請稍候自動重連",
-        "oauth_missing": "⚠️ 尚未完成 OAuth 帳戶認證",
-        "account_id_missing": "⚠️ 缺少帳戶 ID",
-        "no_subscription": "ℹ️ 目前沒有 K 線訂閱",
-    }
-    if event == "token_read_failed":
-        return f"⚠️ 無法讀取 OAuth Token: {kwargs.get('error')}"
-    if event == "trendbar_started":
-        return f"📈 已開始 M1 K 線：symbol {kwargs.get('symbol_id')}"
-    if event == "trendbar_error":
-        return f"⚠️ K 線錯誤: {kwargs.get('error')}"
-    if event == "trendbar_bar":
-        return (
-            f"📊 {kwargs.get('timeframe', 'M1')} {kwargs.get('timestamp')} "
-            f"O={kwargs.get('open')} H={kwargs.get('high')} "
-            f"L={kwargs.get('low')} C={kwargs.get('close')}"
-        )
-    return templates.get(event, "")
-
-
 def format_history_message(event: str, **kwargs) -> str:
     templates = {
         "app_auth_missing": "⚠️ 尚未完成 App 認證",

@@ -16,11 +16,9 @@ from forex.ui.train.layout.dock_manager import DockManagerController
 from forex.ui.train.layout.panel_switcher import PanelSet, PanelSwitcher
 from forex.ui.train.presenters.simulation_presenter import SimulationPresenter
 from forex.ui.train.presenters.training_presenter import TrainingPresenter
-from forex.ui.train.presenters.trendbar_presenter import TrendbarPresenter
 from forex.ui.train.state.history_download_state import HistoryDownloadState
 from forex.ui.train.state.simulation_state import SimulationState
 from forex.ui.train.state.training_state import TrainingState
-from forex.ui.train.state.trendbar_state import TrendbarState
 from forex.ui.shared.widgets.log_widget import LogWidget
 from forex.ui.train.widgets.history_integrity_panel import HistoryIntegrityPanel
 from forex.ui.train.widgets.simulation_panel import SimulationPanel, SimulationParamsPanel
@@ -42,8 +40,6 @@ class PanelBundle:
     simulation_state: SimulationState
     simulation_presenter: SimulationPresenter
     history_download_state: HistoryDownloadState
-    trendbar_state: TrendbarState
-    trendbar_presenter: TrendbarPresenter
 
 
 @dataclass
@@ -111,10 +107,6 @@ def build_panels(
     history_download_state = HistoryDownloadState(parent=parent)
     history_download_state.log_message.connect(log_panel.append)
 
-    trendbar_state = TrendbarState(parent=parent)
-    trendbar_presenter = TrendbarPresenter(parent=parent, state=trendbar_state)
-    trendbar_state.log_message.connect(log_panel.append)
-
     return PanelBundle(
         trade_panel=trade_panel,
         training_panel=training_panel,
@@ -128,8 +120,6 @@ def build_panels(
         simulation_state=simulation_state,
         simulation_presenter=simulation_presenter,
         history_download_state=history_download_state,
-        trendbar_state=trendbar_state,
-        trendbar_presenter=trendbar_presenter,
     )
 
 

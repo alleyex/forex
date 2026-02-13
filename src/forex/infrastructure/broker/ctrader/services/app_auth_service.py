@@ -219,9 +219,6 @@ class AppAuthService(CTraderAuthServiceBase[AppAuthServiceCallbacks, AppAuthMess
         self._connect_started_ts = None
         self._log("🔌 已手動斷線")
 
-    def get_credentials(self) -> AppCredentials:
-        return self._credentials
-
     def seconds_since_last_message(self) -> Optional[float]:
         if self._last_message_ts is None:
             return None

@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 from typing import Optional
-from datetime import datetime
 import time
 from pathlib import Path
 
@@ -27,11 +26,8 @@ from PySide6.QtWidgets import (
 
 try:
     import pyqtgraph as pg
-    from pyqtgraph.Qt import QtCore, QtGui
 except Exception:  # pragma: no cover - optional dependency
     pg = None
-    QtCore = None
-    QtGui = None
 else:
     try:
         pg.setConfigOptions(useOpenGL=False, antialias=False)
@@ -53,11 +49,11 @@ from forex.ui.live.auto_runtime_service import LiveAutoRuntimeService
 from forex.ui.live.auto_settings_persistence import LiveAutoSettingsPersistence
 from forex.ui.live.auto_settings_validator import AutoTradeSettingsValidator
 from forex.ui.live.autotrade_coordinator import LiveAutoTradeCoordinator
+from forex.ui.live.chart_items import CandlestickItem, TimeAxisItem
 from forex.ui.live.chart_coordinator import LiveChartCoordinator
 from forex.ui.live.market_data_controller import LiveMarketDataController
 from forex.ui.live.positions_controller import LivePositionsController
 from forex.ui.live.quote_controller import LiveQuoteController
-from forex.ui.live.symbol_list_service import LiveSymbolListService
 from forex.ui.live.value_formatter_service import LiveValueFormatterService
 from forex.ui.live.layout_coordinator import LiveLayoutCoordinator
 from forex.ui.live.symbol_controller import LiveSymbolController
@@ -117,7 +113,6 @@ class LiveMainWindow(QMainWindow):
         self._quote_controller = LiveQuoteController(self)
         self._positions_controller = LivePositionsController(self)
         self._value_formatter = LiveValueFormatterService(self)
-        self._symbol_list_service = LiveSymbolListService(self)
         self._layout_coordinator = LiveLayoutCoordinator(self)
         self._session_orchestrator = LiveSessionOrchestrator(self)
         self._auto_lifecycle_service = LiveAutoLifecycleService(self)
@@ -216,8 +211,6 @@ class LiveMainWindow(QMainWindow):
 
         quotes_panel = self._build_quotes_panel()
         positions_panel = self._build_positions_panel()
-        self._quotes_panel_widget = quotes_panel
-        self._positions_panel_widget = positions_panel
         bottom_splitter = QSplitter(Qt.Horizontal)
         bottom_splitter.addWidget(quotes_panel)
         bottom_splitter.addWidget(positions_panel)
@@ -622,12 +615,8 @@ class LiveMainWindow(QMainWindow):
         if self._is_broker_runtime_ready():
             self._session_orchestrator.try_resume_runtime_loops(reason="trade_permission_updated")
 
-    @Slot()
-    def _apply_symbol_list_update(self) -> None:
-        self._symbol_list_service.apply_symbol_list_update()
-
     def _sync_trade_symbol_choices(self, preferred_symbol: Optional[str] = None) -> None:
-        self._symbol_list_service.sync_trade_symbol_choices(preferred_symbol=preferred_symbol)
+        self._symbol_controller.sync_trade_symbol_choices(preferred_symbol=preferred_symbol)
 
     def _sync_lot_value_style(self) -> None:
         self._auto_settings_persistence.sync_lot_value_style()
@@ -1112,93 +1101,3 @@ class LiveMainWindow(QMainWindow):
 
     def _rebuild_quotes_table(self) -> None:
         self._symbol_controller.rebuild_quotes_table()
-
-
-if pg is not None:
-    class TimeAxisItem(pg.AxisItem):
-        def tickStrings(self, values, scale, spacing) -> list[str]:
-            labels = []
-            for value in values:
-                try:
-                    labels.append(datetime.utcfromtimestamp(value).strftime("%H:%M"))
-                except (OSError, ValueError, OverflowError):
-                    labels.append("")
-            return labels
-
-    class CandlestickItem(pg.GraphicsObject):
-        def __init__(self, data: list[tuple[float, float, float, float, float]]):
-            super().__init__()
-            self._data = data
-            self._picture = QtGui.QPicture()
-            self._bounds = QtCore.QRectF(0.0, 0.0, 1.0, 1.0)
-            self._generate_picture()
-
-        def setData(self, data: list[tuple[float, float, float, float, float]]) -> None:
-            self.prepareGeometryChange()
-            self._data = data
-            self._generate_picture()
-            self.update()
-
-        def _generate_picture(self) -> None:
-            self._picture = QtGui.QPicture()
-            painter = QtGui.QPainter(self._picture)
-            if not self._data:
-                self._bounds = QtCore.QRectF(0.0, 0.0, 1.0, 1.0)
-                painter.end()
-                return
-            width = self._infer_half_width()
-            times = [float(point[0]) for point in self._data]
-            lows = [float(point[3]) for point in self._data]
-            highs = [float(point[2]) for point in self._data]
-            min_x = min(times) - width
-            max_x = max(times) + width
-            min_y = min(lows)
-            max_y = max(highs)
-            self._bounds = QtCore.QRectF(min_x, min_y, max(max_x - min_x, 1.0), max(max_y - min_y, 1e-8))
-            for candle_ts, open_price, high, low, close in self._data:
-                wick_pen = pg.mkPen("#9ca3af", width=1)
-                painter.setPen(wick_pen)
-                painter.drawLine(QtCore.QPointF(candle_ts, low), QtCore.QPointF(candle_ts, high))
-                if open_price > close:
-                    color = "#ef4444"
-                    rect = QtCore.QRectF(candle_ts - width, close, width * 2, open_price - close)
-                else:
-                    color = "#10b981"
-                    rect = QtCore.QRectF(candle_ts - width, open_price, width * 2, close - open_price)
-                if rect.height() == 0:
-                    painter.setPen(pg.mkPen(color, width=2))
-                    painter.drawLine(
-                        QtCore.QPointF(candle_ts - width, open_price),
-                        QtCore.QPointF(candle_ts + width, open_price),
-                    )
-                else:
-                    painter.setPen(pg.mkPen(color, width=2))
-                    painter.setBrush(pg.mkBrush(color))
-                    painter.drawRect(rect)
-            painter.end()
-
-        def _infer_half_width(self) -> float:
-            if len(self._data) < 2:
-                return 20.0
-            times = [point[0] for point in self._data]
-            diffs = [b - a for a, b in zip(times, times[1:]) if b > a]
-            if not diffs:
-                return 20.0
-            diffs.sort()
-            step = diffs[len(diffs) // 2]
-            return max(1.0, step * 0.225)
-
-        def paint(self, painter, *args) -> None:
-            painter.drawPicture(0, 0, self._picture)
-
-        def boundingRect(self) -> QtCore.QRectF:
-            return QtCore.QRectF(self._bounds)
-
-        def dataBounds(self, ax: int, _frac: float = 1.0, _orthoRange=None):
-            if not self._data:
-                return None
-            if ax == 0:
-                return [self._bounds.left(), self._bounds.right()]
-            if ax == 1:
-                return [self._bounds.top(), self._bounds.bottom()]
-            return None

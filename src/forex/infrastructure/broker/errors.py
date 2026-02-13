@@ -11,7 +11,6 @@ class ErrorCode(str, Enum):
     AUTH = "AUTH"
     NETWORK = "NETWORK"
     PROVIDER = "PROVIDER"
-    UNKNOWN = "UNKNOWN"
 
 
 @dataclass(frozen=True)

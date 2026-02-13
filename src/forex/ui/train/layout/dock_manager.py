@@ -126,14 +126,6 @@ class DockManagerController(QObject):
     def log_dock(self) -> QDockWidget:
         return self._manager.docks.log
 
-    @property
-    def training_params_dock(self) -> QDockWidget:
-        return self._manager.docks.training_params
-
-    @property
-    def simulation_params_dock(self) -> QDockWidget:
-        return self._manager.docks.simulation_params
-
     def bind_log_action(self, action: QAction) -> None:
         self._log_action = action
         self._sync_log_action(self.log_dock.isVisible())

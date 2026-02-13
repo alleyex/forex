@@ -23,7 +23,6 @@ class SimState:
     position: float = 0.0
     equity: float = 1.0
     trades: int = 0
-    position_changes: int = 0
 
 
 def _build_obs(features: np.ndarray, index: int, position: float, max_position: float = 1.0) -> np.ndarray:
@@ -179,7 +178,6 @@ def main() -> None:
         delta = target_position - state.position
         if abs(delta) > 1e-6:
             state.trades += 1
-            state.position_changes += 1
             holding_steps.append(idx - last_change_idx)
             last_change_idx = idx
 

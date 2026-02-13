@@ -128,7 +128,6 @@ class LiveSessionOrchestrator:
         w._last_history_request_key = None
         w._last_history_success_key = None
         w._trendbar_active = False
-        w._quote_subscribed = False
         w._quote_subscribed_ids.clear()
         w._quote_subscribe_inflight.clear()
         w._dispose_history_service()
@@ -335,7 +334,6 @@ class LiveSessionOrchestrator:
         w._last_history_request_key = None
         w._last_history_success_key = None
         w._trendbar_active = False
-        w._quote_subscribed = False
         w._quote_subscribed_ids.clear()
         w._quote_subscribe_inflight.clear()
         w._stop_history_polling()
