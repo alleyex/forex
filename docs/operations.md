@@ -139,6 +139,12 @@ LOG_LEVEL=INFO LOG_FILE=runtime/live_soak.log QT_OPENGL=software forex-live
 python -m forex.tools.diagnostics.reconnect_log_analyzer runtime/live_soak.log
 ```
 
+6. Run pass/fail assertions:
+
+```bash
+python -m forex.tools.diagnostics.soak_assert runtime/live_soak.log
+```
+
 Optional quick regression before/after soak:
 
 ```bash
