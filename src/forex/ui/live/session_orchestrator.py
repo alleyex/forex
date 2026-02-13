@@ -21,7 +21,6 @@ class LiveSessionOrchestrator:
     def __init__(self, window) -> None:
         self._window = window
         self._phase = LiveSessionPhase.DISCONNECTED
-        self._last_phase = LiveSessionPhase.DISCONNECTED
         self._last_resume_ts = 0.0
         self._last_data_activity_ts = 0.0
         self._last_stall_warn_ts = 0.0
@@ -38,7 +37,6 @@ class LiveSessionOrchestrator:
             return
         previous = self._phase
         self._phase = phase
-        self._last_phase = previous
         self._window.logRequested.emit(
             f"ℹ️ session_phase | from={previous.name} | to={phase.name} | reason={reason}"
         )
@@ -54,28 +52,27 @@ class LiveSessionOrchestrator:
             and oauth_status >= int(ConnectionStatus.ACCOUNT_AUTHENTICATED)
         )
 
-    def reconnect_status_text(self, *, reason: str = "status_refresh") -> str:
+    def _derive_reconnect_phase(self) -> LiveSessionPhase:
         w = self._window
         app_status = int(getattr(w._service, "status", 0) or 0)
         oauth_status = int(getattr(w._oauth_service, "status", 0) or 0)
 
         if getattr(w, "_account_authorization_blocked", False):
-            self._set_phase(LiveSessionPhase.LOCKOUT, reason=reason)
-            return "Reconnect: Lockout (Unauthorized account)"
+            return LiveSessionPhase.LOCKOUT
         if app_status == int(ConnectionStatus.CONNECTING):
-            self._set_phase(LiveSessionPhase.CONNECTING, reason=reason)
-            return "Reconnect: Connecting"
+            return LiveSessionPhase.CONNECTING
         if app_status < int(ConnectionStatus.CONNECTED):
-            self._set_phase(LiveSessionPhase.DISCONNECTED, reason=reason)
-            return "Reconnect: Disconnected"
+            return LiveSessionPhase.DISCONNECTED
         if app_status < int(ConnectionStatus.APP_AUTHENTICATED):
-            self._set_phase(LiveSessionPhase.CONNECTING, reason=reason)
-            return "Reconnect: App Auth"
+            return LiveSessionPhase.CONNECTING
         if oauth_status < int(ConnectionStatus.ACCOUNT_AUTHENTICATED):
-            self._set_phase(LiveSessionPhase.APP_READY, reason=reason)
-            return "Reconnect: OAuth / Account Auth"
-        self._set_phase(LiveSessionPhase.READY, reason=reason)
-        return "Reconnect: Ready"
+            return LiveSessionPhase.APP_READY
+        return LiveSessionPhase.READY
+
+    def sync_reconnect_phase(self, *, reason: str = "status_refresh") -> LiveSessionPhase:
+        phase = self._derive_reconnect_phase()
+        self._set_phase(phase, reason=reason)
+        return phase
 
     def suspend_runtime_loops(self) -> None:
         w = self._window
@@ -243,6 +240,7 @@ class LiveSessionOrchestrator:
                     w.logRequested.emit("⏳ Waiting for account authorization (account switch pending)")
                     w._schedule_full_reconnect()
                     return
+            self._auto_enable_after_auth_ready()
             self.try_resume_runtime_loops(reason="oauth_authenticated")
             return
 
@@ -262,6 +260,24 @@ class LiveSessionOrchestrator:
                 oauth_service.connect()
             except Exception as exc:
                 w.logRequested.emit(f"⚠️ OAuth auto-retry failed: {exc}")
+
+    def _auto_enable_after_auth_ready(self) -> None:
+        w = self._window
+        toggle = getattr(w, "_auto_trade_toggle", None)
+        if toggle is None:
+            return
+        if getattr(w, "_account_authorization_blocked", False):
+            return
+        app_state = getattr(w, "_app_state", None)
+        if app_state is not None and getattr(app_state, "selected_account_scope", None) == 0:
+            return
+        try:
+            if toggle.isChecked():
+                return
+            toggle.setChecked(True)
+            w.logRequested.emit("ℹ️ Auto Trade enabled after auth ready")
+        except Exception:
+            pass
 
     def handle_app_state_changed(self, state) -> bool:
         """Returns True when fully handled by orchestrator."""
