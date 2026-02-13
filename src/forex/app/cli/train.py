@@ -1,4 +1,3 @@
-# main_train.py
 import sys
 import traceback
 from importlib import resources
@@ -27,14 +26,14 @@ def main() -> int:
     style_path = resources.files("forex.ui.shared.styles").joinpath("app.qss")
     if style_path.is_file():
         app.setStyleSheet(style_path.read_text(encoding="utf-8"))
-    
+
     main_window = MainWindow(
         use_cases=use_cases,
         event_bus=event_bus,
         app_state=app_state,
     )
     main_window.showMaximized()
-    
+
     return app.exec()
 
 

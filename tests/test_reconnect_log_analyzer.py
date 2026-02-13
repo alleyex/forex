@@ -3,7 +3,7 @@ from __future__ import annotations
 import os
 from pathlib import Path
 
-from forex.tools.live.reconnect_log_analyzer import (
+from forex.tools.diagnostics.reconnect_log_analyzer import (
     analyze_reconnect_log,
     render_summary,
     resolve_log_file,

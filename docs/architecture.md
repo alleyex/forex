@@ -1,11 +1,11 @@
 # Architecture Notes
 
 ## 1) Entry and Bootstrap
-- `src/forex/app/entrypoints/*`: primary entry points (train/live/auth).
+- `src/forex/app/cli/*`: primary CLI entry points (train/live/launcher).
 - CLI entry points via `pyproject.toml`:
-  - `forex-train` -> `forex.app.entrypoints.train:main`
-  - `forex-live` -> `forex.app.entrypoints.live:main`
-- Legacy wrappers: `main_train.py` / `main_live.py` / `app.py` (optional; prefer CLI or `python -m forex.app.entrypoints.*`).
+  - `forex-train` -> `forex.app.cli.train:main`
+  - `forex-live` -> `forex.app.cli.live:main`
+- Legacy wrappers: `main_train.py` / `main_live.py` / `app.py` (optional; prefer CLI or `python -m forex.app.cli.*`).
 - `src/forex/app/bootstrap.py`: initializes logging, provider registry, use cases, event bus, and app state.
 - `forex.config.runtime`: reads environment config (TOKEN_FILE, BROKER_PROVIDER, LOG_LEVEL).
 
@@ -74,3 +74,8 @@
 - Feature engineering: `forex.ml.features` with a pipeline and caching.
 - RL/PPO: `forex.ml.rl.ppo`.
 - Backtesting: `forex.backtest.engine`, `forex.backtest.metrics`, `forex.backtest.report`.
+
+## 9) Tools Layout
+- `src/forex/tools/diagnostics`: operational diagnostics and log analyzers.
+- `src/forex/tools/live`: compatibility wrappers for live-oriented command paths.
+- `src/forex/tools/rl`: RL training/simulation scripts.

@@ -109,7 +109,7 @@ export CTRADER_RETRY_BACKOFF_SECONDS=2
 When reconnect loops happen, export the UI log text and run:
 
 ```bash
-python -m forex.tools.live.reconnect_log_analyzer /path/to/live.log
+python -m forex.tools.diagnostics.reconnect_log_analyzer /path/to/live.log
 ```
 
 This prints a compact summary including:
@@ -136,7 +136,7 @@ LOG_LEVEL=INFO LOG_FILE=runtime/live_soak.log QT_OPENGL=software forex-live
 5. Analyze log:
 
 ```bash
-python -m forex.tools.live.reconnect_log_analyzer runtime/live_soak.log
+python -m forex.tools.diagnostics.reconnect_log_analyzer runtime/live_soak.log
 ```
 
 Optional quick regression before/after soak:

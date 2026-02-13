@@ -1,4 +1,3 @@
-# main_live.py
 import os
 import sys
 from importlib import resources

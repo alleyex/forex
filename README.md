@@ -37,12 +37,12 @@ Live UI:
 QT_OPENGL=software LOG_LEVEL=INFO forex-live
 ```
 
-Direct module entrypoints:
+Direct CLI modules:
 
 ```bash
-QT_OPENGL=software LOG_LEVEL=INFO python -m forex.app.entrypoints.train
-QT_OPENGL=software LOG_LEVEL=INFO python -m forex.app.entrypoints.live
-python -m forex.app.entrypoints.app
+QT_OPENGL=software LOG_LEVEL=INFO python -m forex.app.cli.train
+QT_OPENGL=software LOG_LEVEL=INFO python -m forex.app.cli.live
+python -m forex.app.cli.launcher
 ```
 
 ## Tests

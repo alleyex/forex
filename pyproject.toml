@@ -13,8 +13,8 @@ license = { text = "Proprietary" }
 dependencies = []
 
 [project.scripts]
-forex-train = "forex.app.entrypoints.train:main"
-forex-live = "forex.app.entrypoints.live:main"
+forex-train = "forex.app.cli.train:main"
+forex-live = "forex.app.cli.live:main"
 
 [project.optional-dependencies]
 ui = [
