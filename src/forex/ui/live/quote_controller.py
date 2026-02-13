@@ -1,7 +1,5 @@
 from __future__ import annotations
 
-from typing import Optional
-
 from ctrader_open_api.messages.OpenApiModelMessages_pb2 import ProtoOAPayloadType
 from PySide6.QtCore import Qt
 from PySide6.QtWidgets import QTableWidgetItem

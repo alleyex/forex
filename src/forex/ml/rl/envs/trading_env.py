@@ -56,6 +56,7 @@ class TradingEnv(gym.Env if gym else object):
 
     def reset(self, *, seed: int | None = None, options: dict[str, Any] | None = None):
         super().reset(seed=seed)
+        _ = options
         # Base reset bounds on full dataset, not on prior episode end.
         max_start = self._max_idx - 1
         if self._config.episode_length:

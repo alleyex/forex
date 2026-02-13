@@ -22,7 +22,7 @@ TMsg = TypeVar("TMsg")
 
 
 class TimeoutTrackerLike(Protocol):
-    def configure_retry(self, policy, retry_cb: Callable[[int], None]) -> None:
+    def configure_retry(self, policy, _retry_cb: Callable[[int], None]) -> None:
         ...
 
     def start(self, timeout_seconds: int) -> None:

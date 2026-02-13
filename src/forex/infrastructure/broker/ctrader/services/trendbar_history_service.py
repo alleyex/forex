@@ -177,6 +177,7 @@ class TrendbarHistoryService(
         from_ts: Optional[int] = None,
         to_ts: Optional[int] = None,
     ) -> None:
+        _ = use_seconds
         request = ProtoOAGetTrendbarsReq()
         request.ctidTraderAccountId = self._account_id
         request.symbolId = self._symbol_id

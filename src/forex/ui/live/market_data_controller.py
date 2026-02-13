@@ -131,11 +131,20 @@ class LiveMarketDataController:
             w._awaiting_history_after_symbol_change = False
             return
         digits = w._price_digits
+        step_seconds = max(60, self.timeframe_minutes() * 60)
+        current_bucket_seconds = (int(time.time()) // step_seconds) * step_seconds
+        preview_current_candle = None
+        if w._candles and int(w._candles[-1][0]) == int(current_bucket_seconds):
+            preview_current_candle = w._candles[-1]
         rows_sorted = sorted(rows, key=lambda r: r.get("utc_timestamp_minutes", 0))
         candles: list[tuple[float, float, float, float, float]] = []
         for row in rows_sorted:
             ts_minutes = float(row.get("utc_timestamp_minutes", 0))
             ts = ts_minutes * 60
+            # Keep history authoritative for closed buckets only.
+            # Current bucket is controlled by quote preview to avoid tug-of-war.
+            if ts >= float(current_bucket_seconds):
+                continue
             open_price = w._normalize_price(row.get("open", 0), digits=digits)
             high_price = w._normalize_price(row.get("high", 0), digits=digits)
             low_price = w._normalize_price(row.get("low", 0), digits=digits)
@@ -148,6 +157,8 @@ class LiveMarketDataController:
             close_price = round(float(close_price), digits)
             candles.append((ts, float(open_price), float(high_price), float(low_price), float(close_price)))
         previous_last_ts = w._candles[-1][0] if w._candles else None
+        if preview_current_candle is not None:
+            candles.append(preview_current_candle)
         w._candles = candles
         w._chart_frozen = False
         w.set_candles(w._candles)
@@ -302,6 +313,17 @@ class LiveMarketDataController:
                     )
                 return
         ts = ts_minutes * 60
+        step_seconds = max(60, self.timeframe_minutes() * 60)
+        current_bucket_seconds = (int(time.time()) // step_seconds) * step_seconds
+        if (
+            getattr(w, "_quote_affects_chart_candles", False)
+            and not getattr(w, "_history_only_chart_mode", False)
+            and ts >= float(current_bucket_seconds)
+        ):
+            # In quote-preview mode, do not let trendbar overwrite the
+            # current bucket candle. Keep feed alive marker only.
+            w._auto_last_trendbar_ts = time.time()
+            return
         open_price = w._normalize_price(data.get("open", 0), digits=digits)
         high_price = w._normalize_price(data.get("high", 0), digits=digits)
         low_price = w._normalize_price(data.get("low", 0), digits=digits)

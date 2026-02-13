@@ -5,28 +5,18 @@ from datetime import datetime
 import time
 from pathlib import Path
 
-from PySide6.QtCore import Qt, Signal, Slot, QTimer, QMetaObject, QThread, QSize, QCoreApplication
-from PySide6.QtGui import QAction, QIcon
+from PySide6.QtCore import Qt, Signal, Slot, QTimer, QMetaObject, QThread, QCoreApplication
+from PySide6.QtGui import QAction
 from PySide6.QtWidgets import (
-    QButtonGroup,
-    QCheckBox,
     QComboBox,
-    QDoubleSpinBox,
     QFileDialog,
     QFrame,
-    QFormLayout,
     QGroupBox,
     QHeaderView,
-    QHBoxLayout,
     QLabel,
-    QLineEdit,
     QMainWindow,
-    QPushButton,
-    QRadioButton,
     QGridLayout,
     QSplitter,
-    QSpinBox,
-    QTabWidget,
     QTableWidget,
     QToolButton,
     QToolBar,
@@ -80,7 +70,6 @@ from forex.ui.shared.controllers.connection_controller import ConnectionControll
 from forex.ui.shared.controllers.service_binding import clear_log_history_safe, set_callbacks_safe
 from forex.ui.shared.utils.formatters import (
     format_app_auth_status,
-    format_connection_message,
     format_oauth_status,
 )
 from forex.ui.shared.widgets.log_widget import LogWidget
@@ -764,11 +753,8 @@ class LiveMainWindow(QMainWindow):
         status_bar = self.statusBar()
         self._app_auth_label = QLabel(format_app_auth_status(None))
         self._oauth_label = QLabel(format_oauth_status(None))
-        self._reconnect_label = QLabel("Reconnect: Idle")
         status_bar.addWidget(self._app_auth_label)
         status_bar.addWidget(self._oauth_label)
-        status_bar.addWidget(self._reconnect_label)
-        self._update_reconnect_status()
 
     def _is_broker_runtime_ready(self) -> bool:
         return self._session_orchestrator.broker_runtime_ready()
@@ -777,8 +763,8 @@ class LiveMainWindow(QMainWindow):
         self._session_orchestrator.suspend_runtime_loops()
 
     def _update_reconnect_status(self, *, reason: str = "status_refresh") -> None:
-        text = self._session_orchestrator.reconnect_status_text(reason=reason)
-        self._reconnect_label.setText(text)
+        # Keep reconnect phase state machine updated, but hide status text in UI.
+        self._session_orchestrator.reconnect_status_text(reason=reason)
 
     def _setup_connection_controller(self) -> None:
         controller = ConnectionController(
@@ -1259,21 +1245,21 @@ if pg is not None:
             min_y = min(lows)
             max_y = max(highs)
             self._bounds = QtCore.QRectF(min_x, min_y, max(max_x - min_x, 1.0), max(max_y - min_y, 1e-8))
-            for time, open_price, high, low, close in self._data:
+            for candle_ts, open_price, high, low, close in self._data:
                 wick_pen = pg.mkPen("#9ca3af", width=1)
                 painter.setPen(wick_pen)
-                painter.drawLine(QtCore.QPointF(time, low), QtCore.QPointF(time, high))
+                painter.drawLine(QtCore.QPointF(candle_ts, low), QtCore.QPointF(candle_ts, high))
                 if open_price > close:
                     color = "#ef4444"
-                    rect = QtCore.QRectF(time - width, close, width * 2, open_price - close)
+                    rect = QtCore.QRectF(candle_ts - width, close, width * 2, open_price - close)
                 else:
                     color = "#10b981"
-                    rect = QtCore.QRectF(time - width, open_price, width * 2, close - open_price)
+                    rect = QtCore.QRectF(candle_ts - width, open_price, width * 2, close - open_price)
                 if rect.height() == 0:
                     painter.setPen(pg.mkPen(color, width=2))
                     painter.drawLine(
-                        QtCore.QPointF(time - width, open_price),
-                        QtCore.QPointF(time + width, open_price),
+                        QtCore.QPointF(candle_ts - width, open_price),
+                        QtCore.QPointF(candle_ts + width, open_price),
                     )
                 else:
                     painter.setPen(pg.mkPen(color, width=2))
@@ -1298,7 +1284,7 @@ if pg is not None:
         def boundingRect(self) -> QtCore.QRectF:
             return QtCore.QRectF(self._bounds)
 
-        def dataBounds(self, ax: int, frac: float = 1.0, orthoRange=None):
+        def dataBounds(self, ax: int, _frac: float = 1.0, _orthoRange=None):
             if not self._data:
                 return None
             if ax == 0:

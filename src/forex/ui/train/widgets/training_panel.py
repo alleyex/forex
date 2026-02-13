@@ -979,7 +979,6 @@ class TrainingPanel(QWidget):
             return float(parts[1])
         except ValueError:
             return None
-        return None
 
     @staticmethod
     def _parse_int(key: str, line: str) -> Optional[int]:

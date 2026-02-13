@@ -4,7 +4,7 @@ import os
 import time
 import logging
 from dataclasses import dataclass
-from typing import Dict, FrozenSet, Iterable, Optional, Tuple
+from typing import Dict, FrozenSet, Optional, Tuple
 
 logger = logging.getLogger("metrics")
 
@@ -120,7 +120,7 @@ class _Timer:
         self._start = time.monotonic()
         return self
 
-    def __exit__(self, exc_type, exc, tb):
+    def __exit__(self, _exc_type, _exc, _tb):
         if self._start is None:
             return
         duration = time.monotonic() - self._start

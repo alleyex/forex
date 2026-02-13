@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-from datetime import datetime
 import time
 
 from PySide6.QtCore import QTimer
@@ -94,57 +93,9 @@ class LiveChartCoordinator:
             return
         if getattr(w, "_history_only_chart_mode", False):
             return
-        if w._trendbar_active:
-            self.update_current_candle_from_quote(symbol_id, bid, ask, spot_ts)
-            return
-        if getattr(w, "_awaiting_history_after_symbol_change", False):
-            return
-        if w._chart_frozen:
-            if w._candles:
-                return
-            w._chart_frozen = False
-        if int(symbol_id) != int(w._symbol_id):
-            return
-        digits = w._quote_row_digits.get(int(symbol_id), w._price_digits)
-        price = self._resolve_quote_price(symbol_id, bid, ask, digits=digits)
-        if price is None:
-            return
-        ts_val = spot_ts
-        if ts_val is None or ts_val == 0:
-            ts_seconds = int(time.time())
-        else:
-            try:
-                ts_seconds = int(float(ts_val))
-            except (TypeError, ValueError):
-                ts_seconds = int(time.time())
-            if ts_seconds > 10**12:
-                ts_seconds = ts_seconds // 1000
-        step_seconds = w._timeframe_minutes() * 60
-        if step_seconds <= 0:
-            step_seconds = 60
-        bucket = (ts_seconds // step_seconds) * step_seconds
-        price = round(float(price), digits)
-        candle = (bucket, price, price, price, price)
-        if not w._candles:
-            w._candles = [candle]
-            self.set_candles(w._candles)
-            self.flush_chart_update()
-            return
-        last_time = w._candles[-1][0]
-        if bucket == last_time:
-            open_price, high_price, low_price, _ = w._candles[-1][1:5]
-            high_price = max(high_price, price)
-            low_price = min(low_price, price)
-            w._candles[-1] = (bucket, open_price, high_price, low_price, price)
-        elif bucket > last_time:
-            w._fill_missing_candles(candle)
-            w._candles.append(candle)
-            if len(w._candles) > 50:
-                w._candles = w._candles[-50:]
-        else:
-            return
-        self.set_candles(w._candles)
-        self.flush_chart_update()
+        # In quote-candle mode, quote ticks are preview-only:
+        # they can refine the current bucket but must not create future buckets.
+        self.update_current_candle_from_quote(symbol_id, bid, ask, spot_ts)
 
     def update_current_candle_from_quote(self, symbol_id: int, bid, ask, spot_ts) -> None:
         w = self._window
@@ -178,6 +129,8 @@ class LiveChartCoordinator:
             return
         price = round(float(price), digits)
         if bucket > last_time:
+            # Quote drives only the newest (in-progress) bucket.
+            # On rollover, create the new preview candle from previous close.
             prev_close = w._candles[-1][4]
             open_price = prev_close
             high_price = max(open_price, price)
@@ -187,9 +140,6 @@ class LiveChartCoordinator:
                 w._candles = w._candles[-50:]
             self.set_candles(w._candles)
             self.flush_chart_update()
-            # In quote-candle mode, quote ticks can advance to a new time bucket
-            # before trendbar append is observed. Trigger one decision cycle on
-            # bucket rollover so auto-trade does not go "quiet" spuriously.
             if getattr(w, "_auto_enabled", False):
                 w._run_auto_trade_on_close()
             return
@@ -235,13 +185,22 @@ class LiveChartCoordinator:
         bid_val = w._normalize_price(bid, digits=digits)
         ask_val = w._normalize_price(ask, digits=digits)
 
+        if bid_val is not None and float(bid_val) <= 0:
+            bid_val = None
+        if ask_val is not None and float(ask_val) <= 0:
+            ask_val = None
+
         if bid_val is None:
             bid_val = w._quote_last_bid.get(symbol_id)
         if ask_val is None:
             ask_val = w._quote_last_ask.get(symbol_id)
 
-        if bid_val is not None and ask_val is not None:
-            return (float(bid_val) + float(ask_val)) / 2.0
+        if bid_val is not None and float(bid_val) <= 0:
+            bid_val = None
+        if ask_val is not None and float(ask_val) <= 0:
+            ask_val = None
+
+        # Use bid-first to avoid midpoint distortion when one side is stale/abnormal.
         if bid_val is not None:
             return float(bid_val)
         if ask_val is not None:
