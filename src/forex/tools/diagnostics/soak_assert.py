@@ -21,6 +21,23 @@ class SoakThresholds:
     min_runtime_resume_ratio: float = 0.5
 
 
+def is_insufficient_data(stats: ReconnectLogStats, *, min_lines: int = 20) -> bool:
+    key_events = (
+        stats.disconnect_events
+        + stats.reconnect_scheduled
+        + stats.connect_started
+        + stats.connected
+        + stats.app_auth_sent
+        + stats.app_auth_success
+        + stats.account_auth_success
+        + stats.funds_timeout
+        + stats.request_deferred
+        + stats.runtime_stalled
+        + stats.runtime_resume
+    )
+    return stats.lines < max(1, int(min_lines)) or key_events == 0
+
+
 def evaluate_soak(stats: ReconnectLogStats, thresholds: SoakThresholds) -> list[str]:
     failures: list[str] = []
     if stats.app_auth_success < thresholds.min_app_auth_success:
@@ -75,6 +92,8 @@ def _build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--max-funds-timeout", type=int, default=30)
     parser.add_argument("--min-reconnect-success-ratio", type=float, default=0.5)
     parser.add_argument("--min-runtime-resume-ratio", type=float, default=0.5)
+    parser.add_argument("--min-lines", type=int, default=20)
+    parser.add_argument("--fail-on-insufficient-data", action="store_true")
     return parser
 
 
@@ -101,6 +120,17 @@ def main() -> int:
     failures = evaluate_soak(stats, thresholds)
 
     print(f"log_file: {resolved}")
+    if is_insufficient_data(stats, min_lines=max(1, int(args.min_lines))):
+        print("soak_assert: INSUFFICIENT_DATA")
+        print(
+            "summary:"
+            f" lines={stats.lines}"
+            f" reconnect_scheduled={stats.reconnect_scheduled}"
+            f" app_auth_success={stats.app_auth_success}"
+            f" account_auth_success={stats.account_auth_success}"
+        )
+        return 1 if bool(args.fail_on_insufficient_data) else 0
+
     print("soak_assert: PASS" if not failures else "soak_assert: FAIL")
     print(
         "summary:"
