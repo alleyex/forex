@@ -18,6 +18,24 @@ class LiveAutoTradeCoordinator:
     def __init__(self, window) -> None:
         self._window = window
 
+    def _effective_max_position(self) -> float:
+        w = self._window
+        try:
+            configured = float(getattr(w, "_auto_env_max_position", 1.0))
+        except Exception:
+            configured = 1.0
+        if configured <= 0.0:
+            configured = 1.0
+        return configured
+
+    def _effective_min_position_change(self) -> float:
+        w = self._window
+        try:
+            value = float(getattr(w, "_auto_env_min_position_change", 0.0))
+        except Exception:
+            value = 0.0
+        return max(0.0, value)
+
     def run_auto_trade_on_close(self) -> None:
         w = self._window
         if not w._auto_enabled or not w._auto_model:
@@ -52,14 +70,7 @@ class LiveAutoTradeCoordinator:
         if feature_set.features.shape[0] <= 0:
             w._auto_debug_log("feature rows empty")
             return
-        max_position = 1.0
-        if hasattr(w, "_max_position"):
-            try:
-                max_position = float(w._max_position.value())
-            except Exception:
-                max_position = 1.0
-        if max_position <= 0.0:
-            max_position = 1.0
+        max_position = self._effective_max_position()
         position_norm = w._auto_position / max_position
         obs = np.concatenate(
             [feature_set.features[-1], np.array([position_norm], dtype=np.float32)]
@@ -69,7 +80,7 @@ class LiveAutoTradeCoordinator:
         except Exception as exc:
             w._auto_log(f"❌ Model inference failed: {exc}")
             return
-        target_position = float(np.clip(action[0], -1.0, 1.0))
+        target_position = float(np.clip(action[0], -max_position, max_position))
         confidence_threshold = float(w._confidence.value()) if hasattr(w, "_confidence") else 0.0
         w._auto_debug_fields(
             "decision_input",
@@ -141,7 +152,98 @@ class LiveAutoTradeCoordinator:
         atr_bps = max(0.1, atr_ratio * 10000.0)
         return strength * atr_bps
 
-    def resolve_close_volume(self, position_id: int) -> int:
+    def resolve_close_volume(
+        self,
+        position_id: int,
+        *,
+        desired_position: Optional[float] = None,
+        current_position: Optional[float] = None,
+    ) -> int:
+        w = self._window
+        position_volume: Optional[int] = None
+        for position in w._open_positions:
+            try:
+                current_id = getattr(position, "positionId", None)
+                if int(current_id or 0) != int(position_id):
+                    continue
+            except Exception:
+                continue
+            trade_data = getattr(position, "tradeData", None)
+            volume = getattr(trade_data, "volume", None) if trade_data else None
+            try:
+                volume_int = int(volume)
+            except (TypeError, ValueError):
+                volume_int = 0
+            if volume_int > 0:
+                position_volume = volume_int
+            break
+
+        if position_volume is None:
+            fallback = self.calc_volume()
+            w._auto_log(
+                f"⚠️ Position {position_id} volume unavailable; fallback close volume={fallback}."
+            )
+            return fallback
+
+        close_volume = position_volume
+        if (
+            desired_position is not None
+            and current_position is not None
+            and current_position != 0.0
+            and desired_position * current_position > 0.0
+            and abs(desired_position) < abs(current_position)
+        ):
+            keep_ratio = max(0.0, min(1.0, abs(desired_position) / abs(current_position)))
+            reduce_ratio = 1.0 - keep_ratio
+            requested = int(round(position_volume * reduce_ratio))
+            close_volume = self._normalize_close_volume(requested=requested, available=position_volume)
+            if close_volume <= 0:
+                return 0
+            w._auto_debug_fields(
+                "partial_close_volume",
+                available=position_volume,
+                requested=requested,
+                final=close_volume,
+                keep_ratio=f"{keep_ratio:.3f}",
+            )
+            return close_volume
+
+        return position_volume
+
+    def _normalize_close_volume(self, *, requested: int, available: int) -> int:
+        w = self._window
+        symbol_name = w._trade_symbol.currentText() if hasattr(w, "_trade_symbol") else w._symbol_name
+        min_volume, volume_step = self.get_volume_constraints(symbol_name)
+        volume = max(0, int(requested))
+        available = max(0, int(available))
+        if volume <= 0 or available <= 0:
+            return 0
+        volume = min(volume, available)
+        if volume_step > 1:
+            volume = (volume // volume_step) * volume_step
+        if volume <= 0:
+            return 0
+        if volume < min_volume:
+            volume = min(min_volume, available)
+            if volume_step > 1:
+                volume = (volume // volume_step) * volume_step
+        if volume <= 0:
+            return 0
+        if volume > available:
+            volume = available
+        remainder = available - volume
+        if 0 < remainder < min_volume:
+            adjusted = available - min_volume
+            if adjusted <= 0:
+                return available
+            if volume_step > 1:
+                adjusted = (adjusted // volume_step) * volume_step
+            if adjusted <= 0:
+                return available
+            volume = adjusted
+        return max(0, int(volume))
+
+    def _resolve_full_close_volume(self, position_id: int) -> int:
         w = self._window
         for position in w._open_positions:
             try:
@@ -211,13 +313,29 @@ class LiveAutoTradeCoordinator:
                 step = float(w._position_step.value())
             except Exception:
                 step = 0.0
-        value = float(np.clip(float(target), -1.0, 1.0))
+        max_position = self._effective_max_position()
+        value = float(np.clip(float(target), -max_position, max_position))
         if step <= 0.0:
             return value
         stepped = round(value / step) * step
         if abs(stepped) < (step * 0.5):
             stepped = 0.0
-        return float(np.clip(stepped, -1.0, 1.0))
+        return float(np.clip(stepped, -max_position, max_position))
+
+    def _apply_trading_config_constraints(self, target: float) -> float:
+        w = self._window
+        value = float(target)
+        max_position = self._effective_max_position()
+        value = float(np.clip(value, -max_position, max_position))
+        if bool(getattr(w, "_auto_env_discretize_actions", False)):
+            positions = tuple(getattr(w, "_auto_env_discrete_positions", ()) or ())
+            if positions:
+                value = min(positions, key=lambda v: abs(float(v) - value))
+                value = float(np.clip(float(value), -max_position, max_position))
+        min_change = self._effective_min_position_change()
+        if min_change > 0 and abs(value - float(w._auto_position)) < min_change:
+            value = float(w._auto_position)
+        return value
 
     def execute_target_position(self, target: float, *, feature_set=None) -> bool:
         w = self._window
@@ -238,6 +356,7 @@ class LiveAutoTradeCoordinator:
         threshold = max(0.05, min(1.0, confidence_threshold))
         desired_raw = 0.0 if abs(target) < threshold else target
         desired = self.apply_position_step(desired_raw)
+        desired = self._apply_trading_config_constraints(desired)
         desired_side = "buy" if desired > 0 else "sell"
         w._auto_debug_fields(
             "decision_normalized",
@@ -276,7 +395,7 @@ class LiveAutoTradeCoordinator:
         )
 
         if desired == 0.0 and w._auto_position_id:
-            volume = self.resolve_close_volume(int(w._auto_position_id))
+            volume = self._resolve_full_close_volume(int(w._auto_position_id))
             w._auto_debug_fields("close_position", pos_id=w._auto_position_id, volume=volume)
             closed = w._order_service.close_position(
                 account_id=account_id,
@@ -319,7 +438,14 @@ class LiveAutoTradeCoordinator:
                 and same_side_count > 0
                 and abs(desired) < (abs(w._auto_position) - 0.05)
             ):
-                volume = self.resolve_close_volume(int(w._auto_position_id))
+                volume = self.resolve_close_volume(
+                    int(w._auto_position_id),
+                    desired_position=desired,
+                    current_position=float(w._auto_position),
+                )
+                if volume <= 0:
+                    w._auto_debug_log("same_side_rebalance: normalized close volume is zero")
+                    return False
                 w._auto_debug_fields(
                     "same_side_rebalance_reduce",
                     current=f"{w._auto_position:.3f}",
@@ -357,7 +483,7 @@ class LiveAutoTradeCoordinator:
             w._auto_debug_fields("same_side_add_allowed", open=same_side_count, cap=max_positions)
 
         if w._auto_position_id and not allow_same_side_add:
-            volume = self.resolve_close_volume(int(w._auto_position_id))
+            volume = self._resolve_full_close_volume(int(w._auto_position_id))
             w._auto_debug_fields("reverse_close_first", pos_id=w._auto_position_id, volume=volume)
             closed = w._order_service.close_position(
                 account_id=account_id,

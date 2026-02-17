@@ -1,7 +1,5 @@
 from __future__ import annotations
 
-import json
-from pathlib import Path
 from typing import Optional
 
 try:
@@ -47,6 +45,7 @@ from forex.ui.shared.styles.tokens import (
     STAT_VALUE,
 )
 from forex.config.paths import DEFAULT_MODEL_PATH, MODEL_DIR, RAW_HISTORY_DIR
+from forex.ui.train.services import UIParamsStore
 
 class SimulationParamsPanel(QWidget):
     start_requested = Signal(dict)
@@ -55,6 +54,7 @@ class SimulationParamsPanel(QWidget):
     def __init__(self, parent: Optional[QWidget] = None) -> None:
         super().__init__(parent)
         self._loading_params = False
+        self._params_store = UIParamsStore("simulation")
         self._summary_state = {
             "total_return": None,
             "max_drawdown": None,
@@ -72,7 +72,7 @@ class SimulationParamsPanel(QWidget):
         layout.setContentsMargins(14, 14, 14, 14)
         layout.setSpacing(14)
 
-        file_group = QGroupBox("檔案")
+        file_group = QGroupBox("Files")
         file_layout = QFormLayout(file_group)
         configure_form_layout(
             file_layout,
@@ -95,7 +95,7 @@ class SimulationParamsPanel(QWidget):
         self._data_path.setToolTip(default_data)
         data_row = build_browse_row(self._data_path, self._browse_data)
         data_row.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)
-        file_layout.addRow("資料檔案", data_row)
+        file_layout.addRow("Data File", data_row)
 
         default_model = latest_file_in_dir(
             MODEL_DIR,
@@ -107,9 +107,9 @@ class SimulationParamsPanel(QWidget):
         self._model_path.setToolTip(default_model)
         model_row = build_browse_row(self._model_path, self._browse_model)
         model_row.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)
-        file_layout.addRow("模型檔案", model_row)
+        file_layout.addRow("Model File", model_row)
 
-        params_group = QGroupBox("模擬參數")
+        params_group = QGroupBox("Simulation Params")
         params_layout = QFormLayout(params_group)
         configure_form_layout(
             params_layout,
@@ -123,29 +123,29 @@ class SimulationParamsPanel(QWidget):
         self._log_every.setRange(1, 100_000)
         self._log_every.setValue(1000)
         self._log_every.setFixedWidth(spin_width)
-        params_layout.addRow("輸出間隔", self._log_every)
+        params_layout.addRow("Log Every", self._log_every)
 
         self._max_steps = QSpinBox()
         self._max_steps.setRange(0, 10_000_000)
         self._max_steps.setValue(0)
         self._max_steps.setFixedWidth(spin_width)
-        params_layout.addRow("最大步數", self._max_steps)
+        params_layout.addRow("Max Steps", self._max_steps)
 
         self._transaction_cost = QDoubleSpinBox()
         self._transaction_cost.setRange(0.0, 100.0)
         self._transaction_cost.setDecimals(3)
         self._transaction_cost.setValue(1.0)
         self._transaction_cost.setFixedWidth(spin_width)
-        params_layout.addRow("手續費(bps)", self._transaction_cost)
+        params_layout.addRow("Transaction Cost (bps)", self._transaction_cost)
 
         self._slippage = QDoubleSpinBox()
         self._slippage.setRange(0.0, 100.0)
         self._slippage.setDecimals(3)
         self._slippage.setValue(0.5)
         self._slippage.setFixedWidth(spin_width)
-        params_layout.addRow("滑價(bps)", self._slippage)
+        params_layout.addRow("Slippage (bps)", self._slippage)
 
-        summary_group = QGroupBox("績效摘要")
+        summary_group = QGroupBox("Performance Summary")
         summary_layout = QGridLayout(summary_group)
         summary_layout.setColumnStretch(0, 0)
         summary_layout.setColumnStretch(1, 1)
@@ -154,11 +154,11 @@ class SimulationParamsPanel(QWidget):
 
         self._summary_fields = {}
         summary_rows = [
-            ("總報酬", "total_return"),
-            ("最大回撤", "max_drawdown"),
-            ("夏普比率", "sharpe"),
-            ("交易次數", "trades"),
-            ("最終權益", "equity"),
+            ("Total Return", "total_return"),
+            ("Max Drawdown", "max_drawdown"),
+            ("Sharpe Ratio", "sharpe"),
+            ("Trades", "trades"),
+            ("Final Equity", "equity"),
         ]
         for row, (label_text, key) in enumerate(summary_rows):
             label = QLabel(label_text)
@@ -170,7 +170,7 @@ class SimulationParamsPanel(QWidget):
             summary_layout.addWidget(value, row, 1)
             self._summary_fields[key] = value
 
-        details_group = QGroupBox("交易與持倉")
+        details_group = QGroupBox("Trade and Position")
         details_layout = QGridLayout(details_group)
         details_layout.setColumnStretch(0, 0)
         details_layout.setColumnStretch(1, 1)
@@ -191,10 +191,10 @@ class SimulationParamsPanel(QWidget):
         self._action_dist.setWordWrap(True)
 
         detail_rows = [
-            ("交易統計", self._trade_stats),
-            ("連勝/連敗", self._streak_stats),
-            ("持倉時間", self._holding_stats),
-            ("行動分布", self._action_dist),
+            ("Trade Stats", self._trade_stats),
+            ("Win/Loss Streak", self._streak_stats),
+            ("Holding Duration", self._holding_stats),
+            ("Action Distribution", self._action_dist),
         ]
         for row, (label_text, value) in enumerate(detail_rows):
             label = QLabel(label_text)
@@ -202,13 +202,13 @@ class SimulationParamsPanel(QWidget):
             details_layout.addWidget(label, row, 0)
             details_layout.addWidget(value, row, 1)
 
-        playback_group = QGroupBox("回放區間")
+        playback_group = QGroupBox("Playback Range")
         playback_layout = QGridLayout(playback_group)
         playback_layout.setColumnStretch(0, 0)
         playback_layout.setColumnStretch(1, 1)
         playback_layout.setHorizontalSpacing(10)
         playback_layout.setVerticalSpacing(6)
-        playback_label = QLabel("時間範圍")
+        playback_label = QLabel("Time Range")
         playback_label.setProperty("class", STAT_LABEL)
         self._playback_range = QLabel("-")
         self._playback_range.setProperty("class", STAT_VALUE)
@@ -228,25 +228,25 @@ class SimulationParamsPanel(QWidget):
         controls.setHorizontalSpacing(10)
         controls.setContentsMargins(0, 0, 0, 0)
 
-        self._start_button = QPushButton("開始回放")
+        self._start_button = QPushButton("Start Playback")
         self._start_button.setProperty("class", PRIMARY)
         self._start_button.clicked.connect(self._emit_start)
         controls.addWidget(self._start_button, 0, 0)
 
-        self._stop_button = QPushButton("停止回放")
+        self._stop_button = QPushButton("Stop Playback")
         self._stop_button.clicked.connect(self.stop_requested.emit)
         controls.addWidget(self._stop_button, 0, 1)
 
         layout.addLayout(controls)
 
     def _browse_data(self) -> None:
-        path, _ = QFileDialog.getOpenFileName(self, "選擇資料檔", "", "CSV (*.csv)")
+        path, _ = QFileDialog.getOpenFileName(self, "Select Data File", "", "CSV (*.csv)")
         if path:
             self._data_path.setText(path)
             self._data_path.setToolTip(path)
 
     def _browse_model(self) -> None:
-        path, _ = QFileDialog.getOpenFileName(self, "選擇模型檔", "", "ZIP (*.zip)")
+        path, _ = QFileDialog.getOpenFileName(self, "Select Model File", "", "ZIP (*.zip)")
         if path:
             self._model_path.setText(path)
             self._model_path.setToolTip(path)
@@ -281,31 +281,13 @@ class SimulationParamsPanel(QWidget):
         self._model_path.setToolTip(text)
         self._save_params()
 
-    @staticmethod
-    def _params_path() -> Path:
-        return Path("data/simulation/simulation_params.json")
-
     def _save_params(self) -> None:
         if self._loading_params:
             return
-        path = self._params_path()
-        path.parent.mkdir(parents=True, exist_ok=True)
-        try:
-            path.write_text(
-                json.dumps(self.get_params(), ensure_ascii=True, indent=2),
-                encoding="utf-8",
-            )
-        except OSError:
-            return
+        self._params_store.save(self.get_params())
 
     def _load_params(self) -> None:
-        path = self._params_path()
-        if not path.exists():
-            return
-        try:
-            data = json.loads(path.read_text(encoding="utf-8"))
-        except (OSError, json.JSONDecodeError):
-            return
+        data = self._params_store.load()
         if not isinstance(data, dict):
             return
 
@@ -411,7 +393,7 @@ class SimulationPanel(QWidget):
 
         if self._charts_available:
             plot = pg.PlotWidget()
-            plot.setTitle("回放權益曲線")
+            plot.setTitle("Playback Equity Curve")
             plot.setLabel("bottom", "timesteps")
             plot.setLabel("left", "equity")
             plot.showGrid(x=True, y=True, alpha=0.3)
@@ -419,7 +401,7 @@ class SimulationPanel(QWidget):
             self._curve = plot.plot(pen=pg.mkPen("#F58518", width=2), name="equity")
             layout.addWidget(plot, stretch=1)
         else:
-            notice = QLabel("PyQtGraph 未安裝，無法顯示曲線圖。請安裝 pyqtgraph。")
+            notice = QLabel("PyQtGraph is not installed. Install pyqtgraph to show charts.")
             notice.setWordWrap(True)
             layout.addWidget(notice)
 

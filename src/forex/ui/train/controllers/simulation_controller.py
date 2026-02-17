@@ -49,10 +49,10 @@ class SimulationController(QObject):
         data_path = params.get("data", "").strip()
         model_path = params.get("model", "").strip()
         if not data_path or not Path(data_path).exists():
-            self._show_error("資料檔案不存在，請選擇有效的 CSV 檔案。")
+            self._show_error("Data file does not exist. Please choose a valid CSV file.")
             return
         if not model_path or not Path(model_path).exists():
-            self._show_error("模型檔案不存在，請選擇有效的 ZIP 檔案。")
+            self._show_error("Model file does not exist. Please choose a valid ZIP file.")
             return
 
         self._state.reset_plot.emit()
@@ -97,7 +97,7 @@ class SimulationController(QObject):
         self._state.log_message.emit(format_simulation_message("param_error", message=message))
         parent = self.parent()
         if isinstance(parent, QWidget):
-            QMessageBox.warning(parent, "回放參數錯誤", message)
+            QMessageBox.warning(parent, "Playback Parameter Error", message)
 
     def _on_stdout_line(self, line: str) -> None:
         self._state.log_message.emit(line)

@@ -4,6 +4,7 @@ from pathlib import Path
 
 from ctrader_open_api.messages.OpenApiModelMessages_pb2 import ProtoOATradeSide
 
+from forex.ml.rl.envs.trading_config_io import load_trading_config
 from forex.ml.rl.features.feature_builder import load_scaler
 
 
@@ -50,6 +51,11 @@ class LiveAutoRuntimeService:
             w._auto_log(f"❌ Failed to load model: {exc}{hint}")
             return False
         w._auto_feature_scaler = None
+        w._auto_env_config = None
+        w._auto_env_max_position = 1.0
+        w._auto_env_min_position_change = 0.0
+        w._auto_env_discretize_actions = False
+        w._auto_env_discrete_positions = (-1.0, 0.0, 1.0)
         scaler_path = model_path.with_suffix(".scaler.json")
         if scaler_path.exists():
             try:
@@ -59,8 +65,37 @@ class LiveAutoRuntimeService:
                 w._auto_log(f"⚠️ Failed to load feature scaler: {exc}")
         else:
             w._auto_log("⚠️ Feature scaler not found; using raw features")
+
+        env_config_path = model_path.with_suffix(".env.json")
+        if env_config_path.exists():
+            try:
+                env_config = load_trading_config(env_config_path)
+                w._auto_env_config = env_config
+                w._auto_env_max_position = max(1e-6, float(env_config.max_position))
+                w._auto_env_min_position_change = max(0.0, float(env_config.min_position_change))
+                w._auto_env_discretize_actions = bool(env_config.discretize_actions)
+                w._auto_env_discrete_positions = tuple(float(v) for v in env_config.discrete_positions)
+                self._apply_env_config_to_live_controls(env_config)
+                w._auto_log(f"✅ Trading config loaded: {env_config_path.name}")
+            except Exception as exc:
+                w._auto_log(f"⚠️ Failed to load trading config: {exc}")
+        else:
+            w._auto_log("⚠️ Trading config not found; using live defaults")
         w._auto_log(f"✅ Model loaded: {Path(path).name}")
         return True
+
+    def _apply_env_config_to_live_controls(self, config) -> None:
+        w = self._window
+        if hasattr(w, "_autotrade_loading"):
+            w._autotrade_loading = True
+        try:
+            if hasattr(w, "_slippage_bps"):
+                w._slippage_bps.setValue(float(config.slippage_bps))
+            if hasattr(w, "_position_step"):
+                w._position_step.setValue(float(config.position_step))
+        finally:
+            if hasattr(w, "_autotrade_loading"):
+                w._autotrade_loading = False
 
     def ensure_order_service(self) -> None:
         w = self._window
@@ -129,4 +164,3 @@ class LiveAutoRuntimeService:
         if parts:
             w._auto_log(f"✅ Order executed: {' '.join(parts)}")
         w._request_positions()
-

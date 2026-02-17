@@ -68,9 +68,6 @@ class PPOTrainingController(QObject):
         self._use_metrics_log = True
         if params.get("optuna_trials", 0) > 0:
             self._start_optuna_log_tailer()
-        discrete_positions = str(params.get("discrete_positions", "")).strip()
-        if not discrete_positions:
-            discrete_positions = "-1,0,1"
         args = [
             TRAIN_PPO_SCRIPT,
             "--data",
@@ -87,6 +84,14 @@ class PPOTrainingController(QObject):
             str(params["batch_size"]),
             "--ent-coef",
             str(params["ent_coef"]),
+            "--gae-lambda",
+            str(params["gae_lambda"]),
+            "--clip-range",
+            str(params["clip_range"]),
+            "--vf-coef",
+            str(params["vf_coef"]),
+            "--n-epochs",
+            str(params["n_epochs"]),
             "--episode-length",
             str(params["episode_length"]),
             "--eval-split",
@@ -110,13 +115,9 @@ class PPOTrainingController(QObject):
             "--risk-aversion",
             str(params["risk_aversion"]),
         ]
-        if discrete_positions:
-            args.append(f"--discrete-positions={discrete_positions}")
         args.extend(["--metrics-log", self._metrics_log_path or ""])
         if not params.get("random_start", True):
             args.append("--no-random-start")
-        if params.get("discretize_actions"):
-            args.append("--discretize-actions")
         if params.get("optuna_trials", 0) > 0:
             args.extend(
                 [

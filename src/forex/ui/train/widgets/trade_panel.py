@@ -31,9 +31,6 @@ class TradePanel(QWidget):
         layout.setContentsMargins(12, 12, 12, 12)
         layout.setSpacing(10)
 
-        title = QLabel("交易面板")
-        title.setAlignment(Qt.AlignLeft | Qt.AlignVCenter)
-
         self.setStyleSheet(
             """
             QScrollArea {
@@ -87,103 +84,102 @@ class TradePanel(QWidget):
 
         scroll.setWidget(content)
 
-        layout.addWidget(title)
         layout.addWidget(scroll)
 
     def _build_sections(self) -> None:
         self._add_section(
-            "帳戶基本",
+            "Account Basics",
             [
-                ("account_id", "帳戶 ID"),
-                ("environment", "環境"),
-                ("account_trader_login", "交易登入"),
+                ("account_id", "Account ID"),
+                ("environment", "Environment"),
+                ("account_trader_login", "Account Trader Login"),
                 ("trader_account_id", "CTID Trader Account ID"),
                 ("trader_login", "Trader Login"),
-                ("broker_name", "Broker 名稱"),
-                ("registration_timestamp", "註冊時間"),
-                ("last_balance_update_timestamp", "最後餘額更新"),
-                ("last_closing_deal_timestamp", "最後平倉時間"),
+                ("broker_name", "Broker Name"),
+                ("registration_timestamp", "Registration Time"),
+                ("last_balance_update_timestamp", "Last Balance Update"),
+                ("last_closing_deal_timestamp", "Last Close Time"),
             ],
         )
         self._add_section(
-            "資金/幣別",
+            "Funds/Currency",
             [
-                ("balance", "餘額"),
-                ("balance_version", "餘額版本"),
-                ("equity", "淨值"),
-                ("free_margin", "可用資金"),
-                ("used_margin", "已用保證金"),
-                ("margin_level", "保證金比例"),
-                ("currency", "帳戶幣別"),
-                ("deposit_asset_id", "入金資產 ID"),
+                ("balance", "Balance"),
+                ("balance_version", "Balance Version"),
+                ("equity", "Equity"),
+                ("free_margin", "Free Margin"),
+                ("used_margin", "Used Margin"),
+                ("margin_level", "Margin Level"),
+                ("currency", "Account Currency"),
+                ("deposit_asset_id", "Deposit Asset ID"),
                 ("money_digits", "Money Digits"),
             ],
         )
         self._add_section(
-            "獎金",
+            "Bonuses",
             [
                 ("manager_bonus", "Manager Bonus"),
                 ("ib_bonus", "IB Bonus"),
-                ("non_withdrawable_bonus", "不可提領獎金"),
+                ("non_withdrawable_bonus", "Non-withdrawable Bonus"),
             ],
         )
         self._add_section(
-            "權限/類型",
+            "Permissions/Type",
             [
-                ("permission_scope", "權限範圍"),
-                ("access_rights", "存取權限"),
-                ("account_type", "帳戶類型"),
-                ("swap_free", "免隔夜利息"),
-                ("french_risk", "AMF 合規"),
-                ("is_limited_risk", "有限風險帳戶"),
+                ("permission_scope", "Permission Scope"),
+                ("access_rights", "Access Rights"),
+                ("account_type", "Account Type"),
+                ("swap_free", "Swap Free"),
+                ("french_risk", "AMF Compliance"),
+                ("is_limited_risk", "Limited Risk Account"),
             ],
         )
         self._add_section(
-            "佣金設定",
+            "Commission Settings",
             [
-                ("commission_symbol", "商品"),
-                ("commission_value", "佣金"),
-                ("commission_type", "佣金類型"),
-                ("min_commission", "最小佣金"),
-                ("min_commission_type", "最小佣金類型"),
-                ("min_commission_asset", "最小佣金資產"),
-                ("rollover_commission", "隔夜佣金"),
-                ("rollover_commission_3days", "三倍隔夜日"),
-                ("precise_trading_commission_rate", "精確佣金率"),
-                ("precise_min_commission", "精確最小佣金"),
-                ("pnl_conversion_fee_rate", "PnL 轉換費率"),
+                ("commission_symbol", "Symbol"),
+                ("commission_value", "Commission"),
+                ("commission_type", "Commission Type"),
+                ("min_commission", "Min Commission"),
+                ("min_commission_type", "Min Commission Type"),
+                ("min_commission_asset", "Min Commission Asset"),
+                ("rollover_commission", "Rollover Commission"),
+                ("rollover_commission_3days", "3-day Rollover Day"),
+                ("precise_trading_commission_rate", "Precise Commission Rate"),
+                ("precise_min_commission", "Precise Min Commission"),
+                ("pnl_conversion_fee_rate", "PnL Conversion Fee Rate"),
             ],
         )
         self._add_section(
-            "隔夜利息設定",
+            "Swap Settings",
             [
-                ("swap_long", "多單隔夜利息"),
-                ("swap_short", "空單隔夜利息"),
-                ("swap_calculation_type", "計算方式"),
-                ("swap_period", "隔夜週期"),
-                ("swap_time", "隔夜時間"),
-                ("charge_swap_at_weekends", "週末計息"),
-                ("skip_swap_periods", "略過計息期數"),
-                ("swap_rollover_3days", "三倍計息日"),
+                ("swap_long", "Long Swap"),
+                ("swap_short", "Short Swap"),
+                ("swap_calculation_type", "Calculation Type"),
+                ("swap_period", "Swap Period"),
+                ("swap_time", "Swap Time"),
+                ("charge_swap_at_weekends", "Charge at Weekends"),
+                ("skip_swap_periods", "Skip Swap Periods"),
+                ("swap_rollover_3days", "3-day Swap Rollover"),
             ],
         )
         self._add_section(
-            "槓桿/保證金策略",
+            "Leverage/Margin Strategy",
             [
-                ("leverage_in_cents", "槓桿"),
-                ("max_leverage", "最大槓桿"),
-                ("total_margin_calculation_type", "保證金計算方式"),
-                ("limited_risk_margin_calculation_strategy", "有限風險保證金策略"),
-                ("stop_out_strategy", "Stop Out 策略"),
-                ("fair_stop_out", "完整/部分平倉"),
+                ("leverage_in_cents", "Leverage"),
+                ("max_leverage", "Max Leverage"),
+                ("total_margin_calculation_type", "Margin Calculation Type"),
+                ("limited_risk_margin_calculation_strategy", "Limited-risk Margin Strategy"),
+                ("stop_out_strategy", "Stop Out Strategy"),
+                ("fair_stop_out", "Full/Partial Closeout"),
             ],
         )
         self._add_section(
-            "身份/授權",
+            "Identity/Authorization",
             [
-                ("ctid_user_id", "CTID 使用者 ID"),
-                ("token_expires_at", "Token 到期時間"),
-                ("token_seconds_to_expiry", "Token 剩餘秒數"),
+                ("ctid_user_id", "CTID User ID"),
+                ("token_expires_at", "Token Expiry Time"),
+                ("token_seconds_to_expiry", "Token Seconds Remaining"),
             ],
         )
 
@@ -248,7 +244,7 @@ class TradePanel(QWidget):
         grid.setColumnStretch(columns, 1)
 
     def update_account_info(self, account: Account) -> None:
-        env_text = "真實" if account.is_live else "模擬" if account.is_live is not None else "-"
+        env_text = "Live" if account.is_live else "Demo" if account.is_live is not None else "-"
         self._set_field("account_id", str(account.account_id))
         self._set_field("environment", env_text)
         self._set_field(
@@ -416,7 +412,7 @@ class TradePanel(QWidget):
     def _format_bool(value: Optional[bool]) -> str:
         if value is None:
             return "-"
-        return "是" if value else "否"
+        return "Yes" if value else "No"
 
     @staticmethod
     def _format_enum(value: Optional[int], mapping: dict[int, str]) -> str:

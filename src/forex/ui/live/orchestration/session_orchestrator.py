@@ -203,7 +203,7 @@ class LiveSessionOrchestrator:
                     oauth.disconnect()
                 except Exception:
                     pass
-            w._oauth_label.setText("OAuth 狀態: ⏳ 等待 App 認證")
+            w._oauth_label.setText("OAuth status: ⏳ Waiting for App auth")
             self.suspend_runtime_loops()
             return
 

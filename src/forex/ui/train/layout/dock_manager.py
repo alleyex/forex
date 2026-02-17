@@ -3,7 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Optional
 
-from PySide6.QtCore import Qt, QObject
+from PySide6.QtCore import Qt, QObject, QTimer
 from PySide6.QtGui import QAction
 from PySide6.QtWidgets import QDockWidget, QMainWindow, QWidget
 
@@ -16,6 +16,9 @@ class DockSet:
 
 
 class DockManager:
+    _TRAINING_DOCK_DEFAULT_WIDTH = 700
+    _SIMULATION_DOCK_DEFAULT_WIDTH = 520
+
     def __init__(
         self,
         main_window: QMainWindow,
@@ -39,6 +42,7 @@ class DockManager:
         self._main_window.addDockWidget(Qt.BottomDockWidgetArea, self._dock_set.log)
         self._main_window.addDockWidget(Qt.LeftDockWidgetArea, self._dock_set.training_params)
         self._main_window.addDockWidget(Qt.LeftDockWidgetArea, self._dock_set.simulation_params)
+        QTimer.singleShot(0, self._apply_initial_dock_sizes)
 
     def set_log_collapsed(self, collapsed: bool) -> None:
         log_dock = self._dock_set.log
@@ -60,9 +64,11 @@ class DockManager:
         if mode == "training":
             self._dock_set.training_params.setVisible(True)
             self._dock_set.simulation_params.setVisible(False)
+            self._resize_left_dock(self._dock_set.training_params, self._TRAINING_DOCK_DEFAULT_WIDTH)
         elif mode == "simulation":
             self._dock_set.training_params.setVisible(False)
             self._dock_set.simulation_params.setVisible(True)
+            self._resize_left_dock(self._dock_set.simulation_params, self._SIMULATION_DOCK_DEFAULT_WIDTH)
         else:
             self._dock_set.training_params.setVisible(False)
             self._dock_set.simulation_params.setVisible(False)
@@ -76,7 +82,7 @@ class DockManager:
         return dock
 
     def _create_training_params_dock(self, panel: QWidget) -> QDockWidget:
-        dock = QDockWidget("PPO 參數設定", self._main_window)
+        dock = QDockWidget("PPO Parameters", self._main_window)
         dock.setObjectName("training_params_dock")
         dock.setWidget(panel)
         dock.setAllowedAreas(Qt.LeftDockWidgetArea)
@@ -84,7 +90,7 @@ class DockManager:
         return dock
 
     def _create_simulation_params_dock(self, panel: QWidget) -> QDockWidget:
-        dock = QDockWidget("回放參數", self._main_window)
+        dock = QDockWidget("Playback Parameters", self._main_window)
         dock.setObjectName("simulation_params_dock")
         dock.setWidget(panel)
         dock.setAllowedAreas(Qt.LeftDockWidgetArea)
@@ -94,6 +100,20 @@ class DockManager:
     def _configure_corners(self) -> None:
         self._main_window.setCorner(Qt.BottomLeftCorner, Qt.LeftDockWidgetArea)
         self._main_window.setCorner(Qt.BottomRightCorner, Qt.BottomDockWidgetArea)
+
+    def _apply_initial_dock_sizes(self) -> None:
+        if self._dock_set.training_params.isVisible():
+            self._resize_left_dock(self._dock_set.training_params, self._TRAINING_DOCK_DEFAULT_WIDTH)
+        if self._dock_set.simulation_params.isVisible():
+            self._resize_left_dock(self._dock_set.simulation_params, self._SIMULATION_DOCK_DEFAULT_WIDTH)
+
+    def _resize_left_dock(self, dock: QDockWidget, width: int) -> None:
+        if not dock.isVisible():
+            return
+        try:
+            self._main_window.resizeDocks([dock], [max(320, int(width))], Qt.Horizontal)
+        except Exception:
+            pass
 
 
 class DockManagerController(QObject):

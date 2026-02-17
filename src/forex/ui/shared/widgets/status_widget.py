@@ -1,5 +1,5 @@
 """
-可重用的狀態顯示元件
+Reusable status display widget
 """
 from typing import Dict, Tuple
 from PySide6.QtWidgets import QLabel
@@ -11,18 +11,18 @@ from forex.ui.shared.utils.formatters import format_status_label
 
 class StatusWidget(QLabel):
     """
-    狀態顯示元件
+    Status顯示元件
     
     根據 ConnectionStatus 顯示對應的文字和顏色
     """
     
-    # 預設狀態對應表
+    # 預設Status對應表
     DEFAULT_STATUS_MAP: Dict[ConnectionStatus, Tuple[str, str]] = {
-        ConnectionStatus.DISCONNECTED: ("已斷線", "color: red"),
-        ConnectionStatus.CONNECTING: ("連線中...", "color: orange"),
-        ConnectionStatus.CONNECTED: ("已連線", "color: blue"),
-        ConnectionStatus.APP_AUTHENTICATED: ("應用程式已認證 ✓", "color: green"),
-        ConnectionStatus.ACCOUNT_AUTHENTICATED: ("帳戶已認證 ✓", "color: green"),
+        ConnectionStatus.DISCONNECTED: ("Disconnected", "color: red"),
+        ConnectionStatus.CONNECTING: ("Connecting...", "color: orange"),
+        ConnectionStatus.CONNECTED: ("Connected", "color: blue"),
+        ConnectionStatus.APP_AUTHENTICATED: ("App authenticated ✓", "color: green"),
+        ConnectionStatus.ACCOUNT_AUTHENTICATED: ("Account authenticated ✓", "color: green"),
     }
     
     def __init__(
@@ -38,13 +38,13 @@ class StatusWidget(QLabel):
     @Slot(int)
     def update_status(self, status: int) -> None:
         """
-        更新狀態顯示
+        更新Status顯示
         
         Args:
             status: ConnectionStatus 的整數值
         """
         status_enum = ConnectionStatus(status) if isinstance(status, int) else status
-        text, style = self._status_map.get(status_enum, ("未知", ""))
+        text, style = self._status_map.get(status_enum, ("Unknown", ""))
         self.setText(format_status_label(text))
         self.setStyleSheet(style)
     

@@ -47,14 +47,14 @@ class AccountInfoController(QObject):
             if selected is None:
                 selected = accounts[0]
 
-            env_text = "真實" if selected.is_live else "模擬"
+            env_text = "Live" if selected.is_live else "Demo"
             login_text = "-" if selected.trader_login is None else str(selected.trader_login)
             self._log(format_connection_message("account_info_header"))
             self._log(
-                format_connection_message("account_field", label="帳戶 ID", value=selected.account_id)
+                format_connection_message("account_field", label="Account ID", value=selected.account_id)
             )
-            self._log(format_connection_message("account_field", label="環境", value=env_text))
-            self._log(format_connection_message("account_field", label="交易登入", value=login_text))
+            self._log(format_connection_message("account_field", label="Environment", value=env_text))
+            self._log(format_connection_message("account_field", label="Trader Login", value=login_text))
             self.accountSelected.emit(selected)
             self._fetch_account_funds(selected.account_id)
         except Exception as exc:
@@ -67,28 +67,28 @@ class AccountInfoController(QObject):
         self._log(
             format_connection_message(
                 "funds_field",
-                label="餘額",
+                label="Balance",
                 value=self._format_money(snapshot.balance, money_digits),
             )
         )
         self._log(
             format_connection_message(
                 "funds_field",
-                label="淨值",
+                label="Equity",
                 value=self._format_money(snapshot.equity, money_digits),
             )
         )
         self._log(
             format_connection_message(
                 "funds_field",
-                label="可用資金",
+                label="Free Margin",
                 value=self._format_money(snapshot.free_margin, money_digits),
             )
         )
         self._log(
             format_connection_message(
                 "funds_field",
-                label="已用保證金",
+                label="Used Margin",
                 value=self._format_money(snapshot.used_margin, money_digits),
             )
         )
@@ -96,11 +96,11 @@ class AccountInfoController(QObject):
             margin_text = "-"
         else:
             margin_text = f"{snapshot.margin_level:.2f}%"
-        self._log(format_connection_message("funds_field", label="保證金比例", value=margin_text))
+        self._log(format_connection_message("funds_field", label="Margin Level", value=margin_text))
         self._log(
             format_connection_message(
                 "funds_field",
-                label="帳戶幣別",
+                label="Account Currency",
                 value=snapshot.currency or "-",
             )
         )

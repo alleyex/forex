@@ -136,7 +136,7 @@ class MainWindow(QMainWindow):
         )
 
     def _setup_window(self) -> None:
-        self.setWindowTitle("外匯交易應用程式")
+        self.setWindowTitle("Forex Trading App")
         self.setMinimumSize(1280, 720)
         self.resize(1280, 720)
 
@@ -413,7 +413,7 @@ class MainWindow(QMainWindow):
         try:
             return OAuthTokens.from_file(TOKEN_FILE)
         except Exception as exc:
-            self.logRequested.emit(f"⚠️ 無法讀取 token 檔案: {exc}")
+            self.logRequested.emit(f"⚠️ Failed to read token file: {exc}")
             return None
 
     def _fetch_account_info(self) -> None:
@@ -426,7 +426,7 @@ class MainWindow(QMainWindow):
         tokens = self._load_tokens_for_accounts()
         access_token = "" if tokens is None else str(tokens.access_token or "").strip()
         if not access_token:
-            self.logRequested.emit("⚠️ 缺少 Access Token，請先完成 OAuth 授權")
+            self.logRequested.emit("⚠️ Missing Access Token. Complete OAuth authorization first")
             return
 
         from forex.utils.reactor_manager import reactor_manager
@@ -451,7 +451,7 @@ class MainWindow(QMainWindow):
 
         if tokens is not None and tokens.account_id:
             if self._use_cases.symbol_by_id_in_progress():
-                self.logRequested.emit("⏳ 正在取得商品詳細資訊，請稍候")
+                self.logRequested.emit("⏳ Fetching symbol details, please wait")
             else:
                 symbol_id = int(self._trendbar_symbol_id or 0)
                 if symbol_id:
@@ -464,26 +464,26 @@ class MainWindow(QMainWindow):
                         lambda symbols: self._trade_panel.update_symbol_commission_info(
                             symbols[0] if symbols else {}
                         ),
-                        lambda e: self.logRequested.emit(f"⚠️ 商品詳細資訊取得失敗: {e}"),
+                        lambda e: self.logRequested.emit(f"⚠️ Failed to fetch symbol details: {e}"),
                         self.logRequested.emit,
                     )
                 else:
-                    self.logRequested.emit("⚠️ 缺少商品 ID，無法取得佣金設定")
+                    self.logRequested.emit("⚠️ Missing symbol ID. Cannot fetch commission settings")
 
         if self._use_cases.account_list_in_progress():
-            self.logRequested.emit("⏳ 正在取得帳戶列表，請稍候")
+            self.logRequested.emit("⏳ Fetching account list, please wait")
         else:
             reactor.callFromThread(
                 self._use_cases.fetch_accounts,
                 self._service,
                 access_token,
                 lambda accounts: self.accountsReceived.emit(accounts, selected_account_id),
-                lambda e: self.logRequested.emit(f"⚠️ 帳戶列表取得失敗: {e}"),
+                lambda e: self.logRequested.emit(f"⚠️ Failed to fetch account list: {e}"),
                 self.logRequested.emit,
             )
 
         if self._use_cases.ctid_profile_in_progress():
-            self.logRequested.emit("⏳ 正在取得 CTID Profile，請稍候")
+            self.logRequested.emit("⏳ Fetching CTID profile, please wait")
             return
 
         reactor.callFromThread(
@@ -491,7 +491,7 @@ class MainWindow(QMainWindow):
             self._service,
             access_token,
             lambda profile: self._trade_panel.update_profile_info(profile.user_id),
-            lambda e: self.logRequested.emit(f"⚠️ CTID Profile 取得失敗: {e}"),
+            lambda e: self.logRequested.emit(f"⚠️ Failed to fetch CTID profile: {e}"),
             self.logRequested.emit,
         )
 

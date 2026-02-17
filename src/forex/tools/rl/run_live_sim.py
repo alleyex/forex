@@ -9,6 +9,7 @@ import numpy as np
 from stable_baselines3 import PPO
 
 from forex.ml.rl.envs.trading_env import TradingConfig
+from forex.ml.rl.envs.trading_config_io import load_trading_config
 from forex.ml.rl.features.feature_builder import (
     apply_scaler,
     build_feature_frame,
@@ -29,6 +30,19 @@ def _build_obs(features: np.ndarray, index: int, position: float, max_position: 
     denom = max(1e-6, float(max_position))
     position_norm = position / denom
     return np.concatenate([features[index], np.array([position_norm], dtype=np.float32)]).astype(np.float32)
+
+
+def _apply_action_constraints(target: float, current_position: float, config: TradingConfig) -> float:
+    value = float(target)
+    if config.discretize_actions and config.discrete_positions:
+        value = min(config.discrete_positions, key=lambda candidate: abs(float(candidate) - value))
+    if config.position_step > 0.0:
+        value = round(value / config.position_step) * config.position_step
+    if config.max_position > 0.0:
+        value = float(np.clip(value, -config.max_position, config.max_position))
+    if abs(value - current_position) < config.min_position_change:
+        value = float(current_position)
+    return float(value)
 
 
 def _streak_stats(values: list[float]) -> tuple[int, int]:
@@ -59,6 +73,11 @@ def main() -> None:
         "--feature-scaler",
         default="",
         help="Optional feature scaler JSON (default: model path with .scaler.json).",
+    )
+    parser.add_argument(
+        "--env-config",
+        default="",
+        help="Optional env config JSON (default: model path with .env.json).",
     )
     parser.add_argument(
         "--stochastic",
@@ -99,7 +118,22 @@ def main() -> None:
         episode_length=None,
         random_start=False,
     )
+    env_config_path = args.env_config.strip()
+    if not env_config_path:
+        env_config_path = str(Path(args.model).with_suffix(".env.json"))
+    env_config_file = Path(env_config_path)
+    if env_config_file.exists():
+        try:
+            loaded_config = load_trading_config(env_config_file)
+            loaded_config.transaction_cost_bps = float(args.transaction_cost_bps)
+            loaded_config.slippage_bps = float(args.slippage_bps)
+            loaded_config.episode_length = None
+            loaded_config.random_start = False
+            config = loaded_config
+        except Exception:
+            pass
     cost_rate = (config.transaction_cost_bps + config.slippage_bps) / 10000.0
+    holding_cost_rate = config.holding_cost_bps / 10000.0
 
     model = PPO.load(args.model)
 
@@ -135,8 +169,9 @@ def main() -> None:
         for idx in range(steps):
             delta = position - current
             cost = abs(delta) * cost_rate
+            holding_cost = abs(current) * holding_cost_rate
             price_return = (closes[idx + 1] - closes[idx]) / closes[idx]
-            reward = current * float(price_return) - cost
+            reward = current * float(price_return) - cost - holding_cost
             equity *= 1.0 + reward
             current = position
         return equity, equity - 1.0
@@ -163,7 +198,8 @@ def main() -> None:
         last_idx = idx
         obs = _build_obs(features, idx, state.position, max_position=config.max_position)
         action, _ = model.predict(obs, deterministic=not args.stochastic)
-        target_position = float(np.clip(action[0], -1.0, 1.0))
+        target_raw = float(np.clip(action[0], -config.max_position, config.max_position))
+        target_position = _apply_action_constraints(target_raw, state.position, config)
 
         action_sum += target_position
         action_min = target_position if action_min is None else min(action_min, target_position)
@@ -182,6 +218,7 @@ def main() -> None:
             last_change_idx = idx
 
         cost = abs(delta) * cost_rate
+        holding_cost = abs(state.position) * holding_cost_rate
         if abs(delta) > 1e-6:
             current_price = closes[idx]
             current_time = timestamps[idx] if idx < len(timestamps) else "-"
@@ -192,12 +229,12 @@ def main() -> None:
                 if not args.quiet:
                     print(
                         f"Trade @ {current_time} pos={state.position:.3f} -> {target_position:.3f} "
-                        f"pnl={trade_pnl:.6g} cost={cost:.6g}"
+                        f"pnl={trade_pnl:.6g} cost={cost:.6g} holding={holding_cost:.6g}"
                     )
             last_trade_price = current_price
 
         price_return = (closes[idx + 1] - closes[idx]) / closes[idx]
-        reward = state.position * float(price_return) - cost
+        reward = state.position * float(price_return) - cost - holding_cost
         state.equity *= 1.0 + reward
         equity_series.append(state.equity)
         state.position = target_position

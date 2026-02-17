@@ -1,5 +1,5 @@
 """
-OAuth 認證對話框
+OAuth authentication dialog
 """
 from dataclasses import dataclass
 from typing import Optional
@@ -28,7 +28,7 @@ from forex.utils.reactor_manager import reactor_manager
 
 @dataclass
 class OAuthDialogState(DialogState):
-    """OAuth 對話框狀態"""
+    """OAuth 對話框Status"""
     auth_in_progress: bool = False
     login_in_progress: bool = False
     accounts_in_progress: bool = False
@@ -46,28 +46,28 @@ class TokenFormWidget(QWidget):
         configure_form_layout(layout, horizontal_spacing=12, vertical_spacing=10)
         
         self.access_token = QLineEdit()
-        self.access_token.setPlaceholderText("輸入存取權杖")
+        self.access_token.setPlaceholderText("Enter access token")
         layout.addRow(QLabel("Access Token:"), self.access_token)
         
         self.refresh_token = QLineEdit()
-        self.refresh_token.setPlaceholderText("輸入更新權杖")
+        self.refresh_token.setPlaceholderText("Enter refresh token")
         layout.addRow(QLabel("Refresh Token:"), self.refresh_token)
         
         self.expires_at = QLineEdit()
-        self.expires_at.setPlaceholderText("Unix 時間戳記或留空")
-        layout.addRow(QLabel("到期時間:"), self.expires_at)
+        self.expires_at.setPlaceholderText("Unix timestamp or leave blank")
+        layout.addRow(QLabel("Expires At:"), self.expires_at)
         
         self.account_id = QLineEdit()
-        self.account_id.setPlaceholderText("CTID 交易帳戶 ID")
-        layout.addRow(QLabel("帳戶 ID:"), self.account_id)
+        self.account_id.setPlaceholderText("CTID Trader Account ID")
+        layout.addRow(QLabel("Account ID:"), self.account_id)
         
         self.redirect_uri = QLineEdit()
         self.redirect_uri.setPlaceholderText("http://127.0.0.1:8765/callback")
-        layout.addRow(QLabel("重導向 URI:"), self.redirect_uri)
+        layout.addRow(QLabel("Redirect URI:"), self.redirect_uri)
         
         self.auth_code = QLineEdit()
-        self.auth_code.setPlaceholderText("貼上授權碼")
-        layout.addRow(QLabel("授權碼:"), self.auth_code)
+        self.auth_code.setPlaceholderText("Paste authorization code")
+        layout.addRow(QLabel("Authorization Code:"), self.auth_code)
     
     def set_enabled(self, enabled: bool) -> None:
         """啟用或停用所有欄位"""
@@ -99,27 +99,27 @@ class TokenFormWidget(QWidget):
         """驗證認證所需欄位"""
         data = self.get_data()
         if not data["access_token"]:
-            return "Access Token 為必填"
+            return "Access Token is required"
         if not data["refresh_token"]:
-            return "Refresh Token 為必填"
+            return "Refresh Token is required"
         if not data["account_id"]:
-            return "帳戶 ID 為必填"
+            return "Account ID is required"
         try:
             int(data["account_id"])
         except ValueError:
-            return "帳戶 ID 必須是數字"
+            return "Account ID must be numeric"
         return None
     
     def validate_for_login(self) -> Optional[str]:
         """驗證登入所需欄位"""
         data = self.get_data()
         if not data["redirect_uri"]:
-            return "重導向 URI 為必填"
+            return "Redirect URI is required"
         return None
 
 
 class OAuthDialog(BaseAuthDialog):
-    """OAuth 認證對話框"""
+    """OAuth authentication dialog"""
 
     # 訊號
     authSucceeded = Signal(object)
@@ -187,12 +187,12 @@ class OAuthDialog(BaseAuthDialog):
         layout.addLayout(self._create_button_layout())
 
         # 日誌區域
-        self._log_widget = self._create_log_widget("連線日誌:")
+        self._log_widget = self._create_log_widget("Connection Log:")
         layout.addWidget(self._log_widget)
 
         layout.addStretch()
 
-        # 狀態指示器
+        # Status指示器
         self._status_widget = self._create_status_widget()
         layout.addWidget(self._status_widget)
 
@@ -200,10 +200,10 @@ class OAuthDialog(BaseAuthDialog):
         """建立按鈕列"""
         layout = QHBoxLayout()
         
-        self._btn_authorize = QPushButton("🌐 授權")
-        self._btn_exchange_code = QPushButton("🔁 交換授權碼")
-        self._btn_fetch_accounts = QPushButton("📥 取得帳戶")
-        self._btn_connect = QPushButton("🔗 連線")
+        self._btn_authorize = QPushButton("🌐 Authorize")
+        self._btn_exchange_code = QPushButton("🔁 Exchange Code")
+        self._btn_fetch_accounts = QPushButton("📥 Fetch Accounts")
+        self._btn_connect = QPushButton("🔗 Connect")
         for btn in [
             self._btn_authorize,
             self._btn_exchange_code,
@@ -250,9 +250,9 @@ class OAuthDialog(BaseAuthDialog):
                     trader_login=None,
                 )
         except FileNotFoundError:
-            self._log_warning(f"找不到 Token 檔案: {self._token_file}")
+            self._log_warning(f"Token file not found: {self._token_file}")
         except Exception as exc:
-            self._log_warning(f"載入 Token 失敗: {exc}")
+            self._log_warning(f"Failed to load token: {exc}")
 
         if not self._form.redirect_uri.text().strip():
             self._form.redirect_uri.setText("http://127.0.0.1:8765/callback")
@@ -263,7 +263,7 @@ class OAuthDialog(BaseAuthDialog):
 
     @Slot()
     def _start_authorize(self) -> None:
-        """開始 OAuth 授權流程（自動取得授權碼）"""
+        """Start OAuth 授權流程（自動取得授權碼）"""
         if self._state.login_in_progress:
             return
 
@@ -307,7 +307,7 @@ class OAuthDialog(BaseAuthDialog):
 
         code = self._form.auth_code.text().strip()
         if not code:
-            self._log_error("授權碼為必填")
+            self._log_error("Authorization code is required")
             return
 
         redirect_uri = self._form.redirect_uri.text().strip()
@@ -344,7 +344,7 @@ class OAuthDialog(BaseAuthDialog):
             return
 
         if not self._app_auth_service:
-            self._log_error("缺少應用程式認證服務")
+            self._log_error("Missing app authentication service")
             return
 
         if self._refresh_access_token_if_needed():
@@ -352,7 +352,7 @@ class OAuthDialog(BaseAuthDialog):
 
         access_token = self._form.access_token.text().strip()
         if not access_token:
-            self._log_error("Access Token 為必填")
+            self._log_error("Access Token is required")
             return
 
         if self._use_cases is None:
@@ -360,7 +360,7 @@ class OAuthDialog(BaseAuthDialog):
             return
 
         if self._use_cases.account_list_in_progress():
-            self._log_info("⏳ 正在取得帳戶列表，請稍候")
+            self._log_info("⏳ Fetching account list, please wait")
             return
 
         self._set_accounts_busy(True)
@@ -384,11 +384,11 @@ class OAuthDialog(BaseAuthDialog):
         if not tokens.is_expired():
             return False
         if not tokens.refresh_token:
-            self._log_warning("⚠️ Access Token 已過期但沒有 Refresh Token")
+            self._log_warning("⚠️ Access Token expired and no Refresh Token")
             return False
 
         self._set_accounts_busy(True)
-        self._log_info("🔁 Access Token 已過期，嘗試自動刷新...")
+        self._log_info("🔁 Access Token expired. Trying auto refresh...")
 
         import threading
 
@@ -409,22 +409,22 @@ class OAuthDialog(BaseAuthDialog):
 
     @Slot()
     def _start_auth(self) -> None:
-        """開始帳戶認證"""
+        """Start帳戶認證"""
         if self._state.auth_in_progress:
             return
         if self._service and self._service.status == ConnectionStatus.ACCOUNT_AUTHENTICATED:
-            self._log_info("帳戶已授權，無需重新連線")
+            self._log_info("Account is already authorized. No reconnect needed")
             return
 
         if not self._app_auth_service:
-            self._log_error("缺少應用程式認證服務")
+            self._log_error("Missing app authentication service")
             return
 
         if not self._selected_account and not self._form.account_id.text().strip():
             access_token = self._form.access_token.text().strip()
             if access_token and self._use_cases and not self._state.accounts_in_progress:
                 self._auto_auth_after_accounts = True
-                self._log_info("🔎 先取得帳戶列表以完成選擇")
+                self._log_info("🔎 Fetch account list first to complete selection")
                 self._fetch_accounts()
                 return
 
@@ -479,7 +479,7 @@ class OAuthDialog(BaseAuthDialog):
 
     @Slot(object)
     def _handle_auth_success(self, tokens: OAuthTokens) -> None:
-        self._log_success("帳戶認證成功！")
+        self._log_success("Account authentication succeeded!")
         self._state.auth_in_progress = False
         self._refresh_controls()
         self._fetch_ctid_profile(tokens.access_token)
@@ -493,7 +493,7 @@ class OAuthDialog(BaseAuthDialog):
 
     @Slot(object)
     def _handle_login_success(self, tokens: OAuthTokens) -> None:
-        self._log_success("OAuth token 取得成功")
+        self._log_success("OAuth token acquired successfully")
         self._form.load_tokens(tokens)
         self._state.login_in_progress = False
         self._refresh_controls()
@@ -501,12 +501,12 @@ class OAuthDialog(BaseAuthDialog):
             self._fetch_accounts()
             self._fetch_ctid_profile(tokens.access_token)
         else:
-            self._log_warning("缺少應用程式認證服務，無法取得帳戶列表")
+            self._log_warning("Missing app authentication service, cannot fetch account list")
 
     @Slot(str)
     def _handle_login_error(self, error: str) -> None:
         self._log_error(error)
-        self._log_info("ℹ️ 若瀏覽器授權失敗，可改用「交換授權碼」手動登入")
+        self._log_info("ℹ️ If browser authorization fails, use 'Exchange Code' for manual login")
         self._state.login_in_progress = False
         self._refresh_controls()
 
@@ -534,7 +534,7 @@ class OAuthDialog(BaseAuthDialog):
 
     @Slot(list)
     def _handle_accounts_received(self, accounts: list) -> None:
-        self._log_success(f"取得帳戶數: {len(accounts)}")
+        self._log_success(f"Fetched account count: {len(accounts)}")
         try:
             tokens = OAuthTokens.from_file(self._token_file)
             if tokens and tokens.account_id:
@@ -545,7 +545,7 @@ class OAuthDialog(BaseAuthDialog):
                 }
                 if account_ids and int(tokens.account_id) not in account_ids:
                     self._log_warning(
-                        f"帳戶不一致：token={tokens.account_id}，可用帳戶={sorted(account_ids)}"
+                        f"Account mismatch：token={tokens.account_id}，available accounts={sorted(account_ids)}"
                     )
         except Exception:
             pass
@@ -560,11 +560,11 @@ class OAuthDialog(BaseAuthDialog):
                     self._selected_account = selected
                     self._form.account_id.setText(str(selected.account_id))
             else:
-                self._log_warning("已取消帳戶選擇")
+                self._log_warning("Account selection cancelled")
         if self._selected_account:
             self._log_info(f"✅ Selected account: {self._selected_account.account_id}")
             if self._selected_account.permission_scope == 0:
-                self._log_warning("⚠️ 此帳戶權限為僅檢視（SCOPE_VIEW），不可交易")
+                self._log_warning("⚠️ This account is view-only (SCOPE_VIEW), not tradable")
             try:
                 tokens = OAuthTokens.from_file(self._token_file)
                 if tokens:
@@ -597,14 +597,14 @@ class OAuthDialog(BaseAuthDialog):
 
     @Slot(object)
     def _handle_token_refresh_success(self, tokens: OAuthTokens) -> None:
-        self._log_success("Access Token 已自動刷新")
+        self._log_success("Access Token auto-refreshed")
         self._form.load_tokens(tokens)
         self._set_accounts_busy(False)
         self._fetch_accounts()
 
     @Slot(str)
     def _handle_token_refresh_error(self, error: str) -> None:
-        self._log_error(f"Token 刷新失敗: {error}")
+        self._log_error(f"Token refresh failed: {error}")
         self._set_accounts_busy(False)
 
     @Slot(object)
@@ -613,11 +613,11 @@ class OAuthDialog(BaseAuthDialog):
         if user_id:
             self._log_info(f"🙋 CTID userId: {user_id}")
         else:
-            self._log_info("🙋 CTID profile 已取得")
+            self._log_info("🙋 CTID profile fetched")
 
     @Slot(str)
     def _handle_profile_error(self, error: str) -> None:
-        self._log_warning(f"CTID profile 取得失敗: {error}")
+        self._log_warning(f"CTID profile fetch failed: {error}")
 
     def _fetch_ctid_profile(self, access_token: str) -> None:
         if not self._app_auth_service or not self._use_cases:
@@ -643,7 +643,7 @@ class OAuthDialog(BaseAuthDialog):
         self._refresh_controls()
 
     # ─────────────────────────────────────────────────────────────
-    # 控制項狀態
+    # 控制項Status
     # ─────────────────────────────────────────────────────────────
 
     def _refresh_controls(self) -> None:
@@ -672,14 +672,14 @@ class OAuthDialog(BaseAuthDialog):
             try:
                 expires_value = int(expires_at)
             except ValueError as exc:
-                raise ValueError("到期時間必須是數字") from exc
+                raise ValueError("Expires-at must be numeric") from exc
 
         account_value = None
         if data["account_id"]:
             try:
                 account_value = int(data["account_id"])
             except ValueError as exc:
-                raise ValueError("帳戶 ID 必須是數字") from exc
+                raise ValueError("Account ID must be numeric") from exc
 
         return OAuthTokens(
             access_token=data["access_token"],

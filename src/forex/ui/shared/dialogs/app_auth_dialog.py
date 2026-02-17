@@ -1,5 +1,5 @@
 """
-cTrader 應用程式認證對話框
+cTrader app auth dialog
 """
 from typing import Optional
 
@@ -34,7 +34,7 @@ class CredentialsFormWidget(QWidget):
         layout = QFormLayout(self)
         configure_form_layout(layout, horizontal_spacing=12, vertical_spacing=10)
 
-        # 環境選擇
+        # Environment選擇
         self._host_type = "demo"
         self._host_locked = False
         self._host_group = QButtonGroup(self)
@@ -50,16 +50,16 @@ class CredentialsFormWidget(QWidget):
         host_layout.addWidget(self._host_demo)
         host_layout.addWidget(self._host_live)
         host_layout.addStretch(1)
-        layout.addRow(QLabel("環境:"), host_row)
+        layout.addRow(QLabel("Environment:"), host_row)
         
         # Client ID
         self.client_id = QLineEdit()
-        self.client_id.setPlaceholderText("輸入 Client ID")
+        self.client_id.setPlaceholderText("Enter Client ID")
         layout.addRow(QLabel("Client ID:"), self.client_id)
         
         # Client Secret
         self.client_secret = QLineEdit()
-        self.client_secret.setPlaceholderText("輸入 Client Secret")
+        self.client_secret.setPlaceholderText("Enter Client Secret")
         layout.addRow(QLabel("Client Secret:"), self.client_secret)
     
     def set_enabled(self, enabled: bool) -> None:
@@ -70,7 +70,7 @@ class CredentialsFormWidget(QWidget):
         self.client_secret.setEnabled(enabled)
 
     def set_host_enabled(self, enabled: bool) -> None:
-        """鎖定或解鎖環境選擇"""
+        """鎖定或解鎖Environment選擇"""
         self._host_locked = not enabled
         self._host_demo.setEnabled(enabled)
         self._host_live.setEnabled(enabled)
@@ -99,17 +99,17 @@ class CredentialsFormWidget(QWidget):
         self.client_secret.setText(client_secret)
     
     def validate(self) -> Optional[str]:
-        """驗證表單，回傳錯誤訊息或 None"""
+        """驗證表單，回傳error訊息或 None"""
         data = self.get_data()
         if not data["client_id"]:
-            return "Client ID 為必填"
+            return "Client ID is required"
         if not data["client_secret"]:
-            return "Client Secret 為必填"
+            return "Client Secret is required"
         return None
 
 
 class AppAuthDialog(BaseAuthDialog):
-    """cTrader 應用程式認證對話框"""
+    """cTrader app auth dialog"""
     
     # 訊號
     authSucceeded = Signal(object)  # 發送 Client
@@ -148,7 +148,7 @@ class AppAuthDialog(BaseAuthDialog):
 
     def _setup_ui(self) -> None:
         """初始化 UI"""
-        self.setWindowTitle("cTrader 應用程式認證")
+        self.setWindowTitle("cTrader App Authentication")
         self.setMinimumSize(600, 350)
         
         layout = QVBoxLayout(self)
@@ -158,18 +158,18 @@ class AppAuthDialog(BaseAuthDialog):
         self._form = CredentialsFormWidget()
         layout.addWidget(self._form)
         
-        # 連線按鈕
-        self._btn_connect = QPushButton("🔗 連線")
+        # Connect按鈕
+        self._btn_connect = QPushButton("🔗 Connect")
         layout.addWidget(self._btn_connect)
         
         # 日誌區域
-        self._log_widget = self._create_log_widget("連線日誌:")
+        self._log_widget = self._create_log_widget("Connection Log:")
         layout.addWidget(self._log_widget)
         
         # 彈性空間
         layout.addStretch()
         
-        # 狀態指示器
+        # Status指示器
         self._status_widget = self._create_status_widget()
         layout.addWidget(self._status_widget)
 
@@ -186,15 +186,15 @@ class AppAuthDialog(BaseAuthDialog):
 
     @Slot()
     def _start_auth(self) -> None:
-        """開始認證流程"""
+        """Start認證流程"""
         if self._state.in_progress:
             return
         if self._service:
             if getattr(self._service, "status", None) == ConnectionStatus.CONNECTING:
-                self._log_info("⏳ 正在連線，請稍候")
+                self._log_info("⏳ Connecting, please wait")
                 return
             if getattr(self._service, "is_app_authenticated", False):
-                self._log_info("應用程式已認證，無需重新連線")
+                self._log_info("App is already authenticated. No need to reconnect")
                 self.accept()
                 return
 
@@ -232,7 +232,7 @@ class AppAuthDialog(BaseAuthDialog):
             on_status_changed=lambda s: self.statusChanged.emit(int(s)),
         )
         
-        # 啟動連線
+        # 啟動Connect
         reactor_manager.ensure_running()
         
         from twisted.internet import reactor
@@ -245,7 +245,7 @@ class AppAuthDialog(BaseAuthDialog):
     @Slot(object)
     def _handle_success(self, client) -> None:
         """認證成功"""
-        self._log_success("應用程式認證成功！")
+        self._log_success("App authentication succeeded!")
         self.accept()
 
     @Slot(str)
@@ -257,7 +257,7 @@ class AppAuthDialog(BaseAuthDialog):
 
     @Slot(int)
     def _handle_status_changed(self, status: int) -> None:
-        """同步按鈕狀態與認證狀態"""
+        """同步按鈕Status與認證Status"""
         if self._app_state:
             self._app_state.update_app_status(status)
         if self._event_bus:
@@ -269,7 +269,7 @@ class AppAuthDialog(BaseAuthDialog):
             self._set_controls_enabled(True)
 
     # ─────────────────────────────────────────────────────────────
-    # 控制項狀態
+    # 控制項Status
     # ─────────────────────────────────────────────────────────────
 
     def _set_controls_enabled(self, enabled: bool) -> None:
@@ -286,13 +286,13 @@ class AppAuthDialog(BaseAuthDialog):
         data = self._read_json_file()
         
         if not data:
-            self._log_warning(f"找不到 Token 檔案: {self._token_file}")
+            self._log_warning(f"Token file not found: {self._token_file}")
             self._form.set_host_enabled(True)
             return
         
         host = data.get("host_type", "demo")
         if host not in ("demo", "live"):
-            self._log_warning(f"無效的環境 '{host}'，使用預設值 demo")
+            self._log_warning(f"Invalid environment '{host}', falling back to demo")
             host = "demo"
         
         self._form.load_data(
@@ -300,7 +300,7 @@ class AppAuthDialog(BaseAuthDialog):
             client_id=str(data.get("client_id", "")),
             client_secret=str(data.get("client_secret", "")),
         )
-        # Token 已存在時鎖定環境選擇
+        # Token 已存在時鎖定Environment選擇
         self._form.set_host_enabled(False)
 
     def _save_credentials(self, data: dict) -> bool:
@@ -313,7 +313,7 @@ class AppAuthDialog(BaseAuthDialog):
             ).save(self._token_file)
             return True
         except Exception as e:
-            self._log_error(f"無法儲存 Token 檔案: {e}")
+            self._log_error(f"Failed to save token file: {e}")
             return False
 
     # ─────────────────────────────────────────────────────────────

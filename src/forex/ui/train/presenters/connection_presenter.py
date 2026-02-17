@@ -99,6 +99,6 @@ class ConnectionPresenter(QObject):
 
     def _sync_connection_action(self) -> None:
         if self._oauth_service and self._oauth_service.status >= ConnectionStatus.ACCOUNT_AUTHENTICATED:
-            self._toggle_action.setText("斷線")
+            self._toggle_action.setText("Disconnect")
         else:
-            self._toggle_action.setText("連線")
+            self._toggle_action.setText("Connect")

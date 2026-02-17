@@ -67,33 +67,33 @@ class ToolbarController(QObject):
         main_window: QMainWindow,
         log_visible: bool,
     ) -> ToolbarActions:
-        auth_menu = main_window.menuBar().addMenu("認證")
+        auth_menu = main_window.menuBar().addMenu("Auth")
 
-        action_app_auth = auth_menu.addAction("App 認證")
-        action_oauth = auth_menu.addAction("OAuth 認證")
+        action_app_auth = auth_menu.addAction("App Auth")
+        action_oauth = auth_menu.addAction("OAuth Auth")
 
-        toolbar = main_window.addToolBar("認證")
+        toolbar = main_window.addToolBar("Auth")
         toolbar.setToolButtonStyle(Qt.ToolButtonTextBesideIcon)
 
-        action_toggle_connection = QAction("連線", main_window)
+        action_toggle_connection = QAction("Connect", main_window)
         toolbar.addAction(action_toggle_connection)
 
-        action_fetch_account_info = QAction("帳戶資料", main_window)
+        action_fetch_account_info = QAction("Account Data", main_window)
         toolbar.addAction(action_fetch_account_info)
 
-        action_history_download = QAction("歷史資料", main_window)
+        action_history_download = QAction("History Data", main_window)
         toolbar.addAction(action_history_download)
 
-        action_data_check = QAction("資料檢查", main_window)
+        action_data_check = QAction("Data Check", main_window)
         toolbar.addAction(action_data_check)
 
-        action_train_ppo = QAction("PPO訓練", main_window)
+        action_train_ppo = QAction("PPO Train", main_window)
         toolbar.addAction(action_train_ppo)
 
-        action_simulation = QAction("回放", main_window)
+        action_simulation = QAction("Playback", main_window)
         toolbar.addAction(action_simulation)
 
-        action_toggle_log = QAction("日誌", main_window)
+        action_toggle_log = QAction("Log", main_window)
         action_toggle_log.setCheckable(True)
         action_toggle_log.setChecked(True)
         toolbar.addAction(action_toggle_log)

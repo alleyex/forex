@@ -37,7 +37,7 @@ class HistoryDownloadDialog(QDialog):
         self._setup_ui()
 
     def _setup_ui(self) -> None:
-        self.setWindowTitle("歷史資料下載")
+        self.setWindowTitle("History Download")
         self.setMinimumWidth(680)
         self.setProperty("class", HISTORY_DIALOG)
 
@@ -45,7 +45,7 @@ class HistoryDownloadDialog(QDialog):
         layout.setContentsMargins(32, 32, 32, 32)
         layout.setSpacing(16)
 
-        form_box = QGroupBox("資料設定")
+        form_box = QGroupBox("Data Settings")
         form_layout = QFormLayout(form_box)
         configure_form_layout(
             form_layout,
@@ -65,18 +65,18 @@ class HistoryDownloadDialog(QDialog):
         range_layout = QHBoxLayout(range_row)
         range_layout.setContentsMargins(0, 0, 0, 0)
         range_layout.setSpacing(8)
-        for label in ["最近 1y", "最近 2y", "最近 3y"]:
+        for label in ["Last 1y", "Last 2y", "Last 3y"]:
             button = QRadioButton(label)
             self._range_group.addButton(button)
             range_layout.addWidget(button)
         self._range_group.buttonClicked.connect(self._apply_quick_range)
-        form_layout.addRow("快速範圍", range_row)
+        form_layout.addRow("Quick Range", range_row)
 
         self._symbol_input = QComboBox()
         self._symbol_input.setEnabled(False)
-        self._symbol_input.addItem("請先取得 symbol list", self._symbol_id)
+        self._symbol_input.addItem("Fetch symbol list first", self._symbol_id)
         self._symbol_input.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
-        form_layout.addRow("貨幣種類", self._symbol_input)
+        form_layout.addRow("Symbol", self._symbol_input)
 
         self._timeframe = QComboBox()
         self._timeframe.addItems(["M1", "M5", "M10", "M15", "H1"])
@@ -84,7 +84,7 @@ class HistoryDownloadDialog(QDialog):
         if index >= 0:
             self._timeframe.setCurrentIndex(index)
         self._timeframe.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
-        form_layout.addRow("資料類型", self._timeframe)
+        form_layout.addRow("Timeframe", self._timeframe)
 
         utc_now = QDateTime.currentDateTimeUtc()
         self._start_time = QDateTimeEdit(utc_now.addYears(-3))
@@ -92,18 +92,18 @@ class HistoryDownloadDialog(QDialog):
         self._start_time.setTimeSpec(Qt.UTC)
         self._start_time.setCalendarPopup(True)
         self._start_time.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
-        form_layout.addRow("起始時間 (UTC)", self._start_time)
+        form_layout.addRow("Start Time (UTC)", self._start_time)
 
         self._end_time = QDateTimeEdit(utc_now)
         self._end_time.setDisplayFormat("yyyy-MM-dd HH:mm")
         self._end_time.setTimeSpec(Qt.UTC)
         self._end_time.setCalendarPopup(True)
         self._end_time.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
-        form_layout.addRow("結束時間 (UTC)", self._end_time)
+        form_layout.addRow("End Time (UTC)", self._end_time)
 
         layout.addWidget(form_box)
 
-        output_box = QGroupBox("輸出")
+        output_box = QGroupBox("Output")
         output_layout = QFormLayout(output_box)
         configure_form_layout(
             output_layout,
@@ -121,9 +121,9 @@ class HistoryDownloadDialog(QDialog):
         self._output_path = QLineEdit("data/raw_history/history.csv")
         self._output_path.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
         output_row = build_browse_row(self._output_path, self._browse_path, spacing=8)
-        output_layout.addRow("儲存檔案", output_row)
+        output_layout.addRow("Save File", output_row)
 
-        self._info = QLabel("提示：請先載入 cTrader symbol list。")
+        self._info = QLabel("Tip: Load cTrader symbol list first.")
         self._info.setAlignment(Qt.AlignLeft | Qt.AlignVCenter)
         self._info.setProperty("class", DIALOG_HINT)
         output_layout.addRow(self._info)
@@ -131,8 +131,8 @@ class HistoryDownloadDialog(QDialog):
         layout.addWidget(output_box)
 
         buttons = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
-        buttons.button(QDialogButtonBox.Ok).setText("下載")
-        buttons.button(QDialogButtonBox.Cancel).setText("取消")
+        buttons.button(QDialogButtonBox.Ok).setText("Download")
+        buttons.button(QDialogButtonBox.Cancel).setText("Cancel")
         buttons.accepted.connect(self._validate)
         buttons.rejected.connect(self.reject)
         layout.addWidget(buttons)
@@ -157,19 +157,19 @@ class HistoryDownloadDialog(QDialog):
         self._start_time.setDateTime(utc_now.addYears(-years))
 
     def _browse_path(self) -> None:
-        path, _ = QFileDialog.getSaveFileName(self, "選擇儲存檔案", "history.csv", "CSV (*.csv)")
+        path, _ = QFileDialog.getSaveFileName(self, "Choose Save File", "history.csv", "CSV (*.csv)")
         if path:
             self._output_path.setText(path)
 
     def _validate(self) -> None:
         if not self._symbol_input.isEnabled():
-            QMessageBox.warning(self, "缺少資料", "尚未取得 symbol list。")
+            QMessageBox.warning(self, "Missing Data", "Symbol list has not been fetched yet.")
             return
         if self._end_time.dateTime() <= self._start_time.dateTime():
-            QMessageBox.warning(self, "時間錯誤", "結束時間必須大於起始時間。")
+            QMessageBox.warning(self, "Invalid Time", "End time must be later than start time.")
             return
         if not self._output_path.text().strip():
-            QMessageBox.warning(self, "缺少路徑", "請選擇儲存位置。")
+            QMessageBox.warning(self, "Missing Path", "Please choose a save path.")
             return
         self.accept()
 
@@ -189,7 +189,7 @@ class HistoryDownloadDialog(QDialog):
     def set_symbols(self, symbols: list) -> None:
         self._symbol_input.clear()
         if not symbols:
-            self._symbol_input.addItem("無可用 symbol", self._symbol_id)
+            self._symbol_input.addItem("No symbols available", self._symbol_id)
             self._symbol_input.setEnabled(False)
             return
 

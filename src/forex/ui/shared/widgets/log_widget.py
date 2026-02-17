@@ -1,5 +1,5 @@
 """
-可重用的日誌顯示元件
+Reusable log display widget
 """
 from datetime import datetime
 import time
@@ -56,7 +56,7 @@ class _LogSyntaxHighlighter(QSyntaxHighlighter):
 
 
 class LogWidget(QWidget):
-    _FILTER_LEVELS = ["全部", "DEBUG", "INFO", "OK", "WARN", "ERROR", "其他"]
+    _FILTER_LEVELS = ["All", "DEBUG", "INFO", "OK", "WARN", "ERROR", "OTHER"]
     _EVENT_CATALOG = {
         "request_history",
         "history_requested",
@@ -97,7 +97,7 @@ class LogWidget(QWidget):
     
     def __init__(
         self,
-        title: str = "連線日誌:",
+        title: str = "Connection Log:",
         parent=None,
         *,
         with_timestamp: bool = False,
@@ -113,17 +113,17 @@ class LogWidget(QWidget):
         self._max_entries = max(1, int(max_entries))
         self._level_pattern = re.compile(r"\[(DEBUG|TRADE|TRADING|INFO|OK|WARN|ERROR)\]", re.IGNORECASE)
         self._history_request_pattern = re.compile(
-            r"取得\s+([A-Za-z0-9]+)\s+歷史資料：(\d+)\s+筆\s+\(milliseconds,\s*window=([^,]+),\s*from=([^,]+),\s*to=([^)]+)\)"
+            r"(?:fetch|取得)\s+([A-Za-z0-9]+)\s+(?:history|歷史資料)[:：](\d+)\s+rows\s+\(milliseconds,\s*window=([^,]+),\s*from=([^,]+),\s*to=([^)]+)\)"
         )
         self._request_history_pattern = re.compile(r"Request history\s+\(account_id=(\d+),\s*symbol_id=(\d+)\)")
         self._loaded_candles_pattern = re.compile(r"Loaded\s+(\d+)\s+candles", re.IGNORECASE)
-        self._unhandled_type_pattern = re.compile(r"未處理的訊息類型[:：]\s*(\d+)")
-        self._error_invalid_pattern = re.compile(r"錯誤\s+INVALID_REQUEST[:：]\s*(.+)", re.IGNORECASE)
+        self._unhandled_type_pattern = re.compile(r"(?:Unhandled message type|未處理的訊息類型)[:：]\s*(\d+)")
+        self._error_invalid_pattern = re.compile(r"(?:ERROR|錯誤)\s+INVALID_REQUEST[:：]\s*(.+)", re.IGNORECASE)
         self._strategy_profile_pattern = re.compile(
             r"strategy\s*profile\s*:\s*same-side\s+near-full\s+hold\s*=\s*(ON|OFF)",
             re.IGNORECASE,
         )
-        self._current_filter = "全部"
+        self._current_filter = "All"
         self._repeat_suppression_window_s = 5.0
         self._last_entry_text = ""
         self._last_entry_ts = 0.0
@@ -151,7 +151,7 @@ class LogWidget(QWidget):
         self._btn_filter.setIcon(
             self._resolve_icon(["view-filter", "view-refresh"], QStyle.SP_FileDialogContentsView)
         )
-        self._btn_filter.setToolTip("篩選層級：全部")
+        self._btn_filter.setToolTip("Filter level: All")
         self._btn_filter.setPopupMode(QToolButton.InstantPopup)
         self._btn_filter.setAutoRaise(True)
         self._btn_filter.setStyleSheet(
@@ -181,7 +181,7 @@ class LogWidget(QWidget):
 
         self._btn_copy = QToolButton()
         self._btn_copy.setIcon(self._resolve_icon(["edit-copy"], QStyle.SP_FileDialogDetailedView))
-        self._btn_copy.setToolTip("複製")
+        self._btn_copy.setToolTip("Copy")
         self._btn_copy.setAutoRaise(True)
         self._btn_copy.setStyleSheet(
             """
@@ -205,7 +205,7 @@ class LogWidget(QWidget):
 
         self._btn_clear = QToolButton()
         self._btn_clear.setIcon(self._resolve_icon(["edit-delete", "user-trash"], QStyle.SP_TrashIcon))
-        self._btn_clear.setToolTip("清除")
+        self._btn_clear.setToolTip("Clear")
         self._btn_clear.setAutoRaise(True)
         self._btn_clear.setStyleSheet(
             """
@@ -315,7 +315,7 @@ class LogWidget(QWidget):
         if refresh_required:
             self._apply_filter(current_filter)
             return
-        if current_filter == "全部" or current_filter == level:
+        if current_filter == "All" or current_filter == level:
             self._append_to_view(message)
 
     def _should_suppress_repeated_message(self, message: str) -> bool:
@@ -334,12 +334,12 @@ class LogWidget(QWidget):
             self._entries.append(("INFO", summary))
             if len(self._entries) > self._max_entries:
                 self._entries = self._entries[-self._max_entries :]
-            if self._current_filter == "全部" or self._current_filter == "INFO":
+            if self._current_filter == "All" or self._current_filter == "INFO":
                 self._append_to_view(summary)
         return True
 
     def clear_logs(self) -> None:
-        """清除所有日誌"""
+        """Clear所有日誌"""
         self._entries.clear()
         self._last_entry_text = ""
         self._last_entry_ts = 0.0
@@ -358,7 +358,7 @@ class LogWidget(QWidget):
         lower = text.lower()
         if "[debug]" in lower:
             return "DEBUG"
-        if text.startswith(("❌", "🛑")) or "錯誤" in text or "error" in lower:
+        if text.startswith(("❌", "🛑")) or "error" in text or "error" in lower:
             return "ERROR"
         if text.startswith(("⚠️", "⚠")) or "warn" in lower:
             return "WARN"
@@ -366,7 +366,7 @@ class LogWidget(QWidget):
             return "OK"
         if text.startswith(("ℹ️", "ℹ", "📥", "📡", "🔕", "💓", "📦", "➡️")):
             return "INFO"
-        return "其他"
+        return "OTHER"
 
     def _normalize_message(self, message: str) -> str:
         text = str(message or "").strip()
@@ -384,7 +384,7 @@ class LogWidget(QWidget):
 
         body = self._normalize_body(text)
         level = self._extract_level(body)
-        if level == "其他":
+        if level == "OTHER":
             level = "INFO"
         return f"[{level}] {body}"
 
@@ -428,14 +428,14 @@ class LogWidget(QWidget):
             return "funds_received"
         if "發送 heartbeat" in body or "sending heartbeat" in lower:
             return "heartbeat_sent"
-        if "已送出報價訂閱" in body:
+        if "已送出報價訂閱" in body or "quotes subscribed" in lower:
             value = body.split("：", 1)[-1].strip() if "：" in body else body.split(":", 1)[-1].strip()
             return f"quotes_subscribed | symbols={value}"
         if lower.startswith("order executed"):
             return body.replace("Order executed", "order_executed", 1)
-        if "正在取得 symbol details" in body:
+        if "正在取得 symbol details" in body or "fetching symbol details" in lower:
             return "symbol_details_request"
-        if "已接收 symbol details" in body:
+        if "已接收 symbol details" in body or "symbol details received" in lower:
             return "symbol_details_received"
         return self._normalize_event_prefix(body)
 
@@ -455,7 +455,7 @@ class LogWidget(QWidget):
         return body
 
     def _apply_filter(self, level: str) -> None:
-        if level == "全部":
+        if level == "All":
             items = [entry for _, entry in self._entries]
         else:
             items = [entry for entry_level, entry in self._entries if entry_level == level]
@@ -474,7 +474,7 @@ class LogWidget(QWidget):
 
     def _set_filter(self, level: str) -> None:
         self._current_filter = level
-        self._btn_filter.setToolTip(f"篩選層級：{level}")
+        self._btn_filter.setToolTip(f"Filter level: {level}")
         self._apply_filter(level)
 
     def _resolve_icon(self, theme_names: list[str], fallback: QStyle.StandardPixmap) -> QIcon:

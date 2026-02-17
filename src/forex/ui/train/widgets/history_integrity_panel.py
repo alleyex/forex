@@ -45,7 +45,7 @@ class HistoryIntegrityPanel(QWidget):
         root.setContentsMargins(12, 12, 12, 12)
         root.setSpacing(12)
 
-        file_box = QGroupBox("資料檢查")
+        file_box = QGroupBox("Data Integrity Check")
         file_form = QFormLayout(file_box)
         configure_form_layout(
             file_form,
@@ -57,22 +57,22 @@ class HistoryIntegrityPanel(QWidget):
 
         self._csv_path = QLineEdit("data/raw_history/history.csv")
         self._csv_path.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
-        file_form.addRow("CSV 檔案", build_browse_row(self._csv_path, self._browse_csv))
+        file_form.addRow("CSV File", build_browse_row(self._csv_path, self._browse_csv))
 
-        self._exclude_weekends = QCheckBox("排除週末缺口")
+        self._exclude_weekends = QCheckBox("Exclude weekend gaps")
         self._exclude_weekends.setChecked(True)
-        file_form.addRow("檢查設定", self._exclude_weekends)
+        file_form.addRow("Check Settings", self._exclude_weekends)
 
         actions = QWidget()
         actions_layout = QHBoxLayout(actions)
         actions_layout.setContentsMargins(0, 0, 0, 0)
         actions_layout.setSpacing(8)
-        self._run_button = QPushButton("開始檢查")
+        self._run_button = QPushButton("Run Check")
         self._run_button.clicked.connect(self._run_check)
-        self._export_json_button = QPushButton("匯出報告(JSON)")
+        self._export_json_button = QPushButton("Export Report (JSON)")
         self._export_json_button.setEnabled(False)
         self._export_json_button.clicked.connect(self._export_json)
-        self._export_gaps_button = QPushButton("匯出缺口(CSV)")
+        self._export_gaps_button = QPushButton("Export Gaps (CSV)")
         self._export_gaps_button.setEnabled(False)
         self._export_gaps_button.clicked.connect(self._export_gaps_csv)
         actions_layout.addWidget(self._run_button)
@@ -82,7 +82,7 @@ class HistoryIntegrityPanel(QWidget):
         file_form.addRow("", actions)
         root.addWidget(file_box)
 
-        summary_box = QGroupBox("摘要")
+        summary_box = QGroupBox("Summary")
         summary_grid = QGridLayout(summary_box)
         summary_grid.setHorizontalSpacing(12)
         summary_grid.setVerticalSpacing(8)
@@ -104,30 +104,30 @@ class HistoryIntegrityPanel(QWidget):
             self._summary_labels[key] = value
         root.addWidget(summary_box)
 
-        gaps_box = QGroupBox("缺口明細")
+        gaps_box = QGroupBox("Gap Details")
         gaps_layout = QVBoxLayout(gaps_box)
         gaps_layout.setContentsMargins(8, 8, 8, 8)
         self._gaps_table = QTableWidget(0, 5)
-        self._gaps_table.setHorizontalHeaderLabels(["起始(UTC)", "結束(UTC)", "差值(分鐘)", "缺少K數", "起訖分鐘"])
+        self._gaps_table.setHorizontalHeaderLabels(["Start (UTC)", "End (UTC)", "Diff (min)", "Missing Bars", "Minute Range"])
         self._gaps_table.horizontalHeader().setStretchLastSection(True)
         self._gaps_table.setEditTriggers(QTableWidget.NoEditTriggers)
         gaps_layout.addWidget(self._gaps_table)
         root.addWidget(gaps_box, stretch=1)
 
     def _browse_csv(self) -> None:
-        path, _ = QFileDialog.getOpenFileName(self, "選擇歷史資料 CSV", self._csv_path.text(), "CSV (*.csv)")
+        path, _ = QFileDialog.getOpenFileName(self, "Select History CSV", self._csv_path.text(), "CSV (*.csv)")
         if path:
             self._csv_path.setText(path)
 
     def _run_check(self) -> None:
         path = self._csv_path.text().strip()
         if not path:
-            QMessageBox.warning(self, "缺少檔案", "請先選擇 CSV 檔案。")
+            QMessageBox.warning(self, "Missing File", "Please select a CSV file first.")
             return
         try:
             report = self._service.analyze(path, exclude_weekends=bool(self._exclude_weekends.isChecked()))
         except Exception as exc:
-            QMessageBox.warning(self, "檢查失敗", str(exc))
+            QMessageBox.warning(self, "Check Failed", str(exc))
             return
         self._report = report
         self._apply_report(report)
@@ -160,29 +160,29 @@ class HistoryIntegrityPanel(QWidget):
         if not self._report:
             return
         default_name = Path(self._report.csv_path).with_suffix(".integrity.json").name
-        path, _ = QFileDialog.getSaveFileName(self, "匯出檢查報告(JSON)", default_name, "JSON (*.json)")
+        path, _ = QFileDialog.getSaveFileName(self, "Export Integrity Report (JSON)", default_name, "JSON (*.json)")
         if not path:
             return
         try:
             self._service.export_json(self._report, path)
         except Exception as exc:
-            QMessageBox.warning(self, "匯出失敗", str(exc))
+            QMessageBox.warning(self, "Export Failed", str(exc))
             return
-        QMessageBox.information(self, "完成", f"已匯出：{path}")
+        QMessageBox.information(self, "Done", f"Exported: {path}")
 
     def _export_gaps_csv(self) -> None:
         if not self._report:
             return
         default_name = Path(self._report.csv_path).with_suffix(".gaps.csv").name
-        path, _ = QFileDialog.getSaveFileName(self, "匯出缺口清單(CSV)", default_name, "CSV (*.csv)")
+        path, _ = QFileDialog.getSaveFileName(self, "Export Gap List (CSV)", default_name, "CSV (*.csv)")
         if not path:
             return
         try:
             self._service.export_gaps_csv(self._report, path)
         except Exception as exc:
-            QMessageBox.warning(self, "匯出失敗", str(exc))
+            QMessageBox.warning(self, "Export Failed", str(exc))
             return
-        QMessageBox.information(self, "完成", f"已匯出：{path}")
+        QMessageBox.information(self, "Done", f"Exported: {path}")
 
 
 def _fmt_utc_minutes(value: int) -> str:

@@ -30,7 +30,7 @@ class LiveAutoLogService:
             return "INFO"
         if "[debug]" in lower:
             return "DEBUG"
-        if text.startswith(("❌", "🛑")) or "錯誤" in text or "error" in lower:
+        if text.startswith(("❌", "🛑")) or "error" in text or "error" in lower:
             return "ERROR"
         if text.startswith(("⚠️", "⚠")) or "warn" in lower:
             return "WARN"

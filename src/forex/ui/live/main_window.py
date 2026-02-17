@@ -412,7 +412,7 @@ class LiveMainWindow(QMainWindow):
         if not trading_allowed:
             if self._auto_trade_toggle and self._auto_trade_toggle.isChecked():
                 self._auto_trade_toggle.setChecked(False)
-            self._auto_log("⚠️ 帳戶權限為僅檢視，交易功能已停用")
+            self._auto_log("⚠️ Account permission is view-only. Trading has been disabled")
         self._history_requested = False
         self._pending_history = False
         self._last_history_request_key = None
@@ -600,7 +600,7 @@ class LiveMainWindow(QMainWindow):
         self._enter_account_authorization_lockout()
         self._update_reconnect_status(reason="oauth_error_unauthorized")
         if self._last_authorized_account_id and token_account and int(token_account) != int(self._last_authorized_account_id):
-            self.logRequested.emit("ℹ️ 帳戶未授權，請切回可用帳戶並手動重新連線")
+            self.logRequested.emit("ℹ️ Account is not authorized. Switch to an available account and reconnect manually")
 
     @staticmethod
     def _is_not_authorized_message(message: str) -> bool:
@@ -615,7 +615,7 @@ class LiveMainWindow(QMainWindow):
         try:
             return OAuthTokens.from_file(TOKEN_FILE)
         except Exception as exc:
-            self.logRequested.emit(f"⚠️ 無法讀取 token 檔案: {exc}")
+            self.logRequested.emit(f"⚠️ Failed to read token file: {exc}")
             return None
 
     def _refresh_accounts(self) -> None:

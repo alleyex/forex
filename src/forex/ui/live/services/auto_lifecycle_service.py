@@ -29,7 +29,7 @@ class LiveAutoLifecycleService:
             return
         self._set_loading_ui(False)
         if w._app_state and w._app_state.selected_account_scope == 0:
-            w._auto_log("⚠️ 帳戶權限為僅檢視，無法啟用交易")
+            w._auto_log("⚠️ Account permission is view-only. Cannot enable trading")
             w._auto_trade_toggle.setChecked(False)
             return
         valid, errors = w._auto_settings_validator.validate_start()

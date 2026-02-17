@@ -77,13 +77,13 @@ class LiveAccountController:
             w.logRequested.emit("⚠️ App auth service unavailable. Cannot fetch accounts.")
             return
         if w._use_cases.account_list_in_progress():
-            w.logRequested.emit("⏳ 正在取得帳戶列表，請稍候")
+            w.logRequested.emit("⏳ Fetching account list, please wait")
             return
 
         tokens = w._load_tokens_for_accounts()
         access_token = "" if tokens is None else str(tokens.access_token or "").strip()
         if not access_token:
-            w.logRequested.emit("⚠️ 缺少 Access Token，請先完成 OAuth 授權")
+            w.logRequested.emit("⚠️ Missing Access Token. Complete OAuth authorization first")
             return
 
         from forex.utils.reactor_manager import reactor_manager
@@ -202,12 +202,12 @@ class LiveAccountController:
                 try:
                     tokens.save(TOKEN_FILE)
                 except Exception as exc:
-                    w.logRequested.emit(f"⚠️ 無法寫入 token 檔案: {exc}")
+                    w.logRequested.emit(f"⚠️ Failed to write token file: {exc}")
         if log:
-            w.logRequested.emit(f"✅ 已選擇帳戶: {account_id}")
+            w.logRequested.emit(f"✅ Selected account: {account_id}")
         if user_initiated:
             w._account_switch_in_progress = True
-            w.logRequested.emit("🔁 帳戶已切換，正在重新連線以完成授權")
+            w.logRequested.emit("🔁 Account switched; reconnecting to complete authorization")
             w._schedule_full_reconnect()
 
     def resolve_account_scope(self, account_id: int) -> Optional[int]:

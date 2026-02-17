@@ -68,7 +68,7 @@ def align_form_fields(form: QFormLayout, alignment: Qt.AlignmentFlag) -> None:
 def build_browse_row(
     line_edit: QLineEdit,
     on_clicked: Callable[[], None],
-    button_text: str = "選擇",
+    button_text: str = "Choose",
     spacing: int = 6,
 ) -> QWidget:
     row = QWidget()

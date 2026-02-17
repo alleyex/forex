@@ -167,7 +167,7 @@ class ConnectionController(QObject):
         if self._oauth_dialog_open:
             return
         if not self._service:
-            QMessageBox.warning(self._parent, "需要 App 認證", "請先完成 App 認證，再進行 OAuth。")
+            QMessageBox.warning(self._parent, "App Auth Required", "Complete App authentication before OAuth.")
             return
         if self._oauth_service and self._oauth_service.status == ConnectionStatus.ACCOUNT_AUTHENTICATED:
             auto_connect = False

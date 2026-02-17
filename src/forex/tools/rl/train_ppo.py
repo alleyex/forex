@@ -11,6 +11,7 @@ from stable_baselines3.common.callbacks import BaseCallback, CallbackList, EvalC
 from stable_baselines3.common.evaluation import evaluate_policy
 
 from forex.ml.rl.envs.trading_env import TradingConfig, TradingEnv
+from forex.ml.rl.envs.trading_config_io import save_trading_config
 from forex.ml.rl.features.feature_builder import (
     apply_scaler,
     build_feature_frame,
@@ -55,6 +56,10 @@ def _train_model(
     batch_size: int,
     gamma: float,
     ent_coef: float,
+    gae_lambda: float,
+    clip_range: float,
+    vf_coef: float,
+    n_epochs: int,
     total_steps: int,
     verbose: int = 1,
 ) -> PPO:
@@ -67,8 +72,45 @@ def _train_model(
         batch_size=batch_size,
         gamma=gamma,
         ent_coef=ent_coef,
+        gae_lambda=gae_lambda,
+        clip_range=clip_range,
+        vf_coef=vf_coef,
+        n_epochs=n_epochs,
     )
     return model
+
+
+def _clone_config(config: TradingConfig, **overrides) -> TradingConfig:
+    payload = dict(config.__dict__)
+    payload.update(overrides)
+    return TradingConfig(**payload)
+
+
+def _extract_data_context(csv_path: str | Path) -> dict[str, int | str]:
+    path = Path(csv_path).expanduser()
+    meta_path = path.with_suffix(path.suffix + ".meta.json")
+    if not meta_path.exists():
+        return {}
+    try:
+        payload = json.loads(meta_path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return {}
+    if not isinstance(payload, dict):
+        return {}
+    details = payload.get("details", {})
+    if not isinstance(details, dict):
+        return {}
+    out: dict[str, int | str] = {}
+    symbol = details.get("symbol_id")
+    timeframe = details.get("timeframe")
+    if symbol is not None:
+        try:
+            out["symbol_id"] = int(symbol)
+        except (TypeError, ValueError):
+            pass
+    if timeframe is not None:
+        out["timeframe"] = str(timeframe).strip().upper()
+    return out
 
 
 def main() -> None:
@@ -80,6 +122,10 @@ def main() -> None:
     parser.add_argument("--n-steps", type=int, default=2048, help="PPO rollout steps per update.")
     parser.add_argument("--batch-size", type=int, default=64, help="PPO minibatch size.")
     parser.add_argument("--ent-coef", type=float, default=0.0, help="Entropy coefficient.")
+    parser.add_argument("--gae-lambda", type=float, default=0.95, help="PPO GAE lambda.")
+    parser.add_argument("--clip-range", type=float, default=0.2, help="PPO clip range.")
+    parser.add_argument("--vf-coef", type=float, default=0.5, help="PPO value function coefficient.")
+    parser.add_argument("--n-epochs", type=int, default=10, help="PPO epochs per update.")
     parser.add_argument("--episode-length", type=int, default=2048, help="Episode length in bars.")
     parser.add_argument("--eval-split", type=float, default=0.2, help="Eval split (fraction from tail).")
     parser.add_argument("--eval-freq", type=int, default=10_000, help="Eval frequency in timesteps.")
@@ -113,6 +159,11 @@ def main() -> None:
         "--feature-scaler-out",
         default="",
         help="Optional JSON path to save feature scaler (default: model_out with .scaler.json).",
+    )
+    parser.add_argument(
+        "--env-config-out",
+        default="",
+        help="Optional JSON path to save TradingConfig (default: model_out with .env.json).",
     )
     parser.add_argument("--resume", action="store_true", help="Resume training from existing model.")
     args = parser.parse_args()
@@ -178,6 +229,19 @@ def main() -> None:
         reward_clip=args.reward_clip,
         risk_aversion=args.risk_aversion,
     )
+
+    env_config_path = args.env_config_out.strip()
+    if not env_config_path:
+        env_config_path = str(Path(args.model_out).with_suffix(".env.json"))
+    env_config_path = str(Path(env_config_path).expanduser())
+    env_dir = Path(env_config_path).parent
+    env_dir.mkdir(parents=True, exist_ok=True)
+    save_trading_config(
+        train_config,
+        env_config_path,
+        extra=_extract_data_context(args.data),
+    )
+
     env = _build_env(train_features, train_closes, train_config)
     eval_env = _build_env(eval_features, eval_closes, eval_config)
 
@@ -236,14 +300,49 @@ def main() -> None:
             learning_rate = trial.suggest_float("learning_rate", 1e-5, 1e-3, log=True)
             gamma = trial.suggest_float("gamma", 0.9, 0.9999)
             ent_coef = trial.suggest_float("ent_coef", 1e-6, 1e-2, log=True)
+            gae_lambda = trial.suggest_float("gae_lambda", 0.90, 0.99)
+            clip_range = trial.suggest_float("clip_range", 0.10, 0.30)
+            vf_coef = trial.suggest_float("vf_coef", 0.10, 1.00)
+            n_epochs = trial.suggest_categorical("n_epochs", [5, 10, 20])
+            min_position_change = trial.suggest_float("min_position_change", 0.0, 0.2, step=0.01)
+            position_step = trial.suggest_categorical("position_step", [0.0, 0.05, 0.1, 0.2])
+            risk_aversion = trial.suggest_float("risk_aversion", 0.0, 0.3, step=0.01)
+            max_position = trial.suggest_categorical("max_position", [0.5, 1.0, 1.5, 2.0])
+            episode_length = trial.suggest_categorical("episode_length", [256, 512, 1024, 2048])
+            reward_clip = trial.suggest_categorical("reward_clip", [0.0, 0.005, 0.01, 0.02])
+
+            trial_train_config = _clone_config(
+                train_config,
+                episode_length=episode_length,
+                min_position_change=min_position_change,
+                position_step=position_step,
+                risk_aversion=risk_aversion,
+                max_position=max_position,
+                reward_clip=reward_clip,
+            )
+            trial_eval_config = _clone_config(
+                eval_config,
+                episode_length=episode_length,
+                min_position_change=min_position_change,
+                position_step=position_step,
+                risk_aversion=risk_aversion,
+                max_position=max_position,
+                reward_clip=reward_clip,
+            )
+            trial_env = _build_env(train_features, train_closes, trial_train_config)
+            trial_eval_env = _build_env(eval_features, eval_closes, trial_eval_config)
 
             model = _train_model(
-                env=_build_env(train_features, train_closes, train_config),
+                env=trial_env,
                 learning_rate=learning_rate,
                 n_steps=n_steps,
                 batch_size=batch_size,
                 gamma=gamma,
                 ent_coef=ent_coef,
+                gae_lambda=gae_lambda,
+                clip_range=clip_range,
+                vf_coef=vf_coef,
+                n_epochs=n_epochs,
                 total_steps=args.optuna_steps,
                 verbose=0,
             )
@@ -253,10 +352,12 @@ def main() -> None:
             )
             mean_reward, _ = evaluate_policy(
                 model,
-                eval_env,
+                trial_eval_env,
                 n_eval_episodes=args.eval_episodes,
                 deterministic=True,
             )
+            trial_env.close()
+            trial_eval_env.close()
             return float(mean_reward)
 
         def _log_optuna_trial(study: "optuna.Study", trial: "optuna.Trial") -> None:
@@ -281,18 +382,47 @@ def main() -> None:
             out_path.write_text(json.dumps(best_params, ensure_ascii=True, indent=2))
         if not args.optuna_train_best:
             return
+        best_train_config = _clone_config(
+            train_config,
+            episode_length=int(best_params["episode_length"]),
+            min_position_change=float(best_params["min_position_change"]),
+            position_step=float(best_params["position_step"]),
+            risk_aversion=float(best_params["risk_aversion"]),
+            max_position=float(best_params["max_position"]),
+            reward_clip=float(best_params["reward_clip"]),
+        )
+        best_eval_config = _clone_config(
+            eval_config,
+            episode_length=int(best_params["episode_length"]),
+            min_position_change=float(best_params["min_position_change"]),
+            position_step=float(best_params["position_step"]),
+            risk_aversion=float(best_params["risk_aversion"]),
+            max_position=float(best_params["max_position"]),
+            reward_clip=float(best_params["reward_clip"]),
+        )
+        save_trading_config(
+            best_train_config,
+            env_config_path,
+            extra=_extract_data_context(args.data),
+        )
+        best_env = _build_env(train_features, train_closes, best_train_config)
+        best_eval_env = _build_env(eval_features, eval_closes, best_eval_config)
         model = _train_model(
-            env=env,
+            env=best_env,
             learning_rate=float(best_params["learning_rate"]),
             n_steps=int(best_params["n_steps"]),
             batch_size=int(best_params["batch_size"]),
             gamma=float(best_params["gamma"]),
             ent_coef=float(best_params["ent_coef"]),
+            gae_lambda=float(best_params["gae_lambda"]),
+            clip_range=float(best_params["clip_range"]),
+            vf_coef=float(best_params["vf_coef"]),
+            n_epochs=int(best_params["n_epochs"]),
             total_steps=args.total_steps,
             verbose=args.verbose,
         )
         eval_callback = EvalCallback(
-            eval_env,
+            best_eval_env,
             eval_freq=args.eval_freq,
             n_eval_episodes=args.eval_episodes,
             deterministic=True,
@@ -324,6 +454,10 @@ def main() -> None:
             batch_size=args.batch_size,
             gamma=args.gamma,
             ent_coef=args.ent_coef,
+            gae_lambda=args.gae_lambda,
+            clip_range=args.clip_range,
+            vf_coef=args.vf_coef,
+            n_epochs=args.n_epochs,
             total_steps=args.total_steps,
             verbose=args.verbose,
         )

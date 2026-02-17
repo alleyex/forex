@@ -23,12 +23,12 @@ from forex.ui.shared.utils.formatters import (
 
 @dataclass
 class DialogState:
-    """共用對話框狀態"""
+    """共用對話框Status"""
     in_progress: bool = False
 
 
 class BaseAuthDialog(QDialog):
-    """提供共用 UI 與日誌/狀態功能的基底對話框"""
+    """提供共用 UI 與日誌/Status功能的基底對話框"""
 
     def __init__(
         self,
@@ -54,7 +54,7 @@ class BaseAuthDialog(QDialog):
     # 共用 UI
     # ─────────────────────────────────────────────────────────────
 
-    def _create_log_widget(self, title: str = "連線日誌:") -> LogWidget:
+    def _create_log_widget(self, title: str = "Connection Log:") -> LogWidget:
         self._log_widget = LogWidget(title=title, parent=self)
         return self._log_widget
 
@@ -85,7 +85,7 @@ class BaseAuthDialog(QDialog):
         self._append_log(format_log_error(message))
 
     # ─────────────────────────────────────────────────────────────
-    # 狀態處理
+    # Status處理
     # ─────────────────────────────────────────────────────────────
 
     @Slot(int)
@@ -104,9 +104,9 @@ class BaseAuthDialog(QDialog):
             with open(self._token_file, "r", encoding="utf-8") as file:
                 return json.load(file)
         except json.JSONDecodeError as exc:
-            self._log_error(f"Token 檔案格式錯誤: {exc}")
+            self._log_error(f"Invalid token file format: {exc}")
         except OSError as exc:
-            self._log_error(f"無法讀取 Token 檔案: {exc}")
+            self._log_error(f"Failed to read token file: {exc}")
         return None
 
     # ─────────────────────────────────────────────────────────────
