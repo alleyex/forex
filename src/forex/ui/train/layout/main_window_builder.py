@@ -52,6 +52,8 @@ class StackBundle:
 class StatusBundle:
     app_auth_label: QLabel
     oauth_label: QLabel
+    cpu_label: QLabel
+    memory_label: QLabel
 
 
 @dataclass
@@ -84,6 +86,7 @@ def build_panels(
     training_presenter = TrainingPresenter(parent=parent, state=training_state)
     training_state.metric_point.connect(training_panel.append_metric_point)
     training_state.optuna_point.connect(training_panel.append_optuna_point)
+    training_state.optuna_status.connect(training_panel.update_optuna_status)
     training_state.optuna_reset.connect(training_params_panel.reset_optuna_results)
     training_state.optuna_trial_summary.connect(training_params_panel.update_optuna_trial_summary)
     training_state.optuna_best_params.connect(training_params_panel.update_optuna_best_params)
@@ -191,9 +194,25 @@ def build_status_bar(
     status_bar = main_window.statusBar()
     app_auth_label = QLabel(app_auth_text)
     oauth_label = QLabel(oauth_text)
+    cpu_label = QLabel("CPU: --")
+    memory_label = QLabel("Memory: --")
     status_bar.addWidget(app_auth_label)
     status_bar.addWidget(oauth_label)
-    return StatusBundle(app_auth_label=app_auth_label, oauth_label=oauth_label)
+
+    right_container = QWidget()
+    right_layout = QHBoxLayout(right_container)
+    right_layout.setContentsMargins(0, 0, 14, 0)
+    right_layout.setSpacing(12)
+    right_layout.addWidget(cpu_label)
+    right_layout.addWidget(memory_label)
+
+    status_bar.addPermanentWidget(right_container)
+    return StatusBundle(
+        app_auth_label=app_auth_label,
+        oauth_label=oauth_label,
+        cpu_label=cpu_label,
+        memory_label=memory_label,
+    )
 
 
 def build_toolbar(

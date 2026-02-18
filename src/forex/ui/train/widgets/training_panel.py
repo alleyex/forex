@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import math
 from pathlib import Path
 from typing import Optional
 try:
@@ -20,6 +21,7 @@ from PySide6.QtWidgets import (
     QDoubleSpinBox,
     QPushButton,
     QCheckBox,
+    QComboBox,
     QLineEdit,
     QFileDialog,
     QSizePolicy,
@@ -44,6 +46,19 @@ from forex.ui.shared.utils.path_utils import latest_file_in_dir
 from forex.ui.shared.styles.tokens import FORM_LABEL_WIDTH_COMPACT, PRIMARY, TRAINING_PARAMS
 from forex.config.paths import RAW_HISTORY_DIR
 from forex.ui.train.services import UIParamsStore
+
+
+if pg is not None:
+    class IntegerAxisItem(pg.AxisItem):
+        def tickStrings(self, values, scale, spacing):  # pragma: no cover - UI formatting
+            labels = []
+            for value in values:
+                rounded = int(round(value))
+                if abs(value - rounded) < 1e-6:
+                    labels.append(str(rounded))
+                else:
+                    labels.append("")
+            return labels
 
 
 class AdaptiveFormGrid(QWidget):
@@ -301,9 +316,6 @@ class TrainingParamsPanel(QWidget):
         self._resume_training = QCheckBox("Resume training")
         self._resume_training.setChecked(False)
         options_layout.addWidget(self._resume_training)
-        self._optuna_train_best = QCheckBox("Train best model")
-        self._optuna_train_best.setChecked(True)
-        options_layout.addWidget(self._optuna_train_best)
 
         def _wrap_field(widget: QWidget) -> QWidget:
             container = QWidget()
@@ -464,33 +476,116 @@ class TrainingParamsPanel(QWidget):
 
         optuna_group = QGroupBox("Optuna Settings")
         _apply_live_card_style(optuna_group)
-        optuna_layout = QFormLayout(optuna_group)
-        configure_form_layout(
-            optuna_layout,
-            label_alignment=Qt.AlignLeft | Qt.AlignVCenter,
-            field_growth_policy=QFormLayout.FieldsStayAtSizeHint,
-        )
-        apply_form_label_width(optuna_layout, FORM_LABEL_WIDTH_COMPACT)
-        align_form_fields(optuna_layout, Qt.AlignLeft | Qt.AlignVCenter)
+        optuna_group_layout = QVBoxLayout(optuna_group)
+        optuna_group_layout.setContentsMargins(12, 10, 12, 12)
+        optuna_group_layout.setSpacing(8)
+        optuna_fields = AdaptiveFormGrid(min_cell_width=260, label_min_width=0, max_columns=2)
+        optuna_group_layout.addWidget(optuna_fields)
 
         self._optuna_trials = QSpinBox()
         self._optuna_trials.setRange(0, 500)
         self._optuna_trials.setValue(0)
         self._optuna_trials.setFixedWidth(spin_width)
-        optuna_layout.addRow("Trials", self._optuna_trials)
+        optuna_fields.add_row("Trials", _wrap_field(self._optuna_trials))
 
         self._optuna_steps = QSpinBox()
         self._optuna_steps.setRange(1, 5_000_000)
         self._optuna_steps.setValue(50_000)
         self._optuna_steps.setFixedWidth(spin_width)
-        optuna_layout.addRow("Steps per trial", self._optuna_steps)
+        optuna_fields.add_row("Steps per trial", _wrap_field(self._optuna_steps))
 
-        self._optuna_out = QLineEdit("data/optuna/best_params.json")
-        self._optuna_out.setFixedWidth(field_width)
-        self._optuna_out.setPlaceholderText("data/optuna/best_params.json")
-        optuna_out_row = build_browse_row(self._optuna_out, self._browse_optuna_out)
-        optuna_out_row.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)
-        optuna_layout.addRow("Output JSON", optuna_out_row)
+        self._optuna_auto_select = QCheckBox("Auto select params")
+        self._optuna_auto_select.setChecked(True)
+        optuna_fields.add_row("Auto select", _wrap_field(self._optuna_auto_select))
+
+        self._optuna_select_mode = QComboBox()
+        self._optuna_select_mode.addItems(["Top K", "Top %"])
+        self._optuna_select_mode.setCurrentIndex(0)
+        self._optuna_select_mode.setFixedWidth(spin_width)
+        optuna_fields.add_row("Selection mode", _wrap_field(self._optuna_select_mode))
+
+        self._optuna_top_k = QSpinBox()
+        self._optuna_top_k.setRange(1, 500)
+        self._optuna_top_k.setValue(5)
+        self._optuna_top_k.setFixedWidth(spin_width)
+
+        self._optuna_top_percent = QDoubleSpinBox()
+        self._optuna_top_percent.setRange(0.1, 100.0)
+        self._optuna_top_percent.setDecimals(1)
+        self._optuna_top_percent.setSingleStep(1.0)
+        self._optuna_top_percent.setValue(20.0)
+        self._optuna_top_percent.setFixedWidth(spin_width)
+
+        self._optuna_threshold_stack = QStackedWidget()
+        self._optuna_threshold_stack.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)
+        self._optuna_threshold_stack.addWidget(_wrap_field(self._optuna_top_k))
+        self._optuna_threshold_stack.addWidget(_wrap_field(self._optuna_top_percent))
+        optuna_fields.add_row("Selection value", self._optuna_threshold_stack)
+
+        self._optuna_min_candidates = QSpinBox()
+        self._optuna_min_candidates.setRange(1, 500)
+        self._optuna_min_candidates.setValue(3)
+        self._optuna_min_candidates.setFixedWidth(spin_width)
+        optuna_fields.add_row("Min candidates", _wrap_field(self._optuna_min_candidates))
+
+        self._optuna_replay_enabled = QCheckBox("Replay top candidates")
+        self._optuna_replay_enabled.setChecked(False)
+        optuna_fields.add_row("Replay", _wrap_field(self._optuna_replay_enabled))
+
+        self._optuna_replay_steps = QSpinBox()
+        self._optuna_replay_steps.setRange(1, 10_000_000)
+        self._optuna_replay_steps.setValue(200_000)
+        self._optuna_replay_steps.setFixedWidth(spin_width)
+        optuna_fields.add_row("Replay steps", _wrap_field(self._optuna_replay_steps))
+
+        self._optuna_replay_seeds = QSpinBox()
+        self._optuna_replay_seeds.setRange(1, 20)
+        self._optuna_replay_seeds.setValue(3)
+        self._optuna_replay_seeds.setFixedWidth(spin_width)
+        optuna_fields.add_row("Seeds/candidate", _wrap_field(self._optuna_replay_seeds))
+
+        self._optuna_replay_score_mode = QComboBox()
+        self._optuna_replay_score_mode.addItems(
+            ["Risk-adjusted", "Reward only", "Conservative"]
+        )
+        self._optuna_replay_score_mode.setCurrentIndex(0)
+        self._optuna_replay_score_mode.setFixedWidth(spin_width)
+        optuna_fields.add_row("Replay score", _wrap_field(self._optuna_replay_score_mode))
+
+        self._optuna_replay_min_trade_rate = QDoubleSpinBox()
+        self._optuna_replay_min_trade_rate.setRange(0.0, 100.0)
+        self._optuna_replay_min_trade_rate.setDecimals(3)
+        self._optuna_replay_min_trade_rate.setSingleStep(0.1)
+        self._optuna_replay_min_trade_rate.setValue(0.5)
+        self._optuna_replay_min_trade_rate.setFixedWidth(spin_width)
+        optuna_fields.add_row(
+            "Min trades/1k bars",
+            _wrap_field(self._optuna_replay_min_trade_rate),
+        )
+
+        self._optuna_replay_max_flat_ratio = QDoubleSpinBox()
+        self._optuna_replay_max_flat_ratio.setRange(0.0, 1.0)
+        self._optuna_replay_max_flat_ratio.setDecimals(3)
+        self._optuna_replay_max_flat_ratio.setSingleStep(0.01)
+        self._optuna_replay_max_flat_ratio.setValue(0.98)
+        self._optuna_replay_max_flat_ratio.setFixedWidth(spin_width)
+        optuna_fields.add_row("Max flat ratio", _wrap_field(self._optuna_replay_max_flat_ratio))
+
+        self._optuna_replay_max_ls_imbalance = QDoubleSpinBox()
+        self._optuna_replay_max_ls_imbalance.setRange(0.0, 1.0)
+        self._optuna_replay_max_ls_imbalance.setDecimals(3)
+        self._optuna_replay_max_ls_imbalance.setSingleStep(0.01)
+        self._optuna_replay_max_ls_imbalance.setValue(0.2)
+        self._optuna_replay_max_ls_imbalance.setFixedWidth(spin_width)
+        optuna_fields.add_row(
+            "Max L/S imbalance",
+            _wrap_field(self._optuna_replay_max_ls_imbalance),
+        )
+
+        self._optuna_plan_hint = QLabel("")
+        self._optuna_plan_hint.setProperty("class", "dialog_hint")
+        self._optuna_plan_hint.setWordWrap(True)
+        optuna_group_layout.addWidget(self._optuna_plan_hint)
 
         self._start_button = QPushButton("Start Training")
         self._start_button.setProperty("class", PRIMARY)
@@ -554,6 +649,9 @@ class TrainingParamsPanel(QWidget):
         self._optuna_trial_summary = QLabel(format_optuna_empty_trial())
         self._optuna_trial_summary.setWordWrap(True)
         self._optuna_trial_summary.setProperty("class", "result_value")
+        self._optuna_trial_summary.setStyleSheet(
+            "font-family: 'Menlo', 'Monaco', 'Courier New', monospace;"
+        )
         optuna_results_layout.addWidget(trial_title, 0, 0, Qt.AlignTop)
         optuna_results_layout.addWidget(self._optuna_trial_summary, 0, 1)
 
@@ -562,6 +660,9 @@ class TrainingParamsPanel(QWidget):
         self._optuna_best_summary = QLabel(format_optuna_empty_best())
         self._optuna_best_summary.setWordWrap(True)
         self._optuna_best_summary.setProperty("class", "result_value")
+        self._optuna_best_summary.setStyleSheet(
+            "font-family: 'Menlo', 'Monaco', 'Courier New', monospace;"
+        )
         optuna_results_layout.addWidget(best_title, 1, 0, Qt.AlignTop)
         optuna_results_layout.addWidget(self._optuna_best_summary, 1, 1)
         optuna_layout_wrap.addWidget(optuna_results)
@@ -585,6 +686,9 @@ class TrainingParamsPanel(QWidget):
         self._load_optuna_defaults()
         self._update_data_metadata_preview(self._data_path.text().strip())
         self._bind_auto_save_handlers()
+        self._refresh_optuna_select_controls()
+        self._refresh_optuna_replay_controls()
+        self._refresh_optuna_plan_hint()
 
     def _apply_tabs_style(self, tabs: QTabWidget) -> None:
         tabs.setStyleSheet(
@@ -678,13 +782,9 @@ class TrainingParamsPanel(QWidget):
     def _emit_start(self) -> None:
         params = self.get_params()
         params["optuna_trials"] = 0
-        params["optuna_train_best"] = False
         params["optuna_only"] = False
         self._save_params(params)
         self.start_requested.emit(params)
-
-    def should_apply_optuna(self) -> bool:
-        return bool(self._optuna_train_best.isChecked())
 
     def apply_optuna_params(self, params: dict) -> None:
         if "learning_rate" in params:
@@ -758,8 +858,25 @@ class TrainingParamsPanel(QWidget):
             "risk_aversion": float(self._risk_aversion.value()),
             "optuna_trials": int(self._optuna_trials.value()),
             "optuna_steps": int(self._optuna_steps.value()),
-            "optuna_train_best": bool(self._optuna_train_best.isChecked()),
-            "optuna_out": self._optuna_out.text().strip(),
+            "optuna_auto_select": bool(self._optuna_auto_select.isChecked()),
+            "optuna_select_mode": (
+                "top_percent" if self._optuna_select_mode.currentText() == "Top %" else "top_k"
+            ),
+            "optuna_top_k": int(self._optuna_top_k.value()),
+            "optuna_top_percent": float(self._optuna_top_percent.value()),
+            "optuna_min_candidates": int(self._optuna_min_candidates.value()),
+            "optuna_top_out": "data/optuna/top_params.json",
+            "optuna_replay_enabled": bool(self._optuna_replay_enabled.isChecked()),
+            "optuna_replay_steps": int(self._optuna_replay_steps.value()),
+            "optuna_replay_seeds": int(self._optuna_replay_seeds.value()),
+            "optuna_replay_score_mode": self._replay_score_mode_key(),
+            "optuna_replay_min_trade_rate": float(self._optuna_replay_min_trade_rate.value()),
+            "optuna_replay_max_flat_ratio": float(self._optuna_replay_max_flat_ratio.value()),
+            "optuna_replay_max_ls_imbalance": float(
+                self._optuna_replay_max_ls_imbalance.value()
+            ),
+            "optuna_replay_out": "data/optuna/replay_results.json",
+            "optuna_out": "data/optuna/best_params.json",
             "optuna_only": False,
         }
 
@@ -810,17 +927,9 @@ class TrainingParamsPanel(QWidget):
             f"rows: {row_count}    schema: {schema_version}"
         )
 
-    def _browse_optuna_out(self) -> None:
-        path, _ = QFileDialog.getSaveFileName(
-            self, "Save Optuna Params", self._optuna_out.text(), "JSON (*.json)"
-        )
-        if path:
-            self._optuna_out.setText(path)
-
     def _emit_optuna(self) -> None:
         params = self.get_params()
         params["optuna_only"] = True
-        params["optuna_train_best"] = False
         self._save_params(params)
         self.optuna_requested.emit(params)
         self.reset_optuna_results()
@@ -908,10 +1017,35 @@ class TrainingParamsPanel(QWidget):
             self._optuna_trials.setValue(int(data["optuna_trials"]))
         if "optuna_steps" in data:
             self._optuna_steps.setValue(int(data["optuna_steps"]))
-        if "optuna_train_best" in data:
-            self._optuna_train_best.setChecked(bool(data["optuna_train_best"]))
-        if "optuna_out" in data:
-            self._optuna_out.setText(str(data["optuna_out"]))
+        if "optuna_auto_select" in data:
+            self._optuna_auto_select.setChecked(bool(data["optuna_auto_select"]))
+        if "optuna_select_mode" in data:
+            mode = str(data["optuna_select_mode"]).strip().lower()
+            self._optuna_select_mode.setCurrentIndex(1 if mode == "top_percent" else 0)
+        if "optuna_top_k" in data:
+            self._optuna_top_k.setValue(int(data["optuna_top_k"]))
+        if "optuna_top_percent" in data:
+            self._optuna_top_percent.setValue(float(data["optuna_top_percent"]))
+        if "optuna_min_candidates" in data:
+            self._optuna_min_candidates.setValue(int(data["optuna_min_candidates"]))
+        if "optuna_replay_enabled" in data:
+            self._optuna_replay_enabled.setChecked(bool(data["optuna_replay_enabled"]))
+        if "optuna_replay_steps" in data:
+            self._optuna_replay_steps.setValue(int(data["optuna_replay_steps"]))
+        if "optuna_replay_seeds" in data:
+            self._optuna_replay_seeds.setValue(int(data["optuna_replay_seeds"]))
+        if "optuna_replay_score_mode" in data:
+            self._set_replay_score_mode(str(data["optuna_replay_score_mode"]))
+        if "optuna_replay_min_trade_rate" in data:
+            self._optuna_replay_min_trade_rate.setValue(float(data["optuna_replay_min_trade_rate"]))
+        if "optuna_replay_max_flat_ratio" in data:
+            self._optuna_replay_max_flat_ratio.setValue(float(data["optuna_replay_max_flat_ratio"]))
+        if "optuna_replay_max_ls_imbalance" in data:
+            self._optuna_replay_max_ls_imbalance.setValue(
+                float(data["optuna_replay_max_ls_imbalance"])
+            )
+        self._refresh_optuna_select_controls()
+        self._refresh_optuna_replay_controls()
         self._loading_params = False
 
     def _auto_save_params(self, *_args) -> None:
@@ -937,6 +1071,102 @@ class TrainingParamsPanel(QWidget):
         self._clip_range.valueChanged.connect(self._auto_save_params)
         self._vf_coef.valueChanged.connect(self._auto_save_params)
         self._n_epochs.valueChanged.connect(self._auto_save_params)
+        self._optuna_trials.valueChanged.connect(self._auto_save_params)
+        self._optuna_trials.valueChanged.connect(self._refresh_optuna_plan_hint)
+        self._optuna_steps.valueChanged.connect(self._auto_save_params)
+        self._optuna_auto_select.toggled.connect(self._on_optuna_auto_select_toggled)
+        self._optuna_select_mode.currentIndexChanged.connect(self._on_optuna_select_mode_changed)
+        self._optuna_top_k.valueChanged.connect(self._auto_save_params)
+        self._optuna_top_k.valueChanged.connect(self._refresh_optuna_plan_hint)
+        self._optuna_top_percent.valueChanged.connect(self._auto_save_params)
+        self._optuna_top_percent.valueChanged.connect(self._refresh_optuna_plan_hint)
+        self._optuna_min_candidates.valueChanged.connect(self._auto_save_params)
+        self._optuna_min_candidates.valueChanged.connect(self._refresh_optuna_plan_hint)
+        self._optuna_replay_enabled.toggled.connect(self._on_optuna_replay_toggled)
+        self._optuna_replay_steps.valueChanged.connect(self._auto_save_params)
+        self._optuna_replay_seeds.valueChanged.connect(self._auto_save_params)
+        self._optuna_replay_score_mode.currentIndexChanged.connect(self._auto_save_params)
+        self._optuna_replay_min_trade_rate.valueChanged.connect(self._auto_save_params)
+        self._optuna_replay_max_flat_ratio.valueChanged.connect(self._auto_save_params)
+        self._optuna_replay_max_ls_imbalance.valueChanged.connect(self._auto_save_params)
+
+    def _on_optuna_auto_select_toggled(self, _checked: bool) -> None:
+        self._refresh_optuna_select_controls()
+        self._refresh_optuna_plan_hint()
+        self._auto_save_params()
+
+    def _on_optuna_select_mode_changed(self, _index: int) -> None:
+        self._refresh_optuna_select_controls()
+        self._refresh_optuna_plan_hint()
+        self._auto_save_params()
+
+    def _refresh_optuna_select_controls(self) -> None:
+        enabled = bool(self._optuna_auto_select.isChecked())
+        self._optuna_select_mode.setEnabled(enabled)
+        self._optuna_min_candidates.setEnabled(enabled)
+        is_top_k = self._optuna_select_mode.currentText() == "Top K"
+        self._optuna_top_k.setEnabled(enabled and is_top_k)
+        self._optuna_top_percent.setEnabled(enabled and not is_top_k)
+        self._optuna_threshold_stack.setCurrentIndex(0 if is_top_k else 1)
+        self._optuna_threshold_stack.setEnabled(enabled)
+
+    def _on_optuna_replay_toggled(self, _checked: bool) -> None:
+        self._refresh_optuna_replay_controls()
+        self._refresh_optuna_plan_hint()
+        self._auto_save_params()
+
+    def _refresh_optuna_replay_controls(self) -> None:
+        enabled = bool(self._optuna_replay_enabled.isChecked())
+        self._optuna_replay_steps.setEnabled(enabled)
+        self._optuna_replay_seeds.setEnabled(enabled)
+        self._optuna_replay_score_mode.setEnabled(enabled)
+        self._optuna_replay_min_trade_rate.setEnabled(enabled)
+        self._optuna_replay_max_flat_ratio.setEnabled(enabled)
+        self._optuna_replay_max_ls_imbalance.setEnabled(enabled)
+
+    def _refresh_optuna_plan_hint(self) -> None:
+        trials = int(self._optuna_trials.value())
+        if trials <= 0:
+            self._optuna_plan_hint.setText("Set Trials > 0 to preview candidate selection.")
+            return
+        if not self._optuna_auto_select.isChecked():
+            replay_count = 1 if self._optuna_replay_enabled.isChecked() else 0
+            if replay_count > 0:
+                self._optuna_plan_hint.setText(
+                    f"Auto select is off. Replay will use best 1 candidate (replay={replay_count})."
+                )
+            else:
+                self._optuna_plan_hint.setText("Auto select is off.")
+            return
+        if self._optuna_select_mode.currentText() == "Top K":
+            mode_count = int(self._optuna_top_k.value())
+        else:
+            pct = float(self._optuna_top_percent.value())
+            mode_count = int(math.ceil(trials * pct / 100.0))
+        selected_count = max(mode_count, int(self._optuna_min_candidates.value()))
+        selected_count = min(trials, max(1, selected_count))
+        replay_count = selected_count if self._optuna_replay_enabled.isChecked() else 0
+        self._optuna_plan_hint.setText(
+            f"Expected selection: {selected_count}/{trials} candidates. Replay: {replay_count}."
+        )
+
+    def _replay_score_mode_key(self) -> str:
+        text = self._optuna_replay_score_mode.currentText()
+        if text.startswith("Reward only"):
+            return "reward_only"
+        if text.startswith("Conservative"):
+            return "conservative"
+        return "risk_adjusted"
+
+    def _set_replay_score_mode(self, mode: str) -> None:
+        value = (mode or "").strip().lower()
+        if value == "reward_only":
+            self._optuna_replay_score_mode.setCurrentIndex(1)
+            return
+        if value == "conservative":
+            self._optuna_replay_score_mode.setCurrentIndex(2)
+            return
+        self._optuna_replay_score_mode.setCurrentIndex(0)
 
 
 class TrainingPanel(QWidget):
@@ -1013,14 +1243,17 @@ class TrainingPanel(QWidget):
                     "y": deque(maxlen=self._max_points),
                 }
 
-            optuna_plot = pg.PlotWidget()
-            optuna_plot.setTitle("Optuna trials")
+            self._optuna_title_base = "Optuna trials"
+            optuna_plot = pg.PlotWidget(
+                axisItems={"bottom": IntegerAxisItem(orientation="bottom")}
+            )
+            optuna_plot.setTitle(self._optuna_title_base)
             optuna_plot.setLabel("bottom", "trial")
             optuna_plot.setLabel("left", "value")
             optuna_plot.showGrid(x=True, y=True, alpha=0.3)
             self._optuna_legend = optuna_plot.addLegend()
             self._optuna_plot = optuna_plot
-            optuna_colors = ["#4C78A8", "#F58518", "#54A24B"]
+            optuna_colors = ["#4C78A8", "#F58518", "#E45756", "#54A24B"]
             for index, (key, _) in enumerate(self._optuna_metrics):
                 curve = optuna_plot.plot(
                     pen=pg.mkPen(optuna_colors[index % len(optuna_colors)], width=2)
@@ -1082,6 +1315,7 @@ class TrainingPanel(QWidget):
             notice.setWordWrap(True)
             layout.addWidget(notice)
 
+
     def reset_metrics(self) -> None:
         if not self._charts_available:
             return
@@ -1096,12 +1330,22 @@ class TrainingPanel(QWidget):
     def reset_optuna_metrics(self) -> None:
         if not self._charts_available:
             return
+        self.update_optuna_status("")
         for key in self._optuna_data:
             self._optuna_data[key]["x"].clear()
             self._optuna_data[key]["y"].clear()
             self._optuna_curves[key].setData([])
         for key in self._optuna_visible:
             self._optuna_curves[key].setData([])
+
+    def update_optuna_status(self, status: str) -> None:
+        if not self._charts_available:
+            return
+        text = str(status or "").strip()
+        if not text:
+            self._optuna_plot.setTitle(self._optuna_title_base)
+            return
+        self._optuna_plot.setTitle(f"{self._optuna_title_base} - {text}")
 
     def flush_plot(self) -> None:
         if not self._charts_available:

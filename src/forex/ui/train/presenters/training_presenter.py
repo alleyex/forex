@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import re
 from typing import Optional
 
 from PySide6.QtCore import QObject
@@ -14,6 +15,9 @@ class TrainingPresenter(PresenterBase):
         self._current_step = 0
 
     def handle_log_line(self, line: str) -> None:
+        replay_status = self._parse_replay_status(line)
+        if replay_status:
+            self._state.optuna_status.emit(replay_status)
         parsed = self._parse_csv_line(line)
         if parsed:
             step, key, value = parsed
@@ -34,6 +38,12 @@ class TrainingPresenter(PresenterBase):
         self._state.metric_point.emit(key, float(self._current_step), value)
 
     def handle_optuna_log_line(self, line: str) -> None:
+        replay = self._parse_optuna_replay_line(line)
+        if replay:
+            trial, replay_mean = replay
+            display_trial = trial + 1
+            self._state.optuna_point.emit("replay_mean", display_trial, replay_mean)
+            return
         parsed = self._parse_optuna_csv_line(line)
         if not parsed:
             return
@@ -56,7 +66,25 @@ class TrainingPresenter(PresenterBase):
             self._state.best_params_found.emit(params)
 
     def reset_optuna_results(self) -> None:
+        self._state.optuna_status.emit("")
         self._state.optuna_reset.emit()
+
+    @staticmethod
+    def _parse_replay_status(line: str) -> Optional[str]:
+        text = line.strip()
+        if text.startswith("Replay progress: candidates="):
+            m = re.search(r"candidates=(\d+).*seeds_per_candidate=(\d+)", text)
+            if m:
+                return f"Replay started ({m.group(1)} candidates, {m.group(2)} seeds each)"
+            return "Replay started"
+        if text.startswith("Replay progress: run="):
+            m = re.search(r"run=(\d+)/(\d+)", text)
+            if m:
+                return f"Replay running {m.group(1)}/{m.group(2)}"
+            return "Replay running"
+        if text.startswith("Replay best:"):
+            return "Replay completed"
+        return None
 
     @staticmethod
     def _parse_kv_line(line: str) -> Optional[tuple[str, float]]:
@@ -90,7 +118,7 @@ class TrainingPresenter(PresenterBase):
         parts = line.strip().split(",", 3)
         if len(parts) != 4:
             return None
-        if parts[0] == "trial":
+        if parts[0] == "trial" or parts[0] == "replay":
             return None
         try:
             trial = float(parts[0])
@@ -100,6 +128,20 @@ class TrainingPresenter(PresenterBase):
         except ValueError:
             return None
         return trial, trial_value, best_value, duration
+
+    @staticmethod
+    def _parse_optuna_replay_line(line: str) -> Optional[tuple[float, float]]:
+        if not line.startswith("replay,"):
+            return None
+        parts = line.strip().split(",")
+        if len(parts) < 3:
+            return None
+        try:
+            trial = float(parts[1])
+            replay_mean = float(parts[2])
+        except ValueError:
+            return None
+        return trial, replay_mean
 
     @staticmethod
     def _parse_float(key: str, line: str) -> Optional[float]:

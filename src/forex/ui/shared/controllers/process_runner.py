@@ -48,6 +48,17 @@ class ProcessRunner(QObject):
         QTimer.singleShot(kill_after_ms, self._force_kill)
         return True
 
+    def stop_blocking(self, *, terminate_timeout_ms: int = 3000, kill_timeout_ms: int = 1000) -> bool:
+        if not self.is_running():
+            return False
+        self._stopping = True
+        self._process.terminate()
+        if self._process.waitForFinished(terminate_timeout_ms):
+            return True
+        self._process.kill()
+        self._process.waitForFinished(kill_timeout_ms)
+        return True
+
     def _handle_stdout(self) -> None:
         if not self._process:
             return

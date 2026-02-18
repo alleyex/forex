@@ -2,7 +2,13 @@
 from typing import Optional
 
 from PySide6.QtWidgets import QMainWindow
-from PySide6.QtCore import Slot, Signal
+from PySide6.QtCore import Slot, Signal, QTimer
+from PySide6.QtGui import QCloseEvent
+from PySide6.QtWidgets import QMessageBox
+try:
+    import psutil
+except ImportError:  # pragma: no cover - optional dependency
+    psutil = None
 
 from forex.ui.train.layout.dock_manager import DockManagerController
 from forex.ui.train.layout.main_window_builder import (
@@ -83,6 +89,7 @@ class MainWindow(QMainWindow):
         self._simulation_presenter = None
         self._history_download_state = None
         self._history_download_presenter = None
+        self._system_usage_timer: Optional[QTimer] = None
 
         self._setup_ui()
         self._setup_connection_presenter()
@@ -108,6 +115,22 @@ class MainWindow(QMainWindow):
         self._setup_status_bar()
         self._setup_menu_toolbar()
         self._show_panel("training", show_log=True)
+
+    def closeEvent(self, event: QCloseEvent) -> None:
+        controller = self._ppo_controller
+        if controller is not None and controller.is_running():
+            answer = QMessageBox.question(
+                self,
+                "Training Running",
+                "PPO training is still running. Stop training and exit?",
+                QMessageBox.Yes | QMessageBox.No,
+                QMessageBox.No,
+            )
+            if answer != QMessageBox.Yes:
+                event.ignore()
+                return
+            controller.stop(blocking=True)
+        super().closeEvent(event)
 
     def _setup_connection_controller(self) -> None:
         if not self._use_cases:
@@ -201,6 +224,24 @@ class MainWindow(QMainWindow):
         )
         self._app_auth_status_label = status_bundle.app_auth_label
         self._oauth_status_label = status_bundle.oauth_label
+        self._cpu_status_label = status_bundle.cpu_label
+        self._memory_status_label = status_bundle.memory_label
+        self._system_usage_timer = QTimer(self)
+        self._system_usage_timer.setInterval(1000)
+        self._system_usage_timer.timeout.connect(self._update_system_usage_status)
+        self._system_usage_timer.start()
+        self._update_system_usage_status()
+
+    def _update_system_usage_status(self) -> None:
+        if psutil is None:
+            self._cpu_status_label.setText("CPU: unavailable")
+            self._memory_status_label.setText("Memory: unavailable")
+            return
+        cpu_percent = psutil.cpu_percent(interval=None)
+        cpu_count = psutil.cpu_count(logical=True) or 0
+        mem_percent = psutil.virtual_memory().percent
+        self._cpu_status_label.setText(f"CPU: {cpu_percent:.1f}% ({cpu_count} cores)")
+        self._memory_status_label.setText(f"Memory: {mem_percent:.1f}%")
 
     def _connect_signals(self) -> None:
         """Connect panel signals"""
@@ -353,6 +394,10 @@ class MainWindow(QMainWindow):
             self._ppo_controller.optuna_best_params_logged.connect(
                 self._training_presenter.handle_optuna_best_params
             )
+            self._ppo_controller.replay_best_params_logged.connect(self._on_replay_best_params)
+            self._ppo_controller.replay_best_summary_logged.connect(
+                self._training_params_panel.update_optuna_trial_summary
+            )
         return self._ppo_controller
 
     @Slot(str)
@@ -364,8 +409,14 @@ class MainWindow(QMainWindow):
 
     @Slot(dict)
     def _on_optuna_best_params(self, params: dict) -> None:
-        if not self._training_params_panel.should_apply_optuna():
+        self._training_params_panel.apply_optuna_params(params)
+        self._training_params_panel.update_optuna_best_params(params)
+
+    @Slot(dict)
+    def _on_replay_best_params(self, params: dict) -> None:
+        if not params:
             return
+        # Replay result is already validated against multiple seeds, so apply it directly.
         self._training_params_panel.apply_optuna_params(params)
         self._training_params_panel.update_optuna_best_params(params)
 

@@ -1,7 +1,10 @@
 from __future__ import annotations
 
 import argparse
+import csv
 import json
+import math
+import sys
 from pathlib import Path
 import numpy as np
 from stable_baselines3 import PPO
@@ -114,6 +117,9 @@ def _extract_data_context(csv_path: str | Path) -> dict[str, int | str]:
 
 
 def main() -> None:
+    if hasattr(sys.stdout, "reconfigure"):
+        # Ensure progress logs are flushed promptly when running under QProcess pipes.
+        sys.stdout.reconfigure(line_buffering=True)
     parser = argparse.ArgumentParser(description="Train PPO on forex history with an MLP policy.")
     parser.add_argument("--data", required=True, help="Path to raw history CSV.")
     parser.add_argument("--total-steps", type=int, default=200_000, help="Total PPO timesteps.")
@@ -152,8 +158,88 @@ def main() -> None:
     parser.add_argument("--optuna-trials", type=int, default=0, help="Run Optuna hyperparameter search.")
     parser.add_argument("--optuna-steps", type=int, default=50_000, help="Timesteps per Optuna trial.")
     parser.add_argument("--optuna-train-best", action="store_true", help="Train final model with best params.")
+    parser.add_argument(
+        "--optuna-auto-select",
+        action="store_true",
+        help="Auto select top candidate trials and write top params JSON.",
+    )
+    parser.add_argument(
+        "--optuna-select-mode",
+        choices=["top_k", "top_percent"],
+        default="top_k",
+        help="Auto-select mode for candidate set.",
+    )
+    parser.add_argument("--optuna-top-k", type=int, default=5, help="Top K trials to keep.")
+    parser.add_argument(
+        "--optuna-top-percent",
+        type=float,
+        default=20.0,
+        help="Top percentage of trials to keep (0-100).",
+    )
+    parser.add_argument(
+        "--optuna-min-candidates",
+        type=int,
+        default=3,
+        help="Minimum candidate trials to keep after filtering.",
+    )
+    parser.add_argument(
+        "--optuna-replay-enabled",
+        action="store_true",
+        help="Replay selected top candidate params with longer training.",
+    )
+    parser.add_argument(
+        "--optuna-replay-steps",
+        type=int,
+        default=200_000,
+        help="Training timesteps used for each replay run.",
+    )
+    parser.add_argument(
+        "--optuna-replay-seeds",
+        type=int,
+        default=3,
+        help="Seeds per candidate for replay runs.",
+    )
+    parser.add_argument(
+        "--optuna-replay-score-mode",
+        choices=["reward_only", "risk_adjusted", "conservative"],
+        default="risk_adjusted",
+        help="Scoring mode for replay candidate ranking.",
+    )
+    parser.add_argument(
+        "--optuna-replay-max-flat-ratio",
+        type=float,
+        default=0.98,
+        help="Reject replay candidates whose average flat ratio exceeds this threshold.",
+    )
+    parser.add_argument(
+        "--optuna-replay-max-ls-imbalance",
+        type=float,
+        default=0.2,
+        help="Reject replay candidates whose average |long-short| ratio exceeds this threshold.",
+    )
+    parser.add_argument(
+        "--optuna-replay-min-trade-rate",
+        type=float,
+        default=0.5,
+        help="Reject replay candidates whose average trades per 1k bars is below this threshold.",
+    )
     parser.add_argument("--optuna-out", default="", help="Optional JSON path for best Optuna params.")
+    parser.add_argument(
+        "--optuna-top-out",
+        default="data/optuna/top_params.json",
+        help="JSON path for selected top candidate params list.",
+    )
+    parser.add_argument(
+        "--optuna-replay-out",
+        default="data/optuna/replay_results.json",
+        help="JSON path for replay summary results.",
+    )
     parser.add_argument("--optuna-log", default="", help="Optional CSV path to log Optuna trials.")
+    parser.add_argument(
+        "--optuna-trials-csv",
+        default="data/optuna/trials.csv",
+        help="CSV path to save all Optuna trial values and parameters (empty disables).",
+    )
     parser.add_argument("--model-out", default=DEFAULT_MODEL_PATH, help="Output model path.")
     parser.add_argument(
         "--feature-scaler-out",
@@ -291,6 +377,43 @@ def main() -> None:
             log_path.parent.mkdir(parents=True, exist_ok=True)
             optuna_fh = log_path.open("w", encoding="utf-8")
             optuna_fh.write("trial,value,best_value,duration_sec\n")
+        trials_csv_path = args.optuna_trials_csv.strip()
+        trials_csv_fh = None
+        trials_csv_writer = None
+        trial_param_keys = [
+            "n_steps",
+            "batch_size",
+            "learning_rate",
+            "gamma",
+            "ent_coef",
+            "gae_lambda",
+            "clip_range",
+            "vf_coef",
+            "n_epochs",
+            "min_position_change",
+            "position_step",
+            "risk_aversion",
+            "max_position",
+            "episode_length",
+            "reward_clip",
+        ]
+        if trials_csv_path:
+            trials_path = Path(trials_csv_path).expanduser()
+            trials_path.parent.mkdir(parents=True, exist_ok=True)
+            trials_csv_fh = trials_path.open("w", encoding="utf-8", newline="")
+            trials_csv_writer = csv.DictWriter(
+                trials_csv_fh,
+                fieldnames=[
+                    "trial",
+                    "value",
+                    "best_value",
+                    "duration_sec",
+                    "state",
+                    *trial_param_keys,
+                ],
+            )
+            trials_csv_writer.writeheader()
+        trials_rows: list[dict] = []
 
         def objective(trial: "optuna.Trial") -> float:
             n_steps = trial.suggest_categorical("n_steps", [256, 512, 1024, 2048])
@@ -362,18 +485,381 @@ def main() -> None:
 
         def _log_optuna_trial(study: "optuna.Study", trial: "optuna.Trial") -> None:
             if not optuna_fh or trial.value is None:
-                return
+                if not trials_csv_writer:
+                    return
             duration = trial.duration.total_seconds() if trial.duration else 0.0
-            optuna_fh.write(
-                f"{trial.number},{float(trial.value):.10g},{float(study.best_value):.10g},{duration:.6f}\n"
+            trial_value = float(trial.value) if trial.value is not None else float("nan")
+            best_value = float(study.best_value) if study.best_trial is not None else float("nan")
+            if optuna_fh and trial.value is not None:
+                optuna_fh.write(
+                    f"{trial.number},{trial_value:.10g},{best_value:.10g},{duration:.6f}\n"
+                )
+                optuna_fh.flush()
+            if trials_csv_writer:
+                row = {
+                    "trial": trial.number,
+                    "value": f"{trial_value:.10g}",
+                    "best_value": f"{best_value:.10g}",
+                    "duration_sec": f"{duration:.6f}",
+                    "state": trial.state.name,
+                    "_value_num": trial_value,
+                }
+                for key in trial_param_keys:
+                    value = trial.params.get(key)
+                    row[key] = "" if value is None else f"{float(value):.10g}"
+                trials_rows.append(row)
+
+        def _params_to_configs(params: dict) -> tuple[TradingConfig, TradingConfig]:
+            train_cfg = _clone_config(
+                train_config,
+                episode_length=int(params["episode_length"]),
+                min_position_change=float(params["min_position_change"]),
+                position_step=float(params["position_step"]),
+                risk_aversion=float(params["risk_aversion"]),
+                max_position=float(params["max_position"]),
+                reward_clip=float(params["reward_clip"]),
             )
-            optuna_fh.flush()
+            eval_cfg = _clone_config(
+                eval_config,
+                episode_length=int(params["episode_length"]),
+                min_position_change=float(params["min_position_change"]),
+                position_step=float(params["position_step"]),
+                risk_aversion=float(params["risk_aversion"]),
+                max_position=float(params["max_position"]),
+                reward_clip=float(params["reward_clip"]),
+            )
+            return train_cfg, eval_cfg
+
+        def _profile_policy(model: PPO, features: np.ndarray, config: TradingConfig) -> dict[str, float]:
+            position = 0.0
+            trades = 0
+            action_long = 0
+            action_short = 0
+            action_flat = 0
+            total_steps = max(0, len(features) - 1)
+            for idx in range(total_steps):
+                denom = max(1e-6, float(config.max_position) if config.max_position else 1.0)
+                obs = np.concatenate(
+                    [features[idx], np.array([position / denom], dtype=np.float32)]
+                ).astype(np.float32)
+                action, _ = model.predict(obs, deterministic=True)
+                target = float(np.clip(float(action[0]), -config.max_position, config.max_position))
+                if config.discretize_actions and config.discrete_positions:
+                    target = min(config.discrete_positions, key=lambda v: abs(float(v) - target))
+                if config.position_step > 0.0:
+                    target = round(target / config.position_step) * config.position_step
+                if config.max_position > 0.0:
+                    target = float(np.clip(target, -config.max_position, config.max_position))
+                if abs(target - position) < config.min_position_change:
+                    target = float(position)
+                if abs(target - position) > 1e-12:
+                    trades += 1
+                if target > 0.05:
+                    action_long += 1
+                elif target < -0.05:
+                    action_short += 1
+                else:
+                    action_flat += 1
+                position = target
+            total_actions = max(1, action_long + action_short + action_flat)
+            return {
+                "trades": float(trades),
+                "flat_ratio": float(action_flat / total_actions),
+                "long_ratio": float(action_long / total_actions),
+                "short_ratio": float(action_short / total_actions),
+            }
+
+        def _run_candidate(
+            params: dict, *, total_steps: int, seed: int, verbose: int
+        ) -> tuple[float, dict[str, float]]:
+            cand_train_cfg, cand_eval_cfg = _params_to_configs(params)
+            cand_env = _build_env(train_features, train_closes, cand_train_cfg)
+            cand_eval_env = _build_env(eval_features, eval_closes, cand_eval_cfg)
+            model = _train_model(
+                env=cand_env,
+                learning_rate=float(params["learning_rate"]),
+                n_steps=int(params["n_steps"]),
+                batch_size=int(params["batch_size"]),
+                gamma=float(params["gamma"]),
+                ent_coef=float(params["ent_coef"]),
+                gae_lambda=float(params["gae_lambda"]),
+                clip_range=float(params["clip_range"]),
+                vf_coef=float(params["vf_coef"]),
+                n_epochs=int(params["n_epochs"]),
+                total_steps=total_steps,
+                verbose=verbose,
+            )
+            model.set_random_seed(seed)
+            model.learn(total_timesteps=total_steps, callback=CallbackList([metrics_callback]))
+            mean_reward, _ = evaluate_policy(
+                model,
+                cand_eval_env,
+                n_eval_episodes=args.eval_episodes,
+                deterministic=True,
+            )
+            profile = _profile_policy(model, eval_features, cand_eval_cfg)
+            cand_env.close()
+            cand_eval_env.close()
+            return float(mean_reward), profile
 
         study = optuna.create_study(direction="maximize")
         study.optimize(objective, n_trials=args.optuna_trials, callbacks=[_log_optuna_trial])
         best_params = study.best_trial.params
         print(f"Optuna best value: {study.best_value:.6f}")
         print(f"Optuna best params: {best_params}")
+        if trials_csv_writer:
+            sorted_rows = sorted(
+                trials_rows,
+                key=lambda row: (
+                    math.isnan(float(row.get("_value_num", float("nan")))),
+                    -float(row.get("_value_num", float("-inf")))
+                    if not math.isnan(float(row.get("_value_num", float("nan"))))
+                    else float("inf"),
+                    int(row.get("trial", 0)),
+                ),
+            )
+            for row in sorted_rows:
+                row.pop("_value_num", None)
+                trials_csv_writer.writerow(row)
+            if trials_csv_fh:
+                trials_csv_fh.flush()
+        if trials_csv_fh:
+            trials_csv_fh.close()
+        selected_trials: list = []
+        if args.optuna_auto_select:
+            completed_trials = [
+                trial
+                for trial in study.trials
+                if trial.value is not None
+                and trial.state == optuna.trial.TrialState.COMPLETE
+            ]
+            completed_trials.sort(key=lambda trial: float(trial.value), reverse=True)
+            total_completed = len(completed_trials)
+            if total_completed > 0:
+                if args.optuna_select_mode == "top_percent":
+                    pct = max(0.1, min(100.0, float(args.optuna_top_percent)))
+                    base_count = int(math.ceil(total_completed * (pct / 100.0)))
+                else:
+                    base_count = int(max(1, args.optuna_top_k))
+                keep_count = max(base_count, int(max(1, args.optuna_min_candidates)))
+                keep_count = min(total_completed, keep_count)
+                selected = completed_trials[:keep_count]
+                selected_trials = selected
+                top_payload = []
+                for rank, trial in enumerate(selected, start=1):
+                    top_payload.append(
+                        {
+                            "rank": rank,
+                            "trial": int(trial.number),
+                            "value": float(trial.value),
+                            "params": dict(trial.params),
+                        }
+                    )
+                top_out = str(args.optuna_top_out).strip()
+                if top_out:
+                    top_path = Path(top_out).expanduser()
+                    top_path.parent.mkdir(parents=True, exist_ok=True)
+                    top_path.write_text(
+                        json.dumps(
+                            {
+                                "mode": args.optuna_select_mode,
+                                "top_k": int(args.optuna_top_k),
+                                "top_percent": float(args.optuna_top_percent),
+                                "min_candidates": int(args.optuna_min_candidates),
+                                "total_completed_trials": total_completed,
+                                "selected_count": keep_count,
+                                "candidates": top_payload,
+                            },
+                            ensure_ascii=True,
+                            indent=2,
+                        ),
+                        encoding="utf-8",
+                    )
+                print(
+                    "Optuna auto-select:",
+                    f"mode={args.optuna_select_mode}",
+                    f"selected={keep_count}/{total_completed}",
+                )
+        if args.optuna_replay_enabled:
+            replay_pool = selected_trials
+            if not replay_pool:
+                completed = [
+                    trial
+                    for trial in study.trials
+                    if trial.value is not None
+                    and trial.state == optuna.trial.TrialState.COMPLETE
+                ]
+                completed.sort(key=lambda trial: float(trial.value), reverse=True)
+                replay_pool = completed[:1]
+            replay_steps = max(1, int(args.optuna_replay_steps))
+            replay_seeds = max(1, int(args.optuna_replay_seeds))
+            replay_candidates = replay_pool
+            replay_score_mode = str(args.optuna_replay_score_mode).strip()
+            replay_max_flat_ratio = float(args.optuna_replay_max_flat_ratio)
+            replay_min_trade_rate = max(0.0, float(args.optuna_replay_min_trade_rate))
+            replay_max_ls_imbalance = max(0.0, float(args.optuna_replay_max_ls_imbalance))
+            print(
+                "Replay progress:",
+                f"candidates={len(replay_candidates)}",
+                f"seeds_per_candidate={replay_seeds}",
+                f"steps={replay_steps}",
+                f"score_mode={replay_score_mode}",
+                f"min_trade_rate={replay_min_trade_rate}",
+                f"max_flat={replay_max_flat_ratio}",
+                f"max_ls_imbalance={replay_max_ls_imbalance}",
+            )
+            replay_rows = []
+            for rank, trial in enumerate(replay_candidates, start=1):
+                seed_values = []
+                seed_trades = []
+                seed_flat = []
+                seed_long = []
+                seed_short = []
+                print(
+                    "Replay candidate:",
+                    f"rank={rank}",
+                    f"trial={trial.number}",
+                    f"base_value={float(trial.value):.6g}",
+                    f"seeds={replay_seeds}",
+                )
+                for seed_idx in range(replay_seeds):
+                    total_runs = len(replay_candidates) * replay_seeds
+                    current_run = (rank - 1) * replay_seeds + seed_idx + 1
+                    seed = 10_000 + rank * 100 + seed_idx
+                    print(
+                        "Replay progress:",
+                        f"run={current_run}/{total_runs}",
+                        f"candidate={rank}/{len(replay_candidates)}",
+                        f"seed={seed_idx + 1}/{replay_seeds}",
+                    )
+                    score, profile = _run_candidate(
+                        dict(trial.params),
+                        total_steps=replay_steps,
+                        seed=seed,
+                        verbose=0,
+                    )
+                    print(
+                        "Replay progress:",
+                        f"run={current_run}/{total_runs}",
+                        f"score={score:.6g}",
+                        f"trades={int(profile['trades'])}",
+                        f"flat={profile['flat_ratio']:.3f}",
+                    )
+                    seed_values.append(score)
+                    seed_trades.append(float(profile["trades"]))
+                    seed_flat.append(float(profile["flat_ratio"]))
+                    seed_long.append(float(profile["long_ratio"]))
+                    seed_short.append(float(profile["short_ratio"]))
+                    if optuna_fh:
+                        mean_val = float(np.mean(seed_values))
+                        std_val = float(np.std(seed_values))
+                        # Emit replay progress into Optuna CSV stream so the chart updates
+                        # while replay is running (not only after each candidate completes).
+                        optuna_fh.write(
+                            f"replay,{int(trial.number)},{mean_val:.10g},{std_val:.10g}\n"
+                        )
+                        optuna_fh.flush()
+                replay_rows.append(
+                    {
+                        "rank": rank,
+                        "trial": int(trial.number),
+                        "optuna_value": float(trial.value),
+                        "mean_reward": float(np.mean(seed_values)),
+                        "std_reward": float(np.std(seed_values)),
+                        "min_reward": float(np.min(seed_values)),
+                        "max_reward": float(np.max(seed_values)),
+                        "runs": replay_seeds,
+                        "steps": replay_steps,
+                        "avg_trades": float(np.mean(seed_trades)) if seed_trades else 0.0,
+                        "avg_flat_ratio": float(np.mean(seed_flat)) if seed_flat else 1.0,
+                        "avg_long_ratio": float(np.mean(seed_long)) if seed_long else 0.0,
+                        "avg_short_ratio": float(np.mean(seed_short)) if seed_short else 0.0,
+                        "avg_trade_rate_1k": (
+                            float(np.mean(seed_trades)) * 1000.0 / max(1.0, float(len(eval_features) - 1))
+                        ),
+                        "scores": seed_values,
+                        "params": dict(trial.params),
+                    }
+                )
+            for row in replay_rows:
+                mean_reward = row["mean_reward"]
+                std_reward = row["std_reward"]
+                min_reward = row["min_reward"]
+                avg_trades = row["avg_trades"]
+                avg_flat_ratio = row["avg_flat_ratio"]
+                avg_long_ratio = row["avg_long_ratio"]
+                avg_short_ratio = row["avg_short_ratio"]
+                avg_ls_imbalance = abs(avg_long_ratio - avg_short_ratio)
+                avg_trade_rate_1k = row["avg_trade_rate_1k"]
+                rejected = (
+                    avg_trade_rate_1k < replay_min_trade_rate
+                    or avg_flat_ratio > replay_max_flat_ratio
+                    or avg_ls_imbalance > replay_max_ls_imbalance
+                )
+                reject_reason = ""
+                if rejected:
+                    if avg_trade_rate_1k < replay_min_trade_rate:
+                        reject_reason += (
+                            f"low_trade_rate({avg_trade_rate_1k:.3f}<{replay_min_trade_rate:.3f}) "
+                        )
+                    if avg_flat_ratio > replay_max_flat_ratio:
+                        reject_reason += (
+                            f"high_flat({avg_flat_ratio:.3f}>{replay_max_flat_ratio:.3f})"
+                        )
+                    if avg_ls_imbalance > replay_max_ls_imbalance:
+                        reject_reason += (
+                            f" high_ls_imbalance({avg_ls_imbalance:.3f}>{replay_max_ls_imbalance:.3f})"
+                        )
+                if replay_score_mode == "reward_only":
+                    score = mean_reward
+                elif replay_score_mode == "conservative":
+                    score = mean_reward - 1.0 * std_reward + 0.3 * min_reward
+                else:
+                    score = mean_reward - 0.5 * std_reward + 0.1 * min_reward
+                row["score_mode"] = replay_score_mode
+                row["rejected_activity"] = bool(rejected)
+                row["reject_reason"] = reject_reason.strip()
+                row["score"] = float(-1e12 if rejected else score)
+            replay_rows.sort(key=lambda row: row["score"], reverse=True)
+            valid_count = sum(0 if row["rejected_activity"] else 1 for row in replay_rows)
+            replay_out = str(args.optuna_replay_out).strip()
+            if replay_out:
+                replay_path = Path(replay_out).expanduser()
+                replay_path.parent.mkdir(parents=True, exist_ok=True)
+                replay_path.write_text(
+                    json.dumps(
+                        {
+                            "replay_count": len(replay_rows),
+                            "replay_steps": replay_steps,
+                            "seeds_per_candidate": replay_seeds,
+                            "score_mode": replay_score_mode,
+                            "min_trade_rate_1k": replay_min_trade_rate,
+                            "max_flat_ratio": replay_max_flat_ratio,
+                            "max_ls_imbalance": replay_max_ls_imbalance,
+                            "valid_candidates": valid_count,
+                            "candidate_count": len(replay_rows),
+                            "results": replay_rows,
+                        },
+                        ensure_ascii=True,
+                        indent=2,
+                    ),
+                    encoding="utf-8",
+                )
+            if replay_rows:
+                best_replay = next((row for row in replay_rows if not row["rejected_activity"]), replay_rows[0])
+                print(
+                    "Replay best:",
+                    f"trial={best_replay['trial']}",
+                    f"score={best_replay['score']:.6g}",
+                    f"mode={best_replay['score_mode']}",
+                    f"mean_reward={best_replay['mean_reward']:.6g}",
+                    f"std={best_replay['std_reward']:.6g}",
+                    f"avg_trades={best_replay['avg_trades']:.1f}",
+                    f"avg_trade_rate_1k={best_replay['avg_trade_rate_1k']:.3f}",
+                    f"avg_ls_imbalance={abs(best_replay['avg_long_ratio'] - best_replay['avg_short_ratio']):.3f}",
+                    f"avg_flat={best_replay['avg_flat_ratio']:.3f}",
+                )
+                print(f"Replay best params: {best_replay['params']}")
         if optuna_fh:
             optuna_fh.close()
         if args.optuna_out:
@@ -382,24 +868,7 @@ def main() -> None:
             out_path.write_text(json.dumps(best_params, ensure_ascii=True, indent=2))
         if not args.optuna_train_best:
             return
-        best_train_config = _clone_config(
-            train_config,
-            episode_length=int(best_params["episode_length"]),
-            min_position_change=float(best_params["min_position_change"]),
-            position_step=float(best_params["position_step"]),
-            risk_aversion=float(best_params["risk_aversion"]),
-            max_position=float(best_params["max_position"]),
-            reward_clip=float(best_params["reward_clip"]),
-        )
-        best_eval_config = _clone_config(
-            eval_config,
-            episode_length=int(best_params["episode_length"]),
-            min_position_change=float(best_params["min_position_change"]),
-            position_step=float(best_params["position_step"]),
-            risk_aversion=float(best_params["risk_aversion"]),
-            max_position=float(best_params["max_position"]),
-            reward_clip=float(best_params["reward_clip"]),
-        )
+        best_train_config, best_eval_config = _params_to_configs(best_params)
         save_trading_config(
             best_train_config,
             env_config_path,

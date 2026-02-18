@@ -189,42 +189,101 @@ def format_optuna_trial_summary(text: str) -> str:
     )
     if not match:
         return text
-    trial = match.group("trial")
-    value = match.group("value")
-    best = match.group("best")
-    best_trial = match.group("best_trial")
-    return f"Trial {trial}\nValue: {value}\nBest so far: {best} (trial {best_trial})"
+    trial_raw = match.group("trial")
+    best_trial_raw = match.group("best_trial")
+    try:
+        trial = str(int(trial_raw) + 1)
+    except (TypeError, ValueError):
+        trial = trial_raw
+    try:
+        best_trial = str(int(best_trial_raw) + 1)
+    except (TypeError, ValueError):
+        best_trial = best_trial_raw
+    try:
+        value_num = float(match.group("value"))
+        value = f"{value_num:.6g}"
+    except (TypeError, ValueError):
+        value = match.group("value")
+    try:
+        best_num = float(match.group("best"))
+        best = f"{best_num:.6g}"
+    except (TypeError, ValueError):
+        best = match.group("best")
+    return (
+        f"Trial #{trial}\n"
+        f"Value      : {value}\n"
+        f"Best so far: {best} (trial {best_trial})"
+    )
 
 
 def format_optuna_best_params(params: dict) -> str:
-    order = [
-        "n_steps",
-        "batch_size",
-        "learning_rate",
-        "gamma",
-        "ent_coef",
-        "gae_lambda",
-        "clip_range",
-        "vf_coef",
-        "n_epochs",
-        "episode_length",
-        "reward_clip",
-        "min_position_change",
-        "position_step",
-        "risk_aversion",
-        "max_position",
+    groups = [
+        (
+            "PPO core",
+            [
+                "learning_rate",
+                "gamma",
+                "gae_lambda",
+                "clip_range",
+                "ent_coef",
+                "vf_coef",
+                "n_steps",
+                "batch_size",
+                "n_epochs",
+            ],
+        ),
+        (
+            "Environment",
+            [
+                "episode_length",
+                "reward_clip",
+                "min_position_change",
+                "position_step",
+                "risk_aversion",
+                "max_position",
+            ],
+        ),
     ]
-    items = []
-    for key in order:
-        if key not in params:
-            continue
-        value = params[key]
+    label_map = {
+        "learning_rate": "Learning rate",
+        "gamma": "Gamma",
+        "gae_lambda": "GAE lambda",
+        "clip_range": "Clip range",
+        "ent_coef": "Entropy coef",
+        "vf_coef": "Value fn coef",
+        "n_steps": "Rollout steps",
+        "batch_size": "Batch size",
+        "n_epochs": "Epochs/update",
+        "episode_length": "Episode length",
+        "reward_clip": "Reward clip",
+        "min_position_change": "Min position chg",
+        "position_step": "Position step",
+        "risk_aversion": "Risk aversion",
+        "max_position": "Max position",
+    }
+
+    def _fmt(value) -> str:
         if isinstance(value, float):
-            formatted = f"{value:.6g}"
-        else:
-            formatted = str(value)
-        items.append(f"{key}={formatted}")
-    return "\n".join(items) if items else "—"
+            return f"{value:.6g}"
+        return str(value)
+
+    lines: list[str] = []
+    for title, keys in groups:
+        rows: list[tuple[str, str]] = []
+        for key in keys:
+            if key not in params:
+                continue
+            rows.append((label_map.get(key, key), _fmt(params[key])))
+        if not rows:
+            continue
+        label_width = max(len(label) for label, _ in rows)
+        lines.append(f"[{title}]")
+        for label, value in rows:
+            lines.append(f"{label:<{label_width}} : {value}")
+        lines.append("")
+    if lines and lines[-1] == "":
+        lines.pop()
+    return "\n".join(lines) if lines else "—"
 
 
 def format_optuna_empty_trial() -> str:

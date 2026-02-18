@@ -18,6 +18,8 @@ from forex.ui.shared.utils.formatters import format_training_message
 
 class PPOTrainingController(QObject):
     best_params_found = Signal(dict)
+    replay_best_params_logged = Signal(dict)
+    replay_best_summary_logged = Signal(str)
     optuna_trial_logged = Signal(str)
     optuna_best_params_logged = Signal(dict)
 
@@ -129,8 +131,53 @@ class PPOTrainingController(QObject):
             )
             if self._optuna_log_path:
                 args.extend(["--optuna-log", self._optuna_log_path])
-            if params.get("optuna_train_best") and not optuna_only:
-                args.append("--optuna-train-best")
+            if params.get("optuna_auto_select"):
+                args.append("--optuna-auto-select")
+            select_mode = str(params.get("optuna_select_mode", "top_k")).strip()
+            args.extend(["--optuna-select-mode", select_mode])
+            args.extend(["--optuna-top-k", str(params.get("optuna_top_k", 5))])
+            args.extend(["--optuna-top-percent", str(params.get("optuna_top_percent", 20.0))])
+            args.extend(
+                ["--optuna-min-candidates", str(params.get("optuna_min_candidates", 3))]
+            )
+            top_out = str(params.get("optuna_top_out", "")).strip()
+            if top_out:
+                args.extend(["--optuna-top-out", top_out])
+            if params.get("optuna_replay_enabled"):
+                args.append("--optuna-replay-enabled")
+                args.extend(
+                    ["--optuna-replay-steps", str(params.get("optuna_replay_steps", 200000))]
+                )
+                args.extend(
+                    ["--optuna-replay-seeds", str(params.get("optuna_replay_seeds", 3))]
+                )
+                args.extend(
+                    [
+                        "--optuna-replay-score-mode",
+                        str(params.get("optuna_replay_score_mode", "risk_adjusted")),
+                    ]
+                )
+                args.extend(
+                    [
+                        "--optuna-replay-min-trade-rate",
+                        str(params.get("optuna_replay_min_trade_rate", 0.5)),
+                    ]
+                )
+                args.extend(
+                    [
+                        "--optuna-replay-max-flat-ratio",
+                        str(params.get("optuna_replay_max_flat_ratio", 0.98)),
+                    ]
+                )
+                args.extend(
+                    [
+                        "--optuna-replay-max-ls-imbalance",
+                        str(params.get("optuna_replay_max_ls_imbalance", 0.2)),
+                    ]
+                )
+                replay_out = str(params.get("optuna_replay_out", "")).strip()
+                if replay_out:
+                    args.extend(["--optuna-replay-out", replay_out])
             optuna_out = params.get("optuna_out", "").strip()
             if optuna_out:
                 args.extend(["--optuna-out", optuna_out])
@@ -143,6 +190,17 @@ class PPOTrainingController(QObject):
             self._state.log_message.emit(format_training_message("start_failed"))
             self._stop_metrics_log_tailer()
             self._stop_optuna_log_tailer()
+
+    def is_running(self) -> bool:
+        return self._runner.is_running()
+
+    def stop(self, *, blocking: bool = False) -> None:
+        if not self._runner.is_running():
+            return
+        if blocking:
+            self._runner.stop_blocking()
+        else:
+            self._runner.stop()
 
     def _on_stdout_line(self, line: str) -> None:
         if self._use_metrics_log:
@@ -162,6 +220,16 @@ class PPOTrainingController(QObject):
                 return
             if isinstance(params, dict):
                 self.best_params_found.emit(params)
+        if line.startswith("Replay best params:"):
+            payload = line.split(":", 1)[1].strip()
+            try:
+                params = ast.literal_eval(payload)
+            except (ValueError, SyntaxError):
+                return
+            if isinstance(params, dict):
+                self.replay_best_params_logged.emit(params)
+        if line.startswith("Replay best:"):
+            self.replay_best_summary_logged.emit(line.strip())
 
     def _on_stderr_line(self, line: str) -> None:
         self._state.log_message.emit(format_training_message("stderr", line=line))
@@ -259,7 +327,14 @@ class PPOTrainingController(QObject):
 
     @staticmethod
     def _should_log_summary(line: str) -> bool:
-        return line.startswith("Training setup:") or line.startswith("Optuna best")
+        return (
+            line.startswith("Training setup:")
+            or line.startswith("Optuna best")
+            or line.startswith("Optuna auto-select:")
+            or line.startswith("Replay candidate:")
+            or line.startswith("Replay progress:")
+            or line.startswith("Replay best:")
+        )
 
     def _handle_optuna_line(self, line: str) -> None:
         summary, best_params = self._parse_optuna_trial_details(line)

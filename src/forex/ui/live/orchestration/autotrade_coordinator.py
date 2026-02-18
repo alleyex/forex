@@ -273,17 +273,18 @@ class LiveAutoTradeCoordinator:
         if side not in {"buy", "sell"}:
             return 0
         expected_side = ProtoOATradeSide.BUY if side == "buy" else ProtoOATradeSide.SELL
+        symbol_name = w._trade_symbol.currentText() if hasattr(w, "_trade_symbol") else w._symbol_name
         count = 0
         for position in w._open_positions:
             trade_data = getattr(position, "tradeData", None)
             if not trade_data:
                 continue
-            pos_symbol_id = getattr(trade_data, "symbolId", None)
             pos_side = getattr(trade_data, "tradeSide", None)
-            try:
-                if int(pos_symbol_id or 0) != int(symbol_id):
-                    continue
-            except (TypeError, ValueError):
+            if not self._position_matches_symbol(
+                position=position,
+                symbol_id=symbol_id,
+                symbol_name=symbol_name,
+            ):
                 continue
             if pos_side == expected_side:
                 count += 1
@@ -291,16 +292,14 @@ class LiveAutoTradeCoordinator:
 
     def count_open_positions_for_symbol(self, *, symbol_id: int) -> int:
         w = self._window
+        symbol_name = w._trade_symbol.currentText() if hasattr(w, "_trade_symbol") else w._symbol_name
         count = 0
         for position in w._open_positions:
-            trade_data = getattr(position, "tradeData", None)
-            if not trade_data:
-                continue
-            pos_symbol_id = getattr(trade_data, "symbolId", None)
-            try:
-                if int(pos_symbol_id or 0) != int(symbol_id):
-                    continue
-            except (TypeError, ValueError):
+            if not self._position_matches_symbol(
+                position=position,
+                symbol_id=symbol_id,
+                symbol_name=symbol_name,
+            ):
                 continue
             count += 1
         return count
@@ -405,6 +404,30 @@ class LiveAutoTradeCoordinator:
             return bool(closed)
 
         if desired == 0.0:
+            fallback_position = self._select_symbol_primary_position(
+                symbol_id=symbol_id,
+                symbol_name=symbol_name,
+            )
+            if fallback_position is not None:
+                fallback_position_id = getattr(fallback_position, "positionId", None)
+                try:
+                    fallback_position_id_int = int(fallback_position_id or 0)
+                except (TypeError, ValueError):
+                    fallback_position_id_int = 0
+                if fallback_position_id_int > 0:
+                    w._auto_position_id = fallback_position_id_int
+                    volume = self._resolve_full_close_volume(fallback_position_id_int)
+                    w._auto_debug_fields(
+                        "close_position_fallback",
+                        pos_id=fallback_position_id_int,
+                        volume=volume,
+                    )
+                    closed = w._order_service.close_position(
+                        account_id=account_id,
+                        position_id=fallback_position_id_int,
+                        volume=volume,
+                    )
+                    return bool(closed)
             w._auto_position = 0.0
             w._auto_debug_log("no position change: desired flat and no open position")
             return False
@@ -716,11 +739,8 @@ class LiveAutoTradeCoordinator:
         symbol_id = w._resolve_symbol_id(symbol_name) if symbol_name else None
         matched = []
         for position in positions:
-            trade_data = getattr(position, "tradeData", None)
-            pos_symbol_id = getattr(trade_data, "symbolId", None) if trade_data else None
-            if symbol_id is not None and pos_symbol_id is not None and int(pos_symbol_id) != int(symbol_id):
-                continue
-            matched.append(position)
+            if self._position_matches_symbol(position=position, symbol_id=symbol_id, symbol_name=symbol_name):
+                matched.append(position)
         if not matched:
             w._auto_position_id = None
             w._auto_position = 0.0
@@ -735,6 +755,41 @@ class LiveAutoTradeCoordinator:
             w._auto_position = 1.0
         elif side_value == ProtoOATradeSide.SELL:
             w._auto_position = -1.0
+
+    def _position_matches_symbol(self, *, position: object, symbol_id: int | None, symbol_name: str) -> bool:
+        w = self._window
+        trade_data = getattr(position, "tradeData", None)
+        if not trade_data:
+            return False
+        pos_symbol_id = getattr(trade_data, "symbolId", None)
+        try:
+            pos_symbol_id_int = int(pos_symbol_id or 0)
+        except (TypeError, ValueError):
+            pos_symbol_id_int = 0
+
+        if symbol_id is not None:
+            try:
+                if pos_symbol_id_int == int(symbol_id):
+                    return True
+            except (TypeError, ValueError):
+                pass
+
+        if symbol_name:
+            resolved_name = w._symbol_id_to_name.get(pos_symbol_id_int, "")
+            if isinstance(resolved_name, str) and resolved_name == symbol_name:
+                return True
+        return False
+
+    def _select_symbol_primary_position(self, *, symbol_id: int, symbol_name: str):
+        w = self._window
+        matched = [
+            p
+            for p in w._open_positions
+            if self._position_matches_symbol(position=p, symbol_id=symbol_id, symbol_name=symbol_name)
+        ]
+        if not matched:
+            return None
+        return self.select_primary_position(matched)
 
     @staticmethod
     def select_primary_position(positions: list[object]):
