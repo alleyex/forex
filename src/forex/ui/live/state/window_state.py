@@ -19,7 +19,6 @@ def initialize_live_window_state(window) -> None:
     window._order_service = None
     window._auto_enabled = False
     window._auto_model = None
-    window._auto_env_config = None
     window._auto_env_max_position = 1.0
     window._auto_env_min_position_change = 0.0
     window._auto_env_discretize_actions = False

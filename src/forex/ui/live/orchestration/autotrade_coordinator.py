@@ -36,6 +36,11 @@ class LiveAutoTradeCoordinator:
             value = 0.0
         return max(0.0, value)
 
+    def _one_position_mode_enabled(self) -> bool:
+        w = self._window
+        control = getattr(w, "_one_position_mode", None)
+        return bool(control and control.isChecked())
+
     def run_auto_trade_on_close(self) -> None:
         w = self._window
         if not w._auto_enabled or not w._auto_model:
@@ -381,6 +386,7 @@ class LiveAutoTradeCoordinator:
             desired_side=desired_side,
         )
         symbol_count = self.count_open_positions_for_symbol(symbol_id=symbol_id)
+        one_position_mode = self._one_position_mode_enabled()
         w._auto_debug_fields(
             "strategy_state",
             symbol=symbol_name,
@@ -392,6 +398,44 @@ class LiveAutoTradeCoordinator:
             near_full_hold=("ON" if near_full_hold_enabled else "OFF"),
             rebalance=("ON" if same_side_rebalance_enabled else "OFF"),
         )
+
+        if one_position_mode and symbol_count > 1:
+            primary = self._select_symbol_primary_position(symbol_id=symbol_id, symbol_name=symbol_name)
+            primary_id = getattr(primary, "positionId", None) if primary is not None else None
+            for position in list(w._open_positions):
+                if not self._position_matches_symbol(
+                    position=position,
+                    symbol_id=symbol_id,
+                    symbol_name=symbol_name,
+                ):
+                    continue
+                position_id = getattr(position, "positionId", None)
+                try:
+                    position_id_int = int(position_id or 0)
+                except (TypeError, ValueError):
+                    position_id_int = 0
+                if position_id_int <= 0:
+                    continue
+                try:
+                    if primary_id is not None and int(primary_id) == position_id_int:
+                        continue
+                except (TypeError, ValueError):
+                    pass
+                volume = self._resolve_full_close_volume(position_id_int)
+                w._auto_debug_fields(
+                    "one_position_cleanup",
+                    close_pos_id=position_id_int,
+                    volume=volume,
+                    open_symbol=symbol_count,
+                )
+                closed = w._order_service.close_position(
+                    account_id=account_id,
+                    position_id=position_id_int,
+                    volume=volume,
+                )
+                if closed:
+                    w._auto_log("ℹ️ One-position mode: cleaning extra same-symbol position.")
+                return bool(closed)
 
         if desired == 0.0 and w._auto_position_id:
             volume = self._resolve_full_close_volume(int(w._auto_position_id))
@@ -442,6 +486,32 @@ class LiveAutoTradeCoordinator:
             (w._auto_position > 0 and desired > 0)
             or (w._auto_position < 0 and desired < 0)
         ):
+            if one_position_mode:
+                current_pos = float(w._auto_position)
+                if abs(abs(desired) - abs(current_pos)) <= 0.05:
+                    w._auto_position = desired
+                    w._auto_debug_fields(
+                        "one_position_hold_same_side",
+                        current=f"{current_pos:.3f}",
+                        desired=f"{desired:.3f}",
+                    )
+                    return False
+                volume = self._resolve_full_close_volume(int(w._auto_position_id))
+                w._auto_debug_fields(
+                    "one_position_rebuild_same_side",
+                    current=f"{current_pos:.3f}",
+                    desired=f"{desired:.3f}",
+                    pos_id=w._auto_position_id,
+                    volume=volume,
+                )
+                closed = w._order_service.close_position(
+                    account_id=account_id,
+                    position_id=int(w._auto_position_id),
+                    volume=volume,
+                )
+                if closed:
+                    w._auto_log("ℹ️ One-position mode: closing current position before resizing.")
+                return bool(closed)
             # When desired exposure is weaker than current same-side exposure,
             # never add more. With rebalance OFF, hold; with rebalance ON,
             # try reducing first.
@@ -751,10 +821,43 @@ class LiveAutoTradeCoordinator:
         position_id = getattr(primary, "positionId", None)
         if position_id:
             w._auto_position_id = int(position_id)
+        max_position = self._effective_max_position()
+        side_sign = 0.0
         if side_value == ProtoOATradeSide.BUY:
-            w._auto_position = 1.0
+            side_sign = 1.0
         elif side_value == ProtoOATradeSide.SELL:
-            w._auto_position = -1.0
+            side_sign = -1.0
+        if side_sign == 0.0:
+            return
+
+        # Infer normalized exposure from actual lot size when signal scaling is enabled.
+        # This prevents stale +/-1.0 direction flags from forcing perpetual "reduce" logic.
+        magnitude = max_position
+        trade_volume = getattr(trade_data, "volume", None) if trade_data else None
+        lot_value: Optional[float] = None
+        try:
+            if trade_volume is not None:
+                lot_value = float(trade_volume) / 10000000.0
+        except (TypeError, ValueError):
+            lot_value = None
+        if lot_value is not None and lot_value > 0.0:
+            base_lot = float(w._lot_value.value()) if hasattr(w, "_lot_value") else 0.0
+            if getattr(w, "_lot_risk", None) and w._lot_risk.isChecked():
+                balance = getattr(w, "_auto_balance", None)
+                if balance:
+                    try:
+                        base_lot = max(0.01, (float(balance) * (base_lot / 100.0)) / 100000.0)
+                    except (TypeError, ValueError):
+                        pass
+            if base_lot > 0.0:
+                if getattr(w, "_scale_lot_by_signal", None) and w._scale_lot_by_signal.isChecked():
+                    magnitude = min(max_position, max(0.0, lot_value / base_lot))
+                else:
+                    magnitude = max_position * min(1.0, max(0.0, lot_value / base_lot))
+            else:
+                magnitude = max_position
+
+        w._auto_position = side_sign * float(magnitude)
 
     def _position_matches_symbol(self, *, position: object, symbol_id: int | None, symbol_name: str) -> bool:
         w = self._window

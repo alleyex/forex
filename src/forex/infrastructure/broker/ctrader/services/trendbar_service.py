@@ -79,6 +79,7 @@ class TrendbarService(
         self._period_minutes: int = 1
         self._last_bar: Optional[dict] = None
         self._spot_subscribed = False
+        self._trendbar_subscribed = False
         self._await_spot_subscribe = False
         self._pending_trendbar_request: Optional[ProtoOASubscribeLiveTrendbarReq] = None
         self._last_bar_ts: Optional[int] = None
@@ -102,11 +103,19 @@ class TrendbarService(
     def subscribe(self, account_id: int, symbol_id: int, timeframe: str = "M1") -> None:
         """訂閱即時 K 線"""
         if self._in_progress:
-            self.unsubscribe()
+            if self._trendbar_subscribed:
+                self.unsubscribe()
+            else:
+                self.cancel()
 
         self._account_id = int(account_id)
         self._symbol_id = int(symbol_id)
         self._period_name, self._period, self._period_minutes = self._resolve_period(timeframe)
+        self._trendbar_subscribed = False
+        # Reset cached bar state on every (re)subscribe so a timeframe switch
+        # does not keep emitting stale buckets from the previous period.
+        self._last_bar = None
+        self._last_bar_ts = None
         self._app_auth_service.add_message_handler(self._handle_message)
 
         try:
@@ -132,6 +141,12 @@ class TrendbarService(
         """取消訂閱即時 K 線"""
         if not self._in_progress or self._account_id is None or self._symbol_id is None:
             return
+        # Skip network unsubscribe until live trendbar subscription is confirmed.
+        # This prevents broker INVALID_REQUEST spam when teardown happens while
+        # subscribe is still inflight or never established.
+        if not self._trendbar_subscribed:
+            self.cancel()
+            return
         request = ProtoOAUnsubscribeLiveTrendbarReq()
         request.ctidTraderAccountId = self._account_id
         request.symbolId = self._symbol_id
@@ -143,6 +158,9 @@ class TrendbarService(
             self._cleanup_request_lifecycle(timeout_tracker=None, handler=self._handle_message)
             return
         client.send(request)
+        self._trendbar_subscribed = False
+        self._last_bar = None
+        self._last_bar_ts = None
         self._cleanup_request_lifecycle(timeout_tracker=None, handler=self._handle_message)
         self._log(
             format_sent_unsubscribe(
@@ -160,6 +178,7 @@ class TrendbarService(
         self._await_spot_subscribe = False
         self._pending_trendbar_request = None
         self._spot_subscribed = False
+        self._trendbar_subscribed = False
         self._last_bar = None
         self._last_bar_ts = None
         if self._in_progress:
@@ -206,6 +225,7 @@ class TrendbarService(
         )
 
     def _on_trendbar_subscribe_confirmed(self, _msg: object) -> None:
+        self._trendbar_subscribed = True
         self._log(
             format_confirm(
                 "K 線訂閱已確認",
@@ -214,6 +234,7 @@ class TrendbarService(
         )
 
     def _on_trendbar_unsubscribe_confirmed(self, _msg: object) -> None:
+        self._trendbar_subscribed = False
         self._log(
             format_confirm(
                 "K 線退訂已確認",
@@ -373,6 +394,7 @@ class TrendbarService(
                 self._send_trendbar_request()
             return
         if is_non_subscribed_trendbar_unsubscribe(msg.errorCode, msg.description):
+            self._trendbar_subscribed = False
             return
         self._emit_error(format_error(msg.errorCode, msg.description))
 

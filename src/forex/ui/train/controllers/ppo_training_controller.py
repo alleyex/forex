@@ -183,8 +183,8 @@ class PPOTrainingController(QObject):
                 args.extend(["--optuna-out", optuna_out])
             if optuna_only:
                 args.extend(["--verbose", "0"])
-        if params.get("resume"):
-            args.append("--resume")
+        if params.get("save_best_checkpoint", True):
+            args.append("--save-best-checkpoint")
         started = self._runner.start(sys.executable, args, env={"PYTHONPATH": str(SRC_DIR)})
         if not started:
             self._state.log_message.emit(format_training_message("start_failed"))

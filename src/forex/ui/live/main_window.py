@@ -379,6 +379,7 @@ class LiveMainWindow(QMainWindow):
             self._position_step,
             self._near_full_hold,
             self._same_side_rebalance,
+            self._one_position_mode,
             self._scale_lot_by_signal,
             self._auto_debug,
             self._quote_affects_chart,

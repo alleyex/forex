@@ -507,6 +507,10 @@ class LiveUIBuilder:
         w._same_side_rebalance.setChecked(False)
         advanced_card_form.addRow("Same-side rebalance", w._same_side_rebalance)
 
+        w._one_position_mode = QCheckBox("Enable")
+        w._one_position_mode.setChecked(True)
+        advanced_card_form.addRow("One-position mode", w._one_position_mode)
+
         w._scale_lot_by_signal = QCheckBox("Enable")
         w._scale_lot_by_signal.setChecked(False)
         advanced_card_form.addRow("Scale lot by signal", w._scale_lot_by_signal)

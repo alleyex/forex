@@ -16,6 +16,15 @@ from forex.ui.train.presenters.simulation_presenter import SimulationPresenter
 from forex.ui.shared.utils.formatters import format_simulation_message
 
 
+def _normalize_path(value: str) -> str:
+    text = str(value).strip()
+    if len(text) >= 2 and text[0] == text[-1] and text[0] in {"'", '"'}:
+        text = text[1:-1].strip()
+    if not text:
+        return ""
+    return str(Path(text).expanduser().resolve())
+
+
 class SimulationController(QObject):
     def __init__(
         self,
@@ -46,8 +55,8 @@ class SimulationController(QObject):
             self._state.log_message.emit(format_simulation_message("already_running"))
             return
 
-        data_path = params.get("data", "").strip()
-        model_path = params.get("model", "").strip()
+        data_path = _normalize_path(params.get("data", ""))
+        model_path = _normalize_path(params.get("model", ""))
         if not data_path or not Path(data_path).exists():
             self._show_error("Data file does not exist. Please choose a valid CSV file.")
             return

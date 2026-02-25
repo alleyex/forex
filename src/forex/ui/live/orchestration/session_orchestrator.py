@@ -133,6 +133,9 @@ class LiveSessionOrchestrator:
         w._dispose_history_service()
         w._dispose_trendbar_service()
         w._account_funds_uc = None
+        # Recreate order service as well so it doesn't keep a stale
+        # AppAuthService reference after reconnect/service replacement.
+        w._order_service = None
         # AppAuthService clears message handlers on disconnect; force local
         # handler refs to rebuild so quote/positions callbacks are re-bound.
         w._spot_message_handler = None

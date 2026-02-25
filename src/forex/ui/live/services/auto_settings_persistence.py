@@ -48,6 +48,7 @@ class LiveAutoSettingsPersistence:
         _bind(w._position_step, "valueChanged")
         _bind(w._near_full_hold, "toggled")
         _bind(w._same_side_rebalance, "toggled")
+        _bind(w._one_position_mode, "toggled")
         _bind(w._scale_lot_by_signal, "toggled")
         _bind(w._auto_debug, "toggled")
         _bind(w._quote_affects_chart, "toggled")
@@ -75,6 +76,7 @@ class LiveAutoSettingsPersistence:
             "position_step": float(w._position_step.value()),
             "near_full_hold": bool(w._near_full_hold.isChecked()),
             "same_side_rebalance": bool(w._same_side_rebalance.isChecked()),
+            "one_position_mode": bool(w._one_position_mode.isChecked()),
             "scale_lot_by_signal": bool(w._scale_lot_by_signal.isChecked()),
             "debug_logs": bool(w._auto_debug.isChecked()),
             "quote_affects_candles": bool(w._quote_affects_chart.isChecked()),
@@ -144,6 +146,10 @@ class LiveAutoSettingsPersistence:
                 w._near_full_hold.setChecked(bool(data.get("near_full_hold", True)))
             if "same_side_rebalance" in data:
                 w._same_side_rebalance.setChecked(bool(data.get("same_side_rebalance", False)))
+            if "one_position_mode" in data:
+                w._one_position_mode.setChecked(bool(data.get("one_position_mode", True)))
+            else:
+                w._one_position_mode.setChecked(True)
             if "scale_lot_by_signal" in data:
                 w._scale_lot_by_signal.setChecked(bool(data.get("scale_lot_by_signal", False)))
             if "debug_logs" in data:
@@ -153,4 +159,3 @@ class LiveAutoSettingsPersistence:
             self.sync_lot_value_style()
         finally:
             w._autotrade_loading = False
-

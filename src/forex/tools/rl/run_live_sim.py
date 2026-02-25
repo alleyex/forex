@@ -299,6 +299,9 @@ def main() -> None:
 
     action_avg = action_sum / processed_steps if processed_steps > 0 else 0.0
     total_actions = action_long + action_short + action_flat
+    long_ratio = 0.0
+    short_ratio = 0.0
+    flat_ratio = 1.0
     if total_actions > 0:
         long_ratio = action_long / total_actions
         short_ratio = action_short / total_actions
@@ -311,6 +314,31 @@ def main() -> None:
                 action_avg,
             )
         )
+
+    trade_rate_1k = (state.trades * 1000.0 / processed_steps) if processed_steps > 0 else 0.0
+    ls_imbalance = abs(long_ratio - short_ratio)
+    print(f"Trade rate/1k: {trade_rate_1k:.2f}")
+    print(f"Long-short imbalance: {ls_imbalance:.3f}")
+
+    gate_reasons: list[str] = []
+    if total_return <= 0.0:
+        gate_reasons.append("non-positive return")
+    if max_drawdown > 0.15:
+        gate_reasons.append("drawdown > 15%")
+    if sharpe < 0.003:
+        gate_reasons.append("sharpe < 0.003")
+    if trade_rate_1k < 5.0:
+        gate_reasons.append("trade rate < 5/1k")
+    if trade_rate_1k > 120.0:
+        gate_reasons.append("trade rate > 120/1k")
+    if flat_ratio > 0.90:
+        gate_reasons.append("flat ratio > 0.90")
+    if ls_imbalance > 0.35:
+        gate_reasons.append("|long-short| > 0.35")
+    if gate_reasons:
+        print(f"Quality gate: FAIL ({'; '.join(gate_reasons)})")
+    else:
+        print("Quality gate: PASS")
 
     start_ts = timestamps[0] if timestamps else "-"
     end_ts = timestamps[processed_steps] if processed_steps < len(timestamps) else "-"

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from pathlib import Path
 from typing import Optional
 
 try:
@@ -61,6 +62,8 @@ class SimulationParamsPanel(QWidget):
             "sharpe": None,
             "trades": None,
             "equity": None,
+            "trade_rate_1k": None,
+            "quality_gate": None,
         }
         self._setup_ui()
         self._bind_persistence()
@@ -158,7 +161,9 @@ class SimulationParamsPanel(QWidget):
             ("Max Drawdown", "max_drawdown"),
             ("Sharpe Ratio", "sharpe"),
             ("Trades", "trades"),
+            ("Trade Rate/1k", "trade_rate_1k"),
             ("Final Equity", "equity"),
+            ("Quality Gate", "quality_gate"),
         ]
         for row, (label_text, key) in enumerate(summary_rows):
             label = QLabel(label_text)
@@ -252,6 +257,7 @@ class SimulationParamsPanel(QWidget):
             self._model_path.setToolTip(path)
 
     def _emit_start(self) -> None:
+        self._apply_path_normalization()
         self._save_params()
         self.start_requested.emit(self.get_params())
 
@@ -281,6 +287,23 @@ class SimulationParamsPanel(QWidget):
         self._model_path.setToolTip(text)
         self._save_params()
 
+    @staticmethod
+    def _normalize_path_text(raw: str) -> str:
+        text = str(raw).strip()
+        if len(text) >= 2 and text[0] == text[-1] and text[0] in {"'", '"'}:
+            text = text[1:-1].strip()
+        if not text:
+            return ""
+        return str(Path(text).expanduser().resolve())
+
+    def _apply_path_normalization(self) -> None:
+        data_text = self._normalize_path_text(self._data_path.text())
+        model_text = self._normalize_path_text(self._model_path.text())
+        if data_text and data_text != self._data_path.text():
+            self._data_path.setText(data_text)
+        if model_text and model_text != self._model_path.text():
+            self._model_path.setText(model_text)
+
     def _save_params(self) -> None:
         if self._loading_params:
             return
@@ -307,6 +330,7 @@ class SimulationParamsPanel(QWidget):
                 self._slippage.setValue(float(data["slippage_bps"]))
         finally:
             self._loading_params = False
+        self._apply_path_normalization()
 
     def reset_summary(self) -> None:
         self._summary_state = {
@@ -315,6 +339,8 @@ class SimulationParamsPanel(QWidget):
             "sharpe": None,
             "trades": None,
             "equity": None,
+            "trade_rate_1k": None,
+            "quality_gate": None,
         }
         for key in self._summary_fields:
             self._summary_fields[key].setText("-")
@@ -331,6 +357,8 @@ class SimulationParamsPanel(QWidget):
         sharpe: Optional[float] = None,
         trades: Optional[int] = None,
         equity: Optional[float] = None,
+        trade_rate_1k: Optional[float] = None,
+        quality_gate: Optional[str] = None,
     ) -> None:
         if total_return is not None:
             self._summary_state["total_return"] = total_return
@@ -342,12 +370,18 @@ class SimulationParamsPanel(QWidget):
             self._summary_state["trades"] = trades
         if equity is not None:
             self._summary_state["equity"] = equity
+        if trade_rate_1k is not None:
+            self._summary_state["trade_rate_1k"] = trade_rate_1k
+        if quality_gate is not None:
+            self._summary_state["quality_gate"] = quality_gate
 
         total_return = self._summary_state["total_return"]
         max_drawdown = self._summary_state["max_drawdown"]
         sharpe = self._summary_state["sharpe"]
         trades = self._summary_state["trades"]
         equity = self._summary_state["equity"]
+        trade_rate_1k = self._summary_state["trade_rate_1k"]
+        quality_gate = self._summary_state["quality_gate"]
 
         self._summary_fields["total_return"].setText(
             "-" if total_return is None else f"{total_return:.6f}"
@@ -357,7 +391,11 @@ class SimulationParamsPanel(QWidget):
         )
         self._summary_fields["sharpe"].setText("-" if sharpe is None else f"{sharpe:.6f}")
         self._summary_fields["trades"].setText("-" if trades is None else str(trades))
+        self._summary_fields["trade_rate_1k"].setText(
+            "-" if trade_rate_1k is None else f"{trade_rate_1k:.2f}"
+        )
         self._summary_fields["equity"].setText("-" if equity is None else f"{equity:.6f}")
+        self._summary_fields["quality_gate"].setText("-" if quality_gate is None else str(quality_gate))
 
     def update_trade_stats(self, text: str) -> None:
         self._trade_stats.setText(format_trade_stats(text))

@@ -29,6 +29,16 @@ class SimulationPresenter(PresenterBase):
             if value is not None:
                 self._state.summary_update.emit({"sharpe": value})
             return
+        if line.startswith("Trade rate/1k:"):
+            value = self._parse_float_line(line)
+            if value is not None:
+                self._state.summary_update.emit({"trade_rate_1k": value})
+            return
+        if line.startswith("Quality gate:"):
+            gate = line.split(":", 1)[1].strip()
+            if gate:
+                self._state.summary_update.emit({"quality_gate": gate})
+            return
         if line.startswith("Trade stats:"):
             self._state.trade_stats.emit(line.replace("Trade stats:", "").strip())
             return

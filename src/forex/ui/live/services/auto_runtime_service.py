@@ -51,7 +51,6 @@ class LiveAutoRuntimeService:
             w._auto_log(f"❌ Failed to load model: {exc}{hint}")
             return False
         w._auto_feature_scaler = None
-        w._auto_env_config = None
         w._auto_env_max_position = 1.0
         w._auto_env_min_position_change = 0.0
         w._auto_env_discretize_actions = False
@@ -70,7 +69,6 @@ class LiveAutoRuntimeService:
         if env_config_path.exists():
             try:
                 env_config = load_trading_config(env_config_path)
-                w._auto_env_config = env_config
                 w._auto_env_max_position = max(1e-6, float(env_config.max_position))
                 w._auto_env_min_position_change = max(0.0, float(env_config.min_position_change))
                 w._auto_env_discretize_actions = bool(env_config.discretize_actions)

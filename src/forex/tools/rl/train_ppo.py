@@ -4,7 +4,9 @@ import argparse
 import csv
 import json
 import math
+import shutil
 import sys
+import tempfile
 from pathlib import Path
 import numpy as np
 from stable_baselines3 import PPO
@@ -252,6 +254,11 @@ def main() -> None:
         help="Optional JSON path to save TradingConfig (default: model_out with .env.json).",
     )
     parser.add_argument("--resume", action="store_true", help="Resume training from existing model.")
+    parser.add_argument(
+        "--save-best-checkpoint",
+        action="store_true",
+        help="Save and export the best eval checkpoint instead of the final training weights.",
+    )
     args = parser.parse_args()
 
     df = load_csv(args.data)
@@ -363,6 +370,21 @@ def main() -> None:
             metrics_fh.flush()
 
     metrics_callback = MetricsLogCallback(_write_metric)
+    best_model_tmp_dir: Path | None = None
+
+    def _make_eval_callback(eval_env_ref: DummyVecEnv) -> EvalCallback:
+        nonlocal best_model_tmp_dir
+        kwargs = {
+            "eval_freq": args.eval_freq,
+            "n_eval_episodes": args.eval_episodes,
+            "deterministic": True,
+        }
+        if args.save_best_checkpoint:
+            if best_model_tmp_dir is None:
+                best_model_tmp_dir = Path(tempfile.mkdtemp(prefix="ppo_best_eval_"))
+            kwargs["best_model_save_path"] = str(best_model_tmp_dir)
+            kwargs["log_path"] = str(best_model_tmp_dir)
+        return EvalCallback(eval_env_ref, **kwargs)
 
     if args.optuna_trials > 0:
         try:
@@ -785,7 +807,6 @@ def main() -> None:
                 mean_reward = row["mean_reward"]
                 std_reward = row["std_reward"]
                 min_reward = row["min_reward"]
-                avg_trades = row["avg_trades"]
                 avg_flat_ratio = row["avg_flat_ratio"]
                 avg_long_ratio = row["avg_long_ratio"]
                 avg_short_ratio = row["avg_short_ratio"]
@@ -890,12 +911,7 @@ def main() -> None:
             total_steps=args.total_steps,
             verbose=args.verbose,
         )
-        eval_callback = EvalCallback(
-            best_eval_env,
-            eval_freq=args.eval_freq,
-            n_eval_episodes=args.eval_episodes,
-            deterministic=True,
-        )
+        eval_callback = _make_eval_callback(best_eval_env)
         model.learn(
             total_timesteps=args.total_steps,
             callback=CallbackList([eval_callback, metrics_callback]),
@@ -905,12 +921,7 @@ def main() -> None:
             raise FileNotFoundError(f"Resume requested but model not found: {model_path}")
         model = PPO.load(str(model_path), env=env)
         model.verbose = args.verbose
-        eval_callback = EvalCallback(
-            eval_env,
-            eval_freq=args.eval_freq,
-            n_eval_episodes=args.eval_episodes,
-            deterministic=True,
-        )
+        eval_callback = _make_eval_callback(eval_env)
         model.learn(
             total_timesteps=args.total_steps,
             callback=CallbackList([eval_callback, metrics_callback]),
@@ -930,22 +941,28 @@ def main() -> None:
             total_steps=args.total_steps,
             verbose=args.verbose,
         )
-        eval_callback = EvalCallback(
-            eval_env,
-            eval_freq=args.eval_freq,
-            n_eval_episodes=args.eval_episodes,
-            deterministic=True,
-        )
+        eval_callback = _make_eval_callback(eval_env)
         model.learn(
             total_timesteps=args.total_steps,
             callback=CallbackList([eval_callback, metrics_callback]),
         )
 
+    model_to_save = model
+    if args.save_best_checkpoint and best_model_tmp_dir is not None:
+        best_model_path = best_model_tmp_dir / "best_model.zip"
+        if best_model_path.exists():
+            model_to_save = PPO.load(str(best_model_path))
+            print(f"Using best eval checkpoint: {best_model_path}")
+        else:
+            print("Best eval checkpoint not found; falling back to final model state.")
+
     model_path.parent.mkdir(parents=True, exist_ok=True)
-    model.save(str(model_path))
+    model_to_save.save(str(model_path))
     if metrics_fh:
         metrics_fh.flush()
         metrics_fh.close()
+    if best_model_tmp_dir is not None:
+        shutil.rmtree(best_model_tmp_dir, ignore_errors=True)
 
 
 if __name__ == "__main__":

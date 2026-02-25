@@ -37,34 +37,14 @@ class ReconcileMessage(Protocol):
     payloadType: int
     position: Sequence[object]
 
-
-class PositionMessage(Protocol):
-    positionId: int
-    usedMargin: int
-    moneyDigits: int
-
-
 class PnlMessage(Protocol):
     payloadType: int
     moneyDigits: int
     positionUnrealizedPnL: Sequence[object]
 
-
-class PnlItem(Protocol):
-    positionId: int
-    netUnrealizedPnL: int
-
-
 class AssetMessage(Protocol):
     payloadType: int
     asset: Sequence[object]
-
-
-class AssetItem(Protocol):
-    assetId: int
-    name: str
-    displayName: str
-
 
 class ErrorMessage(Protocol):
     payloadType: int

@@ -28,6 +28,8 @@ from PySide6.QtWidgets import (
     QGroupBox,
     QTabWidget,
     QStackedWidget,
+    QInputDialog,
+    QMessageBox,
 )
 
 from forex.ui.shared.utils.formatters import (
@@ -228,7 +230,7 @@ class TrainingParamsPanel(QWidget):
 
         self._learning_rate = QDoubleSpinBox()
         self._learning_rate.setRange(1e-6, 1.0)
-        self._learning_rate.setDecimals(6)
+        self._learning_rate.setDecimals(10)
         self._learning_rate.setSingleStep(1e-4)
         self._learning_rate.setValue(3e-4)
         self._learning_rate.setFixedWidth(spin_width)
@@ -236,7 +238,7 @@ class TrainingParamsPanel(QWidget):
 
         self._gamma = QDoubleSpinBox()
         self._gamma.setRange(0.0, 0.9999)
-        self._gamma.setDecimals(4)
+        self._gamma.setDecimals(10)
         self._gamma.setSingleStep(0.001)
         self._gamma.setValue(0.99)
         self._gamma.setFixedWidth(spin_width)
@@ -258,7 +260,7 @@ class TrainingParamsPanel(QWidget):
         self._ent_coef.setRange(0.0, 1.0)
         # Optuna often finds very small entropy coefficients (e.g. 1e-5),
         # so keep enough visible precision to avoid displaying as 0.0000.
-        self._ent_coef.setDecimals(8)
+        self._ent_coef.setDecimals(10)
         self._ent_coef.setSingleStep(0.00001)
         self._ent_coef.setValue(0.0)
         self._ent_coef.setFixedWidth(spin_width)
@@ -282,7 +284,7 @@ class TrainingParamsPanel(QWidget):
 
         self._gae_lambda = QDoubleSpinBox()
         self._gae_lambda.setRange(0.0, 1.0)
-        self._gae_lambda.setDecimals(3)
+        self._gae_lambda.setDecimals(10)
         self._gae_lambda.setSingleStep(0.01)
         self._gae_lambda.setValue(0.95)
         self._gae_lambda.setFixedWidth(spin_width)
@@ -290,7 +292,7 @@ class TrainingParamsPanel(QWidget):
 
         self._clip_range = QDoubleSpinBox()
         self._clip_range.setRange(0.01, 1.0)
-        self._clip_range.setDecimals(3)
+        self._clip_range.setDecimals(10)
         self._clip_range.setSingleStep(0.01)
         self._clip_range.setValue(0.2)
         self._clip_range.setFixedWidth(spin_width)
@@ -298,7 +300,7 @@ class TrainingParamsPanel(QWidget):
 
         self._vf_coef = QDoubleSpinBox()
         self._vf_coef.setRange(0.0, 2.0)
-        self._vf_coef.setDecimals(3)
+        self._vf_coef.setDecimals(10)
         self._vf_coef.setSingleStep(0.01)
         self._vf_coef.setValue(0.5)
         self._vf_coef.setFixedWidth(spin_width)
@@ -313,9 +315,9 @@ class TrainingParamsPanel(QWidget):
         options_group = QGroupBox("Options")
         _apply_live_card_style(options_group)
         options_layout = QVBoxLayout(options_group)
-        self._resume_training = QCheckBox("Resume training")
-        self._resume_training.setChecked(False)
-        options_layout.addWidget(self._resume_training)
+        self._save_best_checkpoint = QCheckBox("Save best eval model")
+        self._save_best_checkpoint.setChecked(True)
+        options_layout.addWidget(self._save_best_checkpoint)
 
         def _wrap_field(widget: QWidget) -> QWidget:
             container = QWidget()
@@ -324,8 +326,6 @@ class TrainingParamsPanel(QWidget):
             layout.setAlignment(Qt.AlignLeft | Qt.AlignVCenter)
             layout.addWidget(widget)
             return container
-
-        env_label_width = 180
 
         cost_group = QGroupBox("Cost & Friction")
         _apply_live_card_style(cost_group)
@@ -442,7 +442,7 @@ class TrainingParamsPanel(QWidget):
         reward_group_layout.addWidget(reward_layout)
 
         self._reward_scale = QDoubleSpinBox()
-        self._reward_scale.setRange(0.0, 100.0)
+        self._reward_scale.setRange(0.0, 10000.0)
         self._reward_scale.setDecimals(3)
         self._reward_scale.setSingleStep(0.1)
         self._reward_scale.setValue(1.0)
@@ -635,6 +635,9 @@ class TrainingParamsPanel(QWidget):
         self._optuna_search_button.setProperty("class", PRIMARY)
         self._optuna_search_button.clicked.connect(self._emit_optuna)
         optuna_layout_wrap.addWidget(self._optuna_search_button)
+        self._optuna_load_replay_button = QPushButton("Load Replay Params")
+        self._optuna_load_replay_button.clicked.connect(self._emit_load_replay_params)
+        optuna_layout_wrap.addWidget(self._optuna_load_replay_button)
 
         optuna_results = QGroupBox("Optuna Results")
         _apply_live_card_style(optuna_results)
@@ -682,8 +685,9 @@ class TrainingParamsPanel(QWidget):
         outer_layout.addWidget(tabs)
         left_layout.addWidget(outer_container)
 
-        self._load_params()
-        self._load_optuna_defaults()
+        has_saved_params = self._load_params()
+        if not has_saved_params:
+            self._load_optuna_defaults()
         self._update_data_metadata_preview(self._data_path.text().strip())
         self._bind_auto_save_handlers()
         self._refresh_optuna_select_controls()
@@ -845,7 +849,7 @@ class TrainingParamsPanel(QWidget):
             "n_epochs": int(self._n_epochs.value()),
             "episode_length": int(self._episode_length.value()),
             "eval_split": float(self._eval_split.value()),
-            "resume": bool(self._resume_training.isChecked()),
+            "save_best_checkpoint": bool(self._save_best_checkpoint.isChecked()),
             "transaction_cost_bps": float(self._transaction_cost_bps.value()),
             "slippage_bps": float(self._slippage_bps.value()),
             "holding_cost_bps": float(self._holding_cost_bps.value()),
@@ -891,6 +895,7 @@ class TrainingParamsPanel(QWidget):
         cleaned = str(text).strip()
         self._data_path.setToolTip(cleaned)
         self._update_data_metadata_preview(cleaned)
+        self._auto_save_params()
 
     def _update_data_metadata_preview(self, csv_path: str) -> None:
         if not csv_path:
@@ -934,6 +939,82 @@ class TrainingParamsPanel(QWidget):
         self.optuna_requested.emit(params)
         self.reset_optuna_results()
 
+    def _emit_load_replay_params(self) -> None:
+        replay_path = Path("data/optuna/replay_results.json")
+        if not replay_path.exists():
+            QMessageBox.information(
+                self,
+                "Replay Not Found",
+                "Cannot find data/optuna/replay_results.json",
+            )
+            return
+        try:
+            payload = json.loads(replay_path.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError) as exc:
+            QMessageBox.warning(self, "Replay Parse Error", f"Failed to parse replay results: {exc}")
+            return
+        if not isinstance(payload, dict):
+            QMessageBox.warning(self, "Replay Parse Error", "Invalid replay results format.")
+            return
+        raw_results = payload.get("results", [])
+        if not isinstance(raw_results, list) or not raw_results:
+            QMessageBox.information(self, "No Replay Results", "Replay results are empty.")
+            return
+
+        candidates: list[dict] = []
+        labels: list[str] = []
+        for row in raw_results:
+            if not isinstance(row, dict):
+                continue
+            params = row.get("params", {})
+            if not isinstance(params, dict) or not params:
+                continue
+            trial = row.get("trial", "?")
+            score = float(row.get("score", 0.0))
+            mean_reward = float(row.get("mean_reward", 0.0))
+            avg_trades = float(row.get("avg_trades", 0.0))
+            label = (
+                f"trial={trial} score={score:.6g} "
+                f"mean={mean_reward:.6g} trades={avg_trades:.1f}"
+            )
+            candidates.append(row)
+            labels.append(label)
+
+        if not candidates:
+            QMessageBox.information(self, "No Replay Results", "No valid replay parameter rows found.")
+            return
+
+        selected_label, ok = QInputDialog.getItem(
+            self,
+            "Select Replay Candidate",
+            "Replay params",
+            labels,
+            0,
+            False,
+        )
+        if not ok:
+            return
+        try:
+            selected_index = labels.index(selected_label)
+        except ValueError:
+            return
+
+        selected = candidates[selected_index]
+        params = selected.get("params", {})
+        if not isinstance(params, dict) or not params:
+            return
+        self.apply_optuna_params(params)
+        self.update_optuna_best_params(params)
+        self.update_optuna_trial_summary(
+            (
+                f"Replay selected: trial={selected.get('trial', '?')} "
+                f"score={float(selected.get('score', 0.0)):.6g} "
+                f"mean_reward={float(selected.get('mean_reward', 0.0)):.6g} "
+                f"std={float(selected.get('std_reward', 0.0)):.6g}"
+            )
+        )
+        self._auto_save_params()
+
     def _on_tab_changed(self, index: int) -> None:
         if index == 0:
             self.tab_changed.emit("training")
@@ -959,12 +1040,12 @@ class TrainingParamsPanel(QWidget):
         payload.pop("optuna_only", None)
         self._params_store.save(payload)
 
-    def _load_params(self) -> None:
+    def _load_params(self) -> bool:
         self._loading_params = True
         data = self._params_store.load()
         if not data:
             self._loading_params = False
-            return
+            return False
         if "data_path" in data:
             self._data_path.setText(str(data["data_path"]))
         if "total_steps" in data:
@@ -991,8 +1072,8 @@ class TrainingParamsPanel(QWidget):
             self._episode_length.setValue(int(data["episode_length"]))
         if "eval_split" in data:
             self._eval_split.setValue(float(data["eval_split"]))
-        if "resume" in data:
-            self._resume_training.setChecked(bool(data["resume"]))
+        if "save_best_checkpoint" in data:
+            self._save_best_checkpoint.setChecked(bool(data["save_best_checkpoint"]))
         if "transaction_cost_bps" in data:
             self._transaction_cost_bps.setValue(float(data["transaction_cost_bps"]))
         if "slippage_bps" in data:
@@ -1047,6 +1128,7 @@ class TrainingParamsPanel(QWidget):
         self._refresh_optuna_select_controls()
         self._refresh_optuna_replay_controls()
         self._loading_params = False
+        return True
 
     def _auto_save_params(self, *_args) -> None:
         if self._loading_params:
@@ -1056,6 +1138,13 @@ class TrainingParamsPanel(QWidget):
     def _bind_auto_save_handlers(self) -> None:
         # Persist environment/training edits immediately to avoid losing tweaks
         # when the app restarts.
+        self._total_steps.valueChanged.connect(self._auto_save_params)
+        self._learning_rate.valueChanged.connect(self._auto_save_params)
+        self._gamma.valueChanged.connect(self._auto_save_params)
+        self._n_steps.valueChanged.connect(self._auto_save_params)
+        self._batch_size.valueChanged.connect(self._auto_save_params)
+        self._ent_coef.valueChanged.connect(self._auto_save_params)
+        self._eval_split.valueChanged.connect(self._auto_save_params)
         self._transaction_cost_bps.valueChanged.connect(self._auto_save_params)
         self._slippage_bps.valueChanged.connect(self._auto_save_params)
         self._holding_cost_bps.valueChanged.connect(self._auto_save_params)
@@ -1067,6 +1156,7 @@ class TrainingParamsPanel(QWidget):
         self._reward_scale.valueChanged.connect(self._auto_save_params)
         self._reward_clip.valueChanged.connect(self._auto_save_params)
         self._risk_aversion.valueChanged.connect(self._auto_save_params)
+        self._save_best_checkpoint.toggled.connect(self._auto_save_params)
         self._gae_lambda.valueChanged.connect(self._auto_save_params)
         self._clip_range.valueChanged.connect(self._auto_save_params)
         self._vf_coef.valueChanged.connect(self._auto_save_params)
