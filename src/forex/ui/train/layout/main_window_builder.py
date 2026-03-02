@@ -92,6 +92,7 @@ def build_panels(
     training_state.optuna_best_params.connect(training_params_panel.update_optuna_best_params)
     training_state.best_params_found.connect(on_optuna_best_params)
     training_state.log_message.connect(log_panel.append)
+    training_state.log_message.connect(training_panel.append_log)
 
     simulation_state = SimulationState(parent=parent)
     simulation_presenter = SimulationPresenter(parent=parent, state=simulation_state)
@@ -106,9 +107,11 @@ def build_panels(
     simulation_state.action_distribution.connect(simulation_params_panel.update_action_distribution)
     simulation_state.playback_range.connect(simulation_params_panel.update_playback_range)
     simulation_state.log_message.connect(log_panel.append)
+    simulation_state.log_message.connect(training_panel.append_log)
 
     history_download_state = HistoryDownloadState(parent=parent)
     history_download_state.log_message.connect(log_panel.append)
+    history_download_state.log_message.connect(training_panel.append_log)
 
     return PanelBundle(
         trade_panel=trade_panel,

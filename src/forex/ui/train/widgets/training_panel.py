@@ -1,7 +1,9 @@
 from __future__ import annotations
 
+import csv
 import json
 import math
+from datetime import datetime
 from pathlib import Path
 from typing import Optional
 try:
@@ -30,6 +32,8 @@ from PySide6.QtWidgets import (
     QStackedWidget,
     QInputDialog,
     QMessageBox,
+    QRadioButton,
+    QSplitter,
 )
 
 from forex.ui.shared.utils.formatters import (
@@ -44,9 +48,10 @@ from forex.ui.shared.widgets.layout_helpers import (
     build_browse_row,
     configure_form_layout,
 )
+from forex.ui.shared.widgets.log_widget import LogWidget
 from forex.ui.shared.utils.path_utils import latest_file_in_dir
 from forex.ui.shared.styles.tokens import FORM_LABEL_WIDTH_COMPACT, PRIMARY, TRAINING_PARAMS
-from forex.config.paths import RAW_HISTORY_DIR
+from forex.config.paths import DATA_DIR, RAW_HISTORY_DIR
 from forex.ui.train.services import UIParamsStore
 
 
@@ -150,13 +155,26 @@ class AdaptiveFormGrid(QWidget):
         self._grid.setColumnStretch(cols, 1)
 
 
+class TrimmedDoubleSpinBox(QDoubleSpinBox):
+    """Display decimals without trailing zeros while preserving numeric precision."""
+
+    def textFromValue(self, value: float) -> str:  # pragma: no cover - Qt formatting
+        text = super().textFromValue(value)
+        if "." not in text:
+            return text
+        text = text.rstrip("0").rstrip(".")
+        return text if text else "0"
+
+
 class TrainingParamsPanel(QWidget):
     start_requested = Signal(dict)
+    stop_requested = Signal()
     optuna_requested = Signal(dict)
     tab_changed = Signal(str)
 
     def __init__(self, parent: Optional[QWidget] = None) -> None:
         super().__init__(parent)
+        self._training_running = False
         self._loading_params = False
         self._params_store = UIParamsStore("training")
         self._optuna_metrics = [
@@ -228,7 +246,7 @@ class TrainingParamsPanel(QWidget):
         self._total_steps.setFixedWidth(spin_width)
         params_layout.add_row("total_steps", self._total_steps)
 
-        self._learning_rate = QDoubleSpinBox()
+        self._learning_rate = TrimmedDoubleSpinBox()
         self._learning_rate.setRange(1e-6, 1.0)
         self._learning_rate.setDecimals(10)
         self._learning_rate.setSingleStep(1e-4)
@@ -236,7 +254,7 @@ class TrainingParamsPanel(QWidget):
         self._learning_rate.setFixedWidth(spin_width)
         params_layout.add_row("learning_rate", self._learning_rate)
 
-        self._gamma = QDoubleSpinBox()
+        self._gamma = TrimmedDoubleSpinBox()
         self._gamma.setRange(0.0, 0.9999)
         self._gamma.setDecimals(10)
         self._gamma.setSingleStep(0.001)
@@ -256,7 +274,7 @@ class TrainingParamsPanel(QWidget):
         self._batch_size.setFixedWidth(spin_width)
         params_layout.add_row("batch_size", self._batch_size)
 
-        self._ent_coef = QDoubleSpinBox()
+        self._ent_coef = TrimmedDoubleSpinBox()
         self._ent_coef.setRange(0.0, 1.0)
         # Optuna often finds very small entropy coefficients (e.g. 1e-5),
         # so keep enough visible precision to avoid displaying as 0.0000.
@@ -266,13 +284,20 @@ class TrainingParamsPanel(QWidget):
         self._ent_coef.setFixedWidth(spin_width)
         params_layout.add_row("ent_coef", self._ent_coef)
 
-        self._eval_split = QDoubleSpinBox()
+        self._eval_split = TrimmedDoubleSpinBox()
         self._eval_split.setRange(0.05, 0.5)
         self._eval_split.setDecimals(3)
         self._eval_split.setSingleStep(0.01)
         self._eval_split.setValue(0.2)
         self._eval_split.setFixedWidth(spin_width)
         params_layout.add_row("eval_split", self._eval_split)
+
+        self._device = QComboBox()
+        self._device.addItems(["Auto", "CPU", "MPS", "CUDA"])
+        self._device.setCurrentIndex(0)
+        self._device.setFixedWidth(spin_width)
+        self._device.setToolTip("Training device selection. Auto lets Stable-Baselines3 choose.")
+        params_layout.add_row("device", self._device)
 
         ppo_advanced_group = QGroupBox("PPO Advanced")
         _apply_live_card_style(ppo_advanced_group)
@@ -282,7 +307,7 @@ class TrainingParamsPanel(QWidget):
         ppo_advanced_layout = AdaptiveFormGrid(min_cell_width=260, label_min_width=0, max_columns=2)
         ppo_advanced_group_layout.addWidget(ppo_advanced_layout)
 
-        self._gae_lambda = QDoubleSpinBox()
+        self._gae_lambda = TrimmedDoubleSpinBox()
         self._gae_lambda.setRange(0.0, 1.0)
         self._gae_lambda.setDecimals(10)
         self._gae_lambda.setSingleStep(0.01)
@@ -290,7 +315,7 @@ class TrainingParamsPanel(QWidget):
         self._gae_lambda.setFixedWidth(spin_width)
         ppo_advanced_layout.add_row("gae_lambda", self._gae_lambda)
 
-        self._clip_range = QDoubleSpinBox()
+        self._clip_range = TrimmedDoubleSpinBox()
         self._clip_range.setRange(0.01, 1.0)
         self._clip_range.setDecimals(10)
         self._clip_range.setSingleStep(0.01)
@@ -298,7 +323,16 @@ class TrainingParamsPanel(QWidget):
         self._clip_range.setFixedWidth(spin_width)
         ppo_advanced_layout.add_row("clip_range", self._clip_range)
 
-        self._vf_coef = QDoubleSpinBox()
+        self._target_kl = TrimmedDoubleSpinBox()
+        self._target_kl.setRange(0.0, 1.0)
+        self._target_kl.setDecimals(10)
+        self._target_kl.setSingleStep(0.001)
+        self._target_kl.setValue(0.0)
+        self._target_kl.setFixedWidth(spin_width)
+        self._target_kl.setToolTip("0 disables PPO target_kl early stopping inside each update.")
+        ppo_advanced_layout.add_row("target_kl", self._target_kl)
+
+        self._vf_coef = TrimmedDoubleSpinBox()
         self._vf_coef.setRange(0.0, 2.0)
         self._vf_coef.setDecimals(10)
         self._vf_coef.setSingleStep(0.01)
@@ -318,6 +352,31 @@ class TrainingParamsPanel(QWidget):
         self._save_best_checkpoint = QCheckBox("Save best eval model")
         self._save_best_checkpoint.setChecked(True)
         options_layout.addWidget(self._save_best_checkpoint)
+        options_fields = AdaptiveFormGrid(min_cell_width=250, label_min_width=0, max_columns=2)
+        options_layout.addWidget(options_fields)
+        self._early_stop_enabled = QCheckBox()
+        self._early_stop_enabled.setChecked(True)
+        options_fields.add_row("Early stop", self._early_stop_enabled)
+        self._early_stop_warmup_steps = QSpinBox()
+        self._early_stop_warmup_steps.setRange(0, 10_000_000)
+        self._early_stop_warmup_steps.setValue(100_000)
+        self._early_stop_warmup_steps.setFixedWidth(spin_width)
+        options_fields.add_row("ES warmup", self._early_stop_warmup_steps)
+        self._early_stop_patience_evals = QSpinBox()
+        self._early_stop_patience_evals.setRange(1, 100)
+        self._early_stop_patience_evals.setValue(8)
+        self._early_stop_patience_evals.setFixedWidth(spin_width)
+        options_fields.add_row("ES patience", self._early_stop_patience_evals)
+        self._early_stop_min_delta = TrimmedDoubleSpinBox()
+        self._early_stop_min_delta.setRange(0.0, 10.0)
+        self._early_stop_min_delta.setDecimals(6)
+        self._early_stop_min_delta.setSingleStep(0.0005)
+        self._early_stop_min_delta.setValue(0.001)
+        self._early_stop_min_delta.setFixedWidth(spin_width)
+        options_fields.add_row("ES min delta", self._early_stop_min_delta)
+        self._resolved_device = QLabel("Last runtime: -")
+        self._resolved_device.setProperty("class", "dialog_hint")
+        options_fields.add_row("Resolved device", self._resolved_device)
 
         def _wrap_field(widget: QWidget) -> QWidget:
             container = QWidget()
@@ -335,7 +394,7 @@ class TrainingParamsPanel(QWidget):
         cost_layout = AdaptiveFormGrid(min_cell_width=250, label_min_width=0, max_columns=2)
         cost_group_layout.addWidget(cost_layout)
 
-        self._transaction_cost_bps = QDoubleSpinBox()
+        self._transaction_cost_bps = TrimmedDoubleSpinBox()
         self._transaction_cost_bps.setRange(0.0, 100.0)
         self._transaction_cost_bps.setDecimals(3)
         self._transaction_cost_bps.setSingleStep(0.1)
@@ -346,7 +405,7 @@ class TrainingParamsPanel(QWidget):
             _wrap_field(self._transaction_cost_bps),
         )
 
-        self._slippage_bps = QDoubleSpinBox()
+        self._slippage_bps = TrimmedDoubleSpinBox()
         self._slippage_bps.setRange(0.0, 100.0)
         self._slippage_bps.setDecimals(3)
         self._slippage_bps.setSingleStep(0.1)
@@ -357,7 +416,7 @@ class TrainingParamsPanel(QWidget):
             _wrap_field(self._slippage_bps),
         )
 
-        self._holding_cost_bps = QDoubleSpinBox()
+        self._holding_cost_bps = TrimmedDoubleSpinBox()
         self._holding_cost_bps.setRange(0.0, 100.0)
         self._holding_cost_bps.setDecimals(3)
         self._holding_cost_bps.setSingleStep(0.1)
@@ -376,7 +435,7 @@ class TrainingParamsPanel(QWidget):
         action_layout = AdaptiveFormGrid(min_cell_width=250, label_min_width=0, max_columns=2)
         action_group_layout.addWidget(action_layout)
 
-        self._min_position_change = QDoubleSpinBox()
+        self._min_position_change = TrimmedDoubleSpinBox()
         self._min_position_change.setRange(0.0, 1.0)
         self._min_position_change.setDecimals(3)
         self._min_position_change.setSingleStep(0.01)
@@ -387,7 +446,7 @@ class TrainingParamsPanel(QWidget):
             _wrap_field(self._min_position_change),
         )
 
-        self._max_position = QDoubleSpinBox()
+        self._max_position = TrimmedDoubleSpinBox()
         self._max_position.setRange(0.0, 10.0)
         self._max_position.setDecimals(3)
         self._max_position.setSingleStep(0.1)
@@ -398,7 +457,7 @@ class TrainingParamsPanel(QWidget):
             _wrap_field(self._max_position),
         )
 
-        self._position_step = QDoubleSpinBox()
+        self._position_step = TrimmedDoubleSpinBox()
         self._position_step.setRange(0.0, 1.0)
         self._position_step.setDecimals(3)
         self._position_step.setSingleStep(0.01)
@@ -426,11 +485,31 @@ class TrainingParamsPanel(QWidget):
             _wrap_field(self._episode_length),
         )
 
-        self._random_start = QCheckBox()
-        self._random_start.setChecked(True)
+        self._reward_horizon = QSpinBox()
+        self._reward_horizon.setRange(1, 128)
+        self._reward_horizon.setValue(1)
+        self._reward_horizon.setFixedWidth(spin_width)
         episode_layout.add_row(
-            "Random start",
-            _wrap_field(self._random_start),
+            "Reward horizon",
+            _wrap_field(self._reward_horizon),
+        )
+
+        self._window_size = QSpinBox()
+        self._window_size.setRange(1, 128)
+        self._window_size.setValue(1)
+        self._window_size.setFixedWidth(spin_width)
+        episode_layout.add_row(
+            "Window size",
+            _wrap_field(self._window_size),
+        )
+
+        self._start_mode = QComboBox()
+        self._start_mode.addItems(["Random", "First row", "Weekly open"])
+        self._start_mode.setCurrentIndex(0)
+        self._start_mode.setFixedWidth(spin_width)
+        episode_layout.add_row(
+            "Start mode",
+            _wrap_field(self._start_mode),
         )
 
         reward_group = QGroupBox("Reward shaping")
@@ -441,7 +520,7 @@ class TrainingParamsPanel(QWidget):
         reward_layout = AdaptiveFormGrid(min_cell_width=250, label_min_width=0, max_columns=2)
         reward_group_layout.addWidget(reward_layout)
 
-        self._reward_scale = QDoubleSpinBox()
+        self._reward_scale = TrimmedDoubleSpinBox()
         self._reward_scale.setRange(0.0, 10000.0)
         self._reward_scale.setDecimals(3)
         self._reward_scale.setSingleStep(0.1)
@@ -452,7 +531,7 @@ class TrainingParamsPanel(QWidget):
             _wrap_field(self._reward_scale),
         )
 
-        self._reward_clip = QDoubleSpinBox()
+        self._reward_clip = TrimmedDoubleSpinBox()
         self._reward_clip.setRange(0.0, 10.0)
         self._reward_clip.setDecimals(3)
         self._reward_clip.setSingleStep(0.1)
@@ -463,7 +542,19 @@ class TrainingParamsPanel(QWidget):
             _wrap_field(self._reward_clip),
         )
 
-        self._risk_aversion = QDoubleSpinBox()
+        self._reward_mode = QComboBox()
+        self._reward_mode.addItems(["Linear PnL", "Log return"])
+        self._reward_mode.setCurrentIndex(0)
+        self._reward_mode.setFixedWidth(spin_width)
+        self._reward_mode.setToolTip(
+            "Linear PnL keeps the legacy reward. Log return uses log(1 + net return)."
+        )
+        reward_layout.add_row(
+            "Reward mode",
+            _wrap_field(self._reward_mode),
+        )
+
+        self._risk_aversion = TrimmedDoubleSpinBox()
         self._risk_aversion.setRange(0.0, 10.0)
         self._risk_aversion.setDecimals(3)
         self._risk_aversion.setSingleStep(0.1)
@@ -472,6 +563,48 @@ class TrainingParamsPanel(QWidget):
         reward_layout.add_row(
             "Risk aversion",
             _wrap_field(self._risk_aversion),
+        )
+
+        self._drawdown_penalty = TrimmedDoubleSpinBox()
+        self._drawdown_penalty.setRange(0.0, 10.0)
+        self._drawdown_penalty.setDecimals(3)
+        self._drawdown_penalty.setSingleStep(0.01)
+        self._drawdown_penalty.setValue(0.0)
+        self._drawdown_penalty.setFixedWidth(spin_width)
+        self._drawdown_penalty.setToolTip(
+            "Penalty applied only when drawdown worsens: drawdown_penalty * max(0, drawdown_t - drawdown_t-1)."
+        )
+        reward_layout.add_row(
+            "Drawdown penalty",
+            _wrap_field(self._drawdown_penalty),
+        )
+
+        self._drawdown_governor_slope = TrimmedDoubleSpinBox()
+        self._drawdown_governor_slope.setRange(0.0, 20.0)
+        self._drawdown_governor_slope.setDecimals(3)
+        self._drawdown_governor_slope.setSingleStep(0.1)
+        self._drawdown_governor_slope.setValue(2.0)
+        self._drawdown_governor_slope.setFixedWidth(spin_width)
+        self._drawdown_governor_slope.setToolTip(
+            "Scales max position by max(floor, 1 - slope * drawdown). 0 disables governor."
+        )
+        reward_layout.add_row(
+            "DD governor slope",
+            _wrap_field(self._drawdown_governor_slope),
+        )
+
+        self._drawdown_governor_floor = TrimmedDoubleSpinBox()
+        self._drawdown_governor_floor.setRange(0.0, 1.0)
+        self._drawdown_governor_floor.setDecimals(3)
+        self._drawdown_governor_floor.setSingleStep(0.05)
+        self._drawdown_governor_floor.setValue(0.3)
+        self._drawdown_governor_floor.setFixedWidth(spin_width)
+        self._drawdown_governor_floor.setToolTip(
+            "Minimum scaling floor for drawdown governor."
+        )
+        reward_layout.add_row(
+            "DD governor floor",
+            _wrap_field(self._drawdown_governor_floor),
         )
 
         optuna_group = QGroupBox("Optuna Settings")
@@ -509,7 +642,7 @@ class TrainingParamsPanel(QWidget):
         self._optuna_top_k.setValue(5)
         self._optuna_top_k.setFixedWidth(spin_width)
 
-        self._optuna_top_percent = QDoubleSpinBox()
+        self._optuna_top_percent = TrimmedDoubleSpinBox()
         self._optuna_top_percent.setRange(0.1, 100.0)
         self._optuna_top_percent.setDecimals(1)
         self._optuna_top_percent.setSingleStep(1.0)
@@ -552,7 +685,7 @@ class TrainingParamsPanel(QWidget):
         self._optuna_replay_score_mode.setFixedWidth(spin_width)
         optuna_fields.add_row("Replay score", _wrap_field(self._optuna_replay_score_mode))
 
-        self._optuna_replay_min_trade_rate = QDoubleSpinBox()
+        self._optuna_replay_min_trade_rate = TrimmedDoubleSpinBox()
         self._optuna_replay_min_trade_rate.setRange(0.0, 100.0)
         self._optuna_replay_min_trade_rate.setDecimals(3)
         self._optuna_replay_min_trade_rate.setSingleStep(0.1)
@@ -563,7 +696,7 @@ class TrainingParamsPanel(QWidget):
             _wrap_field(self._optuna_replay_min_trade_rate),
         )
 
-        self._optuna_replay_max_flat_ratio = QDoubleSpinBox()
+        self._optuna_replay_max_flat_ratio = TrimmedDoubleSpinBox()
         self._optuna_replay_max_flat_ratio.setRange(0.0, 1.0)
         self._optuna_replay_max_flat_ratio.setDecimals(3)
         self._optuna_replay_max_flat_ratio.setSingleStep(0.01)
@@ -571,7 +704,7 @@ class TrainingParamsPanel(QWidget):
         self._optuna_replay_max_flat_ratio.setFixedWidth(spin_width)
         optuna_fields.add_row("Max flat ratio", _wrap_field(self._optuna_replay_max_flat_ratio))
 
-        self._optuna_replay_max_ls_imbalance = QDoubleSpinBox()
+        self._optuna_replay_max_ls_imbalance = TrimmedDoubleSpinBox()
         self._optuna_replay_max_ls_imbalance.setRange(0.0, 1.0)
         self._optuna_replay_max_ls_imbalance.setDecimals(3)
         self._optuna_replay_max_ls_imbalance.setSingleStep(0.01)
@@ -598,28 +731,49 @@ class TrainingParamsPanel(QWidget):
         tabs.tabBar().setExpanding(False)
         tabs.tabBar().setDrawBase(False)
 
-        training_tab = QWidget()
-        training_tab.setObjectName("modelTab")
-        training_layout = QVBoxLayout(training_tab)
-        training_layout.setContentsMargins(12, 10, 18, 24)
-        training_layout.setSpacing(8)
-        training_layout.addWidget(file_group)
-        training_layout.addWidget(params_group)
-        training_layout.addWidget(ppo_advanced_group)
-        training_layout.addWidget(options_group)
-        training_layout.addWidget(self._start_button)
-        training_layout.addStretch(1)
+        core_tab = QWidget()
+        core_tab.setObjectName("modelTab")
+        core_layout = QVBoxLayout(core_tab)
+        core_layout.setContentsMargins(12, 10, 18, 24)
+        core_layout.setSpacing(8)
+        core_layout.addWidget(file_group)
+        core_layout.addWidget(params_group)
+        core_layout.addStretch(1)
 
-        env_tab = QWidget()
-        env_tab.setObjectName("tradeTab")
-        env_layout_wrap = QVBoxLayout(env_tab)
-        env_layout_wrap.setContentsMargins(12, 10, 18, 24)
-        env_layout_wrap.setSpacing(8)
-        env_layout_wrap.addWidget(cost_group)
-        env_layout_wrap.addWidget(action_group)
-        env_layout_wrap.addWidget(episode_group)
-        env_layout_wrap.addWidget(reward_group)
-        env_layout_wrap.addStretch(1)
+        ppo_tab = QWidget()
+        ppo_tab.setObjectName("modelTab")
+        ppo_layout = QVBoxLayout(ppo_tab)
+        ppo_layout.setContentsMargins(12, 10, 18, 24)
+        ppo_layout.setSpacing(8)
+        ppo_layout.addWidget(ppo_advanced_group)
+        ppo_layout.addStretch(1)
+
+        run_tab = QWidget()
+        run_tab.setObjectName("modelTab")
+        run_layout = QVBoxLayout(run_tab)
+        run_layout.setContentsMargins(12, 10, 18, 24)
+        run_layout.setSpacing(8)
+        run_layout.addWidget(options_group)
+        run_layout.addWidget(self._start_button)
+        run_layout.addStretch(1)
+
+        market_tab = QWidget()
+        market_tab.setObjectName("tradeTab")
+        market_layout = QVBoxLayout(market_tab)
+        market_layout.setContentsMargins(12, 10, 18, 24)
+        market_layout.setSpacing(8)
+        market_layout.addWidget(cost_group)
+        market_layout.addWidget(action_group)
+        market_layout.addStretch(1)
+
+        sampling_tab = QWidget()
+        sampling_tab.setObjectName("tradeTab")
+        sampling_layout = QVBoxLayout(sampling_tab)
+        sampling_layout.setContentsMargins(12, 10, 18, 24)
+        sampling_layout.setSpacing(8)
+        sampling_layout.addWidget(episode_group)
+        sampling_layout.addWidget(reward_group)
+        sampling_layout.addStretch(1)
 
         optuna_tab = QWidget()
         optuna_tab.setObjectName("advancedTab")
@@ -672,8 +826,11 @@ class TrainingParamsPanel(QWidget):
 
         optuna_layout_wrap.addStretch(1)
 
-        tabs.addTab(training_tab, "Training")
-        tabs.addTab(env_tab, "Environment")
+        tabs.addTab(core_tab, "Core")
+        tabs.addTab(ppo_tab, "PPO")
+        tabs.addTab(run_tab, "Run")
+        tabs.addTab(market_tab, "Market")
+        tabs.addTab(sampling_tab, "Sampling")
         tabs.addTab(optuna_tab, "Optuna")
         self._apply_tabs_style(tabs)
         tabs.currentChanged.connect(self._on_tab_changed)
@@ -685,9 +842,7 @@ class TrainingParamsPanel(QWidget):
         outer_layout.addWidget(tabs)
         left_layout.addWidget(outer_container)
 
-        has_saved_params = self._load_params()
-        if not has_saved_params:
-            self._load_optuna_defaults()
+        self._load_params()
         self._update_data_metadata_preview(self._data_path.text().strip())
         self._bind_auto_save_handlers()
         self._refresh_optuna_select_controls()
@@ -784,11 +939,18 @@ class TrainingParamsPanel(QWidget):
         )
 
     def _emit_start(self) -> None:
+        if self._training_running:
+            self.stop_requested.emit()
+            return
         params = self.get_params()
         params["optuna_trials"] = 0
         params["optuna_only"] = False
         self._save_params(params)
         self.start_requested.emit(params)
+
+    def set_training_running(self, running: bool) -> None:
+        self._training_running = bool(running)
+        self._start_button.setText("Stop Training" if running else "Start Training")
 
     def apply_optuna_params(self, params: dict) -> None:
         if "learning_rate" in params:
@@ -805,20 +967,36 @@ class TrainingParamsPanel(QWidget):
             self._gae_lambda.setValue(float(params["gae_lambda"]))
         if "clip_range" in params:
             self._clip_range.setValue(float(params["clip_range"]))
+        if "target_kl" in params:
+            self._target_kl.setValue(float(params["target_kl"]))
+        if "device" in params:
+            self._set_device(str(params["device"]))
         if "vf_coef" in params:
             self._vf_coef.setValue(float(params["vf_coef"]))
         if "n_epochs" in params:
             self._n_epochs.setValue(int(params["n_epochs"]))
         if "episode_length" in params:
             self._episode_length.setValue(int(params["episode_length"]))
+        if "reward_horizon" in params:
+            self._reward_horizon.setValue(int(params["reward_horizon"]))
+        if "window_size" in params:
+            self._window_size.setValue(int(params["window_size"]))
         if "reward_clip" in params:
             self._reward_clip.setValue(float(params["reward_clip"]))
+        if "reward_mode" in params:
+            self._set_reward_mode(str(params["reward_mode"]))
         if "min_position_change" in params:
             self._min_position_change.setValue(float(params["min_position_change"]))
         if "position_step" in params:
             self._position_step.setValue(float(params["position_step"]))
         if "risk_aversion" in params:
             self._risk_aversion.setValue(float(params["risk_aversion"]))
+        if "drawdown_penalty" in params:
+            self._drawdown_penalty.setValue(float(params["drawdown_penalty"]))
+        if "drawdown_governor_slope" in params:
+            self._drawdown_governor_slope.setValue(float(params["drawdown_governor_slope"]))
+        if "drawdown_governor_floor" in params:
+            self._drawdown_governor_floor.setValue(float(params["drawdown_governor_floor"]))
         if "max_position" in params:
             self._max_position.setValue(float(params["max_position"]))
 
@@ -845,6 +1023,8 @@ class TrainingParamsPanel(QWidget):
             "ent_coef": float(self._ent_coef.value()),
             "gae_lambda": float(self._gae_lambda.value()),
             "clip_range": float(self._clip_range.value()),
+            "target_kl": float(self._target_kl.value()),
+            "device": self._device_key(),
             "vf_coef": float(self._vf_coef.value()),
             "n_epochs": int(self._n_epochs.value()),
             "episode_length": int(self._episode_length.value()),
@@ -853,13 +1033,24 @@ class TrainingParamsPanel(QWidget):
             "transaction_cost_bps": float(self._transaction_cost_bps.value()),
             "slippage_bps": float(self._slippage_bps.value()),
             "holding_cost_bps": float(self._holding_cost_bps.value()),
-            "random_start": bool(self._random_start.isChecked()),
+            "random_start": self._start_mode.currentIndex() == 0,
+            "start_mode": self._start_mode_key(),
             "min_position_change": float(self._min_position_change.value()),
             "max_position": float(self._max_position.value()),
             "position_step": float(self._position_step.value()),
+            "reward_horizon": int(self._reward_horizon.value()),
+            "window_size": int(self._window_size.value()),
             "reward_scale": float(self._reward_scale.value()),
             "reward_clip": float(self._reward_clip.value()),
+            "reward_mode": self._reward_mode_key(),
             "risk_aversion": float(self._risk_aversion.value()),
+            "drawdown_penalty": float(self._drawdown_penalty.value()),
+            "drawdown_governor_slope": float(self._drawdown_governor_slope.value()),
+            "drawdown_governor_floor": float(self._drawdown_governor_floor.value()),
+            "early_stop_enabled": bool(self._early_stop_enabled.isChecked()),
+            "early_stop_warmup_steps": int(self._early_stop_warmup_steps.value()),
+            "early_stop_patience_evals": int(self._early_stop_patience_evals.value()),
+            "early_stop_min_delta": float(self._early_stop_min_delta.value()),
             "optuna_trials": int(self._optuna_trials.value()),
             "optuna_steps": int(self._optuna_steps.value()),
             "optuna_auto_select": bool(self._optuna_auto_select.isChecked()),
@@ -1016,9 +1207,9 @@ class TrainingParamsPanel(QWidget):
         self._auto_save_params()
 
     def _on_tab_changed(self, index: int) -> None:
-        if index == 0:
+        if index in {0, 1, 2}:
             self.tab_changed.emit("training")
-        elif index == 1:
+        elif index in {3, 4}:
             self.tab_changed.emit("environment")
         else:
             self.tab_changed.emit("optuna")
@@ -1064,6 +1255,10 @@ class TrainingParamsPanel(QWidget):
             self._gae_lambda.setValue(float(data["gae_lambda"]))
         if "clip_range" in data:
             self._clip_range.setValue(float(data["clip_range"]))
+        if "target_kl" in data:
+            self._target_kl.setValue(float(data["target_kl"]))
+        if "device" in data:
+            self._set_device(str(data["device"]))
         if "vf_coef" in data:
             self._vf_coef.setValue(float(data["vf_coef"]))
         if "n_epochs" in data:
@@ -1074,26 +1269,48 @@ class TrainingParamsPanel(QWidget):
             self._eval_split.setValue(float(data["eval_split"]))
         if "save_best_checkpoint" in data:
             self._save_best_checkpoint.setChecked(bool(data["save_best_checkpoint"]))
+        if "early_stop_enabled" in data:
+            self._early_stop_enabled.setChecked(bool(data["early_stop_enabled"]))
+        if "early_stop_warmup_steps" in data:
+            self._early_stop_warmup_steps.setValue(int(data["early_stop_warmup_steps"]))
+        if "early_stop_patience_evals" in data:
+            self._early_stop_patience_evals.setValue(int(data["early_stop_patience_evals"]))
+        if "early_stop_min_delta" in data:
+            self._early_stop_min_delta.setValue(float(data["early_stop_min_delta"]))
         if "transaction_cost_bps" in data:
             self._transaction_cost_bps.setValue(float(data["transaction_cost_bps"]))
         if "slippage_bps" in data:
             self._slippage_bps.setValue(float(data["slippage_bps"]))
         if "holding_cost_bps" in data:
             self._holding_cost_bps.setValue(float(data["holding_cost_bps"]))
-        if "random_start" in data:
-            self._random_start.setChecked(bool(data["random_start"]))
+        if "start_mode" in data:
+            self._set_start_mode(str(data["start_mode"]))
+        elif "random_start" in data:
+            self._set_start_mode("random" if bool(data["random_start"]) else "first")
         if "min_position_change" in data:
             self._min_position_change.setValue(float(data["min_position_change"]))
         if "max_position" in data:
             self._max_position.setValue(float(data["max_position"]))
         if "position_step" in data:
             self._position_step.setValue(float(data["position_step"]))
+        if "reward_horizon" in data:
+            self._reward_horizon.setValue(int(data["reward_horizon"]))
+        if "window_size" in data:
+            self._window_size.setValue(int(data["window_size"]))
         if "reward_scale" in data:
             self._reward_scale.setValue(float(data["reward_scale"]))
         if "reward_clip" in data:
             self._reward_clip.setValue(float(data["reward_clip"]))
+        if "reward_mode" in data:
+            self._set_reward_mode(str(data["reward_mode"]))
         if "risk_aversion" in data:
             self._risk_aversion.setValue(float(data["risk_aversion"]))
+        if "drawdown_penalty" in data:
+            self._drawdown_penalty.setValue(float(data["drawdown_penalty"]))
+        if "drawdown_governor_slope" in data:
+            self._drawdown_governor_slope.setValue(float(data["drawdown_governor_slope"]))
+        if "drawdown_governor_floor" in data:
+            self._drawdown_governor_floor.setValue(float(data["drawdown_governor_floor"]))
         if "optuna_trials" in data:
             self._optuna_trials.setValue(int(data["optuna_trials"]))
         if "optuna_steps" in data:
@@ -1152,13 +1369,25 @@ class TrainingParamsPanel(QWidget):
         self._max_position.valueChanged.connect(self._auto_save_params)
         self._position_step.valueChanged.connect(self._auto_save_params)
         self._episode_length.valueChanged.connect(self._auto_save_params)
-        self._random_start.toggled.connect(self._auto_save_params)
+        self._reward_horizon.valueChanged.connect(self._auto_save_params)
+        self._window_size.valueChanged.connect(self._auto_save_params)
+        self._start_mode.currentIndexChanged.connect(self._auto_save_params)
         self._reward_scale.valueChanged.connect(self._auto_save_params)
         self._reward_clip.valueChanged.connect(self._auto_save_params)
+        self._reward_mode.currentIndexChanged.connect(self._auto_save_params)
         self._risk_aversion.valueChanged.connect(self._auto_save_params)
+        self._drawdown_penalty.valueChanged.connect(self._auto_save_params)
+        self._drawdown_governor_slope.valueChanged.connect(self._auto_save_params)
+        self._drawdown_governor_floor.valueChanged.connect(self._auto_save_params)
         self._save_best_checkpoint.toggled.connect(self._auto_save_params)
+        self._early_stop_enabled.toggled.connect(self._auto_save_params)
+        self._early_stop_warmup_steps.valueChanged.connect(self._auto_save_params)
+        self._early_stop_patience_evals.valueChanged.connect(self._auto_save_params)
+        self._early_stop_min_delta.valueChanged.connect(self._auto_save_params)
         self._gae_lambda.valueChanged.connect(self._auto_save_params)
         self._clip_range.valueChanged.connect(self._auto_save_params)
+        self._target_kl.valueChanged.connect(self._auto_save_params)
+        self._device.currentIndexChanged.connect(self._auto_save_params)
         self._vf_coef.valueChanged.connect(self._auto_save_params)
         self._n_epochs.valueChanged.connect(self._auto_save_params)
         self._optuna_trials.valueChanged.connect(self._auto_save_params)
@@ -1258,6 +1487,57 @@ class TrainingParamsPanel(QWidget):
             return
         self._optuna_replay_score_mode.setCurrentIndex(0)
 
+    def _start_mode_key(self) -> str:
+        text = self._start_mode.currentText()
+        if text.startswith("First"):
+            return "first"
+        if text.startswith("Weekly"):
+            return "weekly_open"
+        return "random"
+
+    def _set_start_mode(self, mode: str) -> None:
+        value = (mode or "").strip().lower()
+        if value == "first":
+            self._start_mode.setCurrentIndex(1)
+            return
+        if value == "weekly_open":
+            self._start_mode.setCurrentIndex(2)
+            return
+        self._start_mode.setCurrentIndex(0)
+
+    def _reward_mode_key(self) -> str:
+        text = self._reward_mode.currentText()
+        if text.startswith("Log"):
+            return "log_return"
+        return "linear"
+
+    def _device_key(self) -> str:
+        text = self._device.currentText().strip().lower()
+        if text in {"cpu", "mps", "cuda"}:
+            return text
+        return "auto"
+
+    def _set_reward_mode(self, mode: str) -> None:
+        value = (mode or "").strip().lower()
+        if value == "log_return":
+            self._reward_mode.setCurrentIndex(1)
+            return
+        self._reward_mode.setCurrentIndex(0)
+
+    def _set_device(self, device: str) -> None:
+        value = (device or "").strip().lower()
+        mapping = {
+            "auto": 0,
+            "cpu": 1,
+            "mps": 2,
+            "cuda": 3,
+        }
+        self._device.setCurrentIndex(mapping.get(value, 0))
+
+    def set_resolved_device(self, device: str) -> None:
+        value = str(device or "").strip() or "-"
+        self._resolved_device.setText(f"Last runtime: {value}")
+
 
 class TrainingPanel(QWidget):
     def __init__(self, parent: Optional[QWidget] = None) -> None:
@@ -1267,9 +1547,20 @@ class TrainingPanel(QWidget):
         self._plot_timer = QElapsedTimer()
         self._plot_interval_ms = 50
         self._max_points = 2000
+        self._reward_stat_window = 200
+        self._reward_samples: deque[float] = deque(maxlen=self._reward_stat_window)
+        self._reward_diagnostics_path = Path(DATA_DIR) / "training" / "reward_diagnostics.csv"
+        self._reward_run_started_at = self._current_timestamp()
         self._metrics = [
             ("ep_rew_mean", "ep_rew_mean"),
             ("eval/mean_reward", "mean_reward"),
+            ("reward_step_mean", "reward_step_mean"),
+            ("step_pnl_mean", "step_pnl_mean"),
+            ("cost_mean", "cost_mean"),
+            ("holding_cost_mean", "holding_cost_mean"),
+            ("abs_delta_mean", "abs_delta_mean"),
+            ("abs_price_return_mean", "abs_price_return_mean"),
+            ("early_stop_patience_left", "early_stop_patience_left"),
             ("value_loss", "value_loss"),
             ("explained_variance", "explained_variance"),
             ("approx_kl", "approx_kl"),
@@ -1281,8 +1572,9 @@ class TrainingPanel(QWidget):
             ("fps", "fps"),
         ]
         self._metric_data: dict[str, dict[str, deque[float]]] = {}
+        self._latest_metric_values: dict[str, float] = {}
         self._curves: dict[str, object] = {}
-        self._checkboxes: dict[str, QCheckBox] = {}
+        self._checkboxes: dict[str, QRadioButton] = {}
         self._metric_labels = {key: label for label, key in self._metrics}
         self._legend_keys: set[str] = set()
         self._optuna_metrics = [
@@ -1379,7 +1671,7 @@ class TrainingPanel(QWidget):
             chooser_layout.setHorizontalSpacing(10)
             chooser_layout.setVerticalSpacing(4)
             for idx, (label, key) in enumerate(self._metrics):
-                checkbox = QCheckBox(label)
+                checkbox = QRadioButton(label)
                 checked = label == "eval/mean_reward"
                 checkbox.setChecked(checked)
                 checkbox.toggled.connect(lambda checked_state, k=key: self._toggle_curve(k, checked_state))
@@ -1394,10 +1686,81 @@ class TrainingPanel(QWidget):
             self._chart_stack.setCurrentWidget(plot)
             self._metrics_selector = chooser
             self._optuna_selector = optuna_selector
-            layout.addWidget(self._chart_stack, stretch=1)
-            layout.addWidget(chooser)
-            layout.addWidget(optuna_selector)
+            reward_group = QGroupBox(
+                f"Reward Diagnostics (ep_rew_mean, last {self._reward_stat_window} episodes)"
+            )
+            reward_layout = QFormLayout(reward_group)
+            configure_form_layout(
+                reward_layout,
+                label_alignment=Qt.AlignLeft | Qt.AlignVCenter,
+                field_growth_policy=QFormLayout.AllNonFixedFieldsGrow,
+            )
+            self._reward_count_value = QLabel("-")
+            self._reward_mean_value = QLabel("-")
+            self._reward_std_value = QLabel("-")
+            self._reward_snr_value = QLabel("-")
+            self._reward_quantiles_value = QLabel("-")
+            self._reward_hint_value = QLabel("Waiting for ep_rew_mean samples.")
+            self._reward_hint_value.setWordWrap(True)
+            reward_layout.addRow("samples", self._reward_count_value)
+            reward_layout.addRow("mean", self._reward_mean_value)
+            reward_layout.addRow("std", self._reward_std_value)
+            reward_layout.addRow("SNR", self._reward_snr_value)
+            reward_layout.addRow("quantiles", self._reward_quantiles_value)
+            reward_layout.addRow("interpretation", self._reward_hint_value)
+
+            details_tabs = QTabWidget()
+            details_tabs.setDocumentMode(True)
+            details_tabs.setMovable(False)
+            details_tabs.tabBar().setExpanding(False)
+            details_tabs.tabBar().setDrawBase(False)
+
+            reward_tab = QWidget()
+            reward_tab_layout = QVBoxLayout(reward_tab)
+            reward_tab_layout.setContentsMargins(0, 0, 0, 0)
+            reward_tab_layout.setSpacing(0)
+            reward_tab_layout.addWidget(reward_group)
+
+            log_tab = QWidget()
+            log_layout = QVBoxLayout(log_tab)
+            log_layout.setContentsMargins(0, 0, 0, 0)
+            log_layout.setSpacing(0)
+            self._embedded_log = LogWidget(
+                title="",
+                with_timestamp=True,
+                monospace=True,
+                font_point_delta=2,
+            )
+            log_layout.addWidget(self._embedded_log)
+
+            details_tabs.addTab(reward_tab, "Reward Diagnostics")
+            details_tabs.addTab(log_tab, "Log")
+
+            curve_panel = QGroupBox("Training Curves")
+            curve_layout = QVBoxLayout(curve_panel)
+            curve_layout.setContentsMargins(10, 10, 10, 10)
+            curve_layout.setSpacing(10)
+            curve_layout.addWidget(self._chart_stack, stretch=1)
+            curve_layout.addWidget(chooser)
+            curve_layout.addWidget(optuna_selector)
+
+            details_panel = QGroupBox("Details")
+            details_layout = QVBoxLayout(details_panel)
+            details_layout.setContentsMargins(10, 10, 10, 10)
+            details_layout.setSpacing(0)
+            details_layout.addWidget(details_tabs)
+
+            details_splitter = QSplitter(Qt.Vertical)
+            details_splitter.setChildrenCollapsible(False)
+            details_splitter.addWidget(curve_panel)
+            details_splitter.addWidget(details_panel)
+            details_splitter.setStretchFactor(0, 4)
+            details_splitter.setStretchFactor(1, 2)
+            layout.addWidget(details_splitter, stretch=1)
             optuna_selector.setVisible(False)
+            self._reward_group = reward_group
+            self._details_splitter = details_splitter
+            self._update_reward_diagnostics()
             self._sync_curve_visibility()
             self._sync_optuna_curve_visibility()
         else:
@@ -1410,11 +1773,15 @@ class TrainingPanel(QWidget):
         if not self._charts_available:
             return
         self._current_step = 0
+        self._reward_run_started_at = self._current_timestamp()
         self._plot_timer.restart()
         for key in self._metric_data:
             self._metric_data[key]["x"].clear()
             self._metric_data[key]["y"].clear()
             self._curves[key].setData([])
+        self._latest_metric_values.clear()
+        self._reward_samples.clear()
+        self._update_reward_diagnostics()
         self._sync_curve_visibility()
 
     def reset_optuna_metrics(self) -> None:
@@ -1451,6 +1818,16 @@ class TrainingPanel(QWidget):
             return
         if key not in self._metric_labels:
             return
+        self._current_step = int(step)
+        self._latest_metric_values[key] = value
+        if key == "ep_rew_mean":
+            self._reward_samples.append(value)
+            self._update_reward_diagnostics()
+        elif key == "eval/mean_reward" and self._reward_samples:
+            # Persist eval snapshots into reward diagnostics immediately so the
+            # CSV keeps explicit eval points instead of only piggybacking on the
+            # next episode-reward update.
+            self._update_reward_diagnostics()
         self._append_point(key, step, value)
 
     def append_optuna_point(self, key: str, trial: float, value: float) -> None:
@@ -1473,6 +1850,11 @@ class TrainingPanel(QWidget):
         self._chart_stack.setCurrentWidget(self._optuna_plot)
         self._metrics_selector.setVisible(False)
         self._optuna_selector.setVisible(True)
+
+    def append_log(self, message: str) -> None:
+        embedded = getattr(self, "_embedded_log", None)
+        if embedded is not None:
+            embedded.append(message)
 
     def _append_point(self, key: str, step: float, value: float) -> None:
         data = self._metric_data[key]
@@ -1531,6 +1913,178 @@ class TrainingPanel(QWidget):
     def _sync_optuna_curve_visibility(self) -> None:
         for key, _ in self._optuna_metrics:
             self._toggle_optuna_curve(key, key in self._optuna_visible)
+
+    def _update_reward_diagnostics(self) -> None:
+        if not self._charts_available:
+            return
+        count = len(self._reward_samples)
+        if count == 0:
+            self._reward_count_value.setText("0")
+            self._reward_mean_value.setText("-")
+            self._reward_std_value.setText("-")
+            self._reward_snr_value.setText("-")
+            self._reward_quantiles_value.setText("-")
+            self._reward_hint_value.setText("Waiting for ep_rew_mean samples.")
+            return
+        values = list(self._reward_samples)
+        mean = sum(values) / count
+        variance = sum((value - mean) ** 2 for value in values) / count
+        std = math.sqrt(max(variance, 0.0))
+        snr = abs(mean) / std if std > 1e-12 else float("inf")
+        p10 = self._quantile(values, 0.10)
+        p50 = self._quantile(values, 0.50)
+        p90 = self._quantile(values, 0.90)
+        snr_text = "inf" if math.isinf(snr) else f"{snr:.4f}"
+        self._reward_count_value.setText(str(count))
+        self._reward_mean_value.setText(self._format_stat(mean))
+        self._reward_std_value.setText(self._format_stat(std))
+        self._reward_snr_value.setText(snr_text)
+        self._reward_quantiles_value.setText(
+            f"p10={self._format_stat(p10)}  p50={self._format_stat(p50)}  p90={self._format_stat(p90)}"
+        )
+        if std <= 1e-12:
+            hint = "Reward variance is near zero in this window."
+        elif snr < 0.5:
+            hint = "Low-SNR window: mean reward is small relative to volatility."
+        elif snr < 1.0:
+            hint = "Moderate-noise window: reward signal exists but is still noisy."
+        else:
+            hint = "Reward signal is stronger than its recent volatility."
+        if abs(p90 - p10) > max(std * 2.5, 1e-9):
+            hint += " Wide percentile spread suggests a heavy-tailed or unstable reward distribution."
+        self._reward_hint_value.setText(hint)
+        self._append_reward_diagnostics_row(
+            samples=count,
+            mean=mean,
+            std=std,
+            snr=snr,
+            p10=p10,
+            p50=p50,
+            p90=p90,
+            interpretation=hint,
+        )
+
+    def _append_reward_diagnostics_row(
+        self,
+        *,
+        samples: int,
+        mean: float,
+        std: float,
+        snr: float,
+        p10: float,
+        p50: float,
+        p90: float,
+        interpretation: str,
+    ) -> None:
+        path = self._reward_diagnostics_path
+        component_columns = [
+            ("reward_step_mean", "reward_step_mean"),
+            ("step_pnl_mean", "step_pnl_mean"),
+            ("cost_mean", "cost_mean"),
+            ("holding_cost_mean", "holding_cost_mean"),
+            ("abs_delta_mean", "abs_delta_mean"),
+            ("abs_price_return_mean", "abs_price_return_mean"),
+            ("eval_mean_reward", "eval/mean_reward"),
+            ("early_stop_patience_left", "early_stop_patience_left"),
+            ("explained_variance", "explained_variance"),
+            ("approx_kl", "approx_kl"),
+            ("clip_fraction", "clip_fraction"),
+            ("entropy_loss", "entropy_loss"),
+            ("policy_gradient_loss", "policy_gradient_loss"),
+            ("value_loss", "value_loss"),
+            ("loss", "loss"),
+            ("std_metric", "std"),
+            ("fps", "fps"),
+        ]
+        fieldnames = [
+            "timestamp",
+            "run_started_at",
+            "step",
+            "samples",
+            "mean",
+            "std",
+            "snr",
+            "p10",
+            "p50",
+            "p90",
+            "interpretation",
+            *[column for column, _ in component_columns],
+        ]
+        try:
+            path.parent.mkdir(parents=True, exist_ok=True)
+            self._ensure_reward_diagnostics_schema(path, fieldnames)
+            row = {
+                "timestamp": self._current_timestamp(),
+                "run_started_at": self._reward_run_started_at,
+                "step": str(self._current_step),
+                "samples": str(samples),
+                "mean": f"{mean:.10g}",
+                "std": f"{std:.10g}",
+                "snr": "inf" if math.isinf(snr) else f"{snr:.10g}",
+                "p10": f"{p10:.10g}",
+                "p50": f"{p50:.10g}",
+                "p90": f"{p90:.10g}",
+                "interpretation": interpretation,
+            }
+            for column, metric_key in component_columns:
+                row[column] = self._format_csv_metric_value(
+                    self._latest_metric_values.get(metric_key)
+                )
+            with path.open("a", encoding="utf-8", newline="") as fh:
+                writer = csv.DictWriter(fh, fieldnames=fieldnames)
+                if fh.tell() == 0:
+                    writer.writeheader()
+                writer.writerow(row)
+        except OSError:
+            return
+
+    @staticmethod
+    def _format_stat(value: float) -> str:
+        return f"{value:.6g}"
+
+    @staticmethod
+    def _format_csv_metric_value(value: Optional[float]) -> str:
+        if value is None:
+            return ""
+        if math.isinf(value):
+            return "inf"
+        return f"{value:.10g}"
+
+    @staticmethod
+    def _ensure_reward_diagnostics_schema(path: Path, fieldnames: list[str]) -> None:
+        if not path.exists() or path.stat().st_size == 0:
+            return
+        with path.open("r", encoding="utf-8", newline="") as fh:
+            reader = csv.DictReader(fh)
+            existing_fields = reader.fieldnames or []
+            if existing_fields == fieldnames:
+                return
+            rows = list(reader)
+        with path.open("w", encoding="utf-8", newline="") as fh:
+            writer = csv.DictWriter(fh, fieldnames=fieldnames)
+            writer.writeheader()
+            for row in rows:
+                normalized = {field: row.get(field, "") for field in fieldnames}
+                writer.writerow(normalized)
+
+    @staticmethod
+    def _quantile(values: list[float], q: float) -> float:
+        ordered = sorted(values)
+        if not ordered:
+            return float("nan")
+        if len(ordered) == 1:
+            return ordered[0]
+        position = max(0.0, min(1.0, q)) * (len(ordered) - 1)
+        lower = int(math.floor(position))
+        upper = int(math.ceil(position))
+        if lower == upper:
+            return ordered[lower]
+        weight = position - lower
+        return ordered[lower] * (1.0 - weight) + ordered[upper] * weight
+
+    @staticmethod
+    def _current_timestamp() -> str:
+        return datetime.now().isoformat(timespec="seconds")
 
     @staticmethod
     def _parse_kv_line(line: str) -> Optional[tuple[str, float]]:

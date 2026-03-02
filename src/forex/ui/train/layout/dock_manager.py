@@ -82,16 +82,18 @@ class DockManager:
         return dock
 
     def _create_training_params_dock(self, panel: QWidget) -> QDockWidget:
-        dock = QDockWidget("PPO Parameters", self._main_window)
+        dock = QDockWidget("", self._main_window)
         dock.setObjectName("training_params_dock")
+        dock.setTitleBarWidget(QWidget(dock))
         dock.setWidget(panel)
         dock.setAllowedAreas(Qt.LeftDockWidgetArea)
         dock.setVisible(False)
         return dock
 
     def _create_simulation_params_dock(self, panel: QWidget) -> QDockWidget:
-        dock = QDockWidget("Playback Parameters", self._main_window)
+        dock = QDockWidget("", self._main_window)
         dock.setObjectName("simulation_params_dock")
+        dock.setTitleBarWidget(QWidget(dock))
         dock.setWidget(panel)
         dock.setAllowedAreas(Qt.LeftDockWidgetArea)
         dock.setVisible(False)

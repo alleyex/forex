@@ -22,6 +22,7 @@ class PPOTrainingController(QObject):
     replay_best_summary_logged = Signal(str)
     optuna_trial_logged = Signal(str)
     optuna_best_params_logged = Signal(dict)
+    device_resolved = Signal(str)
 
     def __init__(
         self,
@@ -90,6 +91,10 @@ class PPOTrainingController(QObject):
             str(params["gae_lambda"]),
             "--clip-range",
             str(params["clip_range"]),
+            "--target-kl",
+            str(params.get("target_kl", 0.0)),
+            "--device",
+            str(params.get("device", "auto")),
             "--vf-coef",
             str(params["vf_coef"]),
             "--n-epochs",
@@ -110,15 +115,36 @@ class PPOTrainingController(QObject):
             str(params["max_position"]),
             "--position-step",
             str(params["position_step"]),
+            "--reward-horizon",
+            str(params["reward_horizon"]),
+            "--window-size",
+            str(params.get("window_size", 1)),
+            "--start-mode",
+            str(params.get("start_mode", "random")),
             "--reward-scale",
             str(params["reward_scale"]),
             "--reward-clip",
             str(params["reward_clip"]),
+            "--reward-mode",
+            str(params.get("reward_mode", "linear")),
             "--risk-aversion",
             str(params["risk_aversion"]),
+            "--drawdown-penalty",
+            str(params.get("drawdown_penalty", 0.0)),
+            "--drawdown-governor-slope",
+            str(params.get("drawdown_governor_slope", 0.0)),
+            "--drawdown-governor-floor",
+            str(params.get("drawdown_governor_floor", 0.3)),
         ]
+        if params.get("early_stop_enabled", True):
+            args.append("--early-stop-enabled")
+        args.extend(["--early-stop-warmup-steps", str(params.get("early_stop_warmup_steps", 100000))])
+        args.extend(
+            ["--early-stop-patience-evals", str(params.get("early_stop_patience_evals", 8))]
+        )
+        args.extend(["--early-stop-min-delta", str(params.get("early_stop_min_delta", 0.001))])
         args.extend(["--metrics-log", self._metrics_log_path or ""])
-        if not params.get("random_start", True):
+        if not params.get("random_start", True) and not params.get("start_mode"):
             args.append("--no-random-start")
         if params.get("optuna_trials", 0) > 0:
             args.extend(
@@ -230,6 +256,8 @@ class PPOTrainingController(QObject):
                 self.replay_best_params_logged.emit(params)
         if line.startswith("Replay best:"):
             self.replay_best_summary_logged.emit(line.strip())
+        if line.startswith("Resolved device:"):
+            self.device_resolved.emit(line.split(":", 1)[1].strip())
 
     def _on_stderr_line(self, line: str) -> None:
         self._state.log_message.emit(format_training_message("stderr", line=line))

@@ -8,7 +8,7 @@ from pathlib import Path
 import numpy as np
 from stable_baselines3 import PPO
 
-from forex.ml.rl.envs.trading_env import TradingConfig
+from forex.ml.rl.envs.trading_env import TradingConfig, build_window_observation
 from forex.ml.rl.envs.trading_config_io import load_trading_config
 from forex.ml.rl.features.feature_builder import (
     apply_scaler,
@@ -16,6 +16,7 @@ from forex.ml.rl.features.feature_builder import (
     load_csv,
     load_scaler,
 )
+from forex.ml.rl.models import WindowCnnExtractor
 from forex.config.paths import DEFAULT_MODEL_PATH
 
 
@@ -24,14 +25,6 @@ class SimState:
     position: float = 0.0
     equity: float = 1.0
     trades: int = 0
-
-
-def _build_obs(features: np.ndarray, index: int, position: float, max_position: float = 1.0) -> np.ndarray:
-    denom = max(1e-6, float(max_position))
-    position_norm = position / denom
-    return np.concatenate([features[index], np.array([position_norm], dtype=np.float32)]).astype(np.float32)
-
-
 def _apply_action_constraints(target: float, current_position: float, config: TradingConfig) -> float:
     value = float(target)
     if config.discretize_actions and config.discrete_positions:
@@ -134,6 +127,7 @@ def main() -> None:
             pass
     cost_rate = (config.transaction_cost_bps + config.slippage_bps) / 10000.0
     holding_cost_rate = config.holding_cost_bps / 10000.0
+    reward_horizon = max(1, int(getattr(config, "reward_horizon", 1)))
 
     model = PPO.load(args.model)
 
@@ -163,6 +157,13 @@ def main() -> None:
         equity_log_fh = log_path.open("w", encoding="utf-8")
         equity_log_fh.write("step,equity\n")
 
+    def _horizon_return(idx: int) -> float:
+        base_price = closes[idx]
+        if base_price <= 0.0:
+            return 0.0
+        horizon_idx = min(idx + reward_horizon, len(closes) - 1)
+        return (closes[horizon_idx] - base_price) / base_price
+
     def simulate_fixed(position: float, steps: int) -> tuple[float, float]:
         equity = 1.0
         current = 0.0
@@ -170,7 +171,7 @@ def main() -> None:
             delta = position - current
             cost = abs(delta) * cost_rate
             holding_cost = abs(current) * holding_cost_rate
-            price_return = (closes[idx + 1] - closes[idx]) / closes[idx]
+            price_return = _horizon_return(idx)
             reward = current * float(price_return) - cost - holding_cost
             equity *= 1.0 + reward
             current = position
@@ -196,7 +197,13 @@ def main() -> None:
         if stop_requested:
             break
         last_idx = idx
-        obs = _build_obs(features, idx, state.position, max_position=config.max_position)
+        obs = build_window_observation(
+            features,
+            idx,
+            position=state.position,
+            max_position=config.max_position,
+            window_size=getattr(config, "window_size", 1),
+        )
         action, _ = model.predict(obs, deterministic=not args.stochastic)
         target_raw = float(np.clip(action[0], -config.max_position, config.max_position))
         target_position = _apply_action_constraints(target_raw, state.position, config)
@@ -233,7 +240,7 @@ def main() -> None:
                     )
             last_trade_price = current_price
 
-        price_return = (closes[idx + 1] - closes[idx]) / closes[idx]
+        price_return = _horizon_return(idx)
         reward = state.position * float(price_return) - cost - holding_cost
         state.equity *= 1.0 + reward
         equity_series.append(state.equity)

@@ -6,6 +6,7 @@ from ctrader_open_api.messages.OpenApiModelMessages_pb2 import ProtoOATradeSide
 
 from forex.ml.rl.envs.trading_config_io import load_trading_config
 from forex.ml.rl.features.feature_builder import load_scaler
+from forex.ml.rl.models import WindowCnnExtractor
 
 
 class LiveAutoRuntimeService:
@@ -30,8 +31,9 @@ class LiveAutoRuntimeService:
             import sys
             import typing
 
-            # PySide6 can inject typing.Self on Python 3.10 which breaks torch.
-            if hasattr(typing, "Self"):
+            # Only apply this workaround on Python 3.10 where typing.Self does not
+            # officially exist and may be injected by PySide6.
+            if sys.version_info[:2] == (3, 10) and hasattr(typing, "Self"):
                 delattr(typing, "Self")
             if "typing_extensions" in sys.modules:
                 importlib.reload(sys.modules["typing_extensions"])

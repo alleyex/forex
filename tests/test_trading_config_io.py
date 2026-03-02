@@ -11,14 +11,21 @@ def test_trading_config_io_roundtrip(tmp_path) -> None:
         holding_cost_bps=0.2,
         episode_length=1024,
         random_start=False,
+        start_mode="weekly_open",
         min_position_change=0.05,
         discretize_actions=True,
         discrete_positions=(-1.0, -0.5, 0.0, 0.5, 1.0),
         max_position=1.5,
         position_step=0.1,
+        reward_horizon=4,
+        window_size=8,
         reward_scale=2.0,
         reward_clip=0.8,
+        reward_mode="log_return",
         risk_aversion=0.3,
+        drawdown_penalty=0.05,
+        drawdown_governor_slope=2.0,
+        drawdown_governor_floor=0.3,
     )
     path = tmp_path / "ppo.env.json"
     save_trading_config(config, path)

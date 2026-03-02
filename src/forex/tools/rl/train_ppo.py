@@ -15,7 +15,7 @@ from stable_baselines3.common.monitor import Monitor
 from stable_baselines3.common.callbacks import BaseCallback, CallbackList, EvalCallback
 from stable_baselines3.common.evaluation import evaluate_policy
 
-from forex.ml.rl.envs.trading_env import TradingConfig, TradingEnv
+from forex.ml.rl.envs.trading_env import TradingConfig, TradingEnv, build_window_observation
 from forex.ml.rl.envs.trading_config_io import save_trading_config
 from forex.ml.rl.features.feature_builder import (
     apply_scaler,
@@ -24,21 +24,38 @@ from forex.ml.rl.features.feature_builder import (
     load_csv,
     save_scaler,
 )
+from forex.ml.rl.models import WindowCnnExtractor
 from forex.config.paths import DEFAULT_MODEL_PATH
 
 
-def _build_env(features, closes, config: TradingConfig) -> DummyVecEnv:
-    return DummyVecEnv([lambda: Monitor(TradingEnv(features, closes, config))])
+def _build_env(features, closes, config: TradingConfig, timestamps=None) -> DummyVecEnv:
+    return DummyVecEnv([lambda: Monitor(TradingEnv(features, closes, config, timestamps=timestamps))])
 
 
 class MetricsLogCallback(BaseCallback):
     def __init__(self, write_metric, verbose: int = 0) -> None:
         super().__init__(verbose=verbose)
         self._write_metric = write_metric
+        self._rollout_sums = {
+            "reward_step_mean": 0.0,
+            "step_pnl_mean": 0.0,
+            "cost_mean": 0.0,
+            "holding_cost_mean": 0.0,
+            "abs_delta_mean": 0.0,
+            "abs_price_return_mean": 0.0,
+        }
+        self._rollout_count = 0
 
     def _on_step(self) -> bool:
         step = int(self.num_timesteps)
         for info in self.locals.get("infos", []):
+            self._rollout_sums["reward_step_mean"] += float(info.get("reward", 0.0))
+            self._rollout_sums["step_pnl_mean"] += float(info.get("step_pnl", 0.0))
+            self._rollout_sums["cost_mean"] += float(info.get("cost", 0.0))
+            self._rollout_sums["holding_cost_mean"] += float(info.get("holding_cost", 0.0))
+            self._rollout_sums["abs_delta_mean"] += abs(float(info.get("delta", 0.0)))
+            self._rollout_sums["abs_price_return_mean"] += abs(float(info.get("price_return", 0.0)))
+            self._rollout_count += 1
             metrics = info.get("episode")
             if not metrics:
                 continue
@@ -48,9 +65,65 @@ class MetricsLogCallback(BaseCallback):
 
     def _on_rollout_end(self) -> None:
         step = int(self.num_timesteps)
+        if self._rollout_count > 0:
+            for metric, total in self._rollout_sums.items():
+                self._write_metric(step, metric, total / self._rollout_count)
         mean_reward = self.logger.name_to_value.get("rollout/ep_rew_mean")
         if mean_reward is not None:
             self._write_metric(step, "ep_rew_mean", float(mean_reward))
+        for metric in self._rollout_sums:
+            self._rollout_sums[metric] = 0.0
+        self._rollout_count = 0
+
+
+class PlateauEvalCallback(EvalCallback):
+    def __init__(
+        self,
+        *args,
+        write_metric,
+        early_stop_enabled: bool,
+        early_stop_warmup_steps: int,
+        early_stop_patience_evals: int,
+        early_stop_min_delta: float,
+        **kwargs,
+    ) -> None:
+        super().__init__(*args, **kwargs)
+        self._write_metric = write_metric
+        self._early_stop_enabled = bool(early_stop_enabled)
+        self._early_stop_warmup_steps = max(0, int(early_stop_warmup_steps))
+        self._early_stop_patience_evals = max(1, int(early_stop_patience_evals))
+        self._early_stop_min_delta = max(0.0, float(early_stop_min_delta))
+        self._best_eval_reward = float("-inf")
+        self._no_improvement_evals = 0
+
+    def _on_step(self) -> bool:
+        keep_training = super()._on_step()
+        if not keep_training:
+            return False
+        if self.eval_freq <= 0 or self.n_calls % self.eval_freq != 0:
+            return True
+        step = int(self.num_timesteps)
+        mean_reward = float(self.last_mean_reward)
+        self._write_metric(step, "eval/mean_reward", mean_reward)
+        if not self._early_stop_enabled or step < self._early_stop_warmup_steps:
+            return True
+        if mean_reward > self._best_eval_reward + self._early_stop_min_delta:
+            self._best_eval_reward = mean_reward
+            self._no_improvement_evals = 0
+        else:
+            self._no_improvement_evals += 1
+        remaining = max(0, self._early_stop_patience_evals - self._no_improvement_evals)
+        self._write_metric(step, "early_stop_patience_left", float(remaining))
+        if self._no_improvement_evals >= self._early_stop_patience_evals:
+            print(
+                "Early stop:",
+                f"step={step}",
+                f"eval_mean_reward={mean_reward:.6g}",
+                f"best_eval_reward={self._best_eval_reward:.6g}",
+                f"patience={self._early_stop_patience_evals}",
+            )
+            return False
+        return True
 
 
 def _train_model(
@@ -63,15 +136,27 @@ def _train_model(
     ent_coef: float,
     gae_lambda: float,
     clip_range: float,
+    target_kl: float | None,
     vf_coef: float,
     n_epochs: int,
     total_steps: int,
+    window_size: int,
+    feature_dim: int,
+    device: str,
     verbose: int = 1,
 ) -> PPO:
+    policy_kwargs = {
+        "features_extractor_class": WindowCnnExtractor,
+        "features_extractor_kwargs": {
+            "window_size": window_size,
+            "feature_dim": feature_dim,
+        },
+    }
     model = PPO(
         "MlpPolicy",
         env,
         verbose=verbose,
+        policy_kwargs=policy_kwargs,
         learning_rate=learning_rate,
         n_steps=n_steps,
         batch_size=batch_size,
@@ -79,9 +164,12 @@ def _train_model(
         ent_coef=ent_coef,
         gae_lambda=gae_lambda,
         clip_range=clip_range,
+        target_kl=target_kl,
         vf_coef=vf_coef,
         n_epochs=n_epochs,
+        device=device,
     )
+    print(f"Resolved device: {model.device}")
     return model
 
 
@@ -132,6 +220,18 @@ def main() -> None:
     parser.add_argument("--ent-coef", type=float, default=0.0, help="Entropy coefficient.")
     parser.add_argument("--gae-lambda", type=float, default=0.95, help="PPO GAE lambda.")
     parser.add_argument("--clip-range", type=float, default=0.2, help="PPO clip range.")
+    parser.add_argument(
+        "--target-kl",
+        type=float,
+        default=0.0,
+        help="Target KL for PPO inner-update early stopping (0 disables).",
+    )
+    parser.add_argument(
+        "--device",
+        choices=["auto", "cpu", "mps", "cuda"],
+        default="auto",
+        help="Training device selection for Stable-Baselines3.",
+    )
     parser.add_argument("--vf-coef", type=float, default=0.5, help="PPO value function coefficient.")
     parser.add_argument("--n-epochs", type=int, default=10, help="PPO epochs per update.")
     parser.add_argument("--episode-length", type=int, default=2048, help="Episode length in bars.")
@@ -142,6 +242,12 @@ def main() -> None:
     parser.add_argument("--slippage-bps", type=float, default=0.5, help="Slippage in bps.")
     parser.add_argument("--holding-cost-bps", type=float, default=0.0, help="Holding cost in bps per step.")
     parser.add_argument("--no-random-start", action="store_true", help="Disable random episode starts.")
+    parser.add_argument(
+        "--start-mode",
+        choices=["random", "first", "weekly_open"],
+        default="",
+        help="Episode reset mode. Empty keeps backward-compatible random_start behavior.",
+    )
     parser.add_argument("--min-position-change", type=float, default=0.0, help="Minimum position change.")
     parser.add_argument("--discretize-actions", action="store_true", help="Snap actions to discrete positions.")
     parser.add_argument(
@@ -151,9 +257,44 @@ def main() -> None:
     )
     parser.add_argument("--max-position", type=float, default=1.0, help="Maximum absolute position size.")
     parser.add_argument("--position-step", type=float, default=0.0, help="Position step size (0 disables).")
+    parser.add_argument("--reward-horizon", type=int, default=1, help="Reward uses return over the next N bars.")
+    parser.add_argument(
+        "--window-size",
+        type=int,
+        default=1,
+        help="Observation window size. Uses the latest N bars of features flattened into one vector.",
+    )
     parser.add_argument("--reward-scale", type=float, default=1.0, help="Scale reward by this factor.")
     parser.add_argument("--reward-clip", type=float, default=0.0, help="Clip reward to +/- value (0 disables).")
+    parser.add_argument(
+        "--reward-mode",
+        choices=("linear", "log_return"),
+        default="linear",
+        help="Reward definition: raw net return shaping or log(1 + net_return).",
+    )
     parser.add_argument("--risk-aversion", type=float, default=0.0, help="Penalty for variance of PnL.")
+    parser.add_argument(
+        "--drawdown-penalty",
+        type=float,
+        default=0.0,
+        help="Penalty applied to current drawdown in reward shaping.",
+    )
+    parser.add_argument(
+        "--drawdown-governor-slope",
+        type=float,
+        default=0.0,
+        help="Scales max position as max(floor, 1 - slope * drawdown). 0 disables.",
+    )
+    parser.add_argument(
+        "--drawdown-governor-floor",
+        type=float,
+        default=0.3,
+        help="Minimum scale used by drawdown governor.",
+    )
+    parser.add_argument("--early-stop-enabled", action="store_true", help="Stop when eval reward plateaus.")
+    parser.add_argument("--early-stop-warmup-steps", type=int, default=100_000, help="Do not early stop before this many timesteps.")
+    parser.add_argument("--early-stop-patience-evals", type=int, default=8, help="Number of eval rounds without improvement before stopping.")
+    parser.add_argument("--early-stop-min-delta", type=float, default=0.001, help="Minimum eval reward improvement to reset patience.")
     parser.add_argument("--verbose", type=int, default=1, help="PPO verbosity level.")
     parser.add_argument("--metrics-log", default="", help="Optional CSV path to append metrics.")
     parser.add_argument("--metrics-log-every", type=int, default=1, help="Write metrics every N log entries.")
@@ -262,7 +403,7 @@ def main() -> None:
     args = parser.parse_args()
 
     df = load_csv(args.data)
-    features_frame, closes, _timestamps = build_feature_frame(df)
+    features_frame, closes, timestamps = build_feature_frame(df)
     total_rows = len(features_frame)
     eval_size = int(total_rows * args.eval_split)
     if eval_size < 1 or total_rows - eval_size < 1:
@@ -273,10 +414,13 @@ def main() -> None:
     eval_frame = features_frame.iloc[split_idx:]
     train_closes = closes.iloc[:split_idx].to_numpy(dtype=np.float32)
     eval_closes = closes.iloc[split_idx:].to_numpy(dtype=np.float32)
+    train_timestamps = timestamps[:split_idx]
+    eval_timestamps = timestamps[split_idx:]
 
     scaler = fit_scaler(train_frame)
     train_features = apply_scaler(train_frame, scaler).to_numpy(dtype=np.float32)
     eval_features = apply_scaler(eval_frame, scaler).to_numpy(dtype=np.float32)
+    feature_dim = train_features.shape[1]
 
     scaler_path = args.feature_scaler_out.strip()
     if not scaler_path:
@@ -287,6 +431,9 @@ def main() -> None:
     save_scaler(scaler, scaler_path)
 
     random_start = not args.no_random_start
+    start_mode = str(args.start_mode).strip().lower() if args.start_mode else ""
+    if not start_mode:
+        start_mode = "random" if random_start else "first"
     discrete_positions = tuple(
         float(item)
         for item in (part.strip() for part in args.discrete_positions.split(","))
@@ -298,29 +445,45 @@ def main() -> None:
         slippage_bps=args.slippage_bps,
         holding_cost_bps=args.holding_cost_bps,
         random_start=random_start,
+        start_mode=start_mode,
         min_position_change=args.min_position_change,
         discretize_actions=args.discretize_actions,
         discrete_positions=discrete_positions,
         max_position=args.max_position,
         position_step=args.position_step,
+        reward_horizon=args.reward_horizon,
+        window_size=args.window_size,
         reward_scale=args.reward_scale,
         reward_clip=args.reward_clip,
+        reward_mode=args.reward_mode,
         risk_aversion=args.risk_aversion,
+        drawdown_penalty=args.drawdown_penalty,
+        drawdown_governor_slope=args.drawdown_governor_slope,
+        drawdown_governor_floor=args.drawdown_governor_floor,
     )
+    # Evaluate across multiple anchor points instead of replaying the first eval segment.
+    eval_start_mode = "weekly_open" if len(eval_timestamps) > 0 else "random"
     eval_config = TradingConfig(
         episode_length=args.episode_length,
         transaction_cost_bps=args.transaction_cost_bps,
         slippage_bps=args.slippage_bps,
         holding_cost_bps=args.holding_cost_bps,
-        random_start=False,
+        random_start=True,
+        start_mode=eval_start_mode,
         min_position_change=args.min_position_change,
         discretize_actions=args.discretize_actions,
         discrete_positions=discrete_positions,
         max_position=args.max_position,
         position_step=args.position_step,
+        reward_horizon=args.reward_horizon,
+        window_size=args.window_size,
         reward_scale=args.reward_scale,
         reward_clip=args.reward_clip,
+        reward_mode=args.reward_mode,
         risk_aversion=args.risk_aversion,
+        drawdown_penalty=args.drawdown_penalty,
+        drawdown_governor_slope=args.drawdown_governor_slope,
+        drawdown_governor_floor=args.drawdown_governor_floor,
     )
 
     env_config_path = args.env_config_out.strip()
@@ -329,14 +492,10 @@ def main() -> None:
     env_config_path = str(Path(env_config_path).expanduser())
     env_dir = Path(env_config_path).parent
     env_dir.mkdir(parents=True, exist_ok=True)
-    save_trading_config(
-        train_config,
-        env_config_path,
-        extra=_extract_data_context(args.data),
-    )
 
-    env = _build_env(train_features, train_closes, train_config)
-    eval_env = _build_env(eval_features, eval_closes, eval_config)
+    env = _build_env(train_features, train_closes, train_config, train_timestamps)
+    eval_env = _build_env(eval_features, eval_closes, eval_config, eval_timestamps)
+    eval_env.seed(0)
 
     model_path = Path(args.model_out)
     print(
@@ -344,6 +503,7 @@ def main() -> None:
         f"rows={total_rows}",
         f"train={len(train_features)}",
         f"eval={len(eval_features)}",
+        f"eval_start_mode={eval_start_mode}",
         f"total_steps={args.total_steps}",
         f"resume={args.resume}",
     )
@@ -384,7 +544,30 @@ def main() -> None:
                 best_model_tmp_dir = Path(tempfile.mkdtemp(prefix="ppo_best_eval_"))
             kwargs["best_model_save_path"] = str(best_model_tmp_dir)
             kwargs["log_path"] = str(best_model_tmp_dir)
-        return EvalCallback(eval_env_ref, **kwargs)
+        return PlateauEvalCallback(
+            eval_env_ref,
+            write_metric=_write_metric,
+            early_stop_enabled=args.early_stop_enabled,
+            early_stop_warmup_steps=args.early_stop_warmup_steps,
+            early_stop_patience_evals=args.early_stop_patience_evals,
+            early_stop_min_delta=args.early_stop_min_delta,
+            **kwargs,
+        )
+
+    def _save_interrupted_checkpoint(model_ref: PPO, config_ref: TradingConfig) -> None:
+        model_to_save = model_ref
+        if args.save_best_checkpoint and best_model_tmp_dir is not None:
+            best_model_path = best_model_tmp_dir / "best_model.zip"
+            if best_model_path.exists():
+                model_to_save = PPO.load(str(best_model_path))
+                print(f"Using best eval checkpoint after interrupt: {best_model_path}")
+        model_path.parent.mkdir(parents=True, exist_ok=True)
+        model_to_save.save(str(model_path))
+        save_trading_config(
+            config_ref,
+            env_config_path,
+            extra=_extract_data_context(args.data),
+        )
 
     if args.optuna_trials > 0:
         try:
@@ -410,11 +593,15 @@ def main() -> None:
             "ent_coef",
             "gae_lambda",
             "clip_range",
+            "target_kl",
             "vf_coef",
             "n_epochs",
             "min_position_change",
             "position_step",
+            "reward_horizon",
+            "window_size",
             "risk_aversion",
+            "drawdown_penalty",
             "max_position",
             "episode_length",
             "reward_clip",
@@ -447,11 +634,15 @@ def main() -> None:
             ent_coef = trial.suggest_float("ent_coef", 1e-6, 1e-2, log=True)
             gae_lambda = trial.suggest_float("gae_lambda", 0.90, 0.99)
             clip_range = trial.suggest_float("clip_range", 0.10, 0.30)
+            target_kl = trial.suggest_float("target_kl", 0.0, 0.05)
             vf_coef = trial.suggest_float("vf_coef", 0.10, 1.00)
             n_epochs = trial.suggest_categorical("n_epochs", [5, 10, 20])
             min_position_change = trial.suggest_float("min_position_change", 0.0, 0.2, step=0.01)
             position_step = trial.suggest_categorical("position_step", [0.0, 0.05, 0.1, 0.2])
+            reward_horizon = trial.suggest_categorical("reward_horizon", [1, 2, 4, 8])
+            window_size = trial.suggest_categorical("window_size", [1, 4, 8, 16])
             risk_aversion = trial.suggest_float("risk_aversion", 0.0, 0.3, step=0.01)
+            drawdown_penalty = trial.suggest_float("drawdown_penalty", 0.0, 0.2, step=0.01)
             max_position = trial.suggest_categorical("max_position", [0.5, 1.0, 1.5, 2.0])
             episode_length = trial.suggest_categorical("episode_length", [256, 512, 1024, 2048])
             reward_clip = trial.suggest_categorical("reward_clip", [0.0, 0.005, 0.01, 0.02])
@@ -461,7 +652,10 @@ def main() -> None:
                 episode_length=episode_length,
                 min_position_change=min_position_change,
                 position_step=position_step,
+                reward_horizon=reward_horizon,
+                window_size=window_size,
                 risk_aversion=risk_aversion,
+                drawdown_penalty=drawdown_penalty,
                 max_position=max_position,
                 reward_clip=reward_clip,
             )
@@ -470,12 +664,15 @@ def main() -> None:
                 episode_length=episode_length,
                 min_position_change=min_position_change,
                 position_step=position_step,
+                reward_horizon=reward_horizon,
+                window_size=window_size,
                 risk_aversion=risk_aversion,
+                drawdown_penalty=drawdown_penalty,
                 max_position=max_position,
                 reward_clip=reward_clip,
             )
-            trial_env = _build_env(train_features, train_closes, trial_train_config)
-            trial_eval_env = _build_env(eval_features, eval_closes, trial_eval_config)
+            trial_env = _build_env(train_features, train_closes, trial_train_config, train_timestamps)
+            trial_eval_env = _build_env(eval_features, eval_closes, trial_eval_config, eval_timestamps)
 
             model = _train_model(
                 env=trial_env,
@@ -486,9 +683,13 @@ def main() -> None:
                 ent_coef=ent_coef,
                 gae_lambda=gae_lambda,
                 clip_range=clip_range,
+                target_kl=None if target_kl <= 0.0 else target_kl,
                 vf_coef=vf_coef,
                 n_epochs=n_epochs,
                 total_steps=args.optuna_steps,
+                window_size=window_size,
+                feature_dim=feature_dim,
+                device=args.device,
                 verbose=0,
             )
             model.learn(
@@ -537,7 +738,10 @@ def main() -> None:
                 episode_length=int(params["episode_length"]),
                 min_position_change=float(params["min_position_change"]),
                 position_step=float(params["position_step"]),
+                reward_horizon=int(params.get("reward_horizon", 1)),
+                window_size=int(params.get("window_size", 1)),
                 risk_aversion=float(params["risk_aversion"]),
+                drawdown_penalty=float(params.get("drawdown_penalty", 0.0)),
                 max_position=float(params["max_position"]),
                 reward_clip=float(params["reward_clip"]),
             )
@@ -546,7 +750,10 @@ def main() -> None:
                 episode_length=int(params["episode_length"]),
                 min_position_change=float(params["min_position_change"]),
                 position_step=float(params["position_step"]),
+                reward_horizon=int(params.get("reward_horizon", 1)),
+                window_size=int(params.get("window_size", 1)),
                 risk_aversion=float(params["risk_aversion"]),
+                drawdown_penalty=float(params.get("drawdown_penalty", 0.0)),
                 max_position=float(params["max_position"]),
                 reward_clip=float(params["reward_clip"]),
             )
@@ -560,10 +767,13 @@ def main() -> None:
             action_flat = 0
             total_steps = max(0, len(features) - 1)
             for idx in range(total_steps):
-                denom = max(1e-6, float(config.max_position) if config.max_position else 1.0)
-                obs = np.concatenate(
-                    [features[idx], np.array([position / denom], dtype=np.float32)]
-                ).astype(np.float32)
+                obs = build_window_observation(
+                    features,
+                    idx,
+                    position=position,
+                    max_position=float(config.max_position),
+                    window_size=int(getattr(config, "window_size", 1)),
+                )
                 action, _ = model.predict(obs, deterministic=True)
                 target = float(np.clip(float(action[0]), -config.max_position, config.max_position))
                 if config.discretize_actions and config.discrete_positions:
@@ -595,8 +805,8 @@ def main() -> None:
             params: dict, *, total_steps: int, seed: int, verbose: int
         ) -> tuple[float, dict[str, float]]:
             cand_train_cfg, cand_eval_cfg = _params_to_configs(params)
-            cand_env = _build_env(train_features, train_closes, cand_train_cfg)
-            cand_eval_env = _build_env(eval_features, eval_closes, cand_eval_cfg)
+            cand_env = _build_env(train_features, train_closes, cand_train_cfg, train_timestamps)
+            cand_eval_env = _build_env(eval_features, eval_closes, cand_eval_cfg, eval_timestamps)
             model = _train_model(
                 env=cand_env,
                 learning_rate=float(params["learning_rate"]),
@@ -606,9 +816,17 @@ def main() -> None:
                 ent_coef=float(params["ent_coef"]),
                 gae_lambda=float(params["gae_lambda"]),
                 clip_range=float(params["clip_range"]),
+                target_kl=(
+                    None
+                    if float(params.get("target_kl", 0.0)) <= 0.0
+                    else float(params["target_kl"])
+                ),
                 vf_coef=float(params["vf_coef"]),
                 n_epochs=int(params["n_epochs"]),
                 total_steps=total_steps,
+                window_size=int(params.get("window_size", 1)),
+                feature_dim=feature_dim,
+                device=args.device,
                 verbose=verbose,
             )
             model.set_random_seed(seed)
@@ -890,13 +1108,9 @@ def main() -> None:
         if not args.optuna_train_best:
             return
         best_train_config, best_eval_config = _params_to_configs(best_params)
-        save_trading_config(
-            best_train_config,
-            env_config_path,
-            extra=_extract_data_context(args.data),
-        )
-        best_env = _build_env(train_features, train_closes, best_train_config)
-        best_eval_env = _build_env(eval_features, eval_closes, best_eval_config)
+        best_env = _build_env(train_features, train_closes, best_train_config, train_timestamps)
+        best_eval_env = _build_env(eval_features, eval_closes, best_eval_config, eval_timestamps)
+        final_train_config = best_train_config
         model = _train_model(
             env=best_env,
             learning_rate=float(best_params["learning_rate"]),
@@ -906,27 +1120,58 @@ def main() -> None:
             ent_coef=float(best_params["ent_coef"]),
             gae_lambda=float(best_params["gae_lambda"]),
             clip_range=float(best_params["clip_range"]),
+            target_kl=(
+                None
+                if float(best_params.get("target_kl", 0.0)) <= 0.0
+                else float(best_params["target_kl"])
+            ),
             vf_coef=float(best_params["vf_coef"]),
             n_epochs=int(best_params["n_epochs"]),
             total_steps=args.total_steps,
+            window_size=int(best_params.get("window_size", 1)),
+            feature_dim=feature_dim,
+            device=args.device,
             verbose=args.verbose,
         )
         eval_callback = _make_eval_callback(best_eval_env)
-        model.learn(
-            total_timesteps=args.total_steps,
-            callback=CallbackList([eval_callback, metrics_callback]),
-        )
+        try:
+            model.learn(
+                total_timesteps=args.total_steps,
+                callback=CallbackList([eval_callback, metrics_callback]),
+            )
+        except KeyboardInterrupt:
+            print("Training interrupted by user; saving current checkpoint.")
+            _save_interrupted_checkpoint(model, final_train_config)
+            if metrics_fh:
+                metrics_fh.flush()
+                metrics_fh.close()
+            if best_model_tmp_dir is not None:
+                shutil.rmtree(best_model_tmp_dir, ignore_errors=True)
+            raise SystemExit(130)
     elif args.resume:
         if not model_path.exists():
             raise FileNotFoundError(f"Resume requested but model not found: {model_path}")
-        model = PPO.load(str(model_path), env=env)
+        final_train_config = train_config
+        model = PPO.load(str(model_path), env=env, device=args.device)
+        print(f"Resolved device: {model.device}")
         model.verbose = args.verbose
         eval_callback = _make_eval_callback(eval_env)
-        model.learn(
-            total_timesteps=args.total_steps,
-            callback=CallbackList([eval_callback, metrics_callback]),
-        )
+        try:
+            model.learn(
+                total_timesteps=args.total_steps,
+                callback=CallbackList([eval_callback, metrics_callback]),
+            )
+        except KeyboardInterrupt:
+            print("Training interrupted by user; saving current checkpoint.")
+            _save_interrupted_checkpoint(model, final_train_config)
+            if metrics_fh:
+                metrics_fh.flush()
+                metrics_fh.close()
+            if best_model_tmp_dir is not None:
+                shutil.rmtree(best_model_tmp_dir, ignore_errors=True)
+            raise SystemExit(130)
     else:
+        final_train_config = train_config
         model = _train_model(
             env=env,
             learning_rate=args.learning_rate,
@@ -936,16 +1181,30 @@ def main() -> None:
             ent_coef=args.ent_coef,
             gae_lambda=args.gae_lambda,
             clip_range=args.clip_range,
+            target_kl=None if args.target_kl <= 0.0 else args.target_kl,
             vf_coef=args.vf_coef,
             n_epochs=args.n_epochs,
             total_steps=args.total_steps,
+            window_size=args.window_size,
+            feature_dim=feature_dim,
+            device=args.device,
             verbose=args.verbose,
         )
         eval_callback = _make_eval_callback(eval_env)
-        model.learn(
-            total_timesteps=args.total_steps,
-            callback=CallbackList([eval_callback, metrics_callback]),
-        )
+        try:
+            model.learn(
+                total_timesteps=args.total_steps,
+                callback=CallbackList([eval_callback, metrics_callback]),
+            )
+        except KeyboardInterrupt:
+            print("Training interrupted by user; saving current checkpoint.")
+            _save_interrupted_checkpoint(model, final_train_config)
+            if metrics_fh:
+                metrics_fh.flush()
+                metrics_fh.close()
+            if best_model_tmp_dir is not None:
+                shutil.rmtree(best_model_tmp_dir, ignore_errors=True)
+            raise SystemExit(130)
 
     model_to_save = model
     if args.save_best_checkpoint and best_model_tmp_dir is not None:
@@ -958,6 +1217,11 @@ def main() -> None:
 
     model_path.parent.mkdir(parents=True, exist_ok=True)
     model_to_save.save(str(model_path))
+    save_trading_config(
+        final_train_config,
+        env_config_path,
+        extra=_extract_data_context(args.data),
+    )
     if metrics_fh:
         metrics_fh.flush()
         metrics_fh.close()

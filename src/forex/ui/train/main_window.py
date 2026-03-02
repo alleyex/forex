@@ -114,7 +114,7 @@ class MainWindow(QMainWindow):
         self._setup_panel_switcher()
         self._setup_status_bar()
         self._setup_menu_toolbar()
-        self._show_panel("training", show_log=True)
+        self._show_panel("training", show_log=False)
 
     def closeEvent(self, event: QCloseEvent) -> None:
         controller = self._ppo_controller
@@ -265,6 +265,7 @@ class MainWindow(QMainWindow):
 
     def _connect_panel_signals(self) -> None:
         self._training_params_panel.start_requested.connect(self._start_ppo_training)
+        self._training_params_panel.stop_requested.connect(self._stop_ppo_training)
         self._training_params_panel.optuna_requested.connect(self._start_ppo_training)
         self._training_params_panel.tab_changed.connect(self._on_training_tab_changed)
         self._simulation_params_panel.start_requested.connect(self._start_simulation)
@@ -307,7 +308,7 @@ class MainWindow(QMainWindow):
 
     @Slot()
     def _on_train_ppo_clicked(self) -> None:
-        self._show_panel("training", show_log=True)
+        self._show_panel("training", show_log=False)
 
     @Slot()
     def _on_simulation_clicked(self) -> None:
@@ -323,7 +324,22 @@ class MainWindow(QMainWindow):
         controller = self._get_ppo_controller()
         if controller is None:
             return
+        self._training_params_panel.set_training_running(True)
         controller.start(params, params.get("data_path", ""))
+        if not controller.is_running():
+            self._training_params_panel.set_training_running(False)
+
+    @Slot()
+    def _stop_ppo_training(self) -> None:
+        controller = self._get_ppo_controller()
+        if controller is None:
+            self._training_params_panel.set_training_running(False)
+            return
+        controller.stop()
+
+    def _on_ppo_training_finished(self, *_args) -> None:
+        self._training_panel.flush_plot()
+        self._training_params_panel.set_training_running(False)
 
     @Slot(dict)
     def _start_simulation(self, params: dict) -> None:
@@ -383,7 +399,7 @@ class MainWindow(QMainWindow):
                 state=self._training_state,
                 ingest_log=self._training_presenter.handle_log_line,
                 ingest_optuna_log=self._training_presenter.handle_optuna_log_line,
-                on_finished=lambda *_: self._training_panel.flush_plot(),
+                on_finished=self._on_ppo_training_finished,
             )
             self._ppo_controller.best_params_found.connect(
                 self._training_presenter.handle_best_params_found
@@ -393,6 +409,9 @@ class MainWindow(QMainWindow):
             )
             self._ppo_controller.optuna_best_params_logged.connect(
                 self._training_presenter.handle_optuna_best_params
+            )
+            self._ppo_controller.device_resolved.connect(
+                self._training_params_panel.set_resolved_device
             )
             self._ppo_controller.replay_best_params_logged.connect(self._on_replay_best_params)
             self._ppo_controller.replay_best_summary_logged.connect(
