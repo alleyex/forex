@@ -3,7 +3,12 @@ from __future__ import annotations
 import numpy as np
 import pytest
 
-from forex.ml.rl.envs.trading_env import TradingConfig, TradingEnv
+from forex.ml.rl.envs.trading_env import (
+    TradingConfig,
+    TradingEnv,
+    compute_drawdown_governor_scale,
+    simulate_step_transition,
+)
 
 
 def _make_env(config: TradingConfig, timestamps: list[str] | None = None) -> TradingEnv:
@@ -24,7 +29,7 @@ def test_apply_action_respects_max_position_above_one() -> None:
     pytest.importorskip("gymnasium")
     env = _make_env(TradingConfig(max_position=2.5))
     env.reset()
-    target = env._apply_action(np.array([2.0], dtype=np.float32))
+    target, _ = env._apply_action(np.array([2.0], dtype=np.float32))
     assert target == pytest.approx(2.0)
 
 
@@ -40,9 +45,9 @@ def test_action_constraints_with_one_step_and_one_min_change_form_three_state_po
     )
     env.reset()
     env._position = 0.0
-    assert env._apply_action(np.array([0.8], dtype=np.float32)) == pytest.approx(1.0)
-    assert env._apply_action(np.array([-0.8], dtype=np.float32)) == pytest.approx(-1.0)
-    assert env._apply_action(np.array([0.4], dtype=np.float32)) == pytest.approx(0.0)
+    assert env._apply_action(np.array([0.8], dtype=np.float32))[0] == pytest.approx(1.0)
+    assert env._apply_action(np.array([-0.8], dtype=np.float32))[0] == pytest.approx(-1.0)
+    assert env._apply_action(np.array([0.4], dtype=np.float32))[0] == pytest.approx(0.0)
 
 
 def test_min_position_change_uses_strictly_less_than_threshold() -> None:
@@ -57,10 +62,10 @@ def test_min_position_change_uses_strictly_less_than_threshold() -> None:
     )
     env.reset()
     env._position = 1.0
-    assert env._apply_action(np.array([0.9], dtype=np.float32)) == pytest.approx(1.0)
-    assert env._apply_action(np.array([0.1], dtype=np.float32)) == pytest.approx(0.0)
+    assert env._apply_action(np.array([0.9], dtype=np.float32))[0] == pytest.approx(1.0)
+    assert env._apply_action(np.array([0.1], dtype=np.float32))[0] == pytest.approx(0.0)
     env._position = 0.0
-    assert env._apply_action(np.array([0.49], dtype=np.float32)) == pytest.approx(0.0)
+    assert env._apply_action(np.array([0.49], dtype=np.float32))[0] == pytest.approx(0.0)
 
 
 def test_reset_uses_full_data_range() -> None:
@@ -204,8 +209,10 @@ def test_drawdown_governor_scales_effective_max_position() -> None:
     env.reset()
     env._equity = 0.8
     env._peak_equity = 1.0
-    assert env._drawdown_governor_scale() == pytest.approx(0.6)
-    assert env._apply_action(np.array([1.0], dtype=np.float32)) == pytest.approx(0.6)
+    assert compute_drawdown_governor_scale(equity=env._equity, peak_equity=env._peak_equity, slope=2.0, floor=0.3) == pytest.approx(0.6)
+    target, info = env._apply_action(np.array([1.0], dtype=np.float32))
+    assert target == pytest.approx(0.6)
+    assert info["risk_scale"] == pytest.approx(0.6)
 
 
 def test_drawdown_governor_respects_floor() -> None:
@@ -221,8 +228,59 @@ def test_drawdown_governor_respects_floor() -> None:
     env.reset()
     env._equity = 0.4
     env._peak_equity = 1.0
-    assert env._drawdown_governor_scale() == pytest.approx(0.3)
-    assert env._apply_action(np.array([1.0], dtype=np.float32)) == pytest.approx(0.3)
+    assert compute_drawdown_governor_scale(equity=env._equity, peak_equity=env._peak_equity, slope=2.0, floor=0.3) == pytest.approx(0.3)
+    target, info = env._apply_action(np.array([1.0], dtype=np.float32))
+    assert target == pytest.approx(0.3)
+    assert info["risk_scale"] == pytest.approx(0.3)
+
+
+def test_volatility_targeting_scales_position_from_realized_vol() -> None:
+    pytest.importorskip("gymnasium")
+    features = np.zeros((6, 2), dtype=np.float32)
+    closes = np.array([100.0, 110.0, 100.0, 110.0, 100.0, 110.0], dtype=np.float64)
+    env = TradingEnv(
+        features,
+        closes,
+        TradingConfig(
+            random_start=False,
+            episode_length=4,
+            max_position=1.0,
+            target_vol=0.05,
+            vol_target_lookback=4,
+            vol_scale_floor=0.25,
+            vol_scale_cap=2.0,
+        ),
+    )
+    env.reset()
+    env._idx = 4
+    target, info = env._apply_action(np.array([1.0], dtype=np.float32))
+    assert info["realized_vol"] > 0.0
+    assert info["vol_target_scale"] < 1.0
+    assert target == pytest.approx(info["vol_target_scale"])
+
+
+def test_volatility_targeting_respects_scale_floor_and_cap() -> None:
+    pytest.importorskip("gymnasium")
+    features = np.zeros((6, 2), dtype=np.float32)
+    closes = np.array([100.0, 100.1, 100.2, 100.3, 100.4, 100.5], dtype=np.float64)
+    env = TradingEnv(
+        features,
+        closes,
+        TradingConfig(
+            random_start=False,
+            episode_length=4,
+            max_position=1.0,
+            target_vol=1.0,
+            vol_target_lookback=4,
+            vol_scale_floor=0.5,
+            vol_scale_cap=1.2,
+        ),
+    )
+    env.reset()
+    env._idx = 4
+    target, info = env._apply_action(np.array([1.0], dtype=np.float32))
+    assert info["vol_target_scale"] == pytest.approx(1.2)
+    assert target == pytest.approx(1.0)
 
 
 def test_step_info_exposes_reward_components() -> None:
@@ -235,6 +293,38 @@ def test_step_info_exposes_reward_components() -> None:
     assert "step_pnl" in info
     assert "reward" in info
     assert info["reward"] == pytest.approx(reward)
+
+
+def test_simulate_step_transition_matches_env_step() -> None:
+    pytest.importorskip("gymnasium")
+    config = TradingConfig(
+        random_start=False,
+        episode_length=3,
+        reward_horizon=1,
+        reward_mode="log_return",
+        drawdown_penalty=0.5,
+        risk_aversion=0.1,
+        transaction_cost_bps=0.225,
+        slippage_bps=0.03,
+        holding_cost_bps=0.05,
+    )
+    env = _make_env(config)
+    env.reset()
+    env._position = 0.5
+    transition = simulate_step_transition(
+        current_position=env._position,
+        target_position=0.25,
+        closes=env._closes,
+        idx=env._idx,
+        equity=env._equity,
+        peak_equity=env._peak_equity,
+        config=config,
+    )
+    _, reward, _, _, info = env.step(np.array([0.25], dtype=np.float32))
+    assert reward == pytest.approx(transition["reward"])
+    assert info["equity"] == pytest.approx(transition["equity"])
+    assert info["drawdown"] == pytest.approx(transition["drawdown"])
+    assert info["cost"] == pytest.approx(transition["cost"])
 
 
 def test_reward_horizon_uses_future_n_step_return() -> None:

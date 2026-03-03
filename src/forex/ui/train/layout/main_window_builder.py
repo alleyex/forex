@@ -21,7 +21,10 @@ from forex.ui.train.state.simulation_state import SimulationState
 from forex.ui.train.state.training_state import TrainingState
 from forex.ui.shared.widgets.log_widget import LogWidget
 from forex.ui.train.widgets.history_integrity_panel import HistoryIntegrityPanel
-from forex.ui.train.widgets.simulation_panel import SimulationPanel, SimulationParamsPanel
+from forex.ui.train.widgets.simulation_panel import (
+    SimulationPanel,
+    SimulationParamsPanel,
+)
 from forex.ui.train.widgets.trade_panel import TradePanel
 from forex.ui.train.widgets.training_panel import TrainingPanel, TrainingParamsPanel
 
@@ -98,15 +101,16 @@ def build_panels(
     simulation_presenter = SimulationPresenter(parent=parent, state=simulation_state)
     simulation_state.reset_plot.connect(simulation_panel.reset_plot)
     simulation_state.flush_plot.connect(simulation_panel.flush_plot)
-    simulation_state.reset_summary.connect(simulation_params_panel.reset_summary)
+    simulation_state.reset_summary.connect(simulation_panel.reset_summary)
     simulation_state.equity_point.connect(simulation_panel.append_equity_point)
     simulation_state.summary_update.connect(on_simulation_summary)
-    simulation_state.trade_stats.connect(simulation_params_panel.update_trade_stats)
-    simulation_state.streak_stats.connect(simulation_params_panel.update_streak_stats)
-    simulation_state.holding_stats.connect(simulation_params_panel.update_holding_stats)
-    simulation_state.action_distribution.connect(simulation_params_panel.update_action_distribution)
-    simulation_state.playback_range.connect(simulation_params_panel.update_playback_range)
+    simulation_state.trade_stats.connect(simulation_panel.update_trade_stats)
+    simulation_state.streak_stats.connect(simulation_panel.update_streak_stats)
+    simulation_state.holding_stats.connect(simulation_panel.update_holding_stats)
+    simulation_state.action_distribution.connect(simulation_panel.update_action_distribution)
+    simulation_state.playback_range.connect(simulation_panel.update_playback_range)
     simulation_state.log_message.connect(log_panel.append)
+    simulation_state.log_message.connect(simulation_panel.append_log)
     simulation_state.log_message.connect(training_panel.append_log)
 
     history_download_state = HistoryDownloadState(parent=parent)
@@ -230,11 +234,9 @@ def build_toolbar(
     on_simulation: Callable[[], None],
     on_history_download: Callable[[], None],
     on_data_check: Callable[[], None],
-    on_toggle_log: Callable[[bool], None],
 ) -> ToolbarBundle:
     toolbar_controller = ToolbarController(
         parent=main_window,
-        log_visible=dock_controller.log_dock.isVisible(),
         on_app_auth=on_app_auth,
         on_oauth=on_oauth,
         on_toggle_connection=on_toggle_connection,
@@ -243,9 +245,7 @@ def build_toolbar(
         on_simulation=on_simulation,
         on_history_download=on_history_download,
         on_data_check=on_data_check,
-        on_toggle_log=on_toggle_log,
     )
-    dock_controller.bind_log_action(toolbar_controller.action_toggle_log)
     return ToolbarBundle(
         toolbar_controller=toolbar_controller,
         action_toggle_connection=toolbar_controller.action_toggle_connection,

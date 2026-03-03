@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Callable, Optional
+from typing import Callable, Optional, Protocol
 
 from PySide6.QtCore import QObject
 from PySide6.QtWidgets import QLabel
@@ -13,7 +13,10 @@ from forex.ui.shared.utils.formatters import (
     format_connection_message,
     format_oauth_status,
 )
-from forex.ui.shared.widgets.log_widget import LogWidget
+
+
+class LogSink(Protocol):
+    def append(self, message: str) -> None: ...
 
 
 class ConnectionPresenter(QObject):
@@ -21,7 +24,7 @@ class ConnectionPresenter(QObject):
         self,
         *,
         parent: QObject,
-        log_panel: LogWidget,
+        log_panel: LogSink,
         app_auth_label: QLabel,
         oauth_label: QLabel,
         toggle_action,

@@ -8,7 +8,12 @@ from pathlib import Path
 import numpy as np
 from stable_baselines3 import PPO
 
-from forex.ml.rl.envs.trading_env import TradingConfig, build_window_observation
+from forex.ml.rl.envs.trading_env import (
+    TradingConfig,
+    apply_risk_engine,
+    build_window_observation,
+    simulate_step_transition,
+)
 from forex.ml.rl.envs.trading_config_io import load_trading_config
 from forex.ml.rl.features.feature_builder import (
     apply_scaler,
@@ -16,7 +21,6 @@ from forex.ml.rl.features.feature_builder import (
     load_csv,
     load_scaler,
 )
-from forex.ml.rl.models import WindowCnnExtractor
 from forex.config.paths import DEFAULT_MODEL_PATH
 
 
@@ -25,17 +29,6 @@ class SimState:
     position: float = 0.0
     equity: float = 1.0
     trades: int = 0
-def _apply_action_constraints(target: float, current_position: float, config: TradingConfig) -> float:
-    value = float(target)
-    if config.discretize_actions and config.discrete_positions:
-        value = min(config.discrete_positions, key=lambda candidate: abs(float(candidate) - value))
-    if config.position_step > 0.0:
-        value = round(value / config.position_step) * config.position_step
-    if config.max_position > 0.0:
-        value = float(np.clip(value, -config.max_position, config.max_position))
-    if abs(value - current_position) < config.min_position_change:
-        value = float(current_position)
-    return float(value)
 
 
 def _streak_stats(values: list[float]) -> tuple[int, int]:
@@ -125,10 +118,6 @@ def main() -> None:
             config = loaded_config
         except Exception:
             pass
-    cost_rate = (config.transaction_cost_bps + config.slippage_bps) / 10000.0
-    holding_cost_rate = config.holding_cost_bps / 10000.0
-    reward_horizon = max(1, int(getattr(config, "reward_horizon", 1)))
-
     model = PPO.load(args.model)
 
     state = SimState()
@@ -157,23 +146,22 @@ def main() -> None:
         equity_log_fh = log_path.open("w", encoding="utf-8")
         equity_log_fh.write("step,equity\n")
 
-    def _horizon_return(idx: int) -> float:
-        base_price = closes[idx]
-        if base_price <= 0.0:
-            return 0.0
-        horizon_idx = min(idx + reward_horizon, len(closes) - 1)
-        return (closes[horizon_idx] - base_price) / base_price
-
     def simulate_fixed(position: float, steps: int) -> tuple[float, float]:
         equity = 1.0
+        peak_equity = 1.0
         current = 0.0
         for idx in range(steps):
-            delta = position - current
-            cost = abs(delta) * cost_rate
-            holding_cost = abs(current) * holding_cost_rate
-            price_return = _horizon_return(idx)
-            reward = current * float(price_return) - cost - holding_cost
-            equity *= 1.0 + reward
+            transition = simulate_step_transition(
+                current_position=current,
+                target_position=position,
+                closes=closes,
+                idx=idx,
+                equity=equity,
+                peak_equity=peak_equity,
+                config=config,
+            )
+            equity = transition["equity"]
+            peak_equity = transition["peak_equity"]
             current = position
         return equity, equity - 1.0
 
@@ -205,8 +193,16 @@ def main() -> None:
             window_size=getattr(config, "window_size", 1),
         )
         action, _ = model.predict(obs, deterministic=not args.stochastic)
-        target_raw = float(np.clip(action[0], -config.max_position, config.max_position))
-        target_position = _apply_action_constraints(target_raw, state.position, config)
+        target_raw = float(action[0])
+        target_position, risk_info = apply_risk_engine(
+            target_raw,
+            current_position=state.position,
+            config=config,
+            closes=closes,
+            idx=idx,
+            equity=state.equity,
+            peak_equity=peak_equity,
+        )
 
         action_sum += target_position
         action_min = target_position if action_min is None else min(action_min, target_position)
@@ -224,33 +220,36 @@ def main() -> None:
             holding_steps.append(idx - last_change_idx)
             last_change_idx = idx
 
-        cost = abs(delta) * cost_rate
-        holding_cost = abs(state.position) * holding_cost_rate
+        transition = simulate_step_transition(
+            current_position=state.position,
+            target_position=target_position,
+            closes=closes,
+            idx=idx,
+            equity=state.equity,
+            peak_equity=peak_equity,
+            config=config,
+        )
         if abs(delta) > 1e-6:
             current_price = closes[idx]
             current_time = timestamps[idx] if idx < len(timestamps) else "-"
             if last_trade_price is not None:
                 trade_pnl = state.position * (current_price - last_trade_price) / last_trade_price
                 trade_pnls.append(float(trade_pnl))
-                trade_costs.append(float(cost))
+                trade_costs.append(float(transition["cost"]))
                 if not args.quiet:
                     print(
                         f"Trade @ {current_time} pos={state.position:.3f} -> {target_position:.3f} "
-                        f"pnl={trade_pnl:.6g} cost={cost:.6g} holding={holding_cost:.6g}"
+                        f"pnl={trade_pnl:.6g} cost={transition['cost']:.6g} "
+                        f"holding={transition['holding_cost']:.6g}"
                     )
             last_trade_price = current_price
 
-        price_return = _horizon_return(idx)
-        reward = state.position * float(price_return) - cost - holding_cost
-        state.equity *= 1.0 + reward
+        reward = transition["reward"]
+        state.equity = transition["equity"]
         equity_series.append(state.equity)
         state.position = target_position
-        if state.equity > peak_equity:
-            peak_equity = state.equity
-        if peak_equity > 0:
-            drawdown = (peak_equity - state.equity) / peak_equity
-            if drawdown > max_drawdown:
-                max_drawdown = drawdown
+        peak_equity = transition["peak_equity"]
+        max_drawdown = max(max_drawdown, float(transition["drawdown"]))
 
         if equity_log_fh and (idx + 1) % equity_log_every == 0:
             equity_log_fh.write(f"{idx + 1},{state.equity:.6f}\n")
@@ -260,7 +259,8 @@ def main() -> None:
             ts = timestamps[idx + 1] if idx + 1 < len(timestamps) else "-"
             print(
                 f"[{ts}] step={idx + 1} equity={state.equity:.6f} "
-                f"pos={state.position:.3f} reward={reward:.6g}"
+                f"pos={state.position:.3f} reward={reward:.6g} "
+                f"vol_scale={risk_info['vol_target_scale']:.3f}"
             )
 
     processed_steps = last_idx + 1

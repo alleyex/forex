@@ -114,7 +114,7 @@ class MainWindow(QMainWindow):
         self._setup_panel_switcher()
         self._setup_status_bar()
         self._setup_menu_toolbar()
-        self._show_panel("training", show_log=False)
+        self._show_panel("training")
 
     def closeEvent(self, event: QCloseEvent) -> None:
         controller = self._ppo_controller
@@ -286,7 +286,6 @@ class MainWindow(QMainWindow):
             on_simulation=self._on_simulation_clicked,
             on_history_download=self._open_history_download_dialog,
             on_data_check=self._open_data_check_dialog,
-            on_toggle_log=self._dock_controller.toggle_log,
         )
         _ = toolbar_bundle.toolbar_controller
         self._action_toggle_connection = toolbar_bundle.action_toggle_connection
@@ -308,11 +307,11 @@ class MainWindow(QMainWindow):
 
     @Slot()
     def _on_train_ppo_clicked(self) -> None:
-        self._show_panel("training", show_log=False)
+        self._show_panel("training")
 
     @Slot()
     def _on_simulation_clicked(self) -> None:
-        self._show_panel("simulation", show_log=None)
+        self._show_panel("simulation")
 
     @Slot(dict)
     def _start_ppo_training(self, params: dict) -> None:
@@ -366,7 +365,7 @@ class MainWindow(QMainWindow):
 
     @Slot()
     def _open_data_check_dialog(self) -> None:
-        self._show_panel("data_check", show_log=None)
+        self._show_panel("data_check")
 
     def _get_history_download_controller(self) -> Optional[HistoryDownloadController]:
         if not self._use_cases:
@@ -450,12 +449,12 @@ class MainWindow(QMainWindow):
 
     @Slot(dict)
     def _update_simulation_summary(self, data: dict) -> None:
-        self._simulation_params_panel.update_summary(**data)
+        self._simulation_panel.update_summary(**data)
 
     @Slot()
     def _on_fetch_account_info(self) -> None:
         """Handle fetch account info click"""
-        self._show_panel("trade", show_log=None)
+        self._show_panel("trade")
         if not self._ensure_account_info_connection():
             return
         self._fetch_account_info()
@@ -566,10 +565,10 @@ class MainWindow(QMainWindow):
         )
 
 
-    def _show_panel(self, panel: str, *, show_log: Optional[bool]) -> None:
+    def _show_panel(self, panel: str) -> None:
         if self._panel_switcher is None:
             return
-        self._panel_switcher.show(panel, show_log=show_log)
+        self._panel_switcher.show(panel)
 
     def set_service(self, service: AppAuthServiceLike) -> None:
         """Set the authenticated service"""

@@ -15,7 +15,13 @@ from stable_baselines3.common.monitor import Monitor
 from stable_baselines3.common.callbacks import BaseCallback, CallbackList, EvalCallback
 from stable_baselines3.common.evaluation import evaluate_policy
 
-from forex.ml.rl.envs.trading_env import TradingConfig, TradingEnv, build_window_observation
+from forex.ml.rl.envs.trading_env import (
+    TradingConfig,
+    TradingEnv,
+    apply_risk_engine,
+    build_window_observation,
+    simulate_step_transition,
+)
 from forex.ml.rl.envs.trading_config_io import save_trading_config
 from forex.ml.rl.features.feature_builder import (
     apply_scaler,
@@ -71,6 +77,22 @@ class MetricsLogCallback(BaseCallback):
         mean_reward = self.logger.name_to_value.get("rollout/ep_rew_mean")
         if mean_reward is not None:
             self._write_metric(step, "ep_rew_mean", float(mean_reward))
+        logger_metric_map = {
+            "train/value_loss": "value_loss",
+            "train/explained_variance": "explained_variance",
+            "train/approx_kl": "approx_kl",
+            "train/clip_fraction": "clip_fraction",
+            "train/entropy_loss": "entropy_loss",
+            "train/policy_gradient_loss": "policy_gradient_loss",
+            "train/loss": "loss",
+            "train/std": "std",
+            "time/fps": "fps",
+        }
+        for logger_key, metric_key in logger_metric_map.items():
+            metric_value = self.logger.name_to_value.get(logger_key)
+            if metric_value is None:
+                continue
+            self._write_metric(step, metric_key, float(metric_value))
         for metric in self._rollout_sums:
             self._rollout_sums[metric] = 0.0
         self._rollout_count = 0
@@ -291,6 +313,30 @@ def main() -> None:
         default=0.3,
         help="Minimum scale used by drawdown governor.",
     )
+    parser.add_argument(
+        "--target-vol",
+        type=float,
+        default=0.0,
+        help="Target realized volatility for volatility targeting (0 disables).",
+    )
+    parser.add_argument(
+        "--vol-target-lookback",
+        type=int,
+        default=72,
+        help="Lookback bars used to estimate realized volatility.",
+    )
+    parser.add_argument(
+        "--vol-scale-floor",
+        type=float,
+        default=0.5,
+        help="Minimum volatility targeting scale.",
+    )
+    parser.add_argument(
+        "--vol-scale-cap",
+        type=float,
+        default=1.5,
+        help="Maximum volatility targeting scale.",
+    )
     parser.add_argument("--early-stop-enabled", action="store_true", help="Stop when eval reward plateaus.")
     parser.add_argument("--early-stop-warmup-steps", type=int, default=100_000, help="Do not early stop before this many timesteps.")
     parser.add_argument("--early-stop-patience-evals", type=int, default=8, help="Number of eval rounds without improvement before stopping.")
@@ -458,6 +504,10 @@ def main() -> None:
         reward_mode=args.reward_mode,
         risk_aversion=args.risk_aversion,
         drawdown_penalty=args.drawdown_penalty,
+        target_vol=args.target_vol,
+        vol_target_lookback=args.vol_target_lookback,
+        vol_scale_floor=args.vol_scale_floor,
+        vol_scale_cap=args.vol_scale_cap,
         drawdown_governor_slope=args.drawdown_governor_slope,
         drawdown_governor_floor=args.drawdown_governor_floor,
     )
@@ -482,6 +532,10 @@ def main() -> None:
         reward_mode=args.reward_mode,
         risk_aversion=args.risk_aversion,
         drawdown_penalty=args.drawdown_penalty,
+        target_vol=args.target_vol,
+        vol_target_lookback=args.vol_target_lookback,
+        vol_scale_floor=args.vol_scale_floor,
+        vol_scale_cap=args.vol_scale_cap,
         drawdown_governor_slope=args.drawdown_governor_slope,
         drawdown_governor_floor=args.drawdown_governor_floor,
     )
@@ -602,6 +656,10 @@ def main() -> None:
             "window_size",
             "risk_aversion",
             "drawdown_penalty",
+            "target_vol",
+            "vol_target_lookback",
+            "vol_scale_floor",
+            "vol_scale_cap",
             "max_position",
             "episode_length",
             "reward_clip",
@@ -643,6 +701,10 @@ def main() -> None:
             window_size = trial.suggest_categorical("window_size", [1, 4, 8, 16])
             risk_aversion = trial.suggest_float("risk_aversion", 0.0, 0.3, step=0.01)
             drawdown_penalty = trial.suggest_float("drawdown_penalty", 0.0, 0.2, step=0.01)
+            target_vol = trial.suggest_categorical("target_vol", [0.0, 0.0025, 0.005, 0.01])
+            vol_target_lookback = trial.suggest_categorical("vol_target_lookback", [24, 48, 72, 96])
+            vol_scale_floor = trial.suggest_categorical("vol_scale_floor", [0.3, 0.5, 0.7])
+            vol_scale_cap = trial.suggest_categorical("vol_scale_cap", [1.25, 1.5, 2.0])
             max_position = trial.suggest_categorical("max_position", [0.5, 1.0, 1.5, 2.0])
             episode_length = trial.suggest_categorical("episode_length", [256, 512, 1024, 2048])
             reward_clip = trial.suggest_categorical("reward_clip", [0.0, 0.005, 0.01, 0.02])
@@ -656,6 +718,10 @@ def main() -> None:
                 window_size=window_size,
                 risk_aversion=risk_aversion,
                 drawdown_penalty=drawdown_penalty,
+                target_vol=target_vol,
+                vol_target_lookback=vol_target_lookback,
+                vol_scale_floor=vol_scale_floor,
+                vol_scale_cap=vol_scale_cap,
                 max_position=max_position,
                 reward_clip=reward_clip,
             )
@@ -668,6 +734,10 @@ def main() -> None:
                 window_size=window_size,
                 risk_aversion=risk_aversion,
                 drawdown_penalty=drawdown_penalty,
+                target_vol=target_vol,
+                vol_target_lookback=vol_target_lookback,
+                vol_scale_floor=vol_scale_floor,
+                vol_scale_cap=vol_scale_cap,
                 max_position=max_position,
                 reward_clip=reward_clip,
             )
@@ -742,6 +812,10 @@ def main() -> None:
                 window_size=int(params.get("window_size", 1)),
                 risk_aversion=float(params["risk_aversion"]),
                 drawdown_penalty=float(params.get("drawdown_penalty", 0.0)),
+                target_vol=float(params.get("target_vol", 0.0)),
+                vol_target_lookback=int(params.get("vol_target_lookback", 72)),
+                vol_scale_floor=float(params.get("vol_scale_floor", 0.5)),
+                vol_scale_cap=float(params.get("vol_scale_cap", 1.5)),
                 max_position=float(params["max_position"]),
                 reward_clip=float(params["reward_clip"]),
             )
@@ -754,13 +828,24 @@ def main() -> None:
                 window_size=int(params.get("window_size", 1)),
                 risk_aversion=float(params["risk_aversion"]),
                 drawdown_penalty=float(params.get("drawdown_penalty", 0.0)),
+                target_vol=float(params.get("target_vol", 0.0)),
+                vol_target_lookback=int(params.get("vol_target_lookback", 72)),
+                vol_scale_floor=float(params.get("vol_scale_floor", 0.5)),
+                vol_scale_cap=float(params.get("vol_scale_cap", 1.5)),
                 max_position=float(params["max_position"]),
                 reward_clip=float(params["reward_clip"]),
             )
             return train_cfg, eval_cfg
 
-        def _profile_policy(model: PPO, features: np.ndarray, config: TradingConfig) -> dict[str, float]:
+        def _profile_policy(
+            model: PPO,
+            features: np.ndarray,
+            closes: np.ndarray,
+            config: TradingConfig,
+        ) -> dict[str, float]:
             position = 0.0
+            equity = 1.0
+            peak_equity = 1.0
             trades = 0
             action_long = 0
             action_short = 0
@@ -775,15 +860,15 @@ def main() -> None:
                     window_size=int(getattr(config, "window_size", 1)),
                 )
                 action, _ = model.predict(obs, deterministic=True)
-                target = float(np.clip(float(action[0]), -config.max_position, config.max_position))
-                if config.discretize_actions and config.discrete_positions:
-                    target = min(config.discrete_positions, key=lambda v: abs(float(v) - target))
-                if config.position_step > 0.0:
-                    target = round(target / config.position_step) * config.position_step
-                if config.max_position > 0.0:
-                    target = float(np.clip(target, -config.max_position, config.max_position))
-                if abs(target - position) < config.min_position_change:
-                    target = float(position)
+                target, _ = apply_risk_engine(
+                    float(action[0]),
+                    current_position=position,
+                    config=config,
+                    closes=closes,
+                    idx=idx,
+                    equity=equity,
+                    peak_equity=peak_equity,
+                )
                 if abs(target - position) > 1e-12:
                     trades += 1
                 if target > 0.05:
@@ -792,6 +877,17 @@ def main() -> None:
                     action_short += 1
                 else:
                     action_flat += 1
+                transition = simulate_step_transition(
+                    current_position=position,
+                    target_position=target,
+                    closes=closes,
+                    idx=idx,
+                    equity=equity,
+                    peak_equity=peak_equity,
+                    config=config,
+                )
+                equity = transition["equity"]
+                peak_equity = transition["peak_equity"]
                 position = target
             total_actions = max(1, action_long + action_short + action_flat)
             return {
@@ -837,7 +933,7 @@ def main() -> None:
                 n_eval_episodes=args.eval_episodes,
                 deterministic=True,
             )
-            profile = _profile_policy(model, eval_features, cand_eval_cfg)
+            profile = _profile_policy(model, eval_features, eval_closes, cand_eval_cfg)
             cand_env.close()
             cand_eval_env.close()
             return float(mean_reward), profile

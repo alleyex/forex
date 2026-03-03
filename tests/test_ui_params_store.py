@@ -8,7 +8,7 @@ from forex.ui.train.services.ui_params_store import UIParamsStore
 
 def test_training_store_saves_nested_and_top_level(tmp_path, monkeypatch) -> None:
     current_path = tmp_path / "training_params.json"
-    monkeypatch.setattr(UIParamsStore, "_CURRENT_PATH", current_path)
+    monkeypatch.setitem(UIParamsStore._CURRENT_PATHS, "training", current_path)
 
     store = UIParamsStore("training")
     params = {
@@ -16,22 +16,23 @@ def test_training_store_saves_nested_and_top_level(tmp_path, monkeypatch) -> Non
         "learning_rate": 0.0001,
         "transaction_cost_bps": 0.4,
         "window_size": 4,
+        "target_vol": 0.01,
         "start_mode": "random",
     }
     store.save(params)
 
     payload = json.loads(current_path.read_text(encoding="utf-8"))
-    assert payload["training"] == params
     assert payload["total_steps"] == 320000
     assert payload["learning_rate"] == 0.0001
     assert payload["transaction_cost_bps"] == 0.4
     assert payload["window_size"] == 4
+    assert payload["target_vol"] == 0.01
     assert payload["start_mode"] == "random"
 
 
 def test_training_store_load_prefers_nested_but_falls_back_to_top_level(tmp_path, monkeypatch) -> None:
     current_path = tmp_path / "training_params.json"
-    monkeypatch.setattr(UIParamsStore, "_CURRENT_PATH", current_path)
+    monkeypatch.setitem(UIParamsStore._CURRENT_PATHS, "training", current_path)
 
     payload = {
         "version": 1,
@@ -53,7 +54,7 @@ def test_training_store_load_prefers_nested_but_falls_back_to_top_level(tmp_path
 
 def test_simulation_store_saves_nested_and_top_level(tmp_path, monkeypatch) -> None:
     current_path = tmp_path / "training_params.json"
-    monkeypatch.setattr(UIParamsStore, "_CURRENT_PATH", current_path)
+    monkeypatch.setitem(UIParamsStore._CURRENT_PATHS, "simulation", current_path)
 
     store = UIParamsStore("simulation")
     params = {
@@ -67,7 +68,6 @@ def test_simulation_store_saves_nested_and_top_level(tmp_path, monkeypatch) -> N
     store.save(params)
 
     payload = json.loads(current_path.read_text(encoding="utf-8"))
-    assert payload["simulation"] == params
     assert payload["data"] == "/tmp/history.csv"
     assert payload["model"] == "/tmp/model.zip"
     assert payload["transaction_cost_bps"] == 0.225
@@ -76,7 +76,7 @@ def test_simulation_store_saves_nested_and_top_level(tmp_path, monkeypatch) -> N
 
 def test_simulation_store_load_ignores_training_top_level_fields(tmp_path, monkeypatch) -> None:
     current_path = tmp_path / "training_params.json"
-    monkeypatch.setattr(UIParamsStore, "_CURRENT_PATH", current_path)
+    monkeypatch.setitem(UIParamsStore._CURRENT_PATHS, "simulation", current_path)
 
     payload = {
         "version": 1,

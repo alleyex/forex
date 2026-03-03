@@ -579,6 +579,54 @@ class TrainingParamsPanel(QWidget):
             _wrap_field(self._drawdown_penalty),
         )
 
+        self._target_vol = TrimmedDoubleSpinBox()
+        self._target_vol.setRange(0.0, 10.0)
+        self._target_vol.setDecimals(4)
+        self._target_vol.setSingleStep(0.001)
+        self._target_vol.setValue(0.0)
+        self._target_vol.setFixedWidth(spin_width)
+        self._target_vol.setToolTip(
+            "Target realized volatility used to scale raw positions. 0 disables volatility targeting."
+        )
+        reward_layout.add_row(
+            "Target vol",
+            _wrap_field(self._target_vol),
+        )
+
+        self._vol_target_lookback = QSpinBox()
+        self._vol_target_lookback.setRange(2, 512)
+        self._vol_target_lookback.setValue(72)
+        self._vol_target_lookback.setFixedWidth(spin_width)
+        self._vol_target_lookback.setToolTip("Lookback bars used to estimate realized volatility.")
+        reward_layout.add_row(
+            "Vol lookback",
+            _wrap_field(self._vol_target_lookback),
+        )
+
+        self._vol_scale_floor = TrimmedDoubleSpinBox()
+        self._vol_scale_floor.setRange(0.0, 10.0)
+        self._vol_scale_floor.setDecimals(3)
+        self._vol_scale_floor.setSingleStep(0.05)
+        self._vol_scale_floor.setValue(0.5)
+        self._vol_scale_floor.setFixedWidth(spin_width)
+        self._vol_scale_floor.setToolTip("Minimum volatility targeting scale.")
+        reward_layout.add_row(
+            "Vol scale floor",
+            _wrap_field(self._vol_scale_floor),
+        )
+
+        self._vol_scale_cap = TrimmedDoubleSpinBox()
+        self._vol_scale_cap.setRange(0.0, 10.0)
+        self._vol_scale_cap.setDecimals(3)
+        self._vol_scale_cap.setSingleStep(0.05)
+        self._vol_scale_cap.setValue(1.5)
+        self._vol_scale_cap.setFixedWidth(spin_width)
+        self._vol_scale_cap.setToolTip("Maximum volatility targeting scale.")
+        reward_layout.add_row(
+            "Vol scale cap",
+            _wrap_field(self._vol_scale_cap),
+        )
+
         self._drawdown_governor_slope = TrimmedDoubleSpinBox()
         self._drawdown_governor_slope.setRange(0.0, 20.0)
         self._drawdown_governor_slope.setDecimals(3)
@@ -993,6 +1041,14 @@ class TrainingParamsPanel(QWidget):
             self._risk_aversion.setValue(float(params["risk_aversion"]))
         if "drawdown_penalty" in params:
             self._drawdown_penalty.setValue(float(params["drawdown_penalty"]))
+        if "target_vol" in params:
+            self._target_vol.setValue(float(params["target_vol"]))
+        if "vol_target_lookback" in params:
+            self._vol_target_lookback.setValue(int(params["vol_target_lookback"]))
+        if "vol_scale_floor" in params:
+            self._vol_scale_floor.setValue(float(params["vol_scale_floor"]))
+        if "vol_scale_cap" in params:
+            self._vol_scale_cap.setValue(float(params["vol_scale_cap"]))
         if "drawdown_governor_slope" in params:
             self._drawdown_governor_slope.setValue(float(params["drawdown_governor_slope"]))
         if "drawdown_governor_floor" in params:
@@ -1045,6 +1101,10 @@ class TrainingParamsPanel(QWidget):
             "reward_mode": self._reward_mode_key(),
             "risk_aversion": float(self._risk_aversion.value()),
             "drawdown_penalty": float(self._drawdown_penalty.value()),
+            "target_vol": float(self._target_vol.value()),
+            "vol_target_lookback": int(self._vol_target_lookback.value()),
+            "vol_scale_floor": float(self._vol_scale_floor.value()),
+            "vol_scale_cap": float(self._vol_scale_cap.value()),
             "drawdown_governor_slope": float(self._drawdown_governor_slope.value()),
             "drawdown_governor_floor": float(self._drawdown_governor_floor.value()),
             "early_stop_enabled": bool(self._early_stop_enabled.isChecked()),
@@ -1307,6 +1367,14 @@ class TrainingParamsPanel(QWidget):
             self._risk_aversion.setValue(float(data["risk_aversion"]))
         if "drawdown_penalty" in data:
             self._drawdown_penalty.setValue(float(data["drawdown_penalty"]))
+        if "target_vol" in data:
+            self._target_vol.setValue(float(data["target_vol"]))
+        if "vol_target_lookback" in data:
+            self._vol_target_lookback.setValue(int(data["vol_target_lookback"]))
+        if "vol_scale_floor" in data:
+            self._vol_scale_floor.setValue(float(data["vol_scale_floor"]))
+        if "vol_scale_cap" in data:
+            self._vol_scale_cap.setValue(float(data["vol_scale_cap"]))
         if "drawdown_governor_slope" in data:
             self._drawdown_governor_slope.setValue(float(data["drawdown_governor_slope"]))
         if "drawdown_governor_floor" in data:
@@ -1377,6 +1445,10 @@ class TrainingParamsPanel(QWidget):
         self._reward_mode.currentIndexChanged.connect(self._auto_save_params)
         self._risk_aversion.valueChanged.connect(self._auto_save_params)
         self._drawdown_penalty.valueChanged.connect(self._auto_save_params)
+        self._target_vol.valueChanged.connect(self._auto_save_params)
+        self._vol_target_lookback.valueChanged.connect(self._auto_save_params)
+        self._vol_scale_floor.valueChanged.connect(self._auto_save_params)
+        self._vol_scale_cap.valueChanged.connect(self._auto_save_params)
         self._drawdown_governor_slope.valueChanged.connect(self._auto_save_params)
         self._drawdown_governor_floor.valueChanged.connect(self._auto_save_params)
         self._save_best_checkpoint.toggled.connect(self._auto_save_params)
@@ -1548,7 +1620,9 @@ class TrainingPanel(QWidget):
         self._plot_interval_ms = 50
         self._max_points = 2000
         self._reward_stat_window = 200
+        self._rolling_sharpe_window = 50
         self._reward_samples: deque[float] = deque(maxlen=self._reward_stat_window)
+        self._rolling_sharpe_samples: deque[float] = deque(maxlen=self._rolling_sharpe_window)
         self._reward_diagnostics_path = Path(DATA_DIR) / "training" / "reward_diagnostics.csv"
         self._reward_run_started_at = self._current_timestamp()
         self._metrics = [
@@ -1556,6 +1630,7 @@ class TrainingPanel(QWidget):
             ("eval/mean_reward", "mean_reward"),
             ("reward_step_mean", "reward_step_mean"),
             ("step_pnl_mean", "step_pnl_mean"),
+            ("rolling_sharpe", "rolling_sharpe"),
             ("cost_mean", "cost_mean"),
             ("holding_cost_mean", "holding_cost_mean"),
             ("abs_delta_mean", "abs_delta_mean"),
@@ -1754,8 +1829,8 @@ class TrainingPanel(QWidget):
             details_splitter.setChildrenCollapsible(False)
             details_splitter.addWidget(curve_panel)
             details_splitter.addWidget(details_panel)
-            details_splitter.setStretchFactor(0, 4)
-            details_splitter.setStretchFactor(1, 2)
+            details_splitter.setStretchFactor(0, 1)
+            details_splitter.setStretchFactor(1, 1)
             layout.addWidget(details_splitter, stretch=1)
             optuna_selector.setVisible(False)
             self._reward_group = reward_group
@@ -1781,8 +1856,10 @@ class TrainingPanel(QWidget):
             self._curves[key].setData([])
         self._latest_metric_values.clear()
         self._reward_samples.clear()
+        self._rolling_sharpe_samples.clear()
         self._update_reward_diagnostics()
         self._sync_curve_visibility()
+        self._refresh_training_plot_range()
 
     def reset_optuna_metrics(self) -> None:
         if not self._charts_available:
@@ -1812,6 +1889,7 @@ class TrainingPanel(QWidget):
                 continue
             data = self._metric_data[key]
             self._curves[key].setData(list(data["x"]), list(data["y"]))
+        self._refresh_training_plot_range()
 
     def append_metric_point(self, key: str, step: float, value: float) -> None:
         if not self._charts_available:
@@ -1823,6 +1901,12 @@ class TrainingPanel(QWidget):
         if key == "ep_rew_mean":
             self._reward_samples.append(value)
             self._update_reward_diagnostics()
+        elif key == "step_pnl_mean":
+            self._rolling_sharpe_samples.append(value)
+            rolling_sharpe = self._compute_rolling_sharpe(self._rolling_sharpe_samples)
+            if rolling_sharpe is not None:
+                self._latest_metric_values["rolling_sharpe"] = rolling_sharpe
+                self._append_point("rolling_sharpe", step, rolling_sharpe)
         elif key == "eval/mean_reward" and self._reward_samples:
             # Persist eval snapshots into reward diagnostics immediately so the
             # CSV keeps explicit eval points instead of only piggybacking on the
@@ -1889,6 +1973,7 @@ class TrainingPanel(QWidget):
             if key in self._legend_keys:
                 self._legend.removeItem(self._curves[key])
                 self._legend_keys.remove(key)
+        self._refresh_training_plot_range()
 
     def _toggle_optuna_curve(self, key: str, visible: bool) -> None:
         data = self._optuna_data[key]
@@ -1905,6 +1990,7 @@ class TrainingPanel(QWidget):
             if key in self._optuna_legend_keys:
                 self._optuna_legend.removeItem(self._optuna_curves[key])
                 self._optuna_legend_keys.remove(key)
+        self._refresh_optuna_plot_range()
 
     def _sync_curve_visibility(self) -> None:
         for _, key in self._metrics:
@@ -1913,6 +1999,20 @@ class TrainingPanel(QWidget):
     def _sync_optuna_curve_visibility(self) -> None:
         for key, _ in self._optuna_metrics:
             self._toggle_optuna_curve(key, key in self._optuna_visible)
+
+    def _refresh_training_plot_range(self) -> None:
+        if not self._charts_available:
+            return
+        self._plot.enableAutoRange(axis="x", enable=True)
+        self._plot.enableAutoRange(axis="y", enable=True)
+        self._plot.autoRange()
+
+    def _refresh_optuna_plot_range(self) -> None:
+        if not self._charts_available:
+            return
+        self._optuna_plot.enableAutoRange(axis="x", enable=True)
+        self._optuna_plot.enableAutoRange(axis="y", enable=True)
+        self._optuna_plot.autoRange()
 
     def _update_reward_diagnostics(self) -> None:
         if not self._charts_available:
@@ -1980,6 +2080,7 @@ class TrainingPanel(QWidget):
         component_columns = [
             ("reward_step_mean", "reward_step_mean"),
             ("step_pnl_mean", "step_pnl_mean"),
+            ("rolling_sharpe", "rolling_sharpe"),
             ("cost_mean", "cost_mean"),
             ("holding_cost_mean", "holding_cost_mean"),
             ("abs_delta_mean", "abs_delta_mean"),
@@ -2081,6 +2182,19 @@ class TrainingPanel(QWidget):
             return ordered[lower]
         weight = position - lower
         return ordered[lower] * (1.0 - weight) + ordered[upper] * weight
+
+    @staticmethod
+    def _compute_rolling_sharpe(values: deque[float]) -> Optional[float]:
+        count = len(values)
+        if count < 2:
+            return None
+        sample = list(values)
+        mean = sum(sample) / count
+        variance = sum((value - mean) ** 2 for value in sample) / count
+        std = math.sqrt(max(variance, 0.0))
+        if std <= 1e-12:
+            return None
+        return mean / std
 
     @staticmethod
     def _current_timestamp() -> str:

@@ -22,8 +22,11 @@ from PySide6.QtWidgets import (
     QFileDialog,
     QSizePolicy,
     QGroupBox,
+    QSplitter,
+    QTabWidget,
 )
 
+from forex.ui.shared.widgets.log_widget import LogWidget
 from forex.ui.shared.widgets.layout_helpers import (
     apply_form_label_width,
     align_form_fields,
@@ -56,15 +59,6 @@ class SimulationParamsPanel(QWidget):
         super().__init__(parent)
         self._loading_params = False
         self._params_store = UIParamsStore("simulation")
-        self._summary_state = {
-            "total_return": None,
-            "max_drawdown": None,
-            "sharpe": None,
-            "trades": None,
-            "equity": None,
-            "trade_rate_1k": None,
-            "quality_gate": None,
-        }
         self._setup_ui()
         self._bind_persistence()
         self._load_params()
@@ -148,84 +142,8 @@ class SimulationParamsPanel(QWidget):
         self._slippage.setFixedWidth(spin_width)
         params_layout.addRow("Slippage (bps)", self._slippage)
 
-        summary_group = QGroupBox("Performance Summary")
-        summary_layout = QGridLayout(summary_group)
-        summary_layout.setColumnStretch(0, 0)
-        summary_layout.setColumnStretch(1, 1)
-        summary_layout.setHorizontalSpacing(10)
-        summary_layout.setVerticalSpacing(6)
-
-        self._summary_fields = {}
-        summary_rows = [
-            ("Total Return", "total_return"),
-            ("Max Drawdown", "max_drawdown"),
-            ("Sharpe Ratio", "sharpe"),
-            ("Trades", "trades"),
-            ("Trade Rate/1k", "trade_rate_1k"),
-            ("Final Equity", "equity"),
-            ("Quality Gate", "quality_gate"),
-        ]
-        for row, (label_text, key) in enumerate(summary_rows):
-            label = QLabel(label_text)
-            label.setProperty("class", STAT_LABEL)
-            value = QLabel("-")
-            value.setProperty("class", STAT_VALUE)
-            value.setAlignment(Qt.AlignRight | Qt.AlignVCenter)
-            summary_layout.addWidget(label, row, 0)
-            summary_layout.addWidget(value, row, 1)
-            self._summary_fields[key] = value
-
-        details_group = QGroupBox("Trade and Position")
-        details_layout = QGridLayout(details_group)
-        details_layout.setColumnStretch(0, 0)
-        details_layout.setColumnStretch(1, 1)
-        details_layout.setHorizontalSpacing(10)
-        details_layout.setVerticalSpacing(6)
-
-        self._trade_stats = QLabel("-")
-        self._trade_stats.setProperty("class", STAT_VALUE)
-        self._trade_stats.setWordWrap(True)
-        self._streak_stats = QLabel("-")
-        self._streak_stats.setProperty("class", STAT_VALUE)
-        self._streak_stats.setWordWrap(True)
-        self._holding_stats = QLabel("-")
-        self._holding_stats.setProperty("class", STAT_VALUE)
-        self._holding_stats.setWordWrap(True)
-        self._action_dist = QLabel("-")
-        self._action_dist.setProperty("class", STAT_VALUE)
-        self._action_dist.setWordWrap(True)
-
-        detail_rows = [
-            ("Trade Stats", self._trade_stats),
-            ("Win/Loss Streak", self._streak_stats),
-            ("Holding Duration", self._holding_stats),
-            ("Action Distribution", self._action_dist),
-        ]
-        for row, (label_text, value) in enumerate(detail_rows):
-            label = QLabel(label_text)
-            label.setProperty("class", STAT_LABEL)
-            details_layout.addWidget(label, row, 0)
-            details_layout.addWidget(value, row, 1)
-
-        playback_group = QGroupBox("Playback Range")
-        playback_layout = QGridLayout(playback_group)
-        playback_layout.setColumnStretch(0, 0)
-        playback_layout.setColumnStretch(1, 1)
-        playback_layout.setHorizontalSpacing(10)
-        playback_layout.setVerticalSpacing(6)
-        playback_label = QLabel("Time Range")
-        playback_label.setProperty("class", STAT_LABEL)
-        self._playback_range = QLabel("-")
-        self._playback_range.setProperty("class", STAT_VALUE)
-        self._playback_range.setWordWrap(True)
-        playback_layout.addWidget(playback_label, 0, 0)
-        playback_layout.addWidget(self._playback_range, 0, 1)
-
         layout.addWidget(file_group)
         layout.addWidget(params_group)
-        layout.addWidget(summary_group)
-        layout.addWidget(details_group)
-        layout.addWidget(playback_group)
 
         layout.addStretch(1)
 
@@ -332,6 +250,147 @@ class SimulationParamsPanel(QWidget):
             self._loading_params = False
         self._apply_path_normalization()
 
+
+class PlaybackDetailsPanel(QWidget):
+    def __init__(self, parent: Optional[QWidget] = None) -> None:
+        super().__init__(parent)
+        self._summary_state = {
+            "total_return": None,
+            "max_drawdown": None,
+            "sharpe": None,
+            "trades": None,
+            "equity": None,
+            "trade_rate_1k": None,
+            "quality_gate": None,
+        }
+        self._setup_ui()
+
+    def _setup_ui(self) -> None:
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(10, 10, 10, 10)
+        layout.setSpacing(0)
+
+        tabs = QTabWidget()
+        tabs.setDocumentMode(True)
+        tabs.setMovable(False)
+        tabs.tabBar().setExpanding(False)
+        tabs.tabBar().setDrawBase(False)
+        self._tabs = tabs
+
+        self._embedded_log = LogWidget(
+            title="",
+            with_timestamp=True,
+            monospace=True,
+            font_point_delta=2,
+        )
+        tabs.addTab(self._embedded_log, "Log")
+
+        performance_tab = QWidget()
+        performance_tab_layout = QVBoxLayout(performance_tab)
+        performance_tab_layout.setContentsMargins(0, 0, 0, 0)
+        performance_tab_layout.setSpacing(0)
+
+        performance_group = QGroupBox("Performance Summary")
+        summary_layout = QGridLayout(performance_group)
+        summary_layout.setColumnStretch(0, 0)
+        summary_layout.setColumnStretch(1, 1)
+        summary_layout.setHorizontalSpacing(10)
+        summary_layout.setVerticalSpacing(6)
+
+        self._summary_fields = {}
+        summary_rows = [
+            ("Total Return", "total_return"),
+            ("Max Drawdown", "max_drawdown"),
+            ("Sharpe Ratio", "sharpe"),
+            ("Trades", "trades"),
+            ("Trade Rate/1k", "trade_rate_1k"),
+            ("Final Equity", "equity"),
+            ("Quality Gate", "quality_gate"),
+        ]
+        for row, (label_text, key) in enumerate(summary_rows):
+            label = QLabel(label_text)
+            label.setProperty("class", STAT_LABEL)
+            value = QLabel("-")
+            value.setProperty("class", STAT_VALUE)
+            value.setAlignment(Qt.AlignRight | Qt.AlignVCenter)
+            summary_layout.addWidget(label, row, 0)
+            summary_layout.addWidget(value, row, 1)
+            self._summary_fields[key] = value
+
+        performance_tab_layout.addWidget(performance_group)
+        tabs.addTab(performance_tab, "Performance")
+
+        trade_tab = QWidget()
+        trade_tab_layout = QVBoxLayout(trade_tab)
+        trade_tab_layout.setContentsMargins(0, 0, 0, 0)
+        trade_tab_layout.setSpacing(0)
+
+        trade_group = QGroupBox("Trade and Position")
+        trade_layout = QGridLayout(trade_group)
+        trade_layout.setColumnStretch(0, 0)
+        trade_layout.setColumnStretch(1, 1)
+        trade_layout.setHorizontalSpacing(10)
+        trade_layout.setVerticalSpacing(6)
+
+        self._trade_stats = QLabel("-")
+        self._trade_stats.setProperty("class", STAT_VALUE)
+        self._trade_stats.setWordWrap(True)
+        self._streak_stats = QLabel("-")
+        self._streak_stats.setProperty("class", STAT_VALUE)
+        self._streak_stats.setWordWrap(True)
+        self._holding_stats = QLabel("-")
+        self._holding_stats.setProperty("class", STAT_VALUE)
+        self._holding_stats.setWordWrap(True)
+        self._action_dist = QLabel("-")
+        self._action_dist.setProperty("class", STAT_VALUE)
+        self._action_dist.setWordWrap(True)
+
+        detail_rows = [
+            ("Trade Stats", self._trade_stats),
+            ("Win/Loss Streak", self._streak_stats),
+            ("Holding Duration", self._holding_stats),
+            ("Action Distribution", self._action_dist),
+        ]
+        for row, (label_text, value) in enumerate(detail_rows):
+            label = QLabel(label_text)
+            label.setProperty("class", STAT_LABEL)
+            trade_layout.addWidget(label, row, 0)
+            trade_layout.addWidget(value, row, 1)
+
+        trade_tab_layout.addWidget(trade_group)
+        tabs.addTab(trade_tab, "Trade & Position")
+
+        range_tab = QWidget()
+        range_tab_layout = QVBoxLayout(range_tab)
+        range_tab_layout.setContentsMargins(0, 0, 0, 0)
+        range_tab_layout.setSpacing(0)
+
+        playback_group = QGroupBox("Playback Range")
+        playback_layout = QGridLayout(playback_group)
+        playback_layout.setColumnStretch(0, 0)
+        playback_layout.setColumnStretch(1, 1)
+        playback_layout.setHorizontalSpacing(10)
+        playback_layout.setVerticalSpacing(6)
+
+        playback_label = QLabel("Time Range")
+        playback_label.setProperty("class", STAT_LABEL)
+        self._playback_range = QLabel("-")
+        self._playback_range.setProperty("class", STAT_VALUE)
+        self._playback_range.setWordWrap(True)
+        playback_layout.addWidget(playback_label, 0, 0)
+        playback_layout.addWidget(self._playback_range, 0, 1)
+
+        range_tab_layout.addWidget(playback_group)
+        tabs.addTab(range_tab, "Playback Range")
+
+        layout.addWidget(tabs)
+
+    def append(self, message: str) -> None:
+        self._embedded_log.append(message)
+
+    def clear_logs(self) -> None:
+        self._embedded_log.clear_logs()
+
     def reset_summary(self) -> None:
         self._summary_state = {
             "total_return": None,
@@ -395,7 +454,9 @@ class SimulationParamsPanel(QWidget):
             "-" if trade_rate_1k is None else f"{trade_rate_1k:.2f}"
         )
         self._summary_fields["equity"].setText("-" if equity is None else f"{equity:.6f}")
-        self._summary_fields["quality_gate"].setText("-" if quality_gate is None else str(quality_gate))
+        self._summary_fields["quality_gate"].setText(
+            "-" if quality_gate is None else str(quality_gate)
+        )
 
     def update_trade_stats(self, text: str) -> None:
         self._trade_stats.setText(format_trade_stats(text))
@@ -411,6 +472,7 @@ class SimulationParamsPanel(QWidget):
 
     def update_playback_range(self, text: str) -> None:
         self._playback_range.setText(format_playback_range(text))
+
 
 class SimulationPanel(QWidget):
     def __init__(self, parent: Optional[QWidget] = None) -> None:
@@ -429,6 +491,12 @@ class SimulationPanel(QWidget):
         layout.setContentsMargins(10, 10, 10, 10)
         layout.setSpacing(10)
 
+        details_panel = PlaybackDetailsPanel()
+        self._details_panel = details_panel
+
+        splitter = QSplitter(Qt.Vertical)
+        splitter.setChildrenCollapsible(False)
+
         if self._charts_available:
             plot = pg.PlotWidget()
             plot.setTitle("Playback Equity Curve")
@@ -437,11 +505,17 @@ class SimulationPanel(QWidget):
             plot.showGrid(x=True, y=True, alpha=0.3)
             self._plot = plot
             self._curve = plot.plot(pen=pg.mkPen("#F58518", width=2), name="equity")
-            layout.addWidget(plot, stretch=1)
+            splitter.addWidget(plot)
         else:
             notice = QLabel("PyQtGraph is not installed. Install pyqtgraph to show charts.")
             notice.setWordWrap(True)
-            layout.addWidget(notice)
+            splitter.addWidget(notice)
+
+        splitter.addWidget(details_panel)
+        splitter.setStretchFactor(0, 1)
+        splitter.setStretchFactor(1, 1)
+        self._details_splitter = splitter
+        layout.addWidget(splitter, stretch=1)
 
     def reset_plot(self) -> None:
         self._steps.clear()
@@ -482,3 +556,27 @@ class SimulationPanel(QWidget):
                     self._steps = self._steps[-self._max_points :]
                     self._equity = self._equity[-self._max_points :]
         self._curve.setData(self._steps, self._equity)
+
+    def append_log(self, message: str) -> None:
+        self._details_panel.append(message)
+
+    def reset_summary(self) -> None:
+        self._details_panel.reset_summary()
+
+    def update_summary(self, **data) -> None:
+        self._details_panel.update_summary(**data)
+
+    def update_trade_stats(self, text: str) -> None:
+        self._details_panel.update_trade_stats(text)
+
+    def update_streak_stats(self, text: str) -> None:
+        self._details_panel.update_streak_stats(text)
+
+    def update_holding_stats(self, text: str) -> None:
+        self._details_panel.update_holding_stats(text)
+
+    def update_action_distribution(self, text: str) -> None:
+        self._details_panel.update_action_distribution(text)
+
+    def update_playback_range(self, text: str) -> None:
+        self._details_panel.update_playback_range(text)

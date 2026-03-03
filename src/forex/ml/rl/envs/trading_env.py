@@ -41,6 +41,187 @@ def build_window_observation(
     )
 
 
+def compute_drawdown(equity: float, peak_equity: float) -> float:
+    peak = max(float(peak_equity), 1e-12)
+    current = max(float(equity), 1e-12)
+    return max(0.0, (peak - current) / peak)
+
+
+def compute_drawdown_governor_scale(
+    *,
+    equity: float,
+    peak_equity: float,
+    slope: float,
+    floor: float,
+) -> float:
+    slope = max(0.0, float(slope))
+    floor = min(1.0, max(0.0, float(floor)))
+    if slope <= 0.0:
+        return 1.0
+    drawdown = compute_drawdown(equity, peak_equity)
+    return max(floor, 1.0 - slope * drawdown)
+
+
+def compute_realized_vol(closes: np.ndarray, idx: int, lookback: int) -> float:
+    lookback = max(2, int(lookback))
+    end = max(0, int(idx)) + 1
+    start = max(0, end - lookback)
+    window = closes[start:end]
+    if len(window) < 2:
+        return 0.0
+    prev = window[:-1].astype(np.float64)
+    curr = window[1:].astype(np.float64)
+    valid = prev > 0.0
+    if not np.any(valid):
+        return 0.0
+    returns = (curr[valid] - prev[valid]) / prev[valid]
+    if len(returns) == 0:
+        return 0.0
+    return float(np.std(returns))
+
+
+def compute_horizon_return(closes: np.ndarray, idx: int, reward_horizon: int) -> float:
+    base_idx = max(0, int(idx))
+    if base_idx >= len(closes):
+        return 0.0
+    base_price = float(closes[base_idx])
+    if base_price <= 0.0:
+        return 0.0
+    horizon = max(1, int(reward_horizon))
+    horizon_idx = min(base_idx + horizon, len(closes) - 1)
+    return (float(closes[horizon_idx]) - base_price) / base_price
+
+
+def compute_vol_target_scale(
+    closes: np.ndarray,
+    idx: int,
+    *,
+    target_vol: float,
+    lookback: int,
+    floor: float,
+    cap: float,
+) -> tuple[float, float]:
+    target_vol = max(0.0, float(target_vol))
+    floor = max(0.0, float(floor))
+    cap = max(floor, float(cap))
+    if target_vol <= 0.0:
+        return 1.0, 0.0
+    realized_vol = compute_realized_vol(closes, idx, lookback)
+    if realized_vol <= 0.0:
+        return 1.0, realized_vol
+    scale = target_vol / realized_vol
+    return float(np.clip(scale, floor, cap)), realized_vol
+
+
+def simulate_step_transition(
+    *,
+    current_position: float,
+    target_position: float,
+    closes: np.ndarray,
+    idx: int,
+    equity: float,
+    peak_equity: float,
+    config: "TradingConfig",
+) -> dict[str, float]:
+    cost_rate = (float(config.transaction_cost_bps) + float(config.slippage_bps)) / 10000.0
+    holding_cost_rate = float(config.holding_cost_bps) / 10000.0
+    delta = float(target_position) - float(current_position)
+    cost = abs(delta) * cost_rate
+    holding_cost = abs(float(current_position)) * holding_cost_rate
+    price_return = compute_horizon_return(closes, idx, int(getattr(config, "reward_horizon", 1)))
+    step_pnl = float(current_position) * float(price_return)
+    net_return = step_pnl - cost - holding_cost
+    reward = net_return
+    if float(config.risk_aversion) > 0.0:
+        reward -= float(config.risk_aversion) * (step_pnl ** 2)
+
+    prev_equity = max(float(equity), 1e-12)
+    prev_peak_equity = max(float(peak_equity), prev_equity, 1e-12)
+    prev_drawdown = compute_drawdown(prev_equity, prev_peak_equity)
+    growth_factor = max(1e-12, 1.0 + net_return)
+    next_equity = prev_equity * growth_factor
+    next_peak_equity = max(prev_peak_equity, next_equity)
+    drawdown = compute_drawdown(next_equity, next_peak_equity)
+    drawdown_delta = max(0.0, drawdown - prev_drawdown)
+
+    reward_mode = str(getattr(config, "reward_mode", "linear") or "linear").strip().lower()
+    if reward_mode == "log_return":
+        reward = float(np.log(growth_factor))
+
+    drawdown_penalty = 0.0
+    if float(config.drawdown_penalty) > 0.0:
+        drawdown_penalty = float(config.drawdown_penalty) * drawdown_delta
+        reward -= drawdown_penalty
+    if float(config.reward_scale) != 1.0:
+        reward *= float(config.reward_scale)
+    if float(config.reward_clip) > 0.0:
+        reward = float(np.clip(reward, -float(config.reward_clip), float(config.reward_clip)))
+
+    return {
+        "delta": float(delta),
+        "cost": float(cost),
+        "holding_cost": float(holding_cost),
+        "net_return": float(net_return),
+        "price_return": float(price_return),
+        "step_pnl": float(step_pnl),
+        "reward": float(reward),
+        "reward_mode": reward_mode,
+        "drawdown": float(drawdown),
+        "drawdown_delta": float(drawdown_delta),
+        "drawdown_penalty": float(drawdown_penalty),
+        "equity": float(next_equity),
+        "peak_equity": float(next_peak_equity),
+    }
+
+
+def apply_risk_engine(
+    target: float,
+    *,
+    current_position: float,
+    config: "TradingConfig",
+    closes: np.ndarray,
+    idx: int,
+    equity: float,
+    peak_equity: float,
+) -> tuple[float, dict[str, float]]:
+    max_position = max(0.0, float(config.max_position))
+    clip_limit = max(1.0, max_position)
+    value = float(np.clip(target, -clip_limit, clip_limit))
+    vol_scale, realized_vol = compute_vol_target_scale(
+        closes,
+        idx,
+        target_vol=float(getattr(config, "target_vol", 0.0)),
+        lookback=int(getattr(config, "vol_target_lookback", 72)),
+        floor=float(getattr(config, "vol_scale_floor", 0.5)),
+        cap=float(getattr(config, "vol_scale_cap", 1.5)),
+    )
+    dd_scale = compute_drawdown_governor_scale(
+        equity=equity,
+        peak_equity=peak_equity,
+        slope=float(getattr(config, "drawdown_governor_slope", 0.0)),
+        floor=float(getattr(config, "drawdown_governor_floor", 0.3)),
+    )
+    combined_scale = vol_scale * dd_scale
+    value *= combined_scale
+    if config.discretize_actions and config.discrete_positions:
+        value = min(config.discrete_positions, key=lambda candidate: abs(float(candidate) - value))
+    if config.position_step > 0.0:
+        value = round(value / config.position_step) * config.position_step
+    effective_max_position = max_position * dd_scale
+    if effective_max_position > 0.0:
+        value = float(np.clip(value, -effective_max_position, effective_max_position))
+    else:
+        value = 0.0
+    if abs(value - current_position) < config.min_position_change:
+        value = float(current_position)
+    return float(value), {
+        "vol_target_scale": float(vol_scale),
+        "realized_vol": float(realized_vol),
+        "drawdown_governor_scale": float(dd_scale),
+        "risk_scale": float(combined_scale),
+    }
+
+
 @dataclass
 class TradingConfig:
     transaction_cost_bps: float = 1.0
@@ -61,6 +242,10 @@ class TradingConfig:
     reward_mode: str = "linear"
     risk_aversion: float = 0.0
     drawdown_penalty: float = 0.0
+    target_vol: float = 0.0
+    vol_target_lookback: int = 72
+    vol_scale_floor: float = 0.5
+    vol_scale_cap: float = 1.5
     drawdown_governor_slope: float = 0.0
     drawdown_governor_floor: float = 0.3
 
@@ -99,20 +284,6 @@ class TradingEnv(gym.Env if gym else object):
         self._equity = 1.0
         self._peak_equity = 1.0
 
-    def _current_drawdown(self) -> float:
-        peak = max(float(self._peak_equity), 1e-12)
-        equity = max(float(self._equity), 1e-12)
-        return max(0.0, (peak - equity) / peak)
-
-    def _drawdown_governor_scale(self) -> float:
-        slope = max(0.0, float(getattr(self._config, "drawdown_governor_slope", 0.0)))
-        floor = float(getattr(self._config, "drawdown_governor_floor", 0.3))
-        floor = min(1.0, max(0.0, floor))
-        if slope <= 0.0:
-            return 1.0
-        drawdown = self._current_drawdown()
-        return max(floor, 1.0 - slope * drawdown)
-
     def reset(self, *, seed: int | None = None, options: dict[str, Any] | None = None):
         super().reset(seed=seed)
         _ = options
@@ -132,49 +303,18 @@ class TradingEnv(gym.Env if gym else object):
         return self._get_obs(), {}
 
     def step(self, action: np.ndarray):
-        target_position = self._apply_action(action)
-        delta = target_position - self._position
-        cost = abs(delta) * self._cost_rate
-        holding_cost = abs(self._position) * self._holding_cost_rate
-
-        # Guard against zero/invalid prices to avoid NaNs.
-        base_price = float(self._closes[self._idx])
-        if base_price <= 0.0:
-            price_return = 0.0
-        else:
-            horizon = max(1, int(self._config.reward_horizon))
-            horizon_idx = min(self._idx + horizon, self._max_idx)
-            price_return = (float(self._closes[horizon_idx]) - base_price) / base_price
-        step_pnl = self._position * float(price_return)
-        net_return = step_pnl - cost - holding_cost
-        reward = net_return
-        if self._config.risk_aversion > 0.0:
-            reward -= self._config.risk_aversion * (step_pnl ** 2)
-
-        prev_equity = max(float(self._equity), 1e-12)
-        prev_peak_equity = max(float(self._peak_equity), prev_equity, 1e-12)
-        prev_drawdown = max(0.0, (prev_peak_equity - prev_equity) / prev_peak_equity)
-        growth_factor = max(1e-12, 1.0 + net_return)
-        next_equity = prev_equity * growth_factor
-        next_peak_equity = max(prev_peak_equity, next_equity)
-        drawdown = max(0.0, (next_peak_equity - next_equity) / next_peak_equity)
-        drawdown_delta = max(0.0, drawdown - prev_drawdown)
-
-        reward_mode = str(getattr(self._config, "reward_mode", "linear") or "linear").strip().lower()
-        if reward_mode == "log_return":
-            reward = float(np.log(growth_factor))
-
-        drawdown_penalty = 0.0
-        if self._config.drawdown_penalty > 0.0:
-            drawdown_penalty = self._config.drawdown_penalty * drawdown_delta
-            reward -= drawdown_penalty
-        if self._config.reward_scale != 1.0:
-            reward *= self._config.reward_scale
-        if self._config.reward_clip > 0.0:
-            reward = float(np.clip(reward, -self._config.reward_clip, self._config.reward_clip))
-
-        self._equity = next_equity
-        self._peak_equity = next_peak_equity
+        target_position, risk_info = self._apply_action(action)
+        transition = simulate_step_transition(
+            current_position=self._position,
+            target_position=target_position,
+            closes=self._closes,
+            idx=self._idx,
+            equity=self._equity,
+            peak_equity=self._peak_equity,
+            config=self._config,
+        )
+        self._equity = transition["equity"]
+        self._peak_equity = transition["peak_equity"]
         self._position = target_position
         self._idx += 1
 
@@ -182,38 +322,34 @@ class TradingEnv(gym.Env if gym else object):
         info = {
             "equity": self._equity,
             "position": self._position,
-            "delta": delta,
-            "cost": cost,
-            "holding_cost": holding_cost,
-            "net_return": net_return,
-            "drawdown": drawdown,
-            "drawdown_delta": drawdown_delta,
-            "drawdown_penalty": drawdown_penalty,
-            "drawdown_governor_scale": self._drawdown_governor_scale(),
-            "price_return": price_return,
-            "step_pnl": step_pnl,
-            "reward": reward,
-            "reward_mode": reward_mode,
+            "delta": transition["delta"],
+            "cost": transition["cost"],
+            "holding_cost": transition["holding_cost"],
+            "net_return": transition["net_return"],
+            "drawdown": transition["drawdown"],
+            "drawdown_delta": transition["drawdown_delta"],
+            "drawdown_penalty": transition["drawdown_penalty"],
+            "drawdown_governor_scale": risk_info["drawdown_governor_scale"],
+            "vol_target_scale": risk_info["vol_target_scale"],
+            "realized_vol": risk_info["realized_vol"],
+            "risk_scale": risk_info["risk_scale"],
+            "price_return": transition["price_return"],
+            "step_pnl": transition["step_pnl"],
+            "reward": transition["reward"],
+            "reward_mode": transition["reward_mode"],
         }
-        return self._get_obs(), reward, terminated, False, info
+        return self._get_obs(), transition["reward"], terminated, False, info
 
-    def _apply_action(self, action: np.ndarray) -> float:
-        max_position = max(0.0, float(self._config.max_position))
-        governor_scale = self._drawdown_governor_scale()
-        effective_max_position = max_position * governor_scale
-        clip_limit = max(1.0, max_position)
-        target = float(np.clip(action[0], -clip_limit, clip_limit))
-        if self._config.discretize_actions and self._config.discrete_positions:
-            target = min(self._config.discrete_positions, key=lambda val: abs(val - target))
-        if self._config.position_step > 0.0:
-            target = round(target / self._config.position_step) * self._config.position_step
-        if effective_max_position > 0.0:
-            target = float(np.clip(target, -effective_max_position, effective_max_position))
-        else:
-            target = 0.0
-        if abs(target - self._position) < self._config.min_position_change:
-            target = self._position
-        return float(target)
+    def _apply_action(self, action: np.ndarray) -> tuple[float, dict[str, float]]:
+        return apply_risk_engine(
+            float(action[0]),
+            current_position=self._position,
+            config=self._config,
+            closes=self._closes,
+            idx=self._idx,
+            equity=self._equity,
+            peak_equity=self._peak_equity,
+        )
 
     def _get_obs(self) -> np.ndarray:
         return build_window_observation(
@@ -223,16 +359,6 @@ class TradingEnv(gym.Env if gym else object):
             max_position=float(self._config.max_position),
             window_size=self._window_size,
         )
-
-    def _windowed_features(self, idx: int) -> np.ndarray:
-        obs = build_window_observation(
-            self._features,
-            idx,
-            position=0.0,
-            max_position=1.0,
-            window_size=self._window_size,
-        )
-        return obs[:-1]
 
     def _pick_start_index(self, max_start: int, min_start: int) -> int:
         mode = str(getattr(self._config, "start_mode", "") or "").strip().lower()

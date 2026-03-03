@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from dataclasses import replace
 from datetime import datetime
 import json
 import time
@@ -9,6 +10,7 @@ import numpy as np
 import pandas as pd
 from ctrader_open_api.messages.OpenApiModelMessages_pb2 import ProtoOATradeSide
 
+from forex.ml.rl.envs.trading_env import TradingConfig, apply_risk_engine, build_window_observation
 from forex.ml.rl.features.feature_builder import build_features
 
 
@@ -40,6 +42,24 @@ class LiveAutoTradeCoordinator:
         w = self._window
         control = getattr(w, "_one_position_mode", None)
         return bool(control and control.isChecked())
+
+    def _effective_trading_config(self) -> TradingConfig:
+        w = self._window
+        base = getattr(w, "_auto_env_config", None)
+        if not isinstance(base, TradingConfig):
+            base = TradingConfig()
+        step = float(base.position_step)
+        if hasattr(w, "_position_step"):
+            try:
+                step = float(w._position_step.value())
+            except Exception:
+                step = float(base.position_step)
+        return replace(
+            base,
+            max_position=self._effective_max_position(),
+            min_position_change=self._effective_min_position_change(),
+            position_step=step,
+        )
 
     def run_auto_trade_on_close(self) -> None:
         w = self._window
@@ -75,26 +95,48 @@ class LiveAutoTradeCoordinator:
         if feature_set.features.shape[0] <= 0:
             w._auto_debug_log("feature rows empty")
             return
-        max_position = self._effective_max_position()
-        position_norm = w._auto_position / max_position
-        obs = np.concatenate(
-            [feature_set.features[-1], np.array([position_norm], dtype=np.float32)]
-        ).astype(np.float32)
+        config = self._effective_trading_config()
+        max_position = max(1e-6, float(config.max_position))
+        obs_idx = int(feature_set.features.shape[0] - 1)
+        obs = build_window_observation(
+            feature_set.features,
+            obs_idx,
+            position=w._auto_position,
+            max_position=max_position,
+            window_size=int(getattr(config, "window_size", 1)),
+        )
         try:
             action, _ = w._auto_model.predict(obs, deterministic=True)
         except Exception as exc:
             w._auto_log(f"❌ Model inference failed: {exc}")
             return
-        target_position = float(np.clip(action[0], -max_position, max_position))
+        equity = float(w._auto_balance) if w._auto_balance and float(w._auto_balance) > 0.0 else 1.0
+        peak_equity = (
+            float(w._auto_peak_balance)
+            if w._auto_peak_balance and float(w._auto_peak_balance) > 0.0
+            else equity
+        )
+        target_position, risk_info = apply_risk_engine(
+            float(action[0]),
+            current_position=float(w._auto_position),
+            config=config,
+            closes=np.asarray(feature_set.closes, dtype=np.float32),
+            idx=obs_idx,
+            equity=equity,
+            peak_equity=peak_equity,
+        )
         confidence_threshold = float(w._confidence.value()) if hasattr(w, "_confidence") else 0.0
         w._auto_debug_fields(
             "decision_input",
             tf=w._timeframe,
             candles=len(w._candles),
             features=int(feature_set.features.shape[1]),
+            window=int(getattr(config, "window_size", 1)),
             pos=f"{w._auto_position:.3f}",
             action=f"{float(action[0]):.3f}",
             target=f"{target_position:.3f}",
+            vol_scale=f"{risk_info['vol_target_scale']:.3f}",
+            dd_scale=f"{risk_info['drawdown_governor_scale']:.3f}",
             confidence=f"{confidence_threshold:.3f}",
         )
         if confidence_threshold > 0 and abs(target_position) < confidence_threshold:
@@ -309,38 +351,6 @@ class LiveAutoTradeCoordinator:
             count += 1
         return count
 
-    def apply_position_step(self, target: float) -> float:
-        w = self._window
-        step = 0.0
-        if hasattr(w, "_position_step"):
-            try:
-                step = float(w._position_step.value())
-            except Exception:
-                step = 0.0
-        max_position = self._effective_max_position()
-        value = float(np.clip(float(target), -max_position, max_position))
-        if step <= 0.0:
-            return value
-        stepped = round(value / step) * step
-        if abs(stepped) < (step * 0.5):
-            stepped = 0.0
-        return float(np.clip(stepped, -max_position, max_position))
-
-    def _apply_trading_config_constraints(self, target: float) -> float:
-        w = self._window
-        value = float(target)
-        max_position = self._effective_max_position()
-        value = float(np.clip(value, -max_position, max_position))
-        if bool(getattr(w, "_auto_env_discretize_actions", False)):
-            positions = tuple(getattr(w, "_auto_env_discrete_positions", ()) or ())
-            if positions:
-                value = min(positions, key=lambda v: abs(float(v) - value))
-                value = float(np.clip(float(value), -max_position, max_position))
-        min_change = self._effective_min_position_change()
-        if min_change > 0 and abs(value - float(w._auto_position)) < min_change:
-            value = float(w._auto_position)
-        return value
-
     def execute_target_position(self, target: float, *, feature_set=None) -> bool:
         w = self._window
         if not w._app_state or not w._app_state.selected_account_id:
@@ -359,8 +369,7 @@ class LiveAutoTradeCoordinator:
         confidence_threshold = float(w._confidence.value()) if hasattr(w, "_confidence") else 0.0
         threshold = max(0.05, min(1.0, confidence_threshold))
         desired_raw = 0.0 if abs(target) < threshold else target
-        desired = self.apply_position_step(desired_raw)
-        desired = self._apply_trading_config_constraints(desired)
+        desired = float(np.clip(desired_raw, -self._effective_max_position(), self._effective_max_position()))
         desired_side = "buy" if desired > 0 else "sell"
         w._auto_debug_fields(
             "decision_normalized",

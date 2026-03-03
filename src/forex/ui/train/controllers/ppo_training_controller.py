@@ -131,6 +131,14 @@ class PPOTrainingController(QObject):
             str(params["risk_aversion"]),
             "--drawdown-penalty",
             str(params.get("drawdown_penalty", 0.0)),
+            "--target-vol",
+            str(params.get("target_vol", 0.0)),
+            "--vol-target-lookback",
+            str(params.get("vol_target_lookback", 72)),
+            "--vol-scale-floor",
+            str(params.get("vol_scale_floor", 0.5)),
+            "--vol-scale-cap",
+            str(params.get("vol_scale_cap", 1.5)),
             "--drawdown-governor-slope",
             str(params.get("drawdown_governor_slope", 0.0)),
             "--drawdown-governor-floor",
@@ -232,8 +240,6 @@ class PPOTrainingController(QObject):
         if self._use_metrics_log:
             if self._should_log_summary(line):
                 self._state.log_message.emit(line)
-            if "ep_rew_mean" not in line:
-                self._ingest_log(line)
         else:
             self._state.log_message.emit(line)
             self._ingest_log(line)
@@ -357,6 +363,9 @@ class PPOTrainingController(QObject):
     def _should_log_summary(line: str) -> bool:
         return (
             line.startswith("Training setup:")
+            or line.startswith("Resolved device:")
+            or line.startswith("Early stop:")
+            or line.startswith("Using best eval checkpoint")
             or line.startswith("Optuna best")
             or line.startswith("Optuna auto-select:")
             or line.startswith("Replay candidate:")
