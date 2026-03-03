@@ -24,6 +24,7 @@ def test_trading_config_io_roundtrip(tmp_path) -> None:
         reward_mode="log_return",
         risk_aversion=0.3,
         drawdown_penalty=0.05,
+        downside_penalty=0.02,
         target_vol=0.01,
         vol_target_lookback=48,
         vol_scale_floor=0.4,

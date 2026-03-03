@@ -55,6 +55,7 @@ class UIParamsStore:
             "reward_mode",
             "risk_aversion",
             "drawdown_penalty",
+            "downside_penalty",
             "target_vol",
             "vol_target_lookback",
             "vol_scale_floor",

@@ -543,11 +543,12 @@ class TrainingParamsPanel(QWidget):
         )
 
         self._reward_mode = QComboBox()
-        self._reward_mode.addItems(["Linear PnL", "Log return"])
+        self._reward_mode.addItems(["Linear PnL", "Log return", "Risk-adjusted log return"])
         self._reward_mode.setCurrentIndex(0)
         self._reward_mode.setFixedWidth(spin_width)
         self._reward_mode.setToolTip(
-            "Linear PnL keeps the legacy reward. Log return uses log(1 + net return)."
+            "Linear PnL keeps the legacy reward. Log return uses log(1 + net return). "
+            "Risk-adjusted log return adds downside-only penalty on top of log return."
         )
         reward_layout.add_row(
             "Reward mode",
@@ -577,6 +578,21 @@ class TrainingParamsPanel(QWidget):
         reward_layout.add_row(
             "Drawdown penalty",
             _wrap_field(self._drawdown_penalty),
+        )
+
+        self._downside_penalty = TrimmedDoubleSpinBox()
+        self._downside_penalty.setRange(0.0, 10.0)
+        self._downside_penalty.setDecimals(3)
+        self._downside_penalty.setSingleStep(0.01)
+        self._downside_penalty.setValue(0.0)
+        self._downside_penalty.setFixedWidth(spin_width)
+        self._downside_penalty.setToolTip(
+            "Penalty applied only in risk-adjusted log return mode: "
+            "downside_penalty * min(0, net_return)^2."
+        )
+        reward_layout.add_row(
+            "Downside penalty",
+            _wrap_field(self._downside_penalty),
         )
 
         self._target_vol = TrimmedDoubleSpinBox()
@@ -1041,6 +1057,8 @@ class TrainingParamsPanel(QWidget):
             self._risk_aversion.setValue(float(params["risk_aversion"]))
         if "drawdown_penalty" in params:
             self._drawdown_penalty.setValue(float(params["drawdown_penalty"]))
+        if "downside_penalty" in params:
+            self._downside_penalty.setValue(float(params["downside_penalty"]))
         if "target_vol" in params:
             self._target_vol.setValue(float(params["target_vol"]))
         if "vol_target_lookback" in params:
@@ -1101,6 +1119,7 @@ class TrainingParamsPanel(QWidget):
             "reward_mode": self._reward_mode_key(),
             "risk_aversion": float(self._risk_aversion.value()),
             "drawdown_penalty": float(self._drawdown_penalty.value()),
+            "downside_penalty": float(self._downside_penalty.value()),
             "target_vol": float(self._target_vol.value()),
             "vol_target_lookback": int(self._vol_target_lookback.value()),
             "vol_scale_floor": float(self._vol_scale_floor.value()),
@@ -1367,6 +1386,8 @@ class TrainingParamsPanel(QWidget):
             self._risk_aversion.setValue(float(data["risk_aversion"]))
         if "drawdown_penalty" in data:
             self._drawdown_penalty.setValue(float(data["drawdown_penalty"]))
+        if "downside_penalty" in data:
+            self._downside_penalty.setValue(float(data["downside_penalty"]))
         if "target_vol" in data:
             self._target_vol.setValue(float(data["target_vol"]))
         if "vol_target_lookback" in data:
@@ -1445,6 +1466,7 @@ class TrainingParamsPanel(QWidget):
         self._reward_mode.currentIndexChanged.connect(self._auto_save_params)
         self._risk_aversion.valueChanged.connect(self._auto_save_params)
         self._drawdown_penalty.valueChanged.connect(self._auto_save_params)
+        self._downside_penalty.valueChanged.connect(self._auto_save_params)
         self._target_vol.valueChanged.connect(self._auto_save_params)
         self._vol_target_lookback.valueChanged.connect(self._auto_save_params)
         self._vol_scale_floor.valueChanged.connect(self._auto_save_params)
@@ -1579,6 +1601,8 @@ class TrainingParamsPanel(QWidget):
 
     def _reward_mode_key(self) -> str:
         text = self._reward_mode.currentText()
+        if text.startswith("Risk-adjusted"):
+            return "risk_adjusted"
         if text.startswith("Log"):
             return "log_return"
         return "linear"
@@ -1591,6 +1615,9 @@ class TrainingParamsPanel(QWidget):
 
     def _set_reward_mode(self, mode: str) -> None:
         value = (mode or "").strip().lower()
+        if value == "risk_adjusted":
+            self._reward_mode.setCurrentIndex(2)
+            return
         if value == "log_return":
             self._reward_mode.setCurrentIndex(1)
             return
@@ -1627,7 +1654,7 @@ class TrainingPanel(QWidget):
         self._reward_run_started_at = self._current_timestamp()
         self._metrics = [
             ("ep_rew_mean", "ep_rew_mean"),
-            ("eval/mean_reward", "mean_reward"),
+            ("eval/mean_reward", "eval/mean_reward"),
             ("reward_step_mean", "reward_step_mean"),
             ("step_pnl_mean", "step_pnl_mean"),
             ("rolling_sharpe", "rolling_sharpe"),
@@ -2003,9 +2030,46 @@ class TrainingPanel(QWidget):
     def _refresh_training_plot_range(self) -> None:
         if not self._charts_available:
             return
-        self._plot.enableAutoRange(axis="x", enable=True)
-        self._plot.enableAutoRange(axis="y", enable=True)
-        self._plot.autoRange()
+        visible_points: list[tuple[list[float], list[float]]] = []
+        for _, key in self._metrics:
+            checkbox = self._checkboxes.get(key)
+            if checkbox is None or not checkbox.isChecked():
+                continue
+            data = self._metric_data[key]
+            if not data["x"] or not data["y"]:
+                continue
+            visible_points.append((list(data["x"]), list(data["y"])))
+        if not visible_points:
+            self._plot.enableAutoRange(axis="x", enable=True)
+            self._plot.enableAutoRange(axis="y", enable=True)
+            self._plot.autoRange()
+            return
+        xs = [value for series, _ in visible_points for value in series]
+        ys = [value for _, series in visible_points for value in series]
+        x_min = min(xs)
+        x_max = max(xs)
+        y_min = min(ys)
+        y_max = max(ys)
+        if x_min == x_max:
+            x_pad = max(1.0, abs(x_min) * 0.05)
+            x_min -= x_pad
+            x_max += x_pad
+        else:
+            x_pad = max((x_max - x_min) * 0.03, 1.0)
+            x_min -= x_pad
+            x_max += x_pad
+        if y_min == y_max:
+            y_pad = max(0.1, abs(y_min) * 0.1, 1e-3)
+            y_min -= y_pad
+            y_max += y_pad
+        else:
+            y_pad = max((y_max - y_min) * 0.08, 1e-3)
+            y_min -= y_pad
+            y_max += y_pad
+        self._plot.enableAutoRange(axis="x", enable=False)
+        self._plot.enableAutoRange(axis="y", enable=False)
+        self._plot.setXRange(x_min, x_max, padding=0.0)
+        self._plot.setYRange(y_min, y_max, padding=0.0)
 
     def _refresh_optuna_plot_range(self) -> None:
         if not self._charts_available:

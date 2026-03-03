@@ -16,6 +16,7 @@ from forex.application.state import AppState
 from forex.infrastructure.broker.fake.provider import FakeProvider
 from forex.ui.live.main_window import LiveMainWindow
 from forex.ui.train.main_window import MainWindow
+from forex.ui.train.widgets.training_panel import TrainingPanel
 
 
 class UISmokeTest(unittest.TestCase):
@@ -31,7 +32,7 @@ class UISmokeTest(unittest.TestCase):
             event_bus=EventBus(),
             app_state=AppState(),
         )
-        self.assertEqual(window.windowTitle(), "外匯交易應用程式")
+        self.assertEqual(window.windowTitle(), "Forex Trading App")
         window.close()
         window.deleteLater()
         self._app.processEvents()
@@ -47,6 +48,15 @@ class UISmokeTest(unittest.TestCase):
         self.assertIn("Live", window.windowTitle())
         window.close()
         window.deleteLater()
+        self._app.processEvents()
+
+    def test_training_panel_accepts_eval_mean_reward_metric(self) -> None:
+        panel = TrainingPanel()
+        panel.append_metric_point("eval/mean_reward", 10000, 0.25)
+        self.assertEqual(list(panel._metric_data["eval/mean_reward"]["x"]), [10000])
+        self.assertEqual(list(panel._metric_data["eval/mean_reward"]["y"]), [0.25])
+        panel.close()
+        panel.deleteLater()
         self._app.processEvents()
 
 

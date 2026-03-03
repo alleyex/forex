@@ -394,6 +394,37 @@ def test_drawdown_penalty_uses_drawdown_delta_only() -> None:
     assert reward_two == pytest.approx(0.0)
 
 
+def test_risk_adjusted_reward_uses_log_return_and_downside_only_penalty() -> None:
+    pytest.importorskip("gymnasium")
+    features = np.zeros((3, 2), dtype=np.float32)
+    closes = np.array([100.0, 90.0, 90.0], dtype=np.float64)
+    env = TradingEnv(
+        features,
+        closes,
+        TradingConfig(
+            random_start=False,
+            episode_length=2,
+            reward_horizon=1,
+            reward_mode="risk_adjusted",
+            downside_penalty=2.0,
+            drawdown_penalty=0.5,
+        ),
+    )
+    env.reset()
+    env._position = 1.0
+    _, reward, _, _, info = env.step(np.array([1.0], dtype=np.float32))
+    expected_log_return = np.log(0.9)
+    expected_downside_penalty = 2.0 * (0.1**2)
+    expected_drawdown_penalty = 0.5 * 0.1
+    assert info["reward_mode"] == "risk_adjusted"
+    assert info["net_return"] == pytest.approx(-0.1)
+    assert info["downside_penalty"] == pytest.approx(expected_downside_penalty)
+    assert info["drawdown_penalty"] == pytest.approx(expected_drawdown_penalty)
+    assert reward == pytest.approx(
+        expected_log_return - expected_downside_penalty - expected_drawdown_penalty
+    )
+
+
 def test_weekly_open_start_mode_uses_monday_anchor() -> None:
     pytest.importorskip("gymnasium")
     timestamps = [

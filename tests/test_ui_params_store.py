@@ -16,6 +16,7 @@ def test_training_store_saves_nested_and_top_level(tmp_path, monkeypatch) -> Non
         "learning_rate": 0.0001,
         "transaction_cost_bps": 0.4,
         "window_size": 4,
+        "downside_penalty": 0.02,
         "target_vol": 0.01,
         "start_mode": "random",
     }
@@ -26,6 +27,7 @@ def test_training_store_saves_nested_and_top_level(tmp_path, monkeypatch) -> Non
     assert payload["learning_rate"] == 0.0001
     assert payload["transaction_cost_bps"] == 0.4
     assert payload["window_size"] == 4
+    assert payload["downside_penalty"] == 0.02
     assert payload["target_vol"] == 0.01
     assert payload["start_mode"] == "random"
 

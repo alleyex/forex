@@ -7,6 +7,7 @@ import math
 import shutil
 import sys
 import tempfile
+import time
 from pathlib import Path
 import numpy as np
 from stable_baselines3 import PPO
@@ -42,6 +43,7 @@ class MetricsLogCallback(BaseCallback):
     def __init__(self, write_metric, verbose: int = 0) -> None:
         super().__init__(verbose=verbose)
         self._write_metric = write_metric
+        self._started_at = time.perf_counter()
         self._rollout_sums = {
             "reward_step_mean": 0.0,
             "step_pnl_mean": 0.0,
@@ -93,6 +95,9 @@ class MetricsLogCallback(BaseCallback):
             if metric_value is None:
                 continue
             self._write_metric(step, metric_key, float(metric_value))
+        if self.logger.name_to_value.get("time/fps") is None:
+            elapsed = max(time.perf_counter() - self._started_at, 1e-9)
+            self._write_metric(step, "fps", float(step) / elapsed)
         for metric in self._rollout_sums:
             self._rollout_sums[metric] = 0.0
         self._rollout_count = 0
@@ -290,16 +295,22 @@ def main() -> None:
     parser.add_argument("--reward-clip", type=float, default=0.0, help="Clip reward to +/- value (0 disables).")
     parser.add_argument(
         "--reward-mode",
-        choices=("linear", "log_return"),
+        choices=("linear", "log_return", "risk_adjusted"),
         default="linear",
-        help="Reward definition: raw net return shaping or log(1 + net_return).",
+        help="Reward definition: raw net return, log(1 + net_return), or risk-adjusted log return.",
     )
     parser.add_argument("--risk-aversion", type=float, default=0.0, help="Penalty for variance of PnL.")
     parser.add_argument(
         "--drawdown-penalty",
         type=float,
         default=0.0,
-        help="Penalty applied to current drawdown in reward shaping.",
+        help="Penalty applied when drawdown worsens: drawdown_penalty * drawdown_delta.",
+    )
+    parser.add_argument(
+        "--downside-penalty",
+        type=float,
+        default=0.0,
+        help="Penalty applied only in risk_adjusted mode: downside_penalty * min(0, net_return)^2.",
     )
     parser.add_argument(
         "--drawdown-governor-slope",
@@ -504,6 +515,7 @@ def main() -> None:
         reward_mode=args.reward_mode,
         risk_aversion=args.risk_aversion,
         drawdown_penalty=args.drawdown_penalty,
+        downside_penalty=args.downside_penalty,
         target_vol=args.target_vol,
         vol_target_lookback=args.vol_target_lookback,
         vol_scale_floor=args.vol_scale_floor,
@@ -532,6 +544,7 @@ def main() -> None:
         reward_mode=args.reward_mode,
         risk_aversion=args.risk_aversion,
         drawdown_penalty=args.drawdown_penalty,
+        downside_penalty=args.downside_penalty,
         target_vol=args.target_vol,
         vol_target_lookback=args.vol_target_lookback,
         vol_scale_floor=args.vol_scale_floor,
@@ -656,6 +669,7 @@ def main() -> None:
             "window_size",
             "risk_aversion",
             "drawdown_penalty",
+            "downside_penalty",
             "target_vol",
             "vol_target_lookback",
             "vol_scale_floor",
@@ -812,6 +826,7 @@ def main() -> None:
                 window_size=int(params.get("window_size", 1)),
                 risk_aversion=float(params["risk_aversion"]),
                 drawdown_penalty=float(params.get("drawdown_penalty", 0.0)),
+                downside_penalty=float(params.get("downside_penalty", train_config.downside_penalty)),
                 target_vol=float(params.get("target_vol", 0.0)),
                 vol_target_lookback=int(params.get("vol_target_lookback", 72)),
                 vol_scale_floor=float(params.get("vol_scale_floor", 0.5)),
@@ -828,6 +843,7 @@ def main() -> None:
                 window_size=int(params.get("window_size", 1)),
                 risk_aversion=float(params["risk_aversion"]),
                 drawdown_penalty=float(params.get("drawdown_penalty", 0.0)),
+                downside_penalty=float(params.get("downside_penalty", eval_config.downside_penalty)),
                 target_vol=float(params.get("target_vol", 0.0)),
                 vol_target_lookback=int(params.get("vol_target_lookback", 72)),
                 vol_scale_floor=float(params.get("vol_scale_floor", 0.5)),

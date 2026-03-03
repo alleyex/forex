@@ -131,6 +131,8 @@ class PPOTrainingController(QObject):
             str(params["risk_aversion"]),
             "--drawdown-penalty",
             str(params.get("drawdown_penalty", 0.0)),
+            "--downside-penalty",
+            str(params.get("downside_penalty", 0.0)),
             "--target-vol",
             str(params.get("target_vol", 0.0)),
             "--vol-target-lookback",

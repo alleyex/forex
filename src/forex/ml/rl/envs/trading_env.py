@@ -147,6 +147,13 @@ def simulate_step_transition(
     reward_mode = str(getattr(config, "reward_mode", "linear") or "linear").strip().lower()
     if reward_mode == "log_return":
         reward = float(np.log(growth_factor))
+    elif reward_mode == "risk_adjusted":
+        reward = float(np.log(growth_factor))
+
+    downside_penalty = 0.0
+    if reward_mode == "risk_adjusted" and float(config.downside_penalty) > 0.0:
+        downside_penalty = float(config.downside_penalty) * (min(0.0, net_return) ** 2)
+        reward -= downside_penalty
 
     drawdown_penalty = 0.0
     if float(config.drawdown_penalty) > 0.0:
@@ -166,6 +173,7 @@ def simulate_step_transition(
         "step_pnl": float(step_pnl),
         "reward": float(reward),
         "reward_mode": reward_mode,
+        "downside_penalty": float(downside_penalty),
         "drawdown": float(drawdown),
         "drawdown_delta": float(drawdown_delta),
         "drawdown_penalty": float(drawdown_penalty),
@@ -241,6 +249,7 @@ class TradingConfig:
     reward_clip: float = 0.0
     reward_mode: str = "linear"
     risk_aversion: float = 0.0
+    downside_penalty: float = 0.0
     drawdown_penalty: float = 0.0
     target_vol: float = 0.0
     vol_target_lookback: int = 72
@@ -328,6 +337,7 @@ class TradingEnv(gym.Env if gym else object):
             "net_return": transition["net_return"],
             "drawdown": transition["drawdown"],
             "drawdown_delta": transition["drawdown_delta"],
+            "downside_penalty": transition["downside_penalty"],
             "drawdown_penalty": transition["drawdown_penalty"],
             "drawdown_governor_scale": risk_info["drawdown_governor_scale"],
             "vol_target_scale": risk_info["vol_target_scale"],
