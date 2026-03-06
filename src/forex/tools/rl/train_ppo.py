@@ -1224,6 +1224,12 @@ def main() -> None:
         raise ValueError("--min-position-change must be 0 when --max-position is 0.")
     if args.max_position > 0.0 and args.min_position_change > (2.0 * args.max_position):
         raise ValueError("--min-position-change is too large for current --max-position.")
+    if args.episode_length < 1:
+        raise ValueError("--episode-length must be >= 1.")
+    if args.reward_horizon < 1:
+        raise ValueError("--reward-horizon must be >= 1.")
+    if args.window_size < 1:
+        raise ValueError("--window-size must be >= 1.")
     if not (0.0 < args.eval_split < 1.0):
         raise ValueError("--eval-split must be in (0, 1).")
 
