@@ -35,6 +35,7 @@ from forex.ml.rl.features.feature_builder import (
     filter_feature_rows_by_session,
     fit_scaler,
     load_csv,
+    required_raw_columns_for_profile,
     save_scaler,
     select_feature_columns,
 )
@@ -1179,6 +1180,22 @@ def main() -> None:
         help="Save and export the best eval checkpoint instead of the final training weights.",
     )
     args = parser.parse_args()
+    if args.total_steps < 1:
+        raise ValueError("--total-steps must be >= 1.")
+    if args.learning_rate <= 0.0:
+        raise ValueError("--learning-rate must be > 0.")
+    if not (0.0 < args.gamma <= 1.0):
+        raise ValueError("--gamma must be in (0, 1].")
+    if args.n_steps < 1:
+        raise ValueError("--n-steps must be >= 1.")
+    if args.batch_size < 1:
+        raise ValueError("--batch-size must be >= 1.")
+    if args.batch_size > args.n_steps:
+        raise ValueError("--batch-size cannot exceed --n-steps.")
+    if args.ent_coef < 0.0:
+        raise ValueError("--ent-coef must be >= 0.")
+    if not (0.0 < args.eval_split < 1.0):
+        raise ValueError("--eval-split must be in (0, 1).")
 
     feature_subset_path = str(args.feature_subset_json).strip()
     subset_names: list[str] | None = None
@@ -1190,6 +1207,12 @@ def main() -> None:
         else:
             subset_names = subset_payload
     requested_feature_names = None if subset_names is None else [str(name) for name in subset_names]
+    feature_profile = str(args.feature_profile).strip().lower() or "raw53"
+    profile_required_columns = required_raw_columns_for_profile(feature_profile)
+    if requested_feature_names is not None and profile_required_columns:
+        for name in profile_required_columns:
+            if name not in requested_feature_names:
+                requested_feature_names.append(name)
     session_support_column = {
         "monday_open": "is_monday_open_window",
         "london": "is_london_session",
@@ -1208,7 +1231,6 @@ def main() -> None:
         timestamps,
         args.session_filter,
     )
-    feature_profile = str(args.feature_profile).strip().lower() or "raw53"
     features_frame = apply_feature_profile(features_frame, feature_profile)
     if subset_names is not None:
         subset_in_profile = [name for name in subset_names if name in features_frame.columns]

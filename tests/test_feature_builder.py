@@ -7,6 +7,7 @@ import pytest
 
 from forex.ml.rl.features.feature_builder import (
     ALPHA_FEATURE_COLUMNS,
+    ALPHA_SOURCE_COLUMNS,
     RESIDUAL_CONTEXT_COLUMNS,
     apply_feature_profile,
     build_feature_frame,
@@ -14,6 +15,7 @@ from forex.ml.rl.features.feature_builder import (
     fit_scaler,
     filter_feature_rows_by_session,
     infer_feature_profile_from_names,
+    required_raw_columns_for_profile,
     select_feature_columns,
 )
 
@@ -351,3 +353,24 @@ def test_build_features_infers_profile_from_scaler_names() -> None:
     bundle = build_features(df, scaler=scaler)
     assert list(bundle.names) == scaler.names
     assert bundle.features.shape[1] == len(scaler.names)
+
+
+def test_required_raw_columns_for_profile() -> None:
+    assert required_raw_columns_for_profile("raw53") == tuple()
+    assert required_raw_columns_for_profile("alpha4") == ALPHA_SOURCE_COLUMNS
+    residual_required = required_raw_columns_for_profile("residual")
+    for name in ALPHA_SOURCE_COLUMNS:
+        assert name in residual_required
+    for name in RESIDUAL_CONTEXT_COLUMNS:
+        assert name in residual_required
+
+
+def test_apply_feature_profile_rejects_missing_required_columns() -> None:
+    partial = pd.DataFrame(
+        {
+            "momentum_10_20": [0.1, 0.2],
+            "breakout_20": [0.01, -0.02],
+        }
+    )
+    with pytest.raises(ValueError, match="missing raw feature columns"):
+        apply_feature_profile(partial, "alpha4")

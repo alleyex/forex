@@ -139,12 +139,24 @@ def load_playback_bundle(
         except Exception:
             pass
 
+    model = PPO.load(model_path)
+    model_obs_shape = getattr(getattr(model, "observation_space", None), "shape", None)
+    expected_obs_dim = int(np.prod(model_obs_shape)) if model_obs_shape else 0
+    window_size = max(1, int(getattr(config, "window_size", 1)))
+    actual_obs_dim = (int(features_frame.shape[1]) * window_size) + 1
+    if expected_obs_dim > 0 and expected_obs_dim != actual_obs_dim:
+        raise ValueError(
+            "Model observation dimension mismatch. "
+            f"model expects {expected_obs_dim}, but data pipeline produced {actual_obs_dim}. "
+            "Check feature profile/scaler/env config alignment."
+        )
+
     return PlaybackBundle(
         features=features_frame.to_numpy(dtype=np.float32),
         closes=closes.to_numpy(dtype=np.float32),
         timestamps=list(timestamps),
         config=config,
-        model=PPO.load(model_path),
+        model=model,
     )
 
 

@@ -15,6 +15,20 @@ ALPHA_FEATURE_COLUMNS: tuple[str, ...] = (
     "breakout_score",
     "volatility_score",
 )
+ALPHA_SOURCE_COLUMNS: tuple[str, ...] = (
+    "momentum_10_20",
+    "momentum_20_50",
+    "momentum_50_100",
+    "trend_flag_25",
+    "range_strength_10_50_atr14",
+    "rsi_14",
+    "breakout_20",
+    "breakout_50",
+    "atr_14",
+    "vol_ratio_10_50",
+    "vol_pct_72_252",
+    "bollinger_band_width_20",
+)
 RESIDUAL_CONTEXT_COLUMNS: tuple[str, ...] = (
     "atr_14",
     "vol_pct_72_252",
@@ -133,6 +147,13 @@ def apply_feature_profile(features: pd.DataFrame, profile: str) -> pd.DataFrame:
     profile_name = str(profile).strip().lower() or "raw53"
     if profile_name == "raw53":
         return features.copy()
+    required = required_raw_columns_for_profile(profile_name)
+    missing = [name for name in required if name not in features.columns]
+    if missing:
+        raise ValueError(
+            "Feature profile requires missing raw feature columns: "
+            + ", ".join(missing)
+        )
     alpha_frame = _build_alpha_layer(features)
     if profile_name == "alpha4":
         return alpha_frame
@@ -143,6 +164,17 @@ def apply_feature_profile(features: pd.DataFrame, profile: str) -> pd.DataFrame:
                 residual[name] = pd.to_numeric(features[name], errors="coerce").fillna(0.0).astype(float)
         ordered = [*ALPHA_FEATURE_COLUMNS, *[name for name in RESIDUAL_CONTEXT_COLUMNS if name in residual.columns]]
         return residual.loc[:, ordered].copy()
+    raise ValueError(f"Unknown feature profile: {profile}")
+
+
+def required_raw_columns_for_profile(profile: str) -> tuple[str, ...]:
+    profile_name = str(profile).strip().lower() or "raw53"
+    if profile_name == "raw53":
+        return tuple()
+    if profile_name == "alpha4":
+        return ALPHA_SOURCE_COLUMNS
+    if profile_name == "residual":
+        return (*ALPHA_SOURCE_COLUMNS, *RESIDUAL_CONTEXT_COLUMNS)
     raise ValueError(f"Unknown feature profile: {profile}")
 
 

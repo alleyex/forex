@@ -56,7 +56,12 @@ from forex.ui.shared.widgets.log_widget import LogWidget
 from forex.ui.shared.utils.path_utils import latest_file_in_dir
 from forex.ui.shared.styles.tokens import FORM_LABEL_WIDTH_COMPACT, PRIMARY, TRAINING_PARAMS
 from forex.config.paths import DATA_DIR, RAW_HISTORY_DIR
-from forex.ml.rl.features.feature_builder import build_feature_frame, load_csv
+from forex.ml.rl.features.feature_builder import (
+    ALPHA_FEATURE_COLUMNS,
+    RESIDUAL_CONTEXT_COLUMNS,
+    build_feature_frame,
+    load_csv,
+)
 from forex.ui.train.services import UIParamsStore
 
 
@@ -642,6 +647,7 @@ class TrainingParamsPanel(QWidget):
         self._sync_early_stop_controls()
         self._sync_curriculum_controls()
         self._sync_anti_flat_controls()
+        self._sync_batch_size_limit()
 
         cost_group = QGroupBox("Cost & Friction")
         _apply_live_card_style(cost_group)
@@ -772,7 +778,9 @@ class TrainingParamsPanel(QWidget):
         self._feature_profile = QComboBox()
         self._feature_profile.addItems(["Raw 53 features", "Alpha layer (4)", "Alpha + context (residual)"])
         self._feature_profile.setCurrentIndex(2)
-        self._feature_profile.setFixedWidth(spin_width)
+        self._feature_profile.setMinimumContentsLength(24)
+        self._feature_profile.setSizeAdjustPolicy(QComboBox.SizeAdjustPolicy.AdjustToContentsOnFirstShow)
+        self._feature_profile.setFixedWidth(max(spin_width, 280))
         self._feature_profile.setToolTip(
             "Choose which feature profile to feed into PPO. "
             "Residual uses alpha layer plus a small execution context."
@@ -1163,28 +1171,23 @@ class TrainingParamsPanel(QWidget):
         tabs.tabBar().setExpanding(False)
         tabs.tabBar().setDrawBase(False)
 
-        core_tab = QWidget()
-        core_tab.setObjectName("modelTab")
-        core_layout = QVBoxLayout(core_tab)
-        core_layout.setContentsMargins(12, 10, 18, 24)
-        core_layout.setSpacing(8)
-        core_layout.addWidget(file_group)
-        core_layout.addWidget(params_group)
-        core_layout.addStretch(1)
-
-        ppo_tab = QWidget()
-        ppo_tab.setObjectName("modelTab")
-        ppo_layout = QVBoxLayout(ppo_tab)
-        ppo_layout.setContentsMargins(12, 10, 18, 24)
-        ppo_layout.setSpacing(8)
-        ppo_layout.addWidget(ppo_advanced_group)
-        ppo_layout.addStretch(1)
+        setup_tab = QWidget()
+        setup_tab.setObjectName("modelTab")
+        setup_layout = QVBoxLayout(setup_tab)
+        setup_layout.setContentsMargins(12, 10, 18, 24)
+        setup_layout.setSpacing(8)
+        setup_layout.addWidget(params_group)
+        setup_layout.addWidget(ppo_advanced_group)
+        setup_layout.addWidget(cost_group)
+        setup_layout.addWidget(action_group)
+        setup_layout.addStretch(1)
 
         run_tab = QWidget()
         run_tab.setObjectName("modelTab")
         run_layout = QVBoxLayout(run_tab)
         run_layout.setContentsMargins(12, 10, 18, 24)
         run_layout.setSpacing(8)
+        run_layout.addWidget(file_group)
         run_layout.addWidget(options_group)
         run_layout.addWidget(self._start_button)
         run_layout.addStretch(1)
@@ -1197,15 +1200,6 @@ class TrainingParamsPanel(QWidget):
         guards_layout.addWidget(curriculum_group)
         guards_layout.addWidget(anti_flat_group)
         guards_layout.addStretch(1)
-
-        market_tab = QWidget()
-        market_tab.setObjectName("tradeTab")
-        market_layout = QVBoxLayout(market_tab)
-        market_layout.setContentsMargins(12, 10, 18, 24)
-        market_layout.setSpacing(8)
-        market_layout.addWidget(cost_group)
-        market_layout.addWidget(action_group)
-        market_layout.addStretch(1)
 
         sampling_tab = QWidget()
         sampling_tab.setObjectName("tradeTab")
@@ -1267,9 +1261,7 @@ class TrainingParamsPanel(QWidget):
 
         tabs.addTab(run_tab, "Run")
         tabs.addTab(guards_tab, "Guards")
-        tabs.addTab(core_tab, "Core")
-        tabs.addTab(ppo_tab, "PPO")
-        tabs.addTab(market_tab, "Market")
+        tabs.addTab(setup_tab, "Setup")
         tabs.addTab(sampling_tab, "Sampling")
         self._optuna_tab_index = tabs.addTab(optuna_tab, "Optuna")
         tabs.tabBar().setTabVisible(self._optuna_tab_index, False)
@@ -1286,6 +1278,7 @@ class TrainingParamsPanel(QWidget):
 
         self._load_params()
         self._update_data_metadata_preview(self._data_path.text().strip())
+        self._sync_feature_selection_controls()
         self._bind_auto_save_handlers()
         self._refresh_optuna_select_controls()
         self._refresh_optuna_replay_controls()
@@ -1408,9 +1401,12 @@ class TrainingParamsPanel(QWidget):
         )
 
     def get_params(self) -> dict:
+        selected_features = (
+            list(self._selected_feature_names) if self._feature_profile_key() == "raw53" else []
+        )
         return {
             "data_path": self._data_path.text().strip(),
-            "selected_features": list(self._selected_feature_names),
+            "selected_features": selected_features,
             "total_steps": int(self._total_steps.value()),
             "learning_rate": float(self._learning_rate.value()),
             "gamma": float(self._gamma.value()),
@@ -1547,7 +1543,7 @@ class TrainingParamsPanel(QWidget):
             else:
                 selected = [name for name in self._selected_feature_names if name in self._data_feature_names]
                 self._selected_feature_names = selected or list(self._data_feature_names)
-            self._view_features_button.setEnabled(bool(self._data_feature_names))
+            self._sync_feature_selection_controls()
             self._refresh_view_features_button()
             feature_summary = self._summarize_feature_names(self._data_feature_names)
         except Exception:
@@ -1658,6 +1654,13 @@ class TrainingParamsPanel(QWidget):
         return [(name, items) for name, items in ordered_groups if items]
 
     def _show_feature_list_dialog(self) -> None:
+        if self._feature_profile_key() != "raw53":
+            QMessageBox.information(
+                self,
+                "Features Managed by Profile",
+                "When feature profile is Alpha/Residual, raw feature selection is ignored.",
+            )
+            return
         if not self._data_feature_names:
             QMessageBox.information(self, "Features", "No feature list available for the selected data.")
             return
@@ -1737,6 +1740,17 @@ class TrainingParamsPanel(QWidget):
         dialog.exec()
 
     def _refresh_view_features_button(self) -> None:
+        profile = self._feature_profile_key()
+        if profile != "raw53":
+            if profile == "alpha4":
+                self._view_features_button.setText(
+                    f"Features: Alpha ({len(ALPHA_FEATURE_COLUMNS)})"
+                )
+            else:
+                self._view_features_button.setText(
+                    f"Features: Residual ({len(ALPHA_FEATURE_COLUMNS) + len(RESIDUAL_CONTEXT_COLUMNS)})"
+                )
+            return
         total = len(self._data_feature_names)
         selected = len(self._selected_feature_names)
         if total <= 0:
@@ -1835,10 +1849,14 @@ class TrainingParamsPanel(QWidget):
             self._tab_bar.setVisible(index != self._optuna_tab_index)
         if index == getattr(self, "_optuna_tab_index", -1):
             self.tab_changed.emit("optuna")
-        elif index in {0, 1, 2}:
-            self.tab_changed.emit("training")
-        elif index in {3, 4}:
+            return
+        tab_text = ""
+        if hasattr(self, "_tabs"):
+            tab_text = self._tabs.tabText(index).strip().lower()
+        if tab_text in {"sampling"}:
             self.tab_changed.emit("environment")
+            return
+        self.tab_changed.emit("training")
 
     def show_training_mode(self) -> None:
         if hasattr(self, "_tabs"):
@@ -2064,6 +2082,7 @@ class TrainingParamsPanel(QWidget):
         self._learning_rate.valueChanged.connect(self._auto_save_params)
         self._gamma.valueChanged.connect(self._auto_save_params)
         self._n_steps.valueChanged.connect(self._auto_save_params)
+        self._n_steps.valueChanged.connect(self._sync_batch_size_limit)
         self._batch_size.valueChanged.connect(self._auto_save_params)
         self._ent_coef.valueChanged.connect(self._auto_save_params)
         self._eval_split.valueChanged.connect(self._auto_save_params)
@@ -2078,6 +2097,7 @@ class TrainingParamsPanel(QWidget):
         self._window_size.valueChanged.connect(self._auto_save_params)
         self._start_mode.currentIndexChanged.connect(self._auto_save_params)
         self._feature_profile.currentIndexChanged.connect(self._auto_save_params)
+        self._feature_profile.currentIndexChanged.connect(self._sync_feature_selection_controls)
         self._reward_scale.valueChanged.connect(self._auto_save_params)
         self._reward_clip.valueChanged.connect(self._auto_save_params)
         self._reward_mode.currentIndexChanged.connect(self._auto_save_params)
@@ -2208,6 +2228,12 @@ class TrainingParamsPanel(QWidget):
         self._anti_flat_max_ls_imbalance.setEnabled(enabled)
         self._anti_flat_profile_steps.setEnabled(enabled)
 
+    def _sync_batch_size_limit(self, *_args: object) -> None:
+        max_batch = max(1, int(self._n_steps.value()))
+        self._batch_size.setMaximum(max_batch)
+        if int(self._batch_size.value()) > max_batch:
+            self._batch_size.setValue(max_batch)
+
     def _refresh_optuna_plan_hint(self) -> None:
         trials = int(self._optuna_trials.value())
         if trials <= 0:
@@ -2291,6 +2317,18 @@ class TrainingParamsPanel(QWidget):
             return "alpha4"
         return "residual"
 
+    def _sync_feature_selection_controls(self, *_args: object) -> None:
+        raw_profile = self._feature_profile_key() == "raw53"
+        can_pick = raw_profile and bool(self._data_feature_names)
+        self._view_features_button.setEnabled(can_pick)
+        if raw_profile:
+            self._view_features_button.setToolTip("Select raw features used by training.")
+        else:
+            self._view_features_button.setToolTip(
+                "Feature profile controls the active features. Raw feature selection is disabled."
+            )
+        self._refresh_view_features_button()
+
     def _device_key(self) -> str:
         text = self._device.currentText().strip().lower()
         if text in {"cpu", "mps", "cuda"}:
@@ -2311,11 +2349,11 @@ class TrainingParamsPanel(QWidget):
         value = (profile or "").strip().lower()
         if value == "raw53":
             self._feature_profile.setCurrentIndex(0)
-            return
-        if value == "alpha4":
+        elif value == "alpha4":
             self._feature_profile.setCurrentIndex(1)
-            return
-        self._feature_profile.setCurrentIndex(2)
+        else:
+            self._feature_profile.setCurrentIndex(2)
+        self._sync_feature_selection_controls()
 
     def _set_device(self, device: str) -> None:
         value = (device or "").strip().lower()
