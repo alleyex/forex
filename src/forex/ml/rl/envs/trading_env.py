@@ -132,8 +132,6 @@ def simulate_step_transition(
     step_pnl = float(current_position) * float(price_return)
     net_return = step_pnl - cost - holding_cost
     reward = net_return
-    if float(config.risk_aversion) > 0.0:
-        reward -= float(config.risk_aversion) * (step_pnl ** 2)
 
     prev_equity = max(float(equity), 1e-12)
     prev_peak_equity = max(float(peak_equity), prev_equity, 1e-12)
@@ -149,6 +147,8 @@ def simulate_step_transition(
         reward = float(np.log(growth_factor))
     elif reward_mode == "risk_adjusted":
         reward = float(np.log(growth_factor))
+    if float(config.risk_aversion) > 0.0:
+        reward -= float(config.risk_aversion) * (step_pnl ** 2)
 
     downside_penalty = 0.0
     if reward_mode == "risk_adjusted" and float(config.downside_penalty) > 0.0:
@@ -159,10 +159,16 @@ def simulate_step_transition(
     if float(config.drawdown_penalty) > 0.0:
         drawdown_penalty = float(config.drawdown_penalty) * drawdown_delta
         reward -= drawdown_penalty
+    turnover_penalty = 0.0
+    if float(getattr(config, "turnover_penalty", 0.0)) > 0.0:
+        turnover_penalty = float(config.turnover_penalty) * abs(delta)
+        reward -= turnover_penalty
+    exposure_penalty = 0.0
+    if float(getattr(config, "exposure_penalty", 0.0)) > 0.0:
+        exposure_penalty = float(config.exposure_penalty) * abs(float(target_position))
+        reward -= exposure_penalty
     if float(config.reward_scale) != 1.0:
         reward *= float(config.reward_scale)
-    if float(config.reward_clip) > 0.0:
-        reward = float(np.clip(reward, -float(config.reward_clip), float(config.reward_clip)))
 
     return {
         "delta": float(delta),
@@ -177,6 +183,8 @@ def simulate_step_transition(
         "drawdown": float(drawdown),
         "drawdown_delta": float(drawdown_delta),
         "drawdown_penalty": float(drawdown_penalty),
+        "turnover_penalty": float(turnover_penalty),
+        "exposure_penalty": float(exposure_penalty),
         "equity": float(next_equity),
         "peak_equity": float(next_peak_equity),
     }
@@ -251,6 +259,14 @@ class TradingConfig:
     risk_aversion: float = 0.0
     downside_penalty: float = 0.0
     drawdown_penalty: float = 0.0
+    turnover_penalty: float = 0.0
+    exposure_penalty: float = 0.0
+    flat_position_penalty: float = 0.0
+    flat_streak_penalty: float = 0.0
+    flat_position_threshold: float = 1e-6
+    position_bias_penalty: float = 0.0
+    position_bias_threshold: float = 0.2
+    position_bias_ema_alpha: float = 0.05
     target_vol: float = 0.0
     vol_target_lookback: int = 72
     vol_scale_floor: float = 0.5
@@ -292,6 +308,8 @@ class TradingEnv(gym.Env if gym else object):
         self._position = 0.0
         self._equity = 1.0
         self._peak_equity = 1.0
+        self._flat_steps = 0
+        self._position_bias_ema = 0.0
 
     def reset(self, *, seed: int | None = None, options: dict[str, Any] | None = None):
         super().reset(seed=seed)
@@ -309,6 +327,8 @@ class TradingEnv(gym.Env if gym else object):
         self._position = 0.0
         self._equity = 1.0
         self._peak_equity = 1.0
+        self._flat_steps = 0
+        self._position_bias_ema = 0.0
         return self._get_obs(), {}
 
     def step(self, action: np.ndarray):
@@ -322,6 +342,36 @@ class TradingEnv(gym.Env if gym else object):
             peak_equity=self._peak_equity,
             config=self._config,
         )
+        reward = float(transition["reward"])
+        flat_position_penalty = 0.0
+        flat_streak_penalty = 0.0
+        flat_threshold = max(0.0, float(getattr(self._config, "flat_position_threshold", 1e-6)))
+        is_flat_hold = abs(float(self._position)) <= flat_threshold and abs(float(target_position)) <= flat_threshold
+        if is_flat_hold:
+            self._flat_steps += 1
+            if float(getattr(self._config, "flat_position_penalty", 0.0)) > 0.0:
+                flat_position_penalty = float(self._config.flat_position_penalty)
+                reward -= flat_position_penalty
+            if float(getattr(self._config, "flat_streak_penalty", 0.0)) > 0.0 and self._flat_steps > 1:
+                flat_streak_penalty = float(self._config.flat_streak_penalty) * float(self._flat_steps - 1)
+                reward -= flat_streak_penalty
+        else:
+            self._flat_steps = 0
+        position_bias_penalty = 0.0
+        max_position = max(float(self._config.max_position), 1e-12)
+        bias_alpha = float(getattr(self._config, "position_bias_ema_alpha", 0.05))
+        bias_alpha = float(np.clip(bias_alpha, 0.0, 1.0))
+        normalized_position = float(target_position) / max_position
+        self._position_bias_ema = ((1.0 - bias_alpha) * self._position_bias_ema) + (
+            bias_alpha * normalized_position
+        )
+        bias_threshold = max(0.0, float(getattr(self._config, "position_bias_threshold", 0.2)))
+        bias_excess = max(0.0, abs(self._position_bias_ema) - bias_threshold)
+        if float(getattr(self._config, "position_bias_penalty", 0.0)) > 0.0 and bias_excess > 0.0:
+            position_bias_penalty = float(self._config.position_bias_penalty) * bias_excess
+            reward -= position_bias_penalty
+        if float(self._config.reward_clip) > 0.0:
+            reward = float(np.clip(reward, -float(self._config.reward_clip), float(self._config.reward_clip)))
         self._equity = transition["equity"]
         self._peak_equity = transition["peak_equity"]
         self._position = target_position
@@ -339,16 +389,23 @@ class TradingEnv(gym.Env if gym else object):
             "drawdown_delta": transition["drawdown_delta"],
             "downside_penalty": transition["downside_penalty"],
             "drawdown_penalty": transition["drawdown_penalty"],
+            "turnover_penalty": transition["turnover_penalty"],
+            "exposure_penalty": transition["exposure_penalty"],
+            "flat_position_penalty": flat_position_penalty,
+            "flat_streak_penalty": flat_streak_penalty,
+            "flat_steps": self._flat_steps,
+            "position_bias_penalty": position_bias_penalty,
+            "position_bias_ema": self._position_bias_ema,
             "drawdown_governor_scale": risk_info["drawdown_governor_scale"],
             "vol_target_scale": risk_info["vol_target_scale"],
             "realized_vol": risk_info["realized_vol"],
             "risk_scale": risk_info["risk_scale"],
             "price_return": transition["price_return"],
             "step_pnl": transition["step_pnl"],
-            "reward": transition["reward"],
+            "reward": reward,
             "reward_mode": transition["reward_mode"],
         }
-        return self._get_obs(), transition["reward"], terminated, False, info
+        return self._get_obs(), reward, terminated, False, info
 
     def _apply_action(self, action: np.ndarray) -> tuple[float, dict[str, float]]:
         return apply_risk_engine(

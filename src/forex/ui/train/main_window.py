@@ -283,6 +283,7 @@ class MainWindow(QMainWindow):
             on_toggle_connection=self._toggle_connection,
             on_fetch_account_info=self._on_fetch_account_info,
             on_train_ppo=self._on_train_ppo_clicked,
+            on_optuna=self._on_optuna_clicked,
             on_simulation=self._on_simulation_clicked,
             on_history_download=self._open_history_download_dialog,
             on_data_check=self._open_data_check_dialog,
@@ -308,6 +309,14 @@ class MainWindow(QMainWindow):
     @Slot()
     def _on_train_ppo_clicked(self) -> None:
         self._show_panel("training")
+        self._training_params_panel.show_training_mode()
+        self._training_panel.show_training_plot()
+
+    @Slot()
+    def _on_optuna_clicked(self) -> None:
+        self._show_panel("optuna")
+        self._training_params_panel.show_optuna_mode()
+        self._training_panel.show_optuna_plot()
 
     @Slot()
     def _on_simulation_clicked(self) -> None:

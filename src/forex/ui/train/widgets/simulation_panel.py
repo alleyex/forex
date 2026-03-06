@@ -24,6 +24,7 @@ from PySide6.QtWidgets import (
     QGroupBox,
     QSplitter,
     QTabWidget,
+    QFrame,
 )
 
 from forex.ui.shared.widgets.log_widget import LogWidget
@@ -51,6 +52,75 @@ from forex.ui.shared.styles.tokens import (
 from forex.config.paths import DEFAULT_MODEL_PATH, MODEL_DIR, RAW_HISTORY_DIR
 from forex.ui.train.services import UIParamsStore
 
+
+def _apply_card_tabs_style(tabs: QTabWidget) -> None:
+    tabs.setStyleSheet(
+        """
+        QTabWidget::pane {
+            border: none;
+            top: 0px;
+        }
+        QTabWidget::tab-bar {
+            left: 0px;
+        }
+        QTabBar::base {
+            border: none;
+            background: transparent;
+        }
+        QTabBar::tab {
+            margin: 0px;
+            background: #2a323c;
+            color: #b8c1cc;
+            padding: 6px 14px;
+            border: 1px solid #343c46;
+            border-bottom: none;
+            border-top-left-radius: 10px;
+            border-top-right-radius: 10px;
+            min-width: 72px;
+        }
+        QTabBar::tab:selected {
+            background: #1f252d;
+            color: #f5f7fb;
+            font-weight: 600;
+        }
+        QTabBar::tab:!selected {
+            margin-top: 0px;
+        }
+        QWidget#modelTab QGroupBox#card,
+        QWidget#tradeTab QGroupBox#card,
+        QWidget#advancedTab QGroupBox#card {
+            background: #262d36;
+            border: 1px solid #343c46;
+            border-radius: 10px;
+            margin-top: 6px;
+        }
+        QWidget#modelTab QGroupBox#card::title,
+        QWidget#tradeTab QGroupBox#card::title,
+        QWidget#advancedTab QGroupBox#card::title {
+            color: #cdd6e1;
+            font-weight: 500;
+            letter-spacing: 0.2px;
+            padding: 0px 8px;
+            background: #262d36;
+            subcontrol-origin: margin;
+            subcontrol-position: top left;
+            left: 12px;
+        }
+        QWidget#modelTab QGroupBox#card[titleTone="line"]::title,
+        QWidget#tradeTab QGroupBox#card[titleTone="line"]::title,
+        QWidget#advancedTab QGroupBox#card[titleTone="line"]::title {
+            color: #3a4452;
+            font-weight: 300;
+            font-size: 10px;
+            background: #262d36;
+            subcontrol-origin: margin;
+            subcontrol-position: top right;
+            left: -20px;
+        }
+        """
+    )
+
+
 class SimulationParamsPanel(QWidget):
     start_requested = Signal(dict)
     stop_requested = Signal()
@@ -70,6 +140,8 @@ class SimulationParamsPanel(QWidget):
         layout.setSpacing(14)
 
         file_group = QGroupBox("Files")
+        file_group.setObjectName("card")
+        file_group.setProperty("titleTone", "line")
         file_layout = QFormLayout(file_group)
         configure_form_layout(
             file_layout,
@@ -107,6 +179,8 @@ class SimulationParamsPanel(QWidget):
         file_layout.addRow("Model File", model_row)
 
         params_group = QGroupBox("Simulation Params")
+        params_group.setObjectName("card")
+        params_group.setProperty("titleTone", "line")
         params_layout = QFormLayout(params_group)
         configure_form_layout(
             params_layout,
@@ -275,6 +349,7 @@ class PlaybackDetailsPanel(QWidget):
         tabs.setMovable(False)
         tabs.tabBar().setExpanding(False)
         tabs.tabBar().setDrawBase(False)
+        _apply_card_tabs_style(tabs)
         self._tabs = tabs
 
         self._embedded_log = LogWidget(
@@ -283,67 +358,117 @@ class PlaybackDetailsPanel(QWidget):
             monospace=True,
             font_point_delta=2,
         )
-        tabs.addTab(self._embedded_log, "Log")
 
-        performance_tab = QWidget()
-        performance_tab_layout = QVBoxLayout(performance_tab)
-        performance_tab_layout.setContentsMargins(0, 0, 0, 0)
-        performance_tab_layout.setSpacing(0)
+        overview_tab = QWidget()
+        overview_tab.setObjectName("modelTab")
+        overview_tab_layout = QVBoxLayout(overview_tab)
+        overview_tab_layout.setContentsMargins(0, 0, 0, 0)
+        overview_tab_layout.setSpacing(10)
 
-        performance_group = QGroupBox("Performance Summary")
-        summary_layout = QGridLayout(performance_group)
-        summary_layout.setColumnStretch(0, 0)
-        summary_layout.setColumnStretch(1, 1)
-        summary_layout.setHorizontalSpacing(10)
-        summary_layout.setVerticalSpacing(6)
+        overview_group = QGroupBox("Playback Overview")
+        overview_group.setObjectName("card")
+        overview_group.setProperty("titleTone", "line")
+        summary_layout = QVBoxLayout(overview_group)
+        summary_layout.setContentsMargins(14, 12, 14, 12)
+        summary_layout.setSpacing(12)
 
         self._summary_fields = {}
-        summary_rows = [
+        hero_rows = [
             ("Total Return", "total_return"),
             ("Max Drawdown", "max_drawdown"),
             ("Sharpe Ratio", "sharpe"),
+        ]
+        summary_rows = [
             ("Trades", "trades"),
             ("Trade Rate/1k", "trade_rate_1k"),
             ("Final Equity", "equity"),
             ("Quality Gate", "quality_gate"),
         ]
+
+        summary_cards = QGridLayout()
+        summary_cards.setContentsMargins(0, 0, 0, 0)
+        summary_cards.setHorizontalSpacing(18)
+        summary_cards.setVerticalSpacing(8)
+        summary_cards.setColumnStretch(0, 1)
+        summary_cards.setColumnStretch(1, 1)
+        summary_cards.setColumnStretch(2, 1)
+
+        def _build_summary_metric(label_text: str, key: str) -> QWidget:
+            card = QWidget()
+            card_layout = QVBoxLayout(card)
+            card_layout.setContentsMargins(12, 6, 12, 6)
+            card_layout.setSpacing(4)
+            label = QLabel(label_text)
+            label.setProperty("class", STAT_LABEL)
+            card_layout.addWidget(label)
+            value = QLabel("-")
+            value.setProperty("class", "result_value")
+            value.setAlignment(Qt.AlignLeft | Qt.AlignVCenter)
+            value.setWordWrap(True)
+            card_layout.addWidget(value)
+            self._summary_fields[key] = value
+            return card
+
+        for idx, (label_text, key) in enumerate(hero_rows):
+            summary_cards.addWidget(_build_summary_metric(label_text, key), idx // 3, idx % 3)
+        summary_layout.addLayout(summary_cards)
+
+        summary_table = QGridLayout()
+        summary_table.setContentsMargins(0, 2, 0, 0)
+        summary_table.setHorizontalSpacing(14)
+        summary_table.setVerticalSpacing(8)
+        summary_table.setColumnStretch(1, 1)
+        summary_table.setColumnStretch(3, 1)
+
         for row, (label_text, key) in enumerate(summary_rows):
             label = QLabel(label_text)
             label.setProperty("class", STAT_LABEL)
             value = QLabel("-")
             value.setProperty("class", STAT_VALUE)
-            value.setAlignment(Qt.AlignRight | Qt.AlignVCenter)
-            summary_layout.addWidget(label, row, 0)
-            summary_layout.addWidget(value, row, 1)
+            value.setWordWrap(True)
             self._summary_fields[key] = value
+            if row < 2:
+                summary_table.addWidget(label, row, 0)
+                summary_table.addWidget(value, row, 1)
+            else:
+                summary_table.addWidget(label, row - 2, 2)
+                summary_table.addWidget(value, row - 2, 3)
+        summary_layout.addLayout(summary_table)
 
-        performance_tab_layout.addWidget(performance_group)
-        tabs.addTab(performance_tab, "Performance")
-
-        trade_tab = QWidget()
-        trade_tab_layout = QVBoxLayout(trade_tab)
-        trade_tab_layout.setContentsMargins(0, 0, 0, 0)
-        trade_tab_layout.setSpacing(0)
-
-        trade_group = QGroupBox("Trade and Position")
-        trade_layout = QGridLayout(trade_group)
-        trade_layout.setColumnStretch(0, 0)
-        trade_layout.setColumnStretch(1, 1)
-        trade_layout.setHorizontalSpacing(10)
-        trade_layout.setVerticalSpacing(6)
+        behavior_divider = QFrame()
+        behavior_divider.setFrameShape(QFrame.HLine)
+        behavior_divider.setFrameShadow(QFrame.Plain)
+        behavior_divider.setStyleSheet("color: rgba(184, 193, 204, 0.18);")
+        summary_layout.addWidget(behavior_divider)
 
         self._trade_stats = QLabel("-")
         self._trade_stats.setProperty("class", STAT_VALUE)
         self._trade_stats.setWordWrap(True)
+        self._trade_stats.setAlignment(Qt.AlignLeft | Qt.AlignTop)
+        self._trade_stats.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Minimum)
         self._streak_stats = QLabel("-")
         self._streak_stats.setProperty("class", STAT_VALUE)
         self._streak_stats.setWordWrap(True)
+        self._streak_stats.setAlignment(Qt.AlignLeft | Qt.AlignTop)
+        self._streak_stats.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Minimum)
         self._holding_stats = QLabel("-")
         self._holding_stats.setProperty("class", STAT_VALUE)
         self._holding_stats.setWordWrap(True)
+        self._holding_stats.setAlignment(Qt.AlignLeft | Qt.AlignTop)
+        self._holding_stats.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Minimum)
         self._action_dist = QLabel("-")
         self._action_dist.setProperty("class", STAT_VALUE)
         self._action_dist.setWordWrap(True)
+        self._action_dist.setAlignment(Qt.AlignLeft | Qt.AlignTop)
+        self._action_dist.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Minimum)
+
+        trade_layout = QGridLayout()
+        trade_layout.setContentsMargins(0, 0, 0, 0)
+        trade_layout.setHorizontalSpacing(14)
+        trade_layout.setVerticalSpacing(10)
+        trade_layout.setColumnStretch(1, 1)
+        trade_layout.setColumnStretch(3, 1)
+        trade_layout.setAlignment(Qt.AlignTop)
 
         detail_rows = [
             ("Trade Stats", self._trade_stats),
@@ -351,21 +476,28 @@ class PlaybackDetailsPanel(QWidget):
             ("Holding Duration", self._holding_stats),
             ("Action Distribution", self._action_dist),
         ]
-        for row, (label_text, value) in enumerate(detail_rows):
+        for idx, (label_text, value) in enumerate(detail_rows):
+            row = idx // 2
+            col = 0 if idx % 2 == 0 else 2
             label = QLabel(label_text)
             label.setProperty("class", STAT_LABEL)
-            trade_layout.addWidget(label, row, 0)
-            trade_layout.addWidget(value, row, 1)
-
-        trade_tab_layout.addWidget(trade_group)
-        tabs.addTab(trade_tab, "Trade & Position")
+            label.setAlignment(Qt.AlignLeft | Qt.AlignTop)
+            trade_layout.addWidget(label, row, col, Qt.AlignTop)
+            trade_layout.addWidget(value, row, col + 1, Qt.AlignTop)
+        summary_layout.addLayout(trade_layout)
+        overview_tab_layout.addWidget(overview_group)
+        overview_tab_layout.addStretch(1)
+        tabs.addTab(overview_tab, "Overview")
 
         range_tab = QWidget()
+        range_tab.setObjectName("modelTab")
         range_tab_layout = QVBoxLayout(range_tab)
         range_tab_layout.setContentsMargins(0, 0, 0, 0)
         range_tab_layout.setSpacing(0)
 
         playback_group = QGroupBox("Playback Range")
+        playback_group.setObjectName("card")
+        playback_group.setProperty("titleTone", "line")
         playback_layout = QGridLayout(playback_group)
         playback_layout.setColumnStretch(0, 0)
         playback_layout.setColumnStretch(1, 1)
@@ -382,8 +514,21 @@ class PlaybackDetailsPanel(QWidget):
 
         range_tab_layout.addWidget(playback_group)
         tabs.addTab(range_tab, "Playback Range")
+        log_tab = QWidget()
+        log_tab.setObjectName("modelTab")
+        log_layout = QVBoxLayout(log_tab)
+        log_layout.setContentsMargins(0, 0, 0, 0)
+        log_layout.setSpacing(0)
+        log_layout.addWidget(self._embedded_log)
+        tabs.addTab(log_tab, "Log")
 
-        layout.addWidget(tabs)
+        details_panel = QGroupBox("")
+        details_layout = QVBoxLayout(details_panel)
+        details_layout.setContentsMargins(10, 10, 10, 10)
+        details_layout.setSpacing(0)
+        details_layout.addWidget(tabs)
+
+        layout.addWidget(details_panel)
 
     def append(self, message: str) -> None:
         self._embedded_log.append(message)
@@ -512,7 +657,7 @@ class SimulationPanel(QWidget):
             splitter.addWidget(notice)
 
         splitter.addWidget(details_panel)
-        splitter.setStretchFactor(0, 1)
+        splitter.setStretchFactor(0, 2)
         splitter.setStretchFactor(1, 1)
         self._details_splitter = splitter
         layout.addWidget(splitter, stretch=1)

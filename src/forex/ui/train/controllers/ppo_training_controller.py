@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import sys
 import tempfile
 from pathlib import Path
@@ -55,6 +56,7 @@ class PPOTrainingController(QObject):
         self._optuna_tail_timer.setInterval(200)
         self._optuna_tail_timer.timeout.connect(self._tail_optuna_log)
         self._optuna_last_offset = 0
+        self._feature_subset_path: Optional[str] = None
 
     def start(self, params: dict, data_path: str) -> None:
         if self._runner.is_running():
@@ -95,6 +97,8 @@ class PPOTrainingController(QObject):
             str(params.get("target_kl", 0.0)),
             "--device",
             str(params.get("device", "auto")),
+            "--seed",
+            str(params.get("seed", 0)),
             "--vf-coef",
             str(params["vf_coef"]),
             "--n-epochs",
@@ -133,6 +137,16 @@ class PPOTrainingController(QObject):
             str(params.get("drawdown_penalty", 0.0)),
             "--downside-penalty",
             str(params.get("downside_penalty", 0.0)),
+            "--turnover-penalty",
+            str(params.get("turnover_penalty", 0.0)),
+            "--exposure-penalty",
+            str(params.get("exposure_penalty", 0.0)),
+            "--flat-position-penalty",
+            str(params.get("flat_position_penalty", 0.0)),
+            "--flat-streak-penalty",
+            str(params.get("flat_streak_penalty", 0.0)),
+            "--flat-position-threshold",
+            str(params.get("flat_position_threshold", 1e-6)),
             "--target-vol",
             str(params.get("target_vol", 0.0)),
             "--vol-target-lookback",
@@ -146,6 +160,32 @@ class PPOTrainingController(QObject):
             "--drawdown-governor-floor",
             str(params.get("drawdown_governor_floor", 0.3)),
         ]
+        selected_features = params.get("selected_features", [])
+        if isinstance(selected_features, list) and selected_features:
+            tmp_dir = Path(tempfile.gettempdir())
+            subset_path = tmp_dir / f"ppo_feature_subset_{id(self)}.json"
+            subset_payload = {"selected_features": selected_features}
+            subset_path.write_text(
+                json.dumps(subset_payload, ensure_ascii=True, indent=2),
+                encoding="utf-8",
+            )
+            self._feature_subset_path = str(subset_path)
+            args.extend(["--feature-subset-json", self._feature_subset_path])
+        if params.get("curriculum_enabled", False):
+            args.append("--curriculum-enabled")
+        args.extend(["--curriculum-steps", str(params.get("curriculum_steps", 25000))])
+        args.extend(
+            ["--curriculum-max-position", str(params.get("curriculum_max_position", 0.2))]
+        )
+        args.extend(
+            ["--curriculum-position-step", str(params.get("curriculum_position_step", 0.1))]
+        )
+        args.extend(
+            [
+                "--curriculum-min-position-change",
+                str(params.get("curriculum_min_position_change", 0.05)),
+            ]
+        )
         if params.get("early_stop_enabled", True):
             args.append("--early-stop-enabled")
         args.extend(["--early-stop-warmup-steps", str(params.get("early_stop_warmup_steps", 100000))])
@@ -153,6 +193,27 @@ class PPOTrainingController(QObject):
             ["--early-stop-patience-evals", str(params.get("early_stop_patience_evals", 8))]
         )
         args.extend(["--early-stop-min-delta", str(params.get("early_stop_min_delta", 0.001))])
+        if params.get("anti_flat_enabled", False):
+            args.append("--anti-flat-enabled")
+        args.extend(["--anti-flat-warmup-steps", str(params.get("anti_flat_warmup_steps", 50000))])
+        args.extend(
+            ["--anti-flat-patience-evals", str(params.get("anti_flat_patience_evals", 3))]
+        )
+        args.extend(
+            ["--anti-flat-min-trade-rate", str(params.get("anti_flat_min_trade_rate", 5.0))]
+        )
+        args.extend(
+            ["--anti-flat-max-flat-ratio", str(params.get("anti_flat_max_flat_ratio", 0.98))]
+        )
+        args.extend(
+            [
+                "--anti-flat-max-ls-imbalance",
+                str(params.get("anti_flat_max_ls_imbalance", 0.2)),
+            ]
+        )
+        args.extend(
+            ["--anti-flat-profile-steps", str(params.get("anti_flat_profile_steps", 2500))]
+        )
         args.extend(["--metrics-log", self._metrics_log_path or ""])
         if not params.get("random_start", True) and not params.get("start_mode"):
             args.append("--no-random-start")
@@ -190,13 +251,31 @@ class PPOTrainingController(QObject):
                 args.extend(
                     [
                         "--optuna-replay-score-mode",
-                        str(params.get("optuna_replay_score_mode", "risk_adjusted")),
+                        str(params.get("optuna_replay_score_mode", "walk_forward")),
+                    ]
+                )
+                args.extend(
+                    [
+                        "--optuna-replay-walk-forward-segments",
+                        str(params.get("optuna_replay_walk_forward_segments", 3)),
+                    ]
+                )
+                args.extend(
+                    [
+                        "--optuna-replay-walk-forward-steps",
+                        str(params.get("optuna_replay_walk_forward_steps", 2500)),
+                    ]
+                )
+                args.extend(
+                    [
+                        "--optuna-replay-walk-forward-stride",
+                        str(params.get("optuna_replay_walk_forward_stride", 2500)),
                     ]
                 )
                 args.extend(
                     [
                         "--optuna-replay-min-trade-rate",
-                        str(params.get("optuna_replay_min_trade_rate", 0.5)),
+                        str(params.get("optuna_replay_min_trade_rate", 5.0)),
                     ]
                 )
                 args.extend(
@@ -236,7 +315,7 @@ class PPOTrainingController(QObject):
         if blocking:
             self._runner.stop_blocking()
         else:
-            self._runner.stop()
+            self._runner.stop(kill_after_ms=10000)
 
     def _on_stdout_line(self, line: str) -> None:
         if self._use_metrics_log:

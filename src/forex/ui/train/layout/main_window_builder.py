@@ -91,8 +91,11 @@ def build_panels(
     training_state.optuna_point.connect(training_panel.append_optuna_point)
     training_state.optuna_status.connect(training_panel.update_optuna_status)
     training_state.optuna_reset.connect(training_params_panel.reset_optuna_results)
+    training_state.optuna_reset.connect(training_panel.reset_optuna_results)
     training_state.optuna_trial_summary.connect(training_params_panel.update_optuna_trial_summary)
+    training_state.optuna_trial_summary.connect(training_panel.update_optuna_trial_summary)
     training_state.optuna_best_params.connect(training_params_panel.update_optuna_best_params)
+    training_state.optuna_best_params.connect(training_panel.update_optuna_best_params)
     training_state.best_params_found.connect(on_optuna_best_params)
     training_state.log_message.connect(log_panel.append)
     training_state.log_message.connect(training_panel.append_log)
@@ -231,6 +234,7 @@ def build_toolbar(
     on_toggle_connection: Callable[[], None],
     on_fetch_account_info: Callable[[], None],
     on_train_ppo: Callable[[], None],
+    on_optuna: Callable[[], None],
     on_simulation: Callable[[], None],
     on_history_download: Callable[[], None],
     on_data_check: Callable[[], None],
@@ -242,6 +246,7 @@ def build_toolbar(
         on_toggle_connection=on_toggle_connection,
         on_fetch_account_info=on_fetch_account_info,
         on_train_ppo=on_train_ppo,
+        on_optuna=on_optuna,
         on_simulation=on_simulation,
         on_history_download=on_history_download,
         on_data_check=on_data_check,

@@ -6,6 +6,8 @@ import logging
 from dataclasses import dataclass
 from typing import Dict, FrozenSet, Optional, Tuple
 
+import numpy as np
+
 logger = logging.getLogger("metrics")
 
 TagSet = FrozenSet[Tuple[str, str]]
@@ -128,3 +130,21 @@ class _Timer:
 
 
 metrics = MetricsRegistry()
+
+
+def compute_sharpe_ratio_from_equity(equity_series: list[float] | np.ndarray) -> float:
+    values = np.asarray(equity_series, dtype=np.float64)
+    if values.size < 2:
+        return 0.0
+    prev = values[:-1]
+    curr = values[1:]
+    valid = prev > 0.0
+    if not np.any(valid):
+        return 0.0
+    returns = (curr[valid] - prev[valid]) / prev[valid]
+    if returns.size < 2:
+        return 0.0
+    std = float(np.std(returns))
+    if std <= 1e-12:
+        return 0.0
+    return float(np.mean(returns) / std)

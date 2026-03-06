@@ -27,7 +27,7 @@ class PanelSwitcher:
         self._dock_manager = dock_manager
 
     def show(self, panel: str) -> None:
-        if panel == "training":
+        if panel in {"training", "optuna"}:
             self._stack.setCurrentWidget(self._panels.training)
             self._dock_manager.set_panel_mode("training")
             self._dock_manager.docks.log.setVisible(False)

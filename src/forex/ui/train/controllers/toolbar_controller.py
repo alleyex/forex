@@ -15,6 +15,7 @@ class ToolbarActions:
     action_toggle_connection: QAction
     action_fetch_account_info: QAction
     action_train_ppo: QAction
+    action_optuna: QAction
     action_simulation: QAction
     action_history_download: QAction
     action_data_check: QAction
@@ -30,6 +31,7 @@ class ToolbarController(QObject):
         on_toggle_connection: Callable[[], None],
         on_fetch_account_info: Callable[[], None],
         on_train_ppo: Callable[[], None],
+        on_optuna: Callable[[], None],
         on_simulation: Callable[[], None],
         on_history_download: Callable[[], None],
         on_data_check: Callable[[], None],
@@ -41,6 +43,7 @@ class ToolbarController(QObject):
         self._actions.action_toggle_connection.triggered.connect(on_toggle_connection)
         self._actions.action_fetch_account_info.triggered.connect(on_fetch_account_info)
         self._actions.action_train_ppo.triggered.connect(on_train_ppo)
+        self._actions.action_optuna.triggered.connect(on_optuna)
         self._actions.action_simulation.triggered.connect(on_simulation)
         self._actions.action_history_download.triggered.connect(on_history_download)
         self._actions.action_data_check.triggered.connect(on_data_check)
@@ -80,6 +83,9 @@ class ToolbarController(QObject):
         action_train_ppo = QAction("PPO Train", main_window)
         toolbar.addAction(action_train_ppo)
 
+        action_optuna = QAction("Optuna", main_window)
+        toolbar.addAction(action_optuna)
+
         action_simulation = QAction("Playback", main_window)
         toolbar.addAction(action_simulation)
 
@@ -89,6 +95,7 @@ class ToolbarController(QObject):
             action_toggle_connection=action_toggle_connection,
             action_fetch_account_info=action_fetch_account_info,
             action_train_ppo=action_train_ppo,
+            action_optuna=action_optuna,
             action_simulation=action_simulation,
             action_history_download=action_history_download,
             action_data_check=action_data_check,

@@ -121,7 +121,33 @@ QStatusBar {
 }
 
 QSplitter::handle {
-    background: #1b1f24;
+    background: transparent;
+}
+
+QSplitter::handle:vertical {
+    height: 6px;
+    border: none;
+}
+
+QSplitter::handle:horizontal {
+    width: 6px;
+    border: none;
+}
+
+QSplitter::handle:hover {
+    background: rgba(184, 193, 204, 0.04);
+}
+
+QMainWindow::separator {
+    background: transparent;
+    width: 4px;
+    height: 4px;
+    margin: 0;
+    padding: 0;
+}
+
+QMainWindow::separator:hover {
+    background: rgba(184, 193, 204, 0.08);
 }
 
 QDockWidget::title {

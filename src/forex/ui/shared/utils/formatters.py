@@ -240,6 +240,8 @@ def format_optuna_best_params(params: dict) -> str:
                 "min_position_change",
                 "position_step",
                 "risk_aversion",
+                "turnover_penalty",
+                "exposure_penalty",
                 "max_position",
             ],
         ),
@@ -259,6 +261,8 @@ def format_optuna_best_params(params: dict) -> str:
         "min_position_change": "Min position chg",
         "position_step": "Position step",
         "risk_aversion": "Risk aversion",
+        "turnover_penalty": "Turnover penalty",
+        "exposure_penalty": "Exposure penalty",
         "max_position": "Max position",
     }
 

@@ -12,6 +12,12 @@ from forex.ml.rl.features.feature_builder import load_scaler
 class LiveAutoRuntimeService:
     """Handles auto-trade runtime bootstrapping (model + order service)."""
 
+    _HIGHLIGHT_FEATURES = (
+        "vol_pct_72_252",
+        "trend_flag_25",
+        "range_strength_10_50_atr14",
+    )
+
     def __init__(self, window) -> None:
         self._window = window
 
@@ -60,7 +66,14 @@ class LiveAutoRuntimeService:
         if scaler_path.exists():
             try:
                 w._auto_feature_scaler = load_scaler(scaler_path)
-                w._auto_log(f"✅ Feature scaler loaded: {scaler_path.name}")
+                names = list(getattr(w._auto_feature_scaler, "names", []))
+                w._auto_log(
+                    f"✅ Feature scaler loaded: {scaler_path.name}"
+                    f" ({len(names)} features)"
+                )
+                highlights = [name for name in self._HIGHLIGHT_FEATURES if name in names]
+                if highlights:
+                    w._auto_log(f"   regime features: {', '.join(highlights)}")
             except Exception as exc:
                 w._auto_log(f"⚠️ Failed to load feature scaler: {exc}")
         else:

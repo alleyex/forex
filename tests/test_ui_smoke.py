@@ -55,6 +55,10 @@ class UISmokeTest(unittest.TestCase):
         panel.append_metric_point("eval/mean_reward", 10000, 0.25)
         self.assertEqual(list(panel._metric_data["eval/mean_reward"]["x"]), [10000])
         self.assertEqual(list(panel._metric_data["eval/mean_reward"]["y"]), [0.25])
+        if panel._charts_available:
+            x_data, y_data = panel._curves["eval/mean_reward"].getData()
+            self.assertEqual(list(x_data), [10000])
+            self.assertEqual(list(y_data), [0.25])
         panel.close()
         panel.deleteLater()
         self._app.processEvents()

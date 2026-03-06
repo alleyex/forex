@@ -292,6 +292,7 @@ def test_step_info_exposes_reward_components() -> None:
     assert "price_return" in info
     assert "step_pnl" in info
     assert "reward" in info
+    assert "turnover_penalty" in info
     assert info["reward"] == pytest.approx(reward)
 
 
@@ -423,6 +424,221 @@ def test_risk_adjusted_reward_uses_log_return_and_downside_only_penalty() -> Non
     assert reward == pytest.approx(
         expected_log_return - expected_downside_penalty - expected_drawdown_penalty
     )
+
+
+def test_risk_adjusted_reward_also_applies_risk_aversion_penalty() -> None:
+    pytest.importorskip("gymnasium")
+    features = np.zeros((3, 2), dtype=np.float32)
+    closes = np.array([100.0, 110.0, 110.0], dtype=np.float64)
+    env = TradingEnv(
+        features,
+        closes,
+        TradingConfig(
+            random_start=False,
+            episode_length=2,
+            reward_horizon=1,
+            reward_mode="risk_adjusted",
+            risk_aversion=0.5,
+            transaction_cost_bps=0.0,
+            slippage_bps=0.0,
+            holding_cost_bps=0.0,
+            downside_penalty=0.0,
+            drawdown_penalty=0.0,
+        ),
+    )
+    env.reset()
+    env._position = 1.0
+    _, reward, _, _, info = env.step(np.array([1.0], dtype=np.float32))
+    step_pnl = 0.1
+    expected = np.log(1.1) - 0.5 * (step_pnl**2)
+    assert info["reward_mode"] == "risk_adjusted"
+    assert reward == pytest.approx(expected)
+
+
+def test_reward_clip_applies_in_env_step_not_transition() -> None:
+    pytest.importorskip("gymnasium")
+    features = np.zeros((3, 2), dtype=np.float32)
+    closes = np.array([100.0, 120.0, 120.0], dtype=np.float64)
+    config = TradingConfig(
+        random_start=False,
+        episode_length=2,
+        reward_horizon=1,
+        reward_mode="linear",
+        reward_clip=0.01,
+        transaction_cost_bps=0.0,
+        slippage_bps=0.0,
+        holding_cost_bps=0.0,
+    )
+    env = TradingEnv(features, closes, config)
+    env.reset()
+    env._position = 1.0
+    transition = simulate_step_transition(
+        current_position=env._position,
+        target_position=1.0,
+        closes=env._closes,
+        idx=env._idx,
+        equity=env._equity,
+        peak_equity=env._peak_equity,
+        config=config,
+    )
+    assert transition["reward"] == pytest.approx(0.2)
+    _, reward, _, _, info = env.step(np.array([1.0], dtype=np.float32))
+    assert reward == pytest.approx(0.01)
+    assert info["reward"] == pytest.approx(0.01)
+
+
+def test_turnover_penalty_applies_additional_penalty_to_position_change() -> None:
+    pytest.importorskip("gymnasium")
+    features = np.zeros((3, 2), dtype=np.float32)
+    closes = np.array([100.0, 100.0, 100.0], dtype=np.float64)
+    env = TradingEnv(
+        features,
+        closes,
+        TradingConfig(
+            random_start=False,
+            episode_length=2,
+            reward_horizon=1,
+            turnover_penalty=0.001,
+        ),
+    )
+    env.reset()
+    _, reward, _, _, info = env.step(np.array([1.0], dtype=np.float32))
+    assert info["turnover_penalty"] == pytest.approx(0.001)
+    assert reward == pytest.approx(-(info["cost"] + 0.001))
+
+
+def test_exposure_penalty_applies_to_absolute_target_position() -> None:
+    pytest.importorskip("gymnasium")
+    features = np.zeros((3, 2), dtype=np.float32)
+    closes = np.array([100.0, 100.0, 100.0], dtype=np.float64)
+    env = TradingEnv(
+        features,
+        closes,
+        TradingConfig(
+            random_start=False,
+            episode_length=2,
+            reward_horizon=1,
+            transaction_cost_bps=0.0,
+            slippage_bps=0.0,
+            holding_cost_bps=0.0,
+            exposure_penalty=0.01,
+        ),
+    )
+    env.reset()
+    _, reward, _, _, info = env.step(np.array([0.5], dtype=np.float32))
+    assert info["exposure_penalty"] == pytest.approx(0.005)
+    assert reward == pytest.approx(-0.005)
+
+
+def test_flat_position_penalty_applies_only_when_staying_flat() -> None:
+    pytest.importorskip("gymnasium")
+    features = np.zeros((4, 2), dtype=np.float32)
+    closes = np.array([100.0, 100.0, 100.0, 100.0], dtype=np.float64)
+    env = TradingEnv(
+        features,
+        closes,
+        TradingConfig(
+            random_start=False,
+            episode_length=3,
+            reward_horizon=1,
+            flat_position_penalty=0.001,
+            flat_streak_penalty=0.0005,
+        ),
+    )
+    env.reset()
+    _, reward_one, _, _, info_one = env.step(np.array([0.0], dtype=np.float32))
+    _, reward_two, _, _, info_two = env.step(np.array([0.0], dtype=np.float32))
+    assert info_one["flat_position_penalty"] == pytest.approx(0.001)
+    assert info_one["flat_streak_penalty"] == pytest.approx(0.0)
+    assert info_one["flat_steps"] == 1
+    assert reward_one == pytest.approx(-0.001)
+    assert info_two["flat_position_penalty"] == pytest.approx(0.001)
+    assert info_two["flat_streak_penalty"] == pytest.approx(0.0005)
+    assert info_two["flat_steps"] == 2
+    assert reward_two == pytest.approx(-0.0015)
+
+
+def test_flat_penalty_does_not_apply_when_closing_position_to_flat() -> None:
+    pytest.importorskip("gymnasium")
+    features = np.zeros((4, 2), dtype=np.float32)
+    closes = np.array([100.0, 100.0, 100.0, 100.0], dtype=np.float64)
+    env = TradingEnv(
+        features,
+        closes,
+        TradingConfig(
+            random_start=False,
+            episode_length=3,
+            reward_horizon=1,
+            transaction_cost_bps=0.0,
+            slippage_bps=0.0,
+            flat_position_penalty=0.001,
+            flat_streak_penalty=0.0005,
+        ),
+    )
+    env.reset()
+    env._position = 1.0
+    _, reward, _, _, info = env.step(np.array([0.0], dtype=np.float32))
+    assert info["flat_position_penalty"] == pytest.approx(0.0)
+    assert info["flat_streak_penalty"] == pytest.approx(0.0)
+    assert info["flat_steps"] == 0
+    assert reward == pytest.approx(0.0)
+
+
+def test_position_bias_penalty_accumulates_for_persistent_one_sided_exposure() -> None:
+    pytest.importorskip("gymnasium")
+    features = np.zeros((5, 2), dtype=np.float32)
+    closes = np.array([100.0, 100.0, 100.0, 100.0, 100.0], dtype=np.float64)
+    env = TradingEnv(
+        features,
+        closes,
+        TradingConfig(
+            random_start=False,
+            episode_length=4,
+            reward_horizon=1,
+            transaction_cost_bps=0.0,
+            slippage_bps=0.0,
+            holding_cost_bps=0.0,
+            position_bias_penalty=0.1,
+            position_bias_threshold=0.2,
+            position_bias_ema_alpha=0.5,
+        ),
+    )
+    env.reset()
+    _, reward_one, _, _, info_one = env.step(np.array([1.0], dtype=np.float32))
+    _, reward_two, _, _, info_two = env.step(np.array([1.0], dtype=np.float32))
+    assert info_one["position_bias_ema"] == pytest.approx(0.5)
+    assert info_one["position_bias_penalty"] == pytest.approx(0.03)
+    assert reward_one == pytest.approx(-0.03)
+    assert info_two["position_bias_ema"] == pytest.approx(0.75)
+    assert info_two["position_bias_penalty"] == pytest.approx(0.055)
+    assert reward_two == pytest.approx(-0.055)
+
+
+def test_position_bias_penalty_relaxes_when_exposure_rebalances() -> None:
+    pytest.importorskip("gymnasium")
+    features = np.zeros((5, 2), dtype=np.float32)
+    closes = np.array([100.0, 100.0, 100.0, 100.0, 100.0], dtype=np.float64)
+    env = TradingEnv(
+        features,
+        closes,
+        TradingConfig(
+            random_start=False,
+            episode_length=4,
+            reward_horizon=1,
+            transaction_cost_bps=0.0,
+            slippage_bps=0.0,
+            holding_cost_bps=0.0,
+            position_bias_penalty=0.1,
+            position_bias_threshold=0.2,
+            position_bias_ema_alpha=0.5,
+        ),
+    )
+    env.reset()
+    env.step(np.array([1.0], dtype=np.float32))
+    _, reward, _, _, info = env.step(np.array([-1.0], dtype=np.float32))
+    assert info["position_bias_ema"] == pytest.approx(-0.25)
+    assert info["position_bias_penalty"] == pytest.approx(0.005)
+    assert reward == pytest.approx(-0.005)
 
 
 def test_weekly_open_start_mode_uses_monday_anchor() -> None:
