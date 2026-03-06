@@ -1230,6 +1230,38 @@ def main() -> None:
         raise ValueError("--reward-horizon must be >= 1.")
     if args.window_size < 1:
         raise ValueError("--window-size must be >= 1.")
+    if args.reward_scale < 0.0:
+        raise ValueError("--reward-scale must be >= 0.")
+    if args.reward_clip < 0.0:
+        raise ValueError("--reward-clip must be >= 0.")
+    if args.risk_aversion < 0.0:
+        raise ValueError("--risk-aversion must be >= 0.")
+    if args.drawdown_penalty < 0.0:
+        raise ValueError("--drawdown-penalty must be >= 0.")
+    if args.downside_penalty < 0.0:
+        raise ValueError("--downside-penalty must be >= 0.")
+    if args.turnover_penalty < 0.0:
+        raise ValueError("--turnover-penalty must be >= 0.")
+    if args.exposure_penalty < 0.0:
+        raise ValueError("--exposure-penalty must be >= 0.")
+    if args.flat_position_penalty < 0.0:
+        raise ValueError("--flat-position-penalty must be >= 0.")
+    if args.flat_streak_penalty < 0.0:
+        raise ValueError("--flat-streak-penalty must be >= 0.")
+    if args.flat_position_threshold < 0.0:
+        raise ValueError("--flat-position-threshold must be >= 0.")
+    if args.target_vol < 0.0:
+        raise ValueError("--target-vol must be >= 0.")
+    if args.vol_target_lookback < 2:
+        raise ValueError("--vol-target-lookback must be >= 2.")
+    if args.vol_scale_floor < 0.0:
+        raise ValueError("--vol-scale-floor must be >= 0.")
+    if args.vol_scale_cap < args.vol_scale_floor:
+        raise ValueError("--vol-scale-cap must be >= --vol-scale-floor.")
+    if args.drawdown_governor_slope < 0.0:
+        raise ValueError("--drawdown-governor-slope must be >= 0.")
+    if not (0.0 <= args.drawdown_governor_floor <= 1.0):
+        raise ValueError("--drawdown-governor-floor must be in [0, 1].")
     if not (0.0 < args.eval_split < 1.0):
         raise ValueError("--eval-split must be in (0, 1).")
 
