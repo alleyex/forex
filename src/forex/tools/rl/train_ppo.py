@@ -1194,6 +1194,16 @@ def main() -> None:
         raise ValueError("--batch-size cannot exceed --n-steps.")
     if args.ent_coef < 0.0:
         raise ValueError("--ent-coef must be >= 0.")
+    if not (0.0 <= args.gae_lambda <= 1.0):
+        raise ValueError("--gae-lambda must be in [0, 1].")
+    if args.clip_range <= 0.0:
+        raise ValueError("--clip-range must be > 0.")
+    if args.target_kl < 0.0:
+        raise ValueError("--target-kl must be >= 0 (0 disables target_kl early stopping).")
+    if args.vf_coef < 0.0:
+        raise ValueError("--vf-coef must be >= 0.")
+    if args.n_epochs < 1:
+        raise ValueError("--n-epochs must be >= 1.")
     if not (0.0 < args.eval_split < 1.0):
         raise ValueError("--eval-split must be in (0, 1).")
 

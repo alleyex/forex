@@ -1178,9 +1178,16 @@ class TrainingParamsPanel(QWidget):
         setup_layout.setSpacing(8)
         setup_layout.addWidget(params_group)
         setup_layout.addWidget(ppo_advanced_group)
-        setup_layout.addWidget(cost_group)
-        setup_layout.addWidget(action_group)
         setup_layout.addStretch(1)
+
+        execution_tab = QWidget()
+        execution_tab.setObjectName("tradeTab")
+        execution_layout = QVBoxLayout(execution_tab)
+        execution_layout.setContentsMargins(12, 10, 18, 24)
+        execution_layout.setSpacing(8)
+        execution_layout.addWidget(cost_group)
+        execution_layout.addWidget(action_group)
+        execution_layout.addStretch(1)
 
         run_tab = QWidget()
         run_tab.setObjectName("modelTab")
@@ -1262,6 +1269,7 @@ class TrainingParamsPanel(QWidget):
         tabs.addTab(run_tab, "Run")
         tabs.addTab(guards_tab, "Guards")
         tabs.addTab(setup_tab, "Setup")
+        tabs.addTab(execution_tab, "Execution")
         tabs.addTab(sampling_tab, "Sampling")
         self._optuna_tab_index = tabs.addTab(optuna_tab, "Optuna")
         tabs.tabBar().setTabVisible(self._optuna_tab_index, False)
@@ -1853,7 +1861,7 @@ class TrainingParamsPanel(QWidget):
         tab_text = ""
         if hasattr(self, "_tabs"):
             tab_text = self._tabs.tabText(index).strip().lower()
-        if tab_text in {"sampling"}:
+        if tab_text in {"execution", "sampling"}:
             self.tab_changed.emit("environment")
             return
         self.tab_changed.emit("training")
