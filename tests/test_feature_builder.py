@@ -6,8 +6,14 @@ import pandas as pd
 import pytest
 
 from forex.ml.rl.features.feature_builder import (
+    ALPHA_FEATURE_COLUMNS,
+    RESIDUAL_CONTEXT_COLUMNS,
+    apply_feature_profile,
     build_feature_frame,
+    build_features,
+    fit_scaler,
     filter_feature_rows_by_session,
+    infer_feature_profile_from_names,
     select_feature_columns,
 )
 
@@ -297,3 +303,51 @@ def test_filter_feature_rows_by_session_rejects_unknown_name() -> None:
     closes = pd.Series([1.0])
     with pytest.raises(ValueError, match="Unknown session filter"):
         filter_feature_rows_by_session(features, closes, ["2024-01-01"], "asia")
+
+
+def test_apply_feature_profile_alpha_and_residual_shapes() -> None:
+    rows = 320
+    close = np.linspace(100.0, 120.0, num=rows, dtype=np.float64)
+    df = pd.DataFrame(
+        {
+            "timestamp": pd.date_range("2024-01-01", periods=rows, freq="15min").astype(str),
+            "open": close - 0.1,
+            "close": close,
+            "high": close + 0.4,
+            "low": close - 0.4,
+            "volume": np.linspace(1000.0, 2000.0, num=rows),
+        }
+    )
+    raw_features, _, _ = build_feature_frame(df)
+
+    alpha = apply_feature_profile(raw_features, "alpha4")
+    assert list(alpha.columns) == list(ALPHA_FEATURE_COLUMNS)
+    assert not alpha.isna().any().any()
+
+    residual = apply_feature_profile(raw_features, "residual")
+    expected_residual = [*ALPHA_FEATURE_COLUMNS, *[name for name in RESIDUAL_CONTEXT_COLUMNS if name in raw_features.columns]]
+    assert list(residual.columns) == expected_residual
+    assert not residual.isna().any().any()
+    assert infer_feature_profile_from_names(alpha.columns) == "alpha4"
+    assert infer_feature_profile_from_names(residual.columns) == "residual"
+
+
+def test_build_features_infers_profile_from_scaler_names() -> None:
+    rows = 320
+    close = np.linspace(100.0, 125.0, num=rows, dtype=np.float64)
+    df = pd.DataFrame(
+        {
+            "timestamp": pd.date_range("2024-01-01", periods=rows, freq="15min").astype(str),
+            "open": close - 0.1,
+            "close": close,
+            "high": close + 0.4,
+            "low": close - 0.4,
+            "volume": np.linspace(1000.0, 2000.0, num=rows),
+        }
+    )
+    raw_features, _, _ = build_feature_frame(df)
+    residual = apply_feature_profile(raw_features, "residual")
+    scaler = fit_scaler(residual)
+    bundle = build_features(df, scaler=scaler)
+    assert list(bundle.names) == scaler.names
+    assert bundle.features.shape[1] == len(scaler.names)

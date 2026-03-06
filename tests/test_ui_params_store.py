@@ -29,6 +29,7 @@ def test_training_store_saves_nested_and_top_level(tmp_path, monkeypatch) -> Non
         "flat_position_threshold": 0.01,
         "target_vol": 0.01,
         "start_mode": "random",
+        "feature_profile": "residual",
         "optuna_replay_score_mode": "walk_forward",
         "optuna_replay_walk_forward_segments": 3,
         "optuna_replay_walk_forward_steps": 5000,
@@ -62,6 +63,7 @@ def test_training_store_saves_nested_and_top_level(tmp_path, monkeypatch) -> Non
     assert payload["flat_position_threshold"] == 0.01
     assert payload["target_vol"] == 0.01
     assert payload["start_mode"] == "random"
+    assert payload["feature_profile"] == "residual"
     assert payload["optuna_replay_score_mode"] == "walk_forward"
     assert payload["optuna_replay_walk_forward_segments"] == 3
     assert payload["optuna_replay_walk_forward_steps"] == 5000
@@ -94,6 +96,7 @@ def test_training_store_load_prefers_nested_but_falls_back_to_top_level(tmp_path
             "curriculum_position_step": 0.1,
             "curriculum_min_position_change": 0.05,
             "transaction_cost_bps": 0.4,
+            "feature_profile": "alpha4",
             "flat_position_penalty": 0.0005,
             "flat_streak_penalty": 0.0002,
             "flat_position_threshold": 0.01,
@@ -116,6 +119,7 @@ def test_training_store_load_prefers_nested_but_falls_back_to_top_level(tmp_path
     loaded = UIParamsStore("training").load()
     assert loaded["total_steps"] == 320000
     assert loaded["transaction_cost_bps"] == 0.4
+    assert loaded["feature_profile"] == "alpha4"
     assert loaded["learning_rate"] == 0.001
     assert loaded["seed"] == 7
     assert loaded["curriculum_enabled"] is True

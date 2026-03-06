@@ -9,6 +9,23 @@ import json
 import numpy as np
 import pandas as pd
 
+ALPHA_FEATURE_COLUMNS: tuple[str, ...] = (
+    "trend_score",
+    "range_score",
+    "breakout_score",
+    "volatility_score",
+)
+RESIDUAL_CONTEXT_COLUMNS: tuple[str, ...] = (
+    "atr_14",
+    "vol_pct_72_252",
+    "is_london_session",
+    "is_ny_session",
+    "is_london_ny_overlap",
+    "since_london_open_return",
+    "since_ny_open_return",
+    "ny_open_gap_prev_close",
+)
+
 
 ALL_FEATURE_COLUMNS: tuple[str, ...] = (
     "returns_1",
@@ -97,6 +114,36 @@ def select_feature_columns(features: pd.DataFrame, selected_names: Sequence[str]
     if missing:
         raise ValueError(f"Feature subset references unknown columns: {', '.join(missing)}")
     return features.loc[:, names].copy()
+
+
+def infer_feature_profile_from_names(feature_names: Sequence[str]) -> str:
+    names = {str(name).strip() for name in feature_names if str(name).strip()}
+    if not names:
+        return "raw53"
+    alpha_names = set(ALPHA_FEATURE_COLUMNS)
+    residual_names = alpha_names | set(RESIDUAL_CONTEXT_COLUMNS)
+    if names.issubset(alpha_names):
+        return "alpha4"
+    if alpha_names.issubset(names) and names.issubset(residual_names):
+        return "residual"
+    return "raw53"
+
+
+def apply_feature_profile(features: pd.DataFrame, profile: str) -> pd.DataFrame:
+    profile_name = str(profile).strip().lower() or "raw53"
+    if profile_name == "raw53":
+        return features.copy()
+    alpha_frame = _build_alpha_layer(features)
+    if profile_name == "alpha4":
+        return alpha_frame
+    if profile_name == "residual":
+        residual = alpha_frame.copy()
+        for name in RESIDUAL_CONTEXT_COLUMNS:
+            if name in features.columns:
+                residual[name] = pd.to_numeric(features[name], errors="coerce").fillna(0.0).astype(float)
+        ordered = [*ALPHA_FEATURE_COLUMNS, *[name for name in RESIDUAL_CONTEXT_COLUMNS if name in residual.columns]]
+        return residual.loc[:, ordered].copy()
+    raise ValueError(f"Unknown feature profile: {profile}")
 
 
 def filter_feature_rows_by_session(
@@ -398,6 +445,8 @@ def build_features(
 ) -> FeatureSet:
     features, closes, timestamps = build_feature_frame(df)
     if scaler is not None:
+        inferred_profile = infer_feature_profile_from_names(scaler.names)
+        features = apply_feature_profile(features, inferred_profile)
         features = apply_scaler(features, scaler)
     elif normalize:
         features = apply_scaler(features, fit_scaler(features))
@@ -408,6 +457,51 @@ def build_features(
         timestamps=timestamps,
         names=list(features.columns),
     )
+
+
+def _build_alpha_layer(features: pd.DataFrame) -> pd.DataFrame:
+    def g(name: str, default: float = 0.0) -> pd.Series:
+        if name not in features.columns:
+            return pd.Series(default, index=features.index, dtype=float)
+        return pd.to_numeric(features[name], errors="coerce").fillna(default).astype(float)
+
+    momentum_fast = g("momentum_10_20")
+    momentum_mid = g("momentum_20_50")
+    momentum_slow = g("momentum_50_100")
+    trend_flag = g("trend_flag_25")
+    range_strength = g("range_strength_10_50_atr14")
+    rsi = g("rsi_14", 50.0).clip(0.0, 100.0)
+    breakout_fast = g("breakout_20")
+    breakout_slow = g("breakout_50")
+    atr_14 = g("atr_14")
+    vol_ratio = g("vol_ratio_10_50")
+    vol_pct = g("vol_pct_72_252", 0.5).clip(0.0, 1.0)
+    boll_width = g("bollinger_band_width_20")
+
+    trend_core = (0.45 * momentum_fast) + (0.35 * momentum_mid) + (0.20 * momentum_slow)
+    trend_score = np.tanh((8.0 * trend_core) + (1.5 * trend_flag * (1.0 - range_strength)))
+
+    rsi_neutral = 1.0 - ((rsi - 50.0).abs() / 50.0)
+    breakout_compression = 1.0 / (1.0 + breakout_fast.abs() + breakout_slow.abs())
+    range_raw = (0.60 * range_strength) + (0.30 * rsi_neutral) + (0.10 * breakout_compression)
+    range_score = np.clip((2.0 * range_raw) - 1.0, -1.0, 1.0)
+
+    breakout_core = (0.60 * breakout_fast) + (0.40 * breakout_slow)
+    breakout_score = np.tanh(6.0 * breakout_core)
+
+    vol_core = (0.50 * atr_14) + (0.25 * vol_ratio) + (0.25 * boll_width)
+    volatility_score = np.tanh((2.0 * vol_core) + (1.2 * (vol_pct - 0.5)))
+
+    alpha = pd.DataFrame(
+        {
+            "trend_score": trend_score.astype(float),
+            "range_score": range_score.astype(float),
+            "breakout_score": breakout_score.astype(float),
+            "volatility_score": volatility_score.astype(float),
+        },
+        index=features.index,
+    )
+    return alpha.replace([np.inf, -np.inf], np.nan).fillna(0.0)
 
 
 def _rsi(close: pd.Series, period: int) -> pd.Series:

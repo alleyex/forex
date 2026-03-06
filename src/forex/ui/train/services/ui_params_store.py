@@ -51,6 +51,7 @@ class UIParamsStore:
             "holding_cost_bps",
             "random_start",
             "start_mode",
+            "feature_profile",
             "min_position_change",
             "max_position",
             "position_step",

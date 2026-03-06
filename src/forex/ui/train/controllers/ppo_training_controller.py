@@ -125,6 +125,8 @@ class PPOTrainingController(QObject):
             str(params.get("window_size", 1)),
             "--start-mode",
             str(params.get("start_mode", "random")),
+            "--feature-profile",
+            str(params.get("feature_profile", "residual")),
             "--reward-scale",
             str(params["reward_scale"]),
             "--reward-clip",

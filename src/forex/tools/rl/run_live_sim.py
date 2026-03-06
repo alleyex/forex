@@ -18,9 +18,11 @@ from forex.ml.rl.envs.trading_env import (
     simulate_step_transition,
 )
 from forex.ml.rl.features.feature_builder import (
+    apply_feature_profile,
     apply_scaler,
     build_feature_frame,
     filter_feature_rows_by_session,
+    infer_feature_profile_from_names,
     load_csv,
     load_scaler,
 )
@@ -112,6 +114,8 @@ def load_playback_bundle(
     scaler_file = Path(scaler_path)
     if scaler_file.exists():
         scaler = load_scaler(scaler_file)
+        feature_profile = infer_feature_profile_from_names(scaler.names)
+        features_frame = apply_feature_profile(features_frame, feature_profile)
         features_frame = apply_scaler(features_frame, scaler)
 
     config = TradingConfig(

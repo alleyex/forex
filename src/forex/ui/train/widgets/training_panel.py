@@ -769,6 +769,19 @@ class TrainingParamsPanel(QWidget):
             _wrap_field(self._start_mode),
         )
 
+        self._feature_profile = QComboBox()
+        self._feature_profile.addItems(["Raw 53 features", "Alpha layer (4)", "Alpha + context (residual)"])
+        self._feature_profile.setCurrentIndex(2)
+        self._feature_profile.setFixedWidth(spin_width)
+        self._feature_profile.setToolTip(
+            "Choose which feature profile to feed into PPO. "
+            "Residual uses alpha layer plus a small execution context."
+        )
+        episode_layout.add_row(
+            "Feature profile",
+            _wrap_field(self._feature_profile),
+        )
+
         reward_group = QGroupBox("Reward shaping")
         _apply_live_card_style(reward_group)
         reward_group_layout = QVBoxLayout(reward_group)
@@ -1328,6 +1341,8 @@ class TrainingParamsPanel(QWidget):
             self._reward_clip.setValue(float(params["reward_clip"]))
         if "reward_mode" in params:
             self._set_reward_mode(str(params["reward_mode"]))
+        if "feature_profile" in params:
+            self._set_feature_profile(str(params["feature_profile"]))
         if "min_position_change" in params:
             self._min_position_change.setValue(float(params["min_position_change"]))
         if "position_step" in params:
@@ -1422,6 +1437,7 @@ class TrainingParamsPanel(QWidget):
             "holding_cost_bps": float(self._holding_cost_bps.value()),
             "random_start": self._start_mode.currentIndex() == 0,
             "start_mode": self._start_mode_key(),
+            "feature_profile": self._feature_profile_key(),
             "min_position_change": float(self._min_position_change.value()),
             "max_position": float(self._max_position.value()),
             "position_step": float(self._position_step.value()),
@@ -1939,6 +1955,8 @@ class TrainingParamsPanel(QWidget):
             self._set_start_mode(str(data["start_mode"]))
         elif "random_start" in data:
             self._set_start_mode("random" if bool(data["random_start"]) else "first")
+        if "feature_profile" in data:
+            self._set_feature_profile(str(data["feature_profile"]))
         if "min_position_change" in data:
             self._min_position_change.setValue(float(data["min_position_change"]))
         if "max_position" in data:
@@ -2059,6 +2077,7 @@ class TrainingParamsPanel(QWidget):
         self._reward_horizon.valueChanged.connect(self._auto_save_params)
         self._window_size.valueChanged.connect(self._auto_save_params)
         self._start_mode.currentIndexChanged.connect(self._auto_save_params)
+        self._feature_profile.currentIndexChanged.connect(self._auto_save_params)
         self._reward_scale.valueChanged.connect(self._auto_save_params)
         self._reward_clip.valueChanged.connect(self._auto_save_params)
         self._reward_mode.currentIndexChanged.connect(self._auto_save_params)
@@ -2264,6 +2283,14 @@ class TrainingParamsPanel(QWidget):
             return "log_return"
         return "linear"
 
+    def _feature_profile_key(self) -> str:
+        text = self._feature_profile.currentText()
+        if text.startswith("Raw"):
+            return "raw53"
+        if text.startswith("Alpha layer"):
+            return "alpha4"
+        return "residual"
+
     def _device_key(self) -> str:
         text = self._device.currentText().strip().lower()
         if text in {"cpu", "mps", "cuda"}:
@@ -2279,6 +2306,16 @@ class TrainingParamsPanel(QWidget):
             self._reward_mode.setCurrentIndex(1)
             return
         self._reward_mode.setCurrentIndex(0)
+
+    def _set_feature_profile(self, profile: str) -> None:
+        value = (profile or "").strip().lower()
+        if value == "raw53":
+            self._feature_profile.setCurrentIndex(0)
+            return
+        if value == "alpha4":
+            self._feature_profile.setCurrentIndex(1)
+            return
+        self._feature_profile.setCurrentIndex(2)
 
     def _set_device(self, device: str) -> None:
         value = (device or "").strip().lower()

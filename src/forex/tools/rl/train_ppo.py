@@ -29,6 +29,7 @@ from forex.ml.rl.envs.trading_env import (
 )
 from forex.ml.rl.envs.trading_config_io import save_trading_config
 from forex.ml.rl.features.feature_builder import (
+    apply_feature_profile,
     apply_scaler,
     build_feature_frame,
     filter_feature_rows_by_session,
@@ -1161,6 +1162,12 @@ def main() -> None:
         help="Optional JSON path to save feature scaler (default: model_out with .scaler.json).",
     )
     parser.add_argument(
+        "--feature-profile",
+        choices=("raw53", "alpha4", "residual"),
+        default="residual",
+        help="Feature profile: full raw features, alpha layer only, or alpha plus small context anchors.",
+    )
+    parser.add_argument(
         "--env-config-out",
         default="",
         help="Optional JSON path to save TradingConfig (default: model_out with .env.json).",
@@ -1201,8 +1208,18 @@ def main() -> None:
         timestamps,
         args.session_filter,
     )
+    feature_profile = str(args.feature_profile).strip().lower() or "raw53"
+    features_frame = apply_feature_profile(features_frame, feature_profile)
     if subset_names is not None:
-        features_frame = select_feature_columns(features_frame, subset_names)
+        subset_in_profile = [name for name in subset_names if name in features_frame.columns]
+        if subset_in_profile:
+            features_frame = select_feature_columns(features_frame, subset_in_profile)
+        elif feature_profile != "raw53":
+            print(
+                "Feature subset ignored for profile",
+                feature_profile,
+                f"(selected names not present in profiled frame; using {features_frame.shape[1]} profiled features).",
+            )
     total_rows = len(features_frame)
     eval_size = int(total_rows * args.eval_split)
     if eval_size < 1 or total_rows - eval_size < 1:
@@ -1374,6 +1391,7 @@ def main() -> None:
     model_path = Path(args.model_out)
     print(
         "Training setup:",
+        f"feature_profile={feature_profile}",
         f"rows={total_rows}",
         f"train={len(train_features)}",
         f"eval={len(eval_features)}",
