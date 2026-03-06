@@ -1204,6 +1204,26 @@ def main() -> None:
         raise ValueError("--vf-coef must be >= 0.")
     if args.n_epochs < 1:
         raise ValueError("--n-epochs must be >= 1.")
+    if args.transaction_cost_bps < 0.0:
+        raise ValueError("--transaction-cost-bps must be >= 0.")
+    if args.slippage_bps < 0.0:
+        raise ValueError("--slippage-bps must be >= 0.")
+    if args.holding_cost_bps < 0.0:
+        raise ValueError("--holding-cost-bps must be >= 0.")
+    if args.min_position_change < 0.0:
+        raise ValueError("--min-position-change must be >= 0.")
+    if args.max_position < 0.0:
+        raise ValueError("--max-position must be >= 0.")
+    if args.position_step < 0.0:
+        raise ValueError("--position-step must be >= 0.")
+    if args.max_position == 0.0 and args.position_step > 0.0:
+        raise ValueError("--position-step must be 0 when --max-position is 0.")
+    if args.max_position > 0.0 and args.position_step > args.max_position:
+        raise ValueError("--position-step cannot exceed --max-position.")
+    if args.max_position == 0.0 and args.min_position_change > 0.0:
+        raise ValueError("--min-position-change must be 0 when --max-position is 0.")
+    if args.max_position > 0.0 and args.min_position_change > (2.0 * args.max_position):
+        raise ValueError("--min-position-change is too large for current --max-position.")
     if not (0.0 < args.eval_split < 1.0):
         raise ValueError("--eval-split must be in (0, 1).")
 

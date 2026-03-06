@@ -730,6 +730,7 @@ class TrainingParamsPanel(QWidget):
             "Position step",
             _wrap_field(self._position_step),
         )
+        self._sync_execution_constraints()
 
         episode_group = QGroupBox("Episode & Sampling")
         _apply_live_card_style(episode_group)
@@ -2099,6 +2100,7 @@ class TrainingParamsPanel(QWidget):
         self._holding_cost_bps.valueChanged.connect(self._auto_save_params)
         self._min_position_change.valueChanged.connect(self._auto_save_params)
         self._max_position.valueChanged.connect(self._auto_save_params)
+        self._max_position.valueChanged.connect(self._sync_execution_constraints)
         self._position_step.valueChanged.connect(self._auto_save_params)
         self._episode_length.valueChanged.connect(self._auto_save_params)
         self._reward_horizon.valueChanged.connect(self._auto_save_params)
@@ -2241,6 +2243,17 @@ class TrainingParamsPanel(QWidget):
         self._batch_size.setMaximum(max_batch)
         if int(self._batch_size.value()) > max_batch:
             self._batch_size.setValue(max_batch)
+
+    def _sync_execution_constraints(self, *_args: object) -> None:
+        max_position = max(0.0, float(self._max_position.value()))
+        step_cap = min(1.0, max_position)
+        change_cap = min(1.0, 2.0 * max_position)
+        self._position_step.setMaximum(step_cap)
+        self._min_position_change.setMaximum(change_cap)
+        if float(self._position_step.value()) > step_cap:
+            self._position_step.setValue(step_cap)
+        if float(self._min_position_change.value()) > change_cap:
+            self._min_position_change.setValue(change_cap)
 
     def _refresh_optuna_plan_hint(self) -> None:
         trials = int(self._optuna_trials.value())
