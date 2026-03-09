@@ -375,6 +375,11 @@ class PlateauEvalCallback(EvalCallback):
         anti_flat_min_trade_rate: float,
         anti_flat_max_flat_ratio: float,
         anti_flat_max_ls_imbalance: float,
+        checkpoint_min_trade_rate: float,
+        checkpoint_max_trade_rate: float,
+        checkpoint_max_flat_ratio: float,
+        checkpoint_max_ls_imbalance: float,
+        checkpoint_max_drawdown: float,
         **kwargs,
     ) -> None:
         super().__init__(*args, **kwargs)
@@ -392,6 +397,11 @@ class PlateauEvalCallback(EvalCallback):
         self._anti_flat_min_trade_rate = max(0.0, float(anti_flat_min_trade_rate))
         self._anti_flat_max_flat_ratio = float(anti_flat_max_flat_ratio)
         self._anti_flat_max_ls_imbalance = float(anti_flat_max_ls_imbalance)
+        self._checkpoint_min_trade_rate = max(0.0, float(checkpoint_min_trade_rate))
+        self._checkpoint_max_trade_rate = max(0.0, float(checkpoint_max_trade_rate))
+        self._checkpoint_max_flat_ratio = float(checkpoint_max_flat_ratio)
+        self._checkpoint_max_ls_imbalance = float(checkpoint_max_ls_imbalance)
+        self._checkpoint_max_drawdown = float(checkpoint_max_drawdown)
         self._anti_flat_violation_evals = 0
         self.stopped_early = False
         self.stop_reason = ""
@@ -468,9 +478,10 @@ class PlateauEvalCallback(EvalCallback):
         self.logger.dump(self.num_timesteps)
 
         self._write_metric(step, "eval/mean_reward", mean_reward)
-        allow_checkpoint_updates = step >= self._early_stop_warmup_steps
+        allow_checkpoint_updates = True
         anti_flat_violation = False
         anti_flat_reason = ""
+        checkpoint_reasons: list[str] = []
         if self._activity_profiler is not None:
             profile = self._activity_profiler(self.model)
             trade_rate_1k = float(profile.get("trade_rate_1k", 0.0))
@@ -481,6 +492,26 @@ class PlateauEvalCallback(EvalCallback):
             self._write_metric(step, "eval/flat_ratio", flat_ratio)
             self._write_metric(step, "eval/ls_imbalance", ls_imbalance)
             self._write_metric(step, "eval/max_drawdown", max_drawdown)
+            if trade_rate_1k < self._checkpoint_min_trade_rate:
+                checkpoint_reasons.append(
+                    f"trade_rate({trade_rate_1k:.3f}<{self._checkpoint_min_trade_rate:.3f})"
+                )
+            if self._checkpoint_max_trade_rate > 0.0 and trade_rate_1k > self._checkpoint_max_trade_rate:
+                checkpoint_reasons.append(
+                    f"trade_rate({trade_rate_1k:.3f}>{self._checkpoint_max_trade_rate:.3f})"
+                )
+            if flat_ratio > self._checkpoint_max_flat_ratio:
+                checkpoint_reasons.append(
+                    f"flat_ratio({flat_ratio:.3f}>{self._checkpoint_max_flat_ratio:.3f})"
+                )
+            if ls_imbalance > self._checkpoint_max_ls_imbalance:
+                checkpoint_reasons.append(
+                    f"ls_imbalance({ls_imbalance:.3f}>{self._checkpoint_max_ls_imbalance:.3f})"
+                )
+            if max_drawdown > self._checkpoint_max_drawdown:
+                checkpoint_reasons.append(
+                    f"max_dd({max_drawdown:.3f}>{self._checkpoint_max_drawdown:.3f})"
+                )
             if self._anti_flat_enabled and step >= self._anti_flat_warmup_steps:
                 reasons = []
                 if trade_rate_1k < self._anti_flat_min_trade_rate:
@@ -501,7 +532,9 @@ class PlateauEvalCallback(EvalCallback):
                     self._anti_flat_violation_evals += 1
                 else:
                     self._anti_flat_violation_evals = 0
-
+        allow_checkpoint_updates = not checkpoint_reasons
+        if not allow_checkpoint_updates and self.verbose >= 1:
+            print("Best checkpoint skipped:", f"step={step}", " ".join(checkpoint_reasons))
         if allow_checkpoint_updates and (not anti_flat_violation) and mean_reward > self.best_mean_reward:
             if self.verbose >= 1:
                 print("New best mean reward!")
@@ -530,7 +563,22 @@ class PlateauEvalCallback(EvalCallback):
                 self.stop_reason,
             )
             return False
-        if not self._early_stop_enabled or not allow_checkpoint_updates:
+        if not self._early_stop_enabled or step < self._early_stop_warmup_steps:
+            return True
+        if not allow_checkpoint_updates or anti_flat_violation:
+            return True
+        if self._best_eval_reward == float("-inf"):
+            self._best_eval_reward = mean_reward
+            self._no_improvement_evals = 1
+            remaining = max(0, self._early_stop_patience_evals - self._no_improvement_evals)
+            self._write_metric(step, "early_stop_patience_left", float(remaining))
+            if self.verbose >= 1:
+                print(
+                    "Early stop baseline established:",
+                    f"step={step}",
+                    f"eval_mean_reward={mean_reward:.6g}",
+                    f"patience_left={remaining}",
+                )
             return True
         if mean_reward > self._best_eval_reward + self._early_stop_min_delta:
             self._best_eval_reward = mean_reward
@@ -1019,6 +1067,42 @@ def main() -> None:
         type=int,
         default=3,
         help="Number of violating eval rounds before anti-flat early stop triggers.",
+    )
+    parser.add_argument(
+        "--eval-profile-steps",
+        type=int,
+        default=2500,
+        help="Playback steps used to profile eval activity for checkpoint and anti-flat checks (0 uses full eval tail).",
+    )
+    parser.add_argument(
+        "--checkpoint-min-trade-rate",
+        type=float,
+        default=5.0,
+        help="Minimum trades per 1k bars required for a checkpoint to qualify.",
+    )
+    parser.add_argument(
+        "--checkpoint-max-trade-rate",
+        type=float,
+        default=25.0,
+        help="Maximum trades per 1k bars allowed for a checkpoint to qualify.",
+    )
+    parser.add_argument(
+        "--checkpoint-max-flat-ratio",
+        type=float,
+        default=0.9,
+        help="Maximum flat action ratio allowed for a checkpoint to qualify.",
+    )
+    parser.add_argument(
+        "--checkpoint-max-ls-imbalance",
+        type=float,
+        default=0.35,
+        help="Maximum |long-short| imbalance allowed for a checkpoint to qualify.",
+    )
+    parser.add_argument(
+        "--checkpoint-max-drawdown",
+        type=float,
+        default=0.30,
+        help="Maximum eval max drawdown allowed for a checkpoint to qualify.",
     )
     parser.add_argument(
         "--anti-flat-min-trade-rate",
@@ -1527,7 +1611,7 @@ def main() -> None:
 
     metrics_callback = MetricsLogCallback(_write_metric)
     best_model_tmp_dir: Path | None = None
-    activity_profile_steps = max(0, int(args.anti_flat_profile_steps))
+    activity_profile_steps = max(0, int(args.eval_profile_steps))
 
     def _profile_eval_activity(model_ref: PPO, config_ref: TradingConfig) -> dict[str, float]:
         return _profile_policy_activity(
@@ -1561,7 +1645,7 @@ def main() -> None:
             activity_profiler=(
                 lambda model_ref, config_ref=eval_config_ref: _profile_eval_activity(model_ref, config_ref)
             )
-            if args.anti_flat_enabled
+            if (args.anti_flat_enabled or args.save_best_checkpoint or args.early_stop_enabled)
             else None,
             anti_flat_enabled=args.anti_flat_enabled,
             anti_flat_warmup_steps=args.anti_flat_warmup_steps,
@@ -1569,6 +1653,11 @@ def main() -> None:
             anti_flat_min_trade_rate=args.anti_flat_min_trade_rate,
             anti_flat_max_flat_ratio=args.anti_flat_max_flat_ratio,
             anti_flat_max_ls_imbalance=args.anti_flat_max_ls_imbalance,
+            checkpoint_min_trade_rate=args.checkpoint_min_trade_rate,
+            checkpoint_max_trade_rate=args.checkpoint_max_trade_rate,
+            checkpoint_max_flat_ratio=args.checkpoint_max_flat_ratio,
+            checkpoint_max_ls_imbalance=args.checkpoint_max_ls_imbalance,
+            checkpoint_max_drawdown=args.checkpoint_max_drawdown,
             **kwargs,
         )
 

@@ -202,6 +202,39 @@ class PPOTrainingController(QObject):
             ["--anti-flat-patience-evals", str(params.get("anti_flat_patience_evals", 3))]
         )
         args.extend(
+            ["--eval-profile-steps", str(params.get("eval_profile_steps", 2500))]
+        )
+        args.extend(
+            [
+                "--checkpoint-min-trade-rate",
+                str(params.get("checkpoint_min_trade_rate", 5.0)),
+            ]
+        )
+        args.extend(
+            [
+                "--checkpoint-max-trade-rate",
+                str(params.get("checkpoint_max_trade_rate", 25.0)),
+            ]
+        )
+        args.extend(
+            [
+                "--checkpoint-max-flat-ratio",
+                str(params.get("checkpoint_max_flat_ratio", 0.9)),
+            ]
+        )
+        args.extend(
+            [
+                "--checkpoint-max-ls-imbalance",
+                str(params.get("checkpoint_max_ls_imbalance", 0.35)),
+            ]
+        )
+        args.extend(
+            [
+                "--checkpoint-max-drawdown",
+                str(params.get("checkpoint_max_drawdown", 0.30)),
+            ]
+        )
+        args.extend(
             ["--anti-flat-min-trade-rate", str(params.get("anti_flat_min_trade_rate", 5.0))]
         )
         args.extend(

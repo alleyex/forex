@@ -400,6 +400,12 @@ class TrainingParamsPanel(QWidget):
         self._eval_split.setFixedWidth(spin_width)
         params_layout.add_row("eval_split", self._eval_split)
 
+        self._seed = QSpinBox()
+        self._seed.setRange(0, 2_147_483_647)
+        self._seed.setValue(0)
+        self._seed.setFixedWidth(spin_width)
+        params_layout.add_row("seed", self._seed)
+
         self._device = QComboBox()
         self._device.addItems(["Auto", "CPU", "MPS", "CUDA"])
         self._device.setCurrentIndex(0)
@@ -513,6 +519,20 @@ class TrainingParamsPanel(QWidget):
         )
         options_layout.addWidget(checkpoint_group)
 
+        eval_activity_group = QGroupBox("Eval Activity")
+        _apply_live_card_style(eval_activity_group)
+        eval_activity_group_layout = QVBoxLayout(eval_activity_group)
+        eval_activity_group_layout.setContentsMargins(12, 10, 12, 12)
+        eval_activity_group_layout.setSpacing(8)
+        eval_activity_layout = AdaptiveFormGrid(
+            min_cell_width=250,
+            label_min_width=0,
+            max_columns=2,
+            split_labels=True,
+        )
+        eval_activity_group_layout.addWidget(eval_activity_layout)
+        options_layout.addWidget(eval_activity_group)
+
         early_stop_group, early_stop_layout = _build_run_section(
             "Early Stop",
             self._early_stop_enabled,
@@ -551,11 +571,75 @@ class TrainingParamsPanel(QWidget):
         early_stop_layout.add_row("Min improvement", _wrap_field(self._early_stop_min_delta))
         self._early_stop_setting_cards.append(early_stop_group)
 
-        self._seed = QSpinBox()
-        self._seed.setRange(0, 2_147_483_647)
-        self._seed.setValue(0)
-        self._seed.setFixedWidth(spin_width)
-        checkpoint_layout.add_row("Seed", _wrap_field(self._seed))
+        self._checkpoint_min_trade_rate = TrimmedDoubleSpinBox()
+        self._checkpoint_min_trade_rate.setRange(0.0, 100.0)
+        self._checkpoint_min_trade_rate.setDecimals(3)
+        self._checkpoint_min_trade_rate.setSingleStep(0.1)
+        self._checkpoint_min_trade_rate.setValue(5.0)
+        self._checkpoint_min_trade_rate.setFixedWidth(spin_width)
+        checkpoint_layout.add_row("Min trades/1k", _wrap_field(self._checkpoint_min_trade_rate))
+
+        self._checkpoint_max_trade_rate = TrimmedDoubleSpinBox()
+        self._checkpoint_max_trade_rate.setRange(0.0, 500.0)
+        self._checkpoint_max_trade_rate.setDecimals(3)
+        self._checkpoint_max_trade_rate.setSingleStep(0.5)
+        self._checkpoint_max_trade_rate.setValue(25.0)
+        self._checkpoint_max_trade_rate.setFixedWidth(spin_width)
+        checkpoint_layout.add_row("Max trades/1k", _wrap_field(self._checkpoint_max_trade_rate))
+
+        self._checkpoint_max_flat_ratio = TrimmedDoubleSpinBox()
+        self._checkpoint_max_flat_ratio.setRange(0.0, 1.0)
+        self._checkpoint_max_flat_ratio.setDecimals(3)
+        self._checkpoint_max_flat_ratio.setSingleStep(0.01)
+        self._checkpoint_max_flat_ratio.setValue(0.9)
+        self._checkpoint_max_flat_ratio.setFixedWidth(spin_width)
+        checkpoint_layout.add_row("Max flat ratio", _wrap_field(self._checkpoint_max_flat_ratio))
+
+        self._checkpoint_max_ls_imbalance = TrimmedDoubleSpinBox()
+        self._checkpoint_max_ls_imbalance.setRange(0.0, 1.0)
+        self._checkpoint_max_ls_imbalance.setDecimals(3)
+        self._checkpoint_max_ls_imbalance.setSingleStep(0.01)
+        self._checkpoint_max_ls_imbalance.setValue(0.35)
+        self._checkpoint_max_ls_imbalance.setFixedWidth(spin_width)
+        checkpoint_layout.add_row("Max L/S imbalance", _wrap_field(self._checkpoint_max_ls_imbalance))
+
+        self._checkpoint_max_drawdown = TrimmedDoubleSpinBox()
+        self._checkpoint_max_drawdown.setRange(0.0, 1.0)
+        self._checkpoint_max_drawdown.setDecimals(3)
+        self._checkpoint_max_drawdown.setSingleStep(0.01)
+        self._checkpoint_max_drawdown.setValue(0.30)
+        self._checkpoint_max_drawdown.setFixedWidth(spin_width)
+        checkpoint_layout.add_row("Max drawdown", _wrap_field(self._checkpoint_max_drawdown))
+
+        self._eval_profile_steps = QSpinBox()
+        self._eval_profile_steps.setRange(0, 1_000_000)
+        self._eval_profile_steps.setValue(2_500)
+        self._eval_profile_steps.setFixedWidth(spin_width)
+        eval_activity_layout.add_row("Eval profile steps", _wrap_field(self._eval_profile_steps))
+
+        self._eval_profile_min_trade_rate = TrimmedDoubleSpinBox()
+        self._eval_profile_min_trade_rate.setRange(0.0, 100.0)
+        self._eval_profile_min_trade_rate.setDecimals(3)
+        self._eval_profile_min_trade_rate.setSingleStep(0.1)
+        self._eval_profile_min_trade_rate.setValue(5.0)
+        self._eval_profile_min_trade_rate.setFixedWidth(spin_width)
+        eval_activity_layout.add_row("Min trades/1k", _wrap_field(self._eval_profile_min_trade_rate))
+
+        self._eval_profile_max_flat_ratio = TrimmedDoubleSpinBox()
+        self._eval_profile_max_flat_ratio.setRange(0.0, 1.0)
+        self._eval_profile_max_flat_ratio.setDecimals(3)
+        self._eval_profile_max_flat_ratio.setSingleStep(0.01)
+        self._eval_profile_max_flat_ratio.setValue(0.98)
+        self._eval_profile_max_flat_ratio.setFixedWidth(spin_width)
+        eval_activity_layout.add_row("Max flat ratio", _wrap_field(self._eval_profile_max_flat_ratio))
+
+        self._eval_profile_max_ls_imbalance = TrimmedDoubleSpinBox()
+        self._eval_profile_max_ls_imbalance.setRange(0.0, 1.0)
+        self._eval_profile_max_ls_imbalance.setDecimals(3)
+        self._eval_profile_max_ls_imbalance.setSingleStep(0.01)
+        self._eval_profile_max_ls_imbalance.setValue(0.2)
+        self._eval_profile_max_ls_imbalance.setFixedWidth(spin_width)
+        eval_activity_layout.add_row("Max L/S imbalance", _wrap_field(self._eval_profile_max_ls_imbalance))
 
         self._curriculum_steps = QSpinBox()
         self._curriculum_steps.setRange(0, 10_000_000)
@@ -600,35 +684,6 @@ class TrainingParamsPanel(QWidget):
         self._anti_flat_patience_evals.setFixedWidth(spin_width)
         anti_flat_layout.add_row("Anti-flat patience", _wrap_field(self._anti_flat_patience_evals))
 
-        self._anti_flat_min_trade_rate = TrimmedDoubleSpinBox()
-        self._anti_flat_min_trade_rate.setRange(0.0, 100.0)
-        self._anti_flat_min_trade_rate.setDecimals(3)
-        self._anti_flat_min_trade_rate.setSingleStep(0.1)
-        self._anti_flat_min_trade_rate.setValue(5.0)
-        self._anti_flat_min_trade_rate.setFixedWidth(spin_width)
-        anti_flat_layout.add_row("Min trades/1k", _wrap_field(self._anti_flat_min_trade_rate))
-
-        self._anti_flat_max_flat_ratio = TrimmedDoubleSpinBox()
-        self._anti_flat_max_flat_ratio.setRange(0.0, 1.0)
-        self._anti_flat_max_flat_ratio.setDecimals(3)
-        self._anti_flat_max_flat_ratio.setSingleStep(0.01)
-        self._anti_flat_max_flat_ratio.setValue(0.98)
-        self._anti_flat_max_flat_ratio.setFixedWidth(spin_width)
-        anti_flat_layout.add_row("Max flat ratio", _wrap_field(self._anti_flat_max_flat_ratio))
-
-        self._anti_flat_max_ls_imbalance = TrimmedDoubleSpinBox()
-        self._anti_flat_max_ls_imbalance.setRange(0.0, 1.0)
-        self._anti_flat_max_ls_imbalance.setDecimals(3)
-        self._anti_flat_max_ls_imbalance.setSingleStep(0.01)
-        self._anti_flat_max_ls_imbalance.setValue(0.2)
-        self._anti_flat_max_ls_imbalance.setFixedWidth(spin_width)
-        anti_flat_layout.add_row("Max L/S imbalance", _wrap_field(self._anti_flat_max_ls_imbalance))
-
-        self._anti_flat_profile_steps = QSpinBox()
-        self._anti_flat_profile_steps.setRange(0, 1_000_000)
-        self._anti_flat_profile_steps.setValue(2_500)
-        self._anti_flat_profile_steps.setFixedWidth(spin_width)
-        anti_flat_layout.add_row("Profile steps", _wrap_field(self._anti_flat_profile_steps))
         self._anti_flat_setting_cards.append(anti_flat_group)
 
         self._resolved_device = QLabel("-")
@@ -1437,6 +1492,11 @@ class TrainingParamsPanel(QWidget):
             "episode_length": int(self._episode_length.value()),
             "eval_split": float(self._eval_split.value()),
             "save_best_checkpoint": bool(self._save_best_checkpoint.isChecked()),
+            "checkpoint_min_trade_rate": float(self._checkpoint_min_trade_rate.value()),
+            "checkpoint_max_trade_rate": float(self._checkpoint_max_trade_rate.value()),
+            "checkpoint_max_flat_ratio": float(self._checkpoint_max_flat_ratio.value()),
+            "checkpoint_max_ls_imbalance": float(self._checkpoint_max_ls_imbalance.value()),
+            "checkpoint_max_drawdown": float(self._checkpoint_max_drawdown.value()),
             "transaction_cost_bps": float(self._transaction_cost_bps.value()),
             "slippage_bps": float(self._slippage_bps.value()),
             "holding_cost_bps": float(self._holding_cost_bps.value()),
@@ -1472,10 +1532,14 @@ class TrainingParamsPanel(QWidget):
             "anti_flat_enabled": bool(self._anti_flat_enabled.isChecked()),
             "anti_flat_warmup_steps": int(self._anti_flat_warmup_steps.value()),
             "anti_flat_patience_evals": int(self._anti_flat_patience_evals.value()),
-            "anti_flat_min_trade_rate": float(self._anti_flat_min_trade_rate.value()),
-            "anti_flat_max_flat_ratio": float(self._anti_flat_max_flat_ratio.value()),
-            "anti_flat_max_ls_imbalance": float(self._anti_flat_max_ls_imbalance.value()),
-            "anti_flat_profile_steps": int(self._anti_flat_profile_steps.value()),
+            "anti_flat_min_trade_rate": float(self._eval_profile_min_trade_rate.value()),
+            "anti_flat_max_flat_ratio": float(self._eval_profile_max_flat_ratio.value()),
+            "anti_flat_max_ls_imbalance": float(self._eval_profile_max_ls_imbalance.value()),
+            "anti_flat_profile_steps": int(self._eval_profile_steps.value()),
+            "eval_profile_steps": int(self._eval_profile_steps.value()),
+            "eval_profile_min_trade_rate": float(self._eval_profile_min_trade_rate.value()),
+            "eval_profile_max_flat_ratio": float(self._eval_profile_max_flat_ratio.value()),
+            "eval_profile_max_ls_imbalance": float(self._eval_profile_max_ls_imbalance.value()),
             "optuna_trials": int(self._optuna_trials.value()),
             "optuna_steps": int(self._optuna_steps.value()),
             "optuna_auto_select": bool(self._optuna_auto_select.isChecked()),
@@ -1950,6 +2014,16 @@ class TrainingParamsPanel(QWidget):
             self._eval_split.setValue(float(data["eval_split"]))
         if "save_best_checkpoint" in data:
             self._save_best_checkpoint.setChecked(bool(data["save_best_checkpoint"]))
+        if "checkpoint_min_trade_rate" in data:
+            self._checkpoint_min_trade_rate.setValue(float(data["checkpoint_min_trade_rate"]))
+        if "checkpoint_max_trade_rate" in data:
+            self._checkpoint_max_trade_rate.setValue(float(data["checkpoint_max_trade_rate"]))
+        if "checkpoint_max_flat_ratio" in data:
+            self._checkpoint_max_flat_ratio.setValue(float(data["checkpoint_max_flat_ratio"]))
+        if "checkpoint_max_ls_imbalance" in data:
+            self._checkpoint_max_ls_imbalance.setValue(float(data["checkpoint_max_ls_imbalance"]))
+        if "checkpoint_max_drawdown" in data:
+            self._checkpoint_max_drawdown.setValue(float(data["checkpoint_max_drawdown"]))
         if "early_stop_enabled" in data:
             self._early_stop_enabled.setChecked(bool(data["early_stop_enabled"]))
         if "early_stop_warmup_steps" in data:
@@ -1964,14 +2038,22 @@ class TrainingParamsPanel(QWidget):
             self._anti_flat_warmup_steps.setValue(int(data["anti_flat_warmup_steps"]))
         if "anti_flat_patience_evals" in data:
             self._anti_flat_patience_evals.setValue(int(data["anti_flat_patience_evals"]))
-        if "anti_flat_min_trade_rate" in data:
-            self._anti_flat_min_trade_rate.setValue(float(data["anti_flat_min_trade_rate"]))
-        if "anti_flat_max_flat_ratio" in data:
-            self._anti_flat_max_flat_ratio.setValue(float(data["anti_flat_max_flat_ratio"]))
-        if "anti_flat_max_ls_imbalance" in data:
-            self._anti_flat_max_ls_imbalance.setValue(float(data["anti_flat_max_ls_imbalance"]))
-        if "anti_flat_profile_steps" in data:
-            self._anti_flat_profile_steps.setValue(int(data["anti_flat_profile_steps"]))
+        if "eval_profile_steps" in data:
+            self._eval_profile_steps.setValue(int(data["eval_profile_steps"]))
+        elif "anti_flat_profile_steps" in data:
+            self._eval_profile_steps.setValue(int(data["anti_flat_profile_steps"]))
+        if "eval_profile_min_trade_rate" in data:
+            self._eval_profile_min_trade_rate.setValue(float(data["eval_profile_min_trade_rate"]))
+        elif "anti_flat_min_trade_rate" in data:
+            self._eval_profile_min_trade_rate.setValue(float(data["anti_flat_min_trade_rate"]))
+        if "eval_profile_max_flat_ratio" in data:
+            self._eval_profile_max_flat_ratio.setValue(float(data["eval_profile_max_flat_ratio"]))
+        elif "anti_flat_max_flat_ratio" in data:
+            self._eval_profile_max_flat_ratio.setValue(float(data["anti_flat_max_flat_ratio"]))
+        if "eval_profile_max_ls_imbalance" in data:
+            self._eval_profile_max_ls_imbalance.setValue(float(data["eval_profile_max_ls_imbalance"]))
+        elif "anti_flat_max_ls_imbalance" in data:
+            self._eval_profile_max_ls_imbalance.setValue(float(data["anti_flat_max_ls_imbalance"]))
         if "transaction_cost_bps" in data:
             self._transaction_cost_bps.setValue(float(data["transaction_cost_bps"]))
         if "slippage_bps" in data:
@@ -2126,6 +2208,11 @@ class TrainingParamsPanel(QWidget):
         self._drawdown_governor_slope.valueChanged.connect(self._auto_save_params)
         self._drawdown_governor_floor.valueChanged.connect(self._auto_save_params)
         self._save_best_checkpoint.toggled.connect(self._auto_save_params)
+        self._checkpoint_min_trade_rate.valueChanged.connect(self._auto_save_params)
+        self._checkpoint_max_trade_rate.valueChanged.connect(self._auto_save_params)
+        self._checkpoint_max_flat_ratio.valueChanged.connect(self._auto_save_params)
+        self._checkpoint_max_ls_imbalance.valueChanged.connect(self._auto_save_params)
+        self._checkpoint_max_drawdown.valueChanged.connect(self._auto_save_params)
         self._early_stop_enabled.toggled.connect(self._auto_save_params)
         self._early_stop_enabled.toggled.connect(self._sync_early_stop_controls)
         self._early_stop_warmup_steps.valueChanged.connect(self._auto_save_params)
@@ -2135,10 +2222,10 @@ class TrainingParamsPanel(QWidget):
         self._anti_flat_enabled.toggled.connect(self._sync_anti_flat_controls)
         self._anti_flat_warmup_steps.valueChanged.connect(self._auto_save_params)
         self._anti_flat_patience_evals.valueChanged.connect(self._auto_save_params)
-        self._anti_flat_min_trade_rate.valueChanged.connect(self._auto_save_params)
-        self._anti_flat_max_flat_ratio.valueChanged.connect(self._auto_save_params)
-        self._anti_flat_max_ls_imbalance.valueChanged.connect(self._auto_save_params)
-        self._anti_flat_profile_steps.valueChanged.connect(self._auto_save_params)
+        self._eval_profile_steps.valueChanged.connect(self._auto_save_params)
+        self._eval_profile_min_trade_rate.valueChanged.connect(self._auto_save_params)
+        self._eval_profile_max_flat_ratio.valueChanged.connect(self._auto_save_params)
+        self._eval_profile_max_ls_imbalance.valueChanged.connect(self._auto_save_params)
         self._gae_lambda.valueChanged.connect(self._auto_save_params)
         self._clip_range.valueChanged.connect(self._auto_save_params)
         self._target_kl.valueChanged.connect(self._auto_save_params)
@@ -2233,10 +2320,6 @@ class TrainingParamsPanel(QWidget):
         enabled = bool(self._anti_flat_enabled.isChecked())
         self._anti_flat_warmup_steps.setEnabled(enabled)
         self._anti_flat_patience_evals.setEnabled(enabled)
-        self._anti_flat_min_trade_rate.setEnabled(enabled)
-        self._anti_flat_max_flat_ratio.setEnabled(enabled)
-        self._anti_flat_max_ls_imbalance.setEnabled(enabled)
-        self._anti_flat_profile_steps.setEnabled(enabled)
 
     def _sync_batch_size_limit(self, *_args: object) -> None:
         max_batch = max(1, int(self._n_steps.value()))
