@@ -1,0 +1,59 @@
+from __future__ import annotations
+
+import numpy as np
+
+from forex.ml.rl.envs.trading_env import TradingConfig
+from forex.tools.rl.run_live_sim import PlaybackBundle, _split_transition_cost, run_playback
+
+
+class _StubModel:
+    def __init__(self, actions: list[float]) -> None:
+        self._actions = actions
+        self._idx = 0
+
+    def predict(self, _obs, deterministic: bool = True):
+        action = self._actions[min(self._idx, len(self._actions) - 1)]
+        self._idx += 1
+        return np.array([action], dtype=np.float32), None
+
+
+def test_split_transition_cost_handles_reversal_and_resize() -> None:
+    exit_cost, entry_cost = _split_transition_cost(1.0, -1.0, 0.001)
+    assert exit_cost == 0.001
+    assert entry_cost == 0.001
+
+    exit_cost, entry_cost = _split_transition_cost(1.0, 0.5, 0.001)
+    assert exit_cost == 0.0005
+    assert entry_cost == 0.0
+
+    exit_cost, entry_cost = _split_transition_cost(0.5, 1.0, 0.001)
+    assert exit_cost == 0.0
+    assert entry_cost == 0.0005
+
+
+def test_run_playback_closes_last_open_trade_segment() -> None:
+    bundle = PlaybackBundle(
+        features=np.zeros((4, 1), dtype=np.float32),
+        closes=np.array([100.0, 110.0, 120.0, 120.0], dtype=np.float32),
+        timestamps=[0, 1, 2, 3],
+        config=TradingConfig(
+            transaction_cost_bps=0.0,
+            slippage_bps=0.0,
+            holding_cost_bps=0.0,
+            window_size=1,
+            reward_horizon=1,
+            max_position=1.0,
+            min_position_change=0.0,
+            position_step=0.0,
+        ),
+        model=_StubModel([1.0, 1.0, 1.0]),
+    )
+
+    result = run_playback(bundle, start_index=0, max_steps=3, quiet=True)
+
+    assert result.trades == 1
+    assert len(result.trade_pnls) == 1
+    assert len(result.trade_costs) == 1
+    assert result.trade_pnls[0] > 0.09
+    assert result.drawdown_trough_step >= result.drawdown_peak_step
+    assert result.drawdown_peak_equity >= result.drawdown_trough_equity

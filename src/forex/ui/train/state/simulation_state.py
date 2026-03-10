@@ -14,4 +14,5 @@ class SimulationState(StateBase):
     streak_stats = Signal(str)
     holding_stats = Signal(str)
     action_distribution = Signal(str)
+    drawdown_window = Signal(str)
     playback_range = Signal(str)

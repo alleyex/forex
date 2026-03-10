@@ -51,6 +51,9 @@ class SimulationPresenter(PresenterBase):
         if line.startswith("Action distribution:"):
             self._state.action_distribution.emit(line.replace("Action distribution:", "").strip())
             return
+        if line.startswith("Drawdown window:"):
+            self._state.drawdown_window.emit(line.replace("Drawdown window:", "").strip())
+            return
         if line.startswith("Playback range:"):
             self._state.playback_range.emit(line.replace("Playback range:", "").strip())
 

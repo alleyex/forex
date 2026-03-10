@@ -340,5 +340,15 @@ def format_playback_range(text: str) -> str:
     return format_kv_lines(text, label_map)
 
 
+def format_drawdown_window(text: str) -> str:
+    label_map = {
+        "peak_step": "Peak step",
+        "peak_equity": "Peak equity",
+        "trough_step": "Trough step",
+        "trough_equity": "Trough equity",
+    }
+    return format_kv_lines(text, label_map)
+
+
 def format_optuna_empty_best() -> str:
     return "Best params: —"

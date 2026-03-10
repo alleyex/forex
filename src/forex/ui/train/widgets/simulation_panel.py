@@ -37,6 +37,7 @@ from forex.ui.shared.widgets.layout_helpers import (
 from forex.ui.shared.utils.path_utils import latest_file_in_dir
 from forex.ui.shared.utils.formatters import (
     format_action_distribution,
+    format_drawdown_window,
     format_holding_stats,
     format_playback_range,
     format_streak_stats,
@@ -516,8 +517,15 @@ class PlaybackDetailsPanel(QWidget):
         self._playback_range = QLabel("-")
         self._playback_range.setProperty("class", STAT_VALUE)
         self._playback_range.setWordWrap(True)
+        self._drawdown_window = QLabel("-")
+        self._drawdown_window.setProperty("class", STAT_VALUE)
+        self._drawdown_window.setWordWrap(True)
         playback_layout.addWidget(playback_label, 0, 0)
         playback_layout.addWidget(self._playback_range, 0, 1)
+        dd_window_label = QLabel("Max DD Window")
+        dd_window_label.setProperty("class", STAT_LABEL)
+        playback_layout.addWidget(dd_window_label, 1, 0)
+        playback_layout.addWidget(self._drawdown_window, 1, 1)
 
         range_tab_layout.addWidget(playback_group)
         tabs.addTab(range_tab, "Playback Range")
@@ -560,6 +568,7 @@ class PlaybackDetailsPanel(QWidget):
         self._holding_stats.setText("-")
         self._action_dist.setText("-")
         self._playback_range.setText("-")
+        self._drawdown_window.setText("-")
 
     def update_summary(
         self,
@@ -624,6 +633,9 @@ class PlaybackDetailsPanel(QWidget):
 
     def update_playback_range(self, text: str) -> None:
         self._playback_range.setText(format_playback_range(text))
+
+    def update_drawdown_window(self, text: str) -> None:
+        self._drawdown_window.setText(format_drawdown_window(text))
 
 
 class SimulationPanel(QWidget):
@@ -732,3 +744,6 @@ class SimulationPanel(QWidget):
 
     def update_playback_range(self, text: str) -> None:
         self._details_panel.update_playback_range(text)
+
+    def update_drawdown_window(self, text: str) -> None:
+        self._details_panel.update_drawdown_window(text)

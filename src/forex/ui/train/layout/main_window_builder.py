@@ -111,6 +111,7 @@ def build_panels(
     simulation_state.streak_stats.connect(simulation_panel.update_streak_stats)
     simulation_state.holding_stats.connect(simulation_panel.update_holding_stats)
     simulation_state.action_distribution.connect(simulation_panel.update_action_distribution)
+    simulation_state.drawdown_window.connect(simulation_panel.update_drawdown_window)
     simulation_state.playback_range.connect(simulation_panel.update_playback_range)
     simulation_state.log_message.connect(log_panel.append)
     simulation_state.log_message.connect(simulation_panel.append_log)

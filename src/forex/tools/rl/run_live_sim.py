@@ -66,6 +66,10 @@ class PlaybackResult:
     ls_imbalance: float
     start_ts: object
     end_ts: object
+    drawdown_peak_step: int
+    drawdown_trough_step: int
+    drawdown_peak_equity: float
+    drawdown_trough_equity: float
     gate_reasons: list[str]
 
 
@@ -87,6 +91,24 @@ def _streak_stats(values: list[float]) -> tuple[int, int]:
         max_win = max(max_win, current_win)
         max_loss = max(max_loss, current_loss)
     return max_win, max_loss
+
+
+def _split_transition_cost(old_position: float, new_position: float, cost_rate: float) -> tuple[float, float]:
+    old_abs = abs(float(old_position))
+    new_abs = abs(float(new_position))
+    if old_abs <= 1e-12 and new_abs <= 1e-12:
+        return 0.0, 0.0
+    old_sign = float(np.sign(old_position))
+    new_sign = float(np.sign(new_position))
+    if old_abs <= 1e-12:
+        return 0.0, new_abs * cost_rate
+    if new_abs <= 1e-12:
+        return old_abs * cost_rate, 0.0
+    if old_sign == new_sign:
+        if new_abs >= old_abs:
+            return 0.0, (new_abs - old_abs) * cost_rate
+        return (old_abs - new_abs) * cost_rate, 0.0
+    return old_abs * cost_rate, new_abs * cost_rate
 
 
 def load_playback_bundle(
@@ -214,17 +236,23 @@ def run_playback(
         equity_log_file.write("step,equity\n")
 
     peak_equity = state.equity
+    peak_step = 0
     equity_series = [state.equity]
     max_drawdown = 0.0
+    drawdown_peak_step = 0
+    drawdown_trough_step = 0
+    drawdown_peak_equity = state.equity
+    drawdown_trough_equity = state.equity
     action_sum = 0.0
     action_long = 0
     action_short = 0
     action_flat = 0
-    last_trade_price = None
     last_change_idx = 0
     trade_pnls: list[float] = []
     trade_costs: list[float] = []
     holding_steps: list[int] = []
+    current_trade_growth: float | None = None
+    current_trade_cost: float = 0.0
     last_idx = -1
 
     try:
@@ -276,27 +304,48 @@ def run_playback(
                 peak_equity=peak_equity,
                 config=bundle.config,
             )
+            cost_rate = (float(bundle.config.transaction_cost_bps) + float(bundle.config.slippage_bps)) / 10000.0
+            exit_cost, entry_cost = _split_transition_cost(state.position, target_position, cost_rate)
+            if abs(state.position) > 1e-6:
+                if current_trade_growth is None:
+                    current_trade_growth = 1.0
+                    current_trade_cost = 0.0
+                trade_bar_net = transition["step_pnl"] - exit_cost - transition["holding_cost"]
+                current_trade_growth *= max(1e-12, 1.0 + float(trade_bar_net))
+                current_trade_cost += float(exit_cost + transition["holding_cost"])
             if abs(delta) > 1e-6:
-                current_price = bundle.closes[idx]
                 current_time = bundle.timestamps[idx] if idx < len(bundle.timestamps) else "-"
-                if last_trade_price is not None:
-                    trade_pnl = state.position * (current_price - last_trade_price) / last_trade_price
+                if abs(state.position) > 1e-6 and current_trade_growth is not None:
+                    trade_pnl = current_trade_growth - 1.0
                     trade_pnls.append(float(trade_pnl))
-                    trade_costs.append(float(transition["cost"]))
+                    trade_costs.append(float(current_trade_cost))
                     if not quiet:
                         print(
                             f"Trade @ {current_time} pos={state.position:.3f} -> {target_position:.3f} "
-                            f"pnl={trade_pnl:.6g} cost={transition['cost']:.6g} "
+                            f"net_return={trade_pnl:.6g} cost={current_trade_cost:.6g} "
                             f"holding={transition['holding_cost']:.6g}"
                         )
-                last_trade_price = current_price
+                    current_trade_growth = None
+                    current_trade_cost = 0.0
+                if abs(target_position) > 1e-6:
+                    current_trade_growth = max(1e-12, 1.0 - entry_cost)
+                    current_trade_cost = float(entry_cost)
 
             reward = transition["reward"]
             state.equity = transition["equity"]
             equity_series.append(state.equity)
             state.position = target_position
+            if state.equity >= peak_equity:
+                peak_step = step_num
+                drawdown_peak_equity = state.equity
             peak_equity = transition["peak_equity"]
-            max_drawdown = max(max_drawdown, float(transition["drawdown"]))
+            current_drawdown = float(transition["drawdown"])
+            if current_drawdown >= max_drawdown:
+                max_drawdown = current_drawdown
+                drawdown_peak_step = peak_step
+                drawdown_trough_step = step_num
+                drawdown_peak_equity = peak_equity
+                drawdown_trough_equity = state.equity
 
             if equity_log_file and step_num % log_every_n == 0:
                 equity_log_file.write(f"{step_num},{state.equity:.6f}\n")
@@ -317,6 +366,9 @@ def run_playback(
     processed_steps = max(0, last_idx - start_idx + 1)
     if processed_steps > last_change_idx:
         holding_steps.append(processed_steps - last_change_idx)
+    if current_trade_growth is not None:
+        trade_pnls.append(float(current_trade_growth - 1.0))
+        trade_costs.append(float(current_trade_cost))
 
     total_return = state.equity - 1.0
     sharpe = compute_sharpe_ratio_from_equity(equity_series)
@@ -371,6 +423,10 @@ def run_playback(
         ls_imbalance=ls_imbalance,
         start_ts=start_ts,
         end_ts=end_ts,
+        drawdown_peak_step=drawdown_peak_step,
+        drawdown_trough_step=drawdown_trough_step,
+        drawdown_peak_equity=drawdown_peak_equity,
+        drawdown_trough_equity=drawdown_trough_equity,
         gate_reasons=gate_reasons,
     )
 
@@ -414,6 +470,15 @@ def print_playback_result(result: PlaybackResult) -> None:
         print(f"Quality gate: FAIL ({'; '.join(result.gate_reasons)})")
     else:
         print("Quality gate: PASS")
+    print(
+        "Drawdown window: peak_step={0} peak_equity={1:.6f} "
+        "trough_step={2} trough_equity={3:.6f}".format(
+            result.drawdown_peak_step,
+            result.drawdown_peak_equity,
+            result.drawdown_trough_step,
+            result.drawdown_trough_equity,
+        )
+    )
     print(f"Playback range: start={result.start_ts} end={result.end_ts} steps={result.processed_steps}")
 
 
