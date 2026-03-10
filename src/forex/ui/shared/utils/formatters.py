@@ -296,11 +296,16 @@ def format_optuna_empty_trial() -> str:
 
 def format_trade_stats(text: str) -> str:
     label_map = {
-        "count": "Trades",
+        "position_changes": "Position changes",
+        "closed_trades": "Closed trades",
         "wins": "Winning trades",
         "win_rate": "Win rate",
-        "avg_pnl": "Average PnL",
-        "avg_cost": "Average Cost",
+        "avg_net_return": "Average net return",
+        "median_net_return": "Median net return",
+        "p10_net_return": "P10 net return",
+        "p90_net_return": "P90 net return",
+        "avg_total_cost": "Average total cost",
+        "avg_abs_position": "Average abs position",
     }
     return format_kv_lines(text, label_map)
 
@@ -326,7 +331,8 @@ def format_action_distribution(text: str) -> str:
         "long": "Long ratio",
         "short": "Short ratio",
         "flat": "Flat ratio",
-        "avg": "Average holding",
+        "avg": "Average position",
+        "avg_abs": "Average abs position",
     }
     return format_kv_lines(text, label_map)
 

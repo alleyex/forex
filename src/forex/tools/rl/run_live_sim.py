@@ -59,6 +59,7 @@ class PlaybackResult:
     trade_costs: list[float]
     holding_steps: list[int]
     action_avg: float
+    action_abs_avg: float
     long_ratio: float
     short_ratio: float
     flat_ratio: float
@@ -251,6 +252,7 @@ def run_playback(
     trade_pnls: list[float] = []
     trade_costs: list[float] = []
     holding_steps: list[int] = []
+    action_abs_sum = 0.0
     current_trade_growth: float | None = None
     current_trade_cost: float = 0.0
     last_idx = -1
@@ -282,6 +284,7 @@ def run_playback(
             )
 
             action_sum += target_position
+            action_abs_sum += abs(target_position)
             if target_position > 0.05:
                 action_long += 1
             elif target_position < -0.05:
@@ -373,6 +376,7 @@ def run_playback(
     total_return = state.equity - 1.0
     sharpe = compute_sharpe_ratio_from_equity(equity_series)
     action_avg = action_sum / processed_steps if processed_steps > 0 else 0.0
+    action_abs_avg = action_abs_sum / processed_steps if processed_steps > 0 else 0.0
     total_actions = action_long + action_short + action_flat
     long_ratio = 0.0
     short_ratio = 0.0
@@ -416,6 +420,7 @@ def run_playback(
         trade_costs=trade_costs,
         holding_steps=holding_steps,
         action_avg=action_avg,
+        action_abs_avg=action_abs_avg,
         long_ratio=long_ratio,
         short_ratio=short_ratio,
         flat_ratio=flat_ratio,
@@ -441,11 +446,17 @@ def print_playback_result(result: PlaybackResult) -> None:
 
     if result.trade_pnls:
         wins = sum(1 for pnl in result.trade_pnls if pnl > 0)
-        avg_pnl = float(np.mean(result.trade_pnls))
-        avg_cost = float(np.mean(result.trade_costs)) if result.trade_costs else 0.0
+        avg_net_return = float(np.mean(result.trade_pnls))
+        median_net_return = float(np.median(result.trade_pnls))
+        p10_net_return = float(np.percentile(result.trade_pnls, 10))
+        p90_net_return = float(np.percentile(result.trade_pnls, 90))
+        avg_total_cost = float(np.mean(result.trade_costs)) if result.trade_costs else 0.0
         print(
-            f"Trade stats: count={len(result.trade_pnls)} wins={wins} "
-            f"win_rate={wins / len(result.trade_pnls):.3f} avg_pnl={avg_pnl:.6g} avg_cost={avg_cost:.6g}"
+            f"Trade stats: position_changes={result.trades} closed_trades={len(result.trade_pnls)} "
+            f"wins={wins} win_rate={wins / len(result.trade_pnls):.3f} "
+            f"avg_net_return={avg_net_return:.6g} median_net_return={median_net_return:.6g} "
+            f"p10_net_return={p10_net_return:.6g} p90_net_return={p90_net_return:.6g} "
+            f"avg_total_cost={avg_total_cost:.6g} avg_abs_position={result.action_abs_avg:.6g}"
         )
         max_win, max_loss = _streak_stats(result.trade_pnls)
         print(f"Streak stats: max_win={max_win} max_loss={max_loss}")
@@ -456,11 +467,12 @@ def print_playback_result(result: PlaybackResult) -> None:
         print(f"Holding stats: max_steps={max_hold} avg_steps={avg_hold:.2f}")
 
     print(
-        "Action distribution: long={0:.3f} short={1:.3f} flat={2:.3f} avg={3:.6f}".format(
+        "Action distribution: long={0:.3f} short={1:.3f} flat={2:.3f} avg={3:.6f} avg_abs={4:.6f}".format(
             result.long_ratio,
             result.short_ratio,
             result.flat_ratio,
             result.action_avg,
+            result.action_abs_avg,
         )
     )
     print(f"Trade rate/1k: {result.trade_rate_1k:.2f}")
