@@ -92,17 +92,6 @@ def compute_horizon_return(closes: np.ndarray, idx: int, reward_horizon: int) ->
     return (float(closes[horizon_idx]) - base_price) / base_price
 
 
-def compute_one_bar_return(closes: np.ndarray, idx: int) -> float:
-    base_idx = max(0, int(idx))
-    if base_idx >= len(closes):
-        return 0.0
-    next_idx = min(base_idx + 1, len(closes) - 1)
-    base_price = float(closes[base_idx])
-    if base_price <= 0.0:
-        return 0.0
-    return (float(closes[next_idx]) - base_price) / base_price
-
-
 def compute_vol_target_scale(
     closes: np.ndarray,
     idx: int,
@@ -139,13 +128,13 @@ def simulate_step_transition(
     delta = float(target_position) - float(current_position)
     cost = abs(delta) * cost_rate
     holding_cost = abs(float(current_position)) * holding_cost_rate
-    price_return = compute_one_bar_return(closes, idx)
-    reward_return = compute_horizon_return(closes, idx, int(getattr(config, "reward_horizon", 1)))
+    price_return = compute_horizon_return(closes, idx, int(getattr(config, "reward_horizon", 1)))
+    reward_return = price_return
     step_pnl = float(current_position) * float(price_return)
     net_return = step_pnl - cost - holding_cost
-    reward_step_pnl = float(current_position) * float(reward_return)
-    reward_net_return = reward_step_pnl - cost - holding_cost
-    reward = reward_net_return
+    reward_step_pnl = step_pnl
+    reward_net_return = net_return
+    reward = net_return
 
     prev_equity = max(float(equity), 1e-12)
     prev_peak_equity = max(float(peak_equity), prev_equity, 1e-12)

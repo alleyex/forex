@@ -557,7 +557,7 @@ class TrainingParamsPanel(QWidget):
 
         self._early_stop_warmup_steps = QSpinBox()
         self._early_stop_warmup_steps.setRange(0, 10_000_000)
-        self._early_stop_warmup_steps.setValue(100_000)
+        self._early_stop_warmup_steps.setValue(120_000)
         self._early_stop_warmup_steps.setFixedWidth(spin_width)
         early_stop_layout.add_row("Warmup steps", _wrap_field(self._early_stop_warmup_steps))
         self._early_stop_patience_evals = QSpinBox()
@@ -653,7 +653,7 @@ class TrainingParamsPanel(QWidget):
 
         self._anti_flat_warmup_steps = QSpinBox()
         self._anti_flat_warmup_steps.setRange(0, 10_000_000)
-        self._anti_flat_warmup_steps.setValue(50_000)
+        self._anti_flat_warmup_steps.setValue(120_000)
         self._anti_flat_warmup_steps.setFixedWidth(spin_width)
         anti_flat_layout.add_row("Anti-flat warmup", _wrap_field(self._anti_flat_warmup_steps))
 
@@ -669,8 +669,12 @@ class TrainingParamsPanel(QWidget):
         self._resolved_device.setProperty("class", "result_value")
         self._run_id_value = QLabel("-")
         self._run_id_value.setProperty("class", "result_value")
+        self._run_id_value.setWordWrap(True)
+        self._run_id_value.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Preferred)
         self._output_dir_value = QLabel("-")
         self._output_dir_value.setProperty("class", "result_value")
+        self._output_dir_value.setWordWrap(True)
+        self._output_dir_value.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Preferred)
         runtime_card = QGroupBox("")
         runtime_card.setObjectName("card")
         runtime_layout = QGridLayout(runtime_card)
@@ -686,12 +690,12 @@ class TrainingParamsPanel(QWidget):
         output_dir_title = QLabel("Output dir")
         output_dir_title.setProperty("class", "result_label")
         self._output_dir_value.setTextInteractionFlags(Qt.TextSelectableByMouse)
-        runtime_layout.addWidget(runtime_title, 0, 0, Qt.AlignLeft | Qt.AlignVCenter)
-        runtime_layout.addWidget(self._resolved_device, 0, 1, Qt.AlignLeft | Qt.AlignVCenter)
-        runtime_layout.addWidget(run_id_title, 1, 0, Qt.AlignLeft | Qt.AlignVCenter)
-        runtime_layout.addWidget(self._run_id_value, 1, 1, Qt.AlignLeft | Qt.AlignVCenter)
-        runtime_layout.addWidget(output_dir_title, 2, 0, Qt.AlignLeft | Qt.AlignVCenter)
-        runtime_layout.addWidget(self._output_dir_value, 2, 1, Qt.AlignLeft | Qt.AlignVCenter)
+        runtime_layout.addWidget(runtime_title, 0, 0, Qt.AlignLeft | Qt.AlignTop)
+        runtime_layout.addWidget(self._resolved_device, 0, 1, Qt.AlignLeft | Qt.AlignTop)
+        runtime_layout.addWidget(run_id_title, 1, 0, Qt.AlignLeft | Qt.AlignTop)
+        runtime_layout.addWidget(self._run_id_value, 1, 1, Qt.AlignLeft | Qt.AlignTop)
+        runtime_layout.addWidget(output_dir_title, 2, 0, Qt.AlignLeft | Qt.AlignTop)
+        runtime_layout.addWidget(self._output_dir_value, 2, 1, Qt.AlignLeft | Qt.AlignTop)
         self._sync_early_stop_controls()
         self._sync_curriculum_controls()
         self._sync_anti_flat_controls()
@@ -750,7 +754,7 @@ class TrainingParamsPanel(QWidget):
         self._min_position_change.setRange(0.0, 1.0)
         self._min_position_change.setDecimals(3)
         self._min_position_change.setSingleStep(0.01)
-        self._min_position_change.setValue(0.05)
+        self._min_position_change.setValue(0.2)
         self._min_position_change.setFixedWidth(spin_width)
         action_layout.add_row(
             "Min position change",
@@ -831,6 +835,7 @@ class TrainingParamsPanel(QWidget):
                 "Alpha layer (4)",
                 "Alpha4 + context (residual)",
                 "Alpha layer (8)",
+                "Alpha8 + context (residual)",
                 "Alpha layer (12)",
                 "Alpha12 + context (residual)",
                 "Alpha layer (16)",
@@ -890,8 +895,8 @@ class TrainingParamsPanel(QWidget):
         self._reward_mode.setCurrentIndex(2)
         self._reward_mode.setFixedWidth(spin_width)
         self._reward_mode.setToolTip(
-            "Linear PnL keeps the legacy reward. Log return uses log(1 + net return). "
-            "Risk-adjusted log return adds downside-only penalty on top of log return."
+            "Linear PnL is a pure net return baseline. Log return is a pure log(1 + net return) baseline. "
+            "Risk-adjusted log return adds risk, downside, drawdown, turnover, and exposure penalties."
         )
         reward_layout.add_row(
             "Reward mode",
@@ -942,7 +947,7 @@ class TrainingParamsPanel(QWidget):
         self._turnover_penalty.setRange(0.0, 1.0)
         self._turnover_penalty.setDecimals(6)
         self._turnover_penalty.setSingleStep(0.0001)
-        self._turnover_penalty.setValue(5e-4)
+        self._turnover_penalty.setValue(1e-4)
         self._turnover_penalty.setFixedWidth(spin_width)
         self._turnover_penalty.setToolTip(
             "Extra penalty applied to absolute position change to discourage excess turnover."
@@ -1828,6 +1833,7 @@ class TrainingParamsPanel(QWidget):
                 "alpha4": f"Features: Alpha4 ({len(ALPHA_FEATURE_COLUMNS)})",
                 "residual": f"Features: Alpha4 + context ({len(ALPHA_FEATURE_COLUMNS) + len(RESIDUAL_CONTEXT_COLUMNS)})",
                 "alpha8": "Features: Alpha8 (8)",
+                "alpha8_residual": "Features: Alpha8 + context (16)",
                 "alpha12": "Features: Alpha12 (12)",
                 "alpha12_residual": "Features: Alpha12 + context (20)",
                 "alpha16": "Features: Alpha16 (16)",
@@ -2436,6 +2442,8 @@ class TrainingParamsPanel(QWidget):
             return "residual"
         if text == "Alpha layer (8)":
             return "alpha8"
+        if text == "Alpha8 + context (residual)":
+            return "alpha8_residual"
         if text == "Alpha layer (12)":
             return "alpha12"
         if text == "Alpha12 + context (residual)":
@@ -2491,15 +2499,16 @@ class TrainingParamsPanel(QWidget):
             "alpha4": 1,
             "residual": 2,
             "alpha8": 3,
-            "alpha12": 4,
-            "alpha12_residual": 5,
-            "alpha16": 6,
-            "alpha16_residual": 7,
-            "alpha20": 8,
-            "alpha20_residual": 9,
-            "core20": 10,
-            "alpha4_from_core20": 11,
-            "alpha8_from_core20": 12,
+            "alpha8_residual": 4,
+            "alpha12": 5,
+            "alpha12_residual": 6,
+            "alpha16": 7,
+            "alpha16_residual": 8,
+            "alpha20": 9,
+            "alpha20_residual": 10,
+            "core20": 11,
+            "alpha4_from_core20": 12,
+            "alpha8_from_core20": 13,
         }
         self._feature_profile.setCurrentIndex(mapping.get(value, 2))
         self._sync_feature_selection_controls()
@@ -2518,11 +2527,24 @@ class TrainingParamsPanel(QWidget):
         value = str(device or "").strip() or "-"
         self._resolved_device.setText(value)
 
+    @staticmethod
+    def _wrap_display_path(path_text: str) -> str:
+        text = str(path_text or "").strip()
+        if not text:
+            return "-"
+        for token in ("/", "_", "-"):
+            text = text.replace(token, f"{token}\u200b")
+        return text
+
     def set_run_context(self, run_id: str, output_dir: str) -> None:
         self._run_id_value.setText(str(run_id or "-"))
         out = str(output_dir or "-")
-        self._output_dir_value.setText(out)
+        self._output_dir_value.setText(self._wrap_display_path(out))
         self._output_dir_value.setToolTip(out)
+        self._run_id_value.adjustSize()
+        self._output_dir_value.adjustSize()
+        self._run_id_value.setMinimumHeight(self._run_id_value.sizeHint().height())
+        self._output_dir_value.setMinimumHeight(self._output_dir_value.sizeHint().height())
 
     def set_reward_diagnostics_path(self, path: str | Path) -> None:
         self._reward_diagnostics_path = Path(path)

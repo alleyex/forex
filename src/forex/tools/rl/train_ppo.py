@@ -926,7 +926,7 @@ def main() -> None:
         default="",
         help="Episode reset mode. Empty keeps backward-compatible random_start behavior.",
     )
-    parser.add_argument("--min-position-change", type=float, default=0.05, help="Minimum position change.")
+    parser.add_argument("--min-position-change", type=float, default=0.2, help="Minimum position change.")
     parser.add_argument("--discretize-actions", action="store_true", help="Snap actions to discrete positions.")
     parser.add_argument(
         "--discrete-positions",
@@ -966,7 +966,7 @@ def main() -> None:
     parser.add_argument(
         "--turnover-penalty",
         type=float,
-        default=5e-4,
+        default=1e-4,
         help="Extra penalty applied to absolute position change to discourage excess turnover.",
     )
     parser.add_argument(
@@ -1047,19 +1047,30 @@ def main() -> None:
         default=1.0,
         help="Maximum volatility targeting scale.",
     )
-    parser.add_argument("--early-stop-enabled", action="store_true", help="Stop when eval reward plateaus.")
-    parser.add_argument("--early-stop-warmup-steps", type=int, default=100_000, help="Do not early stop before this many timesteps.")
+    parser.add_argument(
+        "--early-stop-enabled",
+        action=argparse.BooleanOptionalAction,
+        default=True,
+        help="Stop when eval reward plateaus.",
+    )
+    parser.add_argument(
+        "--early-stop-warmup-steps",
+        type=int,
+        default=120_000,
+        help="Do not early stop before this many timesteps.",
+    )
     parser.add_argument("--early-stop-patience-evals", type=int, default=6, help="Number of eval rounds without improvement before stopping.")
     parser.add_argument("--early-stop-min-delta", type=float, default=0.0005, help="Minimum eval reward improvement to reset patience.")
     parser.add_argument(
         "--anti-flat-enabled",
-        action="store_true",
+        action=argparse.BooleanOptionalAction,
+        default=True,
         help="Stop training early when eval activity repeatedly collapses into near-flat behavior.",
     )
     parser.add_argument(
         "--anti-flat-warmup-steps",
         type=int,
-        default=50_000,
+        default=120_000,
         help="Do not enforce anti-flat checks before this many timesteps.",
     )
     parser.add_argument(
@@ -1253,6 +1264,7 @@ def main() -> None:
             "alpha4",
             "residual",
             "alpha8",
+            "alpha8_residual",
             "alpha12",
             "alpha12_residual",
             "alpha16",

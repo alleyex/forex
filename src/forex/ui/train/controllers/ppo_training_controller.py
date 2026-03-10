@@ -61,6 +61,11 @@ class PPOTrainingController(QObject):
         self._optuna_tail_timer.timeout.connect(self._tail_optuna_log)
         self._optuna_last_offset = 0
         self._feature_subset_path: Optional[str] = None
+        self._current_run_id: str = ""
+        self._current_run_dir: Optional[Path] = None
+        self._used_best_checkpoint = False
+        self._best_checkpoint_path: Optional[str] = None
+        self._best_checkpoint_missing = False
 
     def start(self, params: dict, data_path: str) -> None:
         if self._runner.is_running():
@@ -74,6 +79,11 @@ class PPOTrainingController(QObject):
 
         self._state.log_message.emit(format_training_message("start"))
         run_id, run_dir = self._prepare_run_context(params)
+        self._current_run_id = run_id
+        self._current_run_dir = run_dir
+        self._used_best_checkpoint = False
+        self._best_checkpoint_path = None
+        self._best_checkpoint_missing = False
         self.run_initialized.emit(run_id, str(run_dir))
         self._start_metrics_log_tailer()
         self._use_metrics_log = True
@@ -202,14 +212,14 @@ class PPOTrainingController(QObject):
         )
         if params.get("early_stop_enabled", True):
             args.append("--early-stop-enabled")
-        args.extend(["--early-stop-warmup-steps", str(params.get("early_stop_warmup_steps", 100000))])
+        args.extend(["--early-stop-warmup-steps", str(params.get("early_stop_warmup_steps", 120000))])
         args.extend(
             ["--early-stop-patience-evals", str(params.get("early_stop_patience_evals", 8))]
         )
         args.extend(["--early-stop-min-delta", str(params.get("early_stop_min_delta", 0.001))])
-        if params.get("anti_flat_enabled", False):
+        if params.get("anti_flat_enabled", True):
             args.append("--anti-flat-enabled")
-        args.extend(["--anti-flat-warmup-steps", str(params.get("anti_flat_warmup_steps", 50000))])
+        args.extend(["--anti-flat-warmup-steps", str(params.get("anti_flat_warmup_steps", 120000))])
         args.extend(
             ["--anti-flat-patience-evals", str(params.get("anti_flat_patience_evals", 3))]
         )
@@ -400,6 +410,14 @@ class PPOTrainingController(QObject):
             self.replay_best_summary_logged.emit(line.strip())
         if line.startswith("Resolved device:"):
             self.device_resolved.emit(line.split(":", 1)[1].strip())
+        if line.startswith("Using best eval checkpoint:"):
+            self._used_best_checkpoint = True
+            self._best_checkpoint_missing = False
+            self._best_checkpoint_path = line.split(":", 1)[1].strip()
+        elif line.startswith("Best eval checkpoint not found;"):
+            self._used_best_checkpoint = False
+            self._best_checkpoint_missing = True
+            self._best_checkpoint_path = None
 
     def _on_stderr_line(self, line: str) -> None:
         self._state.log_message.emit(format_training_message("stderr", line=line))
@@ -548,3 +566,56 @@ class PPOTrainingController(QObject):
                 if isinstance(parsed, dict):
                     best_params = parsed
         return summary, best_params
+
+    def build_checkpoint_summary(self) -> dict:
+        payload = {
+            "run_id": self._current_run_id or "-",
+            "run_dir": str(self._current_run_dir) if self._current_run_dir else "-",
+            "used_best_checkpoint": self._used_best_checkpoint,
+            "best_checkpoint_path": self._best_checkpoint_path or "",
+            "best_checkpoint_missing": self._best_checkpoint_missing,
+        }
+        run_dir = self._current_run_dir
+        if run_dir is None:
+            return payload
+        diagnostics_path = run_dir / "training_diagnostics.csv"
+        if not diagnostics_path.exists():
+            return payload
+        try:
+            import csv
+
+            with diagnostics_path.open("r", encoding="utf-8", newline="") as fh:
+                rows = list(csv.DictReader(fh))
+        except Exception:
+            return payload
+        if not rows:
+            return payload
+
+        def _to_float(value: object) -> float:
+            try:
+                text = str(value).strip()
+                if not text:
+                    return float("-inf")
+                return float(text)
+            except Exception:
+                return float("-inf")
+
+        best_row = max(
+            rows,
+            key=lambda row: _to_float(row.get("best_eval_reward") or row.get("eval_mean_reward")),
+        )
+        last_row = rows[-1]
+        payload.update(
+            {
+                "best_eval_reward": best_row.get("best_eval_reward") or best_row.get("eval_mean_reward") or "-",
+                "best_eval_mean_reward": best_row.get("eval_mean_reward") or "-",
+                "best_checkpoint_gate": best_row.get("checkpoint_gate") or "-",
+                "best_rolling_sharpe": best_row.get("rolling_sharpe") or "-",
+                "best_eval_trade_rate_1k": best_row.get("eval_trade_rate_1k") or "-",
+                "best_eval_ls_imbalance": best_row.get("eval_ls_imbalance") or "-",
+                "best_eval_max_drawdown": best_row.get("eval_max_drawdown") or "-",
+                "last_eval_mean_reward": last_row.get("eval_mean_reward") or "-",
+                "last_checkpoint_gate": last_row.get("checkpoint_gate") or "-",
+            }
+        )
+        return payload

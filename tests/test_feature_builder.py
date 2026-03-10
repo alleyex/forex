@@ -344,6 +344,7 @@ def test_apply_feature_profile_alpha_and_residual_shapes() -> None:
     assert infer_feature_profile_from_names(residual.columns) == "residual"
 
     alpha8 = apply_feature_profile(raw_features, "alpha8")
+    alpha8_residual = apply_feature_profile(raw_features, "alpha8_residual")
     alpha12 = apply_feature_profile(raw_features, "alpha12")
     alpha16 = apply_feature_profile(raw_features, "alpha16")
     alpha20 = apply_feature_profile(raw_features, "alpha20")
@@ -355,6 +356,7 @@ def test_apply_feature_profile_alpha_and_residual_shapes() -> None:
     core20_alpha8 = apply_feature_profile(raw_features, "alpha8_from_core20")
 
     assert list(alpha8.columns) == list(ALPHA8_FEATURE_COLUMNS)
+    assert list(alpha8_residual.columns[: len(ALPHA8_FEATURE_COLUMNS)]) == list(ALPHA8_FEATURE_COLUMNS)
     assert list(alpha12.columns) == list(ALPHA12_FEATURE_COLUMNS)
     assert list(alpha16.columns) == list(ALPHA16_FEATURE_COLUMNS)
     assert list(alpha20.columns) == list(ALPHA20_FEATURE_COLUMNS)
@@ -364,7 +366,9 @@ def test_apply_feature_profile_alpha_and_residual_shapes() -> None:
     assert list(core20.columns) == list(CORE20_FEATURE_COLUMNS)
     assert list(core20_alpha4.columns) == list(CORE20_ALPHA4_FEATURE_COLUMNS)
     assert list(core20_alpha8.columns) == list(CORE20_ALPHA8_FEATURE_COLUMNS)
+    assert infer_feature_profile_from_names(alpha8.columns) == "alpha8"
     assert infer_feature_profile_from_names(alpha20.columns) == "alpha20"
+    assert infer_feature_profile_from_names(alpha8_residual.columns) == "alpha8_residual"
     assert infer_feature_profile_from_names(alpha20_residual.columns) == "alpha20_residual"
     assert infer_feature_profile_from_names(core20.columns) == "core20"
     assert infer_feature_profile_from_names(core20_alpha8.columns) == "alpha8_from_core20"
@@ -389,6 +393,27 @@ def test_build_features_infers_profile_from_scaler_names() -> None:
     bundle = build_features(df, scaler=scaler)
     assert list(bundle.names) == scaler.names
     assert bundle.features.shape[1] == len(scaler.names)
+
+
+def test_build_features_preserves_alpha8_scaler_profile() -> None:
+    rows = 320
+    close = np.linspace(100.0, 125.0, num=rows, dtype=np.float64)
+    df = pd.DataFrame(
+        {
+            "timestamp": pd.date_range("2024-01-01", periods=rows, freq="15min").astype(str),
+            "open": close - 0.1,
+            "close": close,
+            "high": close + 0.4,
+            "low": close - 0.4,
+            "volume": np.linspace(1000.0, 2000.0, num=rows),
+        }
+    )
+    raw_features, _, _ = build_feature_frame(df)
+    alpha8 = apply_feature_profile(raw_features, "alpha8")
+    scaler = fit_scaler(alpha8)
+    bundle = build_features(df, scaler=scaler)
+    assert list(bundle.names) == scaler.names
+    assert bundle.features.shape[1] == len(ALPHA8_FEATURE_COLUMNS)
 
 
 def test_required_raw_columns_for_profile() -> None:

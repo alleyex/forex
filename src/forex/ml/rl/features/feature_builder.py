@@ -249,12 +249,14 @@ def infer_feature_profile_from_names(feature_names: Sequence[str]) -> str:
         return "alpha16"
     if alpha16_names.issubset(names) and names.issubset(alpha16_names | set(RESIDUAL_CONTEXT_COLUMNS)):
         return "alpha16_residual"
-    if names == alpha12_names:
-        return "alpha12"
-    if alpha12_names.issubset(names) and names.issubset(alpha12_names | set(RESIDUAL_CONTEXT_COLUMNS)):
-        return "alpha12_residual"
     if names == alpha8_names:
         return "alpha8"
+    if names == alpha12_names:
+        return "alpha12"
+    if alpha8_names.issubset(names) and names.issubset(alpha8_names | set(RESIDUAL_CONTEXT_COLUMNS)):
+        return "alpha8_residual"
+    if alpha12_names.issubset(names) and names.issubset(alpha12_names | set(RESIDUAL_CONTEXT_COLUMNS)):
+        return "alpha12_residual"
     if names == alpha4_names:
         return "alpha4"
     if alpha4_names.issubset(names) and names.issubset(residual_names):
@@ -279,6 +281,8 @@ def apply_feature_profile(features: pd.DataFrame, profile: str) -> pd.DataFrame:
         return alpha_frame.loc[:, list(ALPHA4_FEATURE_COLUMNS)].copy()
     if profile_name == "alpha8":
         return alpha_frame.loc[:, list(ALPHA8_FEATURE_COLUMNS)].copy()
+    if profile_name == "alpha8_residual":
+        return _build_residual_frame(features, alpha_frame, ALPHA8_FEATURE_COLUMNS)
     if profile_name == "alpha12":
         return alpha_frame.loc[:, list(ALPHA12_FEATURE_COLUMNS)].copy()
     if profile_name == "alpha16":
@@ -310,7 +314,7 @@ def required_raw_columns_for_profile(profile: str) -> tuple[str, ...]:
         return tuple()
     if profile_name in {"alpha4", "alpha8", "alpha12", "alpha16", "alpha20"}:
         return ALPHA_SOURCE_COLUMNS
-    if profile_name in {"residual", "alpha12_residual", "alpha16_residual", "alpha20_residual"}:
+    if profile_name in {"residual", "alpha8_residual", "alpha12_residual", "alpha16_residual", "alpha20_residual"}:
         return (*ALPHA_SOURCE_COLUMNS, *RESIDUAL_CONTEXT_COLUMNS)
     if profile_name == "core20":
         return CORE20_FEATURE_COLUMNS
