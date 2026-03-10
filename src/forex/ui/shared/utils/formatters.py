@@ -298,6 +298,11 @@ def format_trade_stats(text: str) -> str:
     label_map = {
         "position_changes": "Position changes",
         "closed_trades": "Closed trades",
+        "opens": "Opens",
+        "closes": "Closes",
+        "reversals": "Reversals",
+        "resizes": "Resizes",
+        "terminal_closes": "Terminal closes",
         "wins": "Winning trades",
         "win_rate": "Win rate",
         "avg_net_return": "Average net return",

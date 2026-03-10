@@ -3,7 +3,12 @@ from __future__ import annotations
 import numpy as np
 
 from forex.ml.rl.envs.trading_env import TradingConfig
-from forex.tools.rl.run_live_sim import PlaybackBundle, _split_transition_cost, run_playback
+from forex.tools.rl.run_live_sim import (
+    PlaybackBundle,
+    _classify_position_change,
+    _split_transition_cost,
+    run_playback,
+)
 
 
 class _StubModel:
@@ -29,6 +34,14 @@ def test_split_transition_cost_handles_reversal_and_resize() -> None:
     exit_cost, entry_cost = _split_transition_cost(0.5, 1.0, 0.001)
     assert exit_cost == 0.0
     assert entry_cost == 0.0005
+
+
+def test_classify_position_change_distinguishes_open_close_resize_and_reversal() -> None:
+    assert _classify_position_change(0.0, 1.0) == "open"
+    assert _classify_position_change(1.0, 0.0) == "close"
+    assert _classify_position_change(1.0, 0.5) == "resize"
+    assert _classify_position_change(0.5, 1.0) == "resize"
+    assert _classify_position_change(1.0, -1.0) == "reversal"
 
 
 def test_run_playback_closes_last_open_trade_segment() -> None:

@@ -58,6 +58,11 @@ class PlaybackResult:
     trade_pnls: list[float]
     trade_costs: list[float]
     holding_steps: list[int]
+    opens: int
+    closes: int
+    reversals: int
+    resizes: int
+    terminal_closes: int
     action_avg: float
     action_abs_avg: float
     long_ratio: float
@@ -110,6 +115,20 @@ def _split_transition_cost(old_position: float, new_position: float, cost_rate: 
             return 0.0, (new_abs - old_abs) * cost_rate
         return (old_abs - new_abs) * cost_rate, 0.0
     return old_abs * cost_rate, new_abs * cost_rate
+
+
+def _classify_position_change(old_position: float, new_position: float, eps: float = 1e-6) -> str:
+    old_abs = abs(float(old_position))
+    new_abs = abs(float(new_position))
+    if abs(float(new_position) - float(old_position)) <= eps:
+        return "none"
+    if old_abs <= eps and new_abs > eps:
+        return "open"
+    if old_abs > eps and new_abs <= eps:
+        return "close"
+    if np.sign(old_position) != np.sign(new_position):
+        return "reversal"
+    return "resize"
 
 
 def load_playback_bundle(
@@ -248,6 +267,11 @@ def run_playback(
     action_long = 0
     action_short = 0
     action_flat = 0
+    opens = 0
+    closes = 0
+    reversals = 0
+    resizes = 0
+    terminal_closes = 0
     last_change_idx = 0
     trade_pnls: list[float] = []
     trade_costs: list[float] = []
@@ -295,6 +319,15 @@ def run_playback(
             delta = target_position - state.position
             if abs(delta) > 1e-6:
                 state.trades += 1
+                change_kind = _classify_position_change(state.position, target_position)
+                if change_kind == "open":
+                    opens += 1
+                elif change_kind == "close":
+                    closes += 1
+                elif change_kind == "reversal":
+                    reversals += 1
+                elif change_kind == "resize":
+                    resizes += 1
                 holding_steps.append(step_num - 1 - last_change_idx)
                 last_change_idx = step_num - 1
 
@@ -370,6 +403,7 @@ def run_playback(
     if processed_steps > last_change_idx:
         holding_steps.append(processed_steps - last_change_idx)
     if current_trade_growth is not None:
+        terminal_closes += 1
         trade_pnls.append(float(current_trade_growth - 1.0))
         trade_costs.append(float(current_trade_cost))
 
@@ -419,6 +453,11 @@ def run_playback(
         trade_pnls=trade_pnls,
         trade_costs=trade_costs,
         holding_steps=holding_steps,
+        opens=opens,
+        closes=closes,
+        reversals=reversals,
+        resizes=resizes,
+        terminal_closes=terminal_closes,
         action_avg=action_avg,
         action_abs_avg=action_abs_avg,
         long_ratio=long_ratio,
@@ -453,6 +492,8 @@ def print_playback_result(result: PlaybackResult) -> None:
         avg_total_cost = float(np.mean(result.trade_costs)) if result.trade_costs else 0.0
         print(
             f"Trade stats: position_changes={result.trades} closed_trades={len(result.trade_pnls)} "
+            f"opens={result.opens} closes={result.closes} reversals={result.reversals} "
+            f"resizes={result.resizes} terminal_closes={result.terminal_closes} "
             f"wins={wins} win_rate={wins / len(result.trade_pnls):.3f} "
             f"avg_net_return={avg_net_return:.6g} median_net_return={median_net_return:.6g} "
             f"p10_net_return={p10_net_return:.6g} p90_net_return={p90_net_return:.6g} "
