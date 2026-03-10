@@ -272,6 +272,7 @@ class TrainingParamsPanel(QWidget):
     start_requested = Signal(dict)
     stop_requested = Signal()
     optuna_requested = Signal(dict)
+    history_download_requested = Signal()
     tab_changed = Signal(str)
 
     def __init__(self, parent: Optional[QWidget] = None) -> None:
@@ -306,7 +307,7 @@ class TrainingParamsPanel(QWidget):
         configure_form_layout(
             file_layout,
             label_alignment=Qt.AlignLeft | Qt.AlignVCenter,
-            field_growth_policy=QFormLayout.FieldsStayAtSizeHint,
+            field_growth_policy=QFormLayout.ExpandingFieldsGrow,
         )
         apply_form_label_width(file_layout, FORM_LABEL_WIDTH_COMPACT)
         align_form_fields(file_layout, Qt.AlignLeft | Qt.AlignVCenter)
@@ -331,14 +332,24 @@ class TrainingParamsPanel(QWidget):
         self._data_meta.setAlignment(Qt.AlignLeft | Qt.AlignTop)
         self._data_meta.setProperty("class", "result_value")
         self._data_meta.setMinimumWidth(field_width)
+        self._data_meta.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Preferred)
         self._data_meta.setTextInteractionFlags(Qt.TextSelectableByMouse)
         self._data_meta_label = QLabel("Metadata")
         self._data_meta_label.setAlignment(Qt.AlignLeft | Qt.AlignTop)
         file_layout.addRow(self._data_meta_label, self._data_meta)
+        self._history_download_button = QPushButton("Download History")
+        self._history_download_button.clicked.connect(self.history_download_requested.emit)
         self._view_features_button = QPushButton("View Features")
         self._view_features_button.setEnabled(False)
         self._view_features_button.clicked.connect(self._show_feature_list_dialog)
-        file_layout.addRow("", self._view_features_button)
+        feature_actions = QWidget()
+        feature_actions_layout = QHBoxLayout(feature_actions)
+        feature_actions_layout.setContentsMargins(0, 0, 0, 0)
+        feature_actions_layout.setSpacing(10)
+        feature_actions_layout.addWidget(self._history_download_button)
+        feature_actions_layout.addWidget(self._view_features_button)
+        feature_actions_layout.addStretch(1)
+        file_layout.addRow("", feature_actions)
 
         params_group = QGroupBox("Training Params")
         _apply_live_card_style(params_group)
@@ -460,11 +471,6 @@ class TrainingParamsPanel(QWidget):
         self._n_epochs.setFixedWidth(spin_width)
         ppo_advanced_layout.add_row("n_epochs", self._n_epochs)
 
-        options_group = QWidget()
-        options_layout = QVBoxLayout(options_group)
-        options_layout.setContentsMargins(0, 0, 0, 0)
-        options_layout.setSpacing(12)
-
         def _wrap_field(widget: QWidget) -> QWidget:
             container = QWidget()
             layout = QVBoxLayout(container)
@@ -517,7 +523,6 @@ class TrainingParamsPanel(QWidget):
             self._save_best_checkpoint,
             "Promote the strongest validation checkpoint instead of whatever weights happen to be last.",
         )
-        options_layout.addWidget(checkpoint_group)
 
         eval_activity_group = QGroupBox("Eval Activity")
         _apply_live_card_style(eval_activity_group)
@@ -531,14 +536,12 @@ class TrainingParamsPanel(QWidget):
             split_labels=True,
         )
         eval_activity_group_layout.addWidget(eval_activity_layout)
-        options_layout.addWidget(eval_activity_group)
 
         early_stop_group, early_stop_layout = _build_run_section(
             "Early Stop",
             self._early_stop_enabled,
             "End the run once validation stalls, so long tails do not overwrite a good checkpoint.",
         )
-        options_layout.addWidget(early_stop_group)
 
         curriculum_group, curriculum_layout = _build_run_section(
             "Curriculum",
@@ -571,14 +574,6 @@ class TrainingParamsPanel(QWidget):
         early_stop_layout.add_row("Min improvement", _wrap_field(self._early_stop_min_delta))
         self._early_stop_setting_cards.append(early_stop_group)
 
-        self._checkpoint_min_trade_rate = TrimmedDoubleSpinBox()
-        self._checkpoint_min_trade_rate.setRange(0.0, 100.0)
-        self._checkpoint_min_trade_rate.setDecimals(3)
-        self._checkpoint_min_trade_rate.setSingleStep(0.1)
-        self._checkpoint_min_trade_rate.setValue(5.0)
-        self._checkpoint_min_trade_rate.setFixedWidth(spin_width)
-        checkpoint_layout.add_row("Min trades/1k", _wrap_field(self._checkpoint_min_trade_rate))
-
         self._checkpoint_max_trade_rate = TrimmedDoubleSpinBox()
         self._checkpoint_max_trade_rate.setRange(0.0, 500.0)
         self._checkpoint_max_trade_rate.setDecimals(3)
@@ -586,22 +581,6 @@ class TrainingParamsPanel(QWidget):
         self._checkpoint_max_trade_rate.setValue(25.0)
         self._checkpoint_max_trade_rate.setFixedWidth(spin_width)
         checkpoint_layout.add_row("Max trades/1k", _wrap_field(self._checkpoint_max_trade_rate))
-
-        self._checkpoint_max_flat_ratio = TrimmedDoubleSpinBox()
-        self._checkpoint_max_flat_ratio.setRange(0.0, 1.0)
-        self._checkpoint_max_flat_ratio.setDecimals(3)
-        self._checkpoint_max_flat_ratio.setSingleStep(0.01)
-        self._checkpoint_max_flat_ratio.setValue(0.9)
-        self._checkpoint_max_flat_ratio.setFixedWidth(spin_width)
-        checkpoint_layout.add_row("Max flat ratio", _wrap_field(self._checkpoint_max_flat_ratio))
-
-        self._checkpoint_max_ls_imbalance = TrimmedDoubleSpinBox()
-        self._checkpoint_max_ls_imbalance.setRange(0.0, 1.0)
-        self._checkpoint_max_ls_imbalance.setDecimals(3)
-        self._checkpoint_max_ls_imbalance.setSingleStep(0.01)
-        self._checkpoint_max_ls_imbalance.setValue(0.35)
-        self._checkpoint_max_ls_imbalance.setFixedWidth(spin_width)
-        checkpoint_layout.add_row("Max L/S imbalance", _wrap_field(self._checkpoint_max_ls_imbalance))
 
         self._checkpoint_max_drawdown = TrimmedDoubleSpinBox()
         self._checkpoint_max_drawdown.setRange(0.0, 1.0)
@@ -697,9 +676,9 @@ class TrainingParamsPanel(QWidget):
         runtime_layout = QGridLayout(runtime_card)
         runtime_layout.setContentsMargins(14, 12, 14, 12)
         runtime_layout.setSpacing(12)
+        runtime_layout.setHorizontalSpacing(18)
+        runtime_layout.setVerticalSpacing(10)
         runtime_layout.setColumnStretch(1, 1)
-        runtime_layout.setColumnStretch(3, 1)
-        runtime_layout.setColumnStretch(5, 1)
         runtime_title = QLabel("Resolved device")
         runtime_title.setProperty("class", "result_label")
         run_id_title = QLabel("Run id")
@@ -709,11 +688,10 @@ class TrainingParamsPanel(QWidget):
         self._output_dir_value.setTextInteractionFlags(Qt.TextSelectableByMouse)
         runtime_layout.addWidget(runtime_title, 0, 0, Qt.AlignLeft | Qt.AlignVCenter)
         runtime_layout.addWidget(self._resolved_device, 0, 1, Qt.AlignLeft | Qt.AlignVCenter)
-        runtime_layout.addWidget(run_id_title, 0, 2, Qt.AlignLeft | Qt.AlignVCenter)
-        runtime_layout.addWidget(self._run_id_value, 0, 3, Qt.AlignLeft | Qt.AlignVCenter)
-        runtime_layout.addWidget(output_dir_title, 0, 4, Qt.AlignLeft | Qt.AlignVCenter)
-        runtime_layout.addWidget(self._output_dir_value, 0, 5, Qt.AlignLeft | Qt.AlignVCenter)
-        options_layout.addWidget(runtime_card)
+        runtime_layout.addWidget(run_id_title, 1, 0, Qt.AlignLeft | Qt.AlignVCenter)
+        runtime_layout.addWidget(self._run_id_value, 1, 1, Qt.AlignLeft | Qt.AlignVCenter)
+        runtime_layout.addWidget(output_dir_title, 2, 0, Qt.AlignLeft | Qt.AlignVCenter)
+        runtime_layout.addWidget(self._output_dir_value, 2, 1, Qt.AlignLeft | Qt.AlignVCenter)
         self._sync_early_stop_controls()
         self._sync_curriculum_controls()
         self._sync_anti_flat_controls()
@@ -1282,7 +1260,7 @@ class TrainingParamsPanel(QWidget):
         run_layout.setContentsMargins(12, 10, 18, 24)
         run_layout.setSpacing(8)
         run_layout.addWidget(file_group)
-        run_layout.addWidget(options_group)
+        run_layout.addWidget(runtime_card)
         run_layout.addWidget(self._start_button)
         run_layout.addStretch(1)
 
@@ -1291,6 +1269,9 @@ class TrainingParamsPanel(QWidget):
         guards_layout = QVBoxLayout(guards_tab)
         guards_layout.setContentsMargins(12, 10, 18, 24)
         guards_layout.setSpacing(8)
+        guards_layout.addWidget(checkpoint_group)
+        guards_layout.addWidget(eval_activity_group)
+        guards_layout.addWidget(early_stop_group)
         guards_layout.addWidget(curriculum_group)
         guards_layout.addWidget(anti_flat_group)
         guards_layout.addStretch(1)
@@ -1523,10 +1504,10 @@ class TrainingParamsPanel(QWidget):
             "episode_length": int(self._episode_length.value()),
             "eval_split": float(self._eval_split.value()),
             "save_best_checkpoint": bool(self._save_best_checkpoint.isChecked()),
-            "checkpoint_min_trade_rate": float(self._checkpoint_min_trade_rate.value()),
+            "checkpoint_min_trade_rate": float(self._eval_profile_min_trade_rate.value()),
             "checkpoint_max_trade_rate": float(self._checkpoint_max_trade_rate.value()),
-            "checkpoint_max_flat_ratio": float(self._checkpoint_max_flat_ratio.value()),
-            "checkpoint_max_ls_imbalance": float(self._checkpoint_max_ls_imbalance.value()),
+            "checkpoint_max_flat_ratio": float(self._eval_profile_max_flat_ratio.value()),
+            "checkpoint_max_ls_imbalance": float(self._eval_profile_max_ls_imbalance.value()),
             "checkpoint_max_drawdown": float(self._checkpoint_max_drawdown.value()),
             "transaction_cost_bps": float(self._transaction_cost_bps.value()),
             "slippage_bps": float(self._slippage_bps.value()),
@@ -1649,7 +1630,7 @@ class TrainingParamsPanel(QWidget):
                 self._selected_feature_names = selected or list(self._data_feature_names)
             self._sync_feature_selection_controls()
             self._refresh_view_features_button()
-            feature_summary = self._summarize_feature_names(self._data_feature_names)
+            feature_summary = None
         except Exception:
             feature_summary = None
         self._data_meta.setText(self._format_metadata_summary(payload, feature_summary))
@@ -1665,31 +1646,28 @@ class TrainingParamsPanel(QWidget):
         timeframe = details.get("timeframe", "unknown")
         row_count = details.get("row_count", "unknown")
         schema_version = payload.get("schema_version", "unknown")
+        range_start = TrainingParamsPanel._format_range_value(details.get("range_start"))
+        range_end = TrainingParamsPanel._format_range_value(details.get("range_end"))
         summary = (
             f"symbol_id: {symbol}    timeframe: {timeframe}\n"
-            f"rows: {row_count}    schema: {schema_version}"
+            f"rows: {row_count}    schema: {schema_version}\n"
+            f"range: {range_start} -> {range_end}"
         )
         if feature_summary:
             summary += f"\n{feature_summary}"
         return summary
 
     @staticmethod
-    def _summarize_feature_names(feature_names: list[str]) -> str:
-        if not feature_names:
-            return "features: unknown"
-        highlights = [
-            name
-            for name in (
-                "vol_pct_72_252",
-                "trend_flag_25",
-                "range_strength_10_50_atr14",
-            )
-            if name in feature_names
-        ]
-        summary = f"features: {len(feature_names)}"
-        if highlights:
-            summary += f"    regime: {', '.join(highlights)}"
-        return summary
+    def _format_range_value(value: object) -> str:
+        text = str(value or "").strip()
+        if not text:
+            return "-"
+        for fmt in ("%Y-%m-%d_%H%M", "%Y-%m-%d %H:%M", "%Y-%m-%dT%H:%M:%S"):
+            try:
+                return datetime.strptime(text, fmt).strftime("%Y-%m-%d %H:%M")
+            except ValueError:
+                continue
+        return text.replace("_", " ")
 
     @staticmethod
     def _group_feature_names(feature_names: list[str]) -> list[tuple[str, list[str]]]:
@@ -2052,14 +2030,8 @@ class TrainingParamsPanel(QWidget):
             self._eval_split.setValue(float(data["eval_split"]))
         if "save_best_checkpoint" in data:
             self._save_best_checkpoint.setChecked(bool(data["save_best_checkpoint"]))
-        if "checkpoint_min_trade_rate" in data:
-            self._checkpoint_min_trade_rate.setValue(float(data["checkpoint_min_trade_rate"]))
         if "checkpoint_max_trade_rate" in data:
             self._checkpoint_max_trade_rate.setValue(float(data["checkpoint_max_trade_rate"]))
-        if "checkpoint_max_flat_ratio" in data:
-            self._checkpoint_max_flat_ratio.setValue(float(data["checkpoint_max_flat_ratio"]))
-        if "checkpoint_max_ls_imbalance" in data:
-            self._checkpoint_max_ls_imbalance.setValue(float(data["checkpoint_max_ls_imbalance"]))
         if "checkpoint_max_drawdown" in data:
             self._checkpoint_max_drawdown.setValue(float(data["checkpoint_max_drawdown"]))
         if "early_stop_enabled" in data:
@@ -2082,14 +2054,20 @@ class TrainingParamsPanel(QWidget):
             self._eval_profile_steps.setValue(int(data["anti_flat_profile_steps"]))
         if "eval_profile_min_trade_rate" in data:
             self._eval_profile_min_trade_rate.setValue(float(data["eval_profile_min_trade_rate"]))
+        elif "checkpoint_min_trade_rate" in data:
+            self._eval_profile_min_trade_rate.setValue(float(data["checkpoint_min_trade_rate"]))
         elif "anti_flat_min_trade_rate" in data:
             self._eval_profile_min_trade_rate.setValue(float(data["anti_flat_min_trade_rate"]))
         if "eval_profile_max_flat_ratio" in data:
             self._eval_profile_max_flat_ratio.setValue(float(data["eval_profile_max_flat_ratio"]))
+        elif "checkpoint_max_flat_ratio" in data:
+            self._eval_profile_max_flat_ratio.setValue(float(data["checkpoint_max_flat_ratio"]))
         elif "anti_flat_max_flat_ratio" in data:
             self._eval_profile_max_flat_ratio.setValue(float(data["anti_flat_max_flat_ratio"]))
         if "eval_profile_max_ls_imbalance" in data:
             self._eval_profile_max_ls_imbalance.setValue(float(data["eval_profile_max_ls_imbalance"]))
+        elif "checkpoint_max_ls_imbalance" in data:
+            self._eval_profile_max_ls_imbalance.setValue(float(data["checkpoint_max_ls_imbalance"]))
         elif "anti_flat_max_ls_imbalance" in data:
             self._eval_profile_max_ls_imbalance.setValue(float(data["anti_flat_max_ls_imbalance"]))
         if "transaction_cost_bps" in data:
@@ -2246,10 +2224,7 @@ class TrainingParamsPanel(QWidget):
         self._drawdown_governor_slope.valueChanged.connect(self._auto_save_params)
         self._drawdown_governor_floor.valueChanged.connect(self._auto_save_params)
         self._save_best_checkpoint.toggled.connect(self._auto_save_params)
-        self._checkpoint_min_trade_rate.valueChanged.connect(self._auto_save_params)
         self._checkpoint_max_trade_rate.valueChanged.connect(self._auto_save_params)
-        self._checkpoint_max_flat_ratio.valueChanged.connect(self._auto_save_params)
-        self._checkpoint_max_ls_imbalance.valueChanged.connect(self._auto_save_params)
         self._checkpoint_max_drawdown.valueChanged.connect(self._auto_save_params)
         self._early_stop_enabled.toggled.connect(self._auto_save_params)
         self._early_stop_enabled.toggled.connect(self._sync_early_stop_controls)

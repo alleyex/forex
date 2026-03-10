@@ -237,7 +237,6 @@ def build_toolbar(
     on_train_ppo: Callable[[], None],
     on_optuna: Callable[[], None],
     on_simulation: Callable[[], None],
-    on_history_download: Callable[[], None],
     on_data_check: Callable[[], None],
 ) -> ToolbarBundle:
     toolbar_controller = ToolbarController(
@@ -249,7 +248,6 @@ def build_toolbar(
         on_train_ppo=on_train_ppo,
         on_optuna=on_optuna,
         on_simulation=on_simulation,
-        on_history_download=on_history_download,
         on_data_check=on_data_check,
     )
     return ToolbarBundle(

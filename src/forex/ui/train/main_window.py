@@ -268,6 +268,7 @@ class MainWindow(QMainWindow):
         self._training_params_panel.start_requested.connect(self._start_ppo_training)
         self._training_params_panel.stop_requested.connect(self._stop_ppo_training)
         self._training_params_panel.optuna_requested.connect(self._start_ppo_training)
+        self._training_params_panel.history_download_requested.connect(self._open_history_download_dialog)
         self._training_params_panel.tab_changed.connect(self._on_training_tab_changed)
         self._simulation_params_panel.start_requested.connect(self._start_simulation)
         self._simulation_params_panel.stop_requested.connect(self._stop_simulation)
@@ -286,7 +287,6 @@ class MainWindow(QMainWindow):
             on_train_ppo=self._on_train_ppo_clicked,
             on_optuna=self._on_optuna_clicked,
             on_simulation=self._on_simulation_clicked,
-            on_history_download=self._open_history_download_dialog,
             on_data_check=self._open_data_check_dialog,
         )
         _ = toolbar_bundle.toolbar_controller

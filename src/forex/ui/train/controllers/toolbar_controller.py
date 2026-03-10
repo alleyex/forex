@@ -17,7 +17,6 @@ class ToolbarActions:
     action_train_ppo: QAction
     action_optuna: QAction
     action_simulation: QAction
-    action_history_download: QAction
     action_data_check: QAction
 
 
@@ -33,7 +32,6 @@ class ToolbarController(QObject):
         on_train_ppo: Callable[[], None],
         on_optuna: Callable[[], None],
         on_simulation: Callable[[], None],
-        on_history_download: Callable[[], None],
         on_data_check: Callable[[], None],
     ) -> None:
         super().__init__(parent)
@@ -45,7 +43,6 @@ class ToolbarController(QObject):
         self._actions.action_train_ppo.triggered.connect(on_train_ppo)
         self._actions.action_optuna.triggered.connect(on_optuna)
         self._actions.action_simulation.triggered.connect(on_simulation)
-        self._actions.action_history_download.triggered.connect(on_history_download)
         self._actions.action_data_check.triggered.connect(on_data_check)
 
     @property
@@ -60,10 +57,8 @@ class ToolbarController(QObject):
         self,
         main_window: QMainWindow,
     ) -> ToolbarActions:
-        auth_menu = main_window.menuBar().addMenu("Auth")
-
-        action_app_auth = auth_menu.addAction("App Auth")
-        action_oauth = auth_menu.addAction("OAuth Auth")
+        action_app_auth = QAction("App Auth", main_window)
+        action_oauth = QAction("OAuth Auth", main_window)
 
         toolbar = main_window.addToolBar("Auth")
         toolbar.setToolButtonStyle(Qt.ToolButtonTextBesideIcon)
@@ -73,9 +68,6 @@ class ToolbarController(QObject):
 
         action_fetch_account_info = QAction("Account Data", main_window)
         toolbar.addAction(action_fetch_account_info)
-
-        action_history_download = QAction("History Data", main_window)
-        toolbar.addAction(action_history_download)
 
         action_data_check = QAction("Data Check", main_window)
         toolbar.addAction(action_data_check)
@@ -97,6 +89,5 @@ class ToolbarController(QObject):
             action_train_ppo=action_train_ppo,
             action_optuna=action_optuna,
             action_simulation=action_simulation,
-            action_history_download=action_history_download,
             action_data_check=action_data_check,
         )
