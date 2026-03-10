@@ -291,6 +291,9 @@ def test_step_info_exposes_reward_components() -> None:
     assert "delta" in info
     assert "price_return" in info
     assert "step_pnl" in info
+    assert "reward_return" in info
+    assert "reward_step_pnl" in info
+    assert "reward_net_return" in info
     assert "reward" in info
     assert "turnover_penalty" in info
     assert info["reward"] == pytest.approx(reward)
@@ -340,10 +343,14 @@ def test_reward_horizon_uses_future_n_step_return() -> None:
     env.reset()
     env._position = 1.0
     _, reward, _, _, info = env.step(np.array([1.0], dtype=np.float32))
-    expected_return = (102.0 - 100.0) / 100.0
-    assert info["price_return"] == pytest.approx(expected_return)
-    assert info["step_pnl"] == pytest.approx(expected_return)
-    assert reward == pytest.approx(expected_return)
+    expected_one_bar_return = (101.0 - 100.0) / 100.0
+    expected_horizon_return = (102.0 - 100.0) / 100.0
+    assert info["price_return"] == pytest.approx(expected_one_bar_return)
+    assert info["step_pnl"] == pytest.approx(expected_one_bar_return)
+    assert info["reward_return"] == pytest.approx(expected_horizon_return)
+    assert info["reward_step_pnl"] == pytest.approx(expected_horizon_return)
+    assert info["reward_net_return"] == pytest.approx(expected_horizon_return)
+    assert reward == pytest.approx(expected_horizon_return)
 
 
 def test_log_return_reward_uses_log_growth() -> None:
@@ -683,5 +690,7 @@ def test_large_window_and_horizon_config_keep_expected_obs_shape_and_horizon_cap
     assert env._end == len(closes) - 1
     env._position = 1.0
     _, _, _, _, info = env.step(np.array([1.0], dtype=np.float32))
-    expected_return = (closes[96] - closes[0]) / closes[0]
-    assert info["price_return"] == pytest.approx(expected_return)
+    expected_one_bar_return = (closes[1] - closes[0]) / closes[0]
+    expected_horizon_return = (closes[96] - closes[0]) / closes[0]
+    assert info["price_return"] == pytest.approx(expected_one_bar_return)
+    assert info["reward_return"] == pytest.approx(expected_horizon_return)

@@ -42,7 +42,6 @@ class PlaybackBundle:
 class SimState:
     position: float = 0.0
     equity: float = 1.0
-    trades: int = 0
 
 
 @dataclass
@@ -272,13 +271,13 @@ def run_playback(
     reversals = 0
     resizes = 0
     terminal_closes = 0
-    last_change_idx = 0
     trade_pnls: list[float] = []
     trade_costs: list[float] = []
     holding_steps: list[int] = []
     action_abs_sum = 0.0
     current_trade_growth: float | None = None
     current_trade_cost: float = 0.0
+    current_trade_start_step: int | None = None
     last_idx = -1
 
     try:
@@ -318,7 +317,6 @@ def run_playback(
 
             delta = target_position - state.position
             if abs(delta) > 1e-6:
-                state.trades += 1
                 change_kind = _classify_position_change(state.position, target_position)
                 if change_kind == "open":
                     opens += 1
@@ -328,8 +326,6 @@ def run_playback(
                     reversals += 1
                 elif change_kind == "resize":
                     resizes += 1
-                holding_steps.append(step_num - 1 - last_change_idx)
-                last_change_idx = step_num - 1
 
             transition = simulate_step_transition(
                 current_position=state.position,
@@ -350,11 +346,19 @@ def run_playback(
                 current_trade_growth *= max(1e-12, 1.0 + float(trade_bar_net))
                 current_trade_cost += float(exit_cost + transition["holding_cost"])
             if abs(delta) > 1e-6:
-                current_time = bundle.timestamps[idx] if idx < len(bundle.timestamps) else "-"
-                if abs(state.position) > 1e-6 and current_trade_growth is not None:
+                execution_idx = idx + 1
+                current_time = (
+                    bundle.timestamps[execution_idx] if execution_idx < len(bundle.timestamps) else "-"
+                )
+                if change_kind == "resize" and current_trade_growth is not None:
+                    current_trade_growth *= max(1e-12, 1.0 - entry_cost)
+                    current_trade_cost += float(entry_cost)
+                if change_kind in {"close", "reversal"} and abs(state.position) > 1e-6 and current_trade_growth is not None:
                     trade_pnl = current_trade_growth - 1.0
                     trade_pnls.append(float(trade_pnl))
                     trade_costs.append(float(current_trade_cost))
+                    if current_trade_start_step is not None:
+                        holding_steps.append(step_num - current_trade_start_step)
                     if not quiet:
                         print(
                             f"Trade @ {current_time} pos={state.position:.3f} -> {target_position:.3f} "
@@ -363,9 +367,11 @@ def run_playback(
                         )
                     current_trade_growth = None
                     current_trade_cost = 0.0
-                if abs(target_position) > 1e-6:
+                    current_trade_start_step = None
+                if change_kind in {"open", "reversal"} and abs(target_position) > 1e-6:
                     current_trade_growth = max(1e-12, 1.0 - entry_cost)
                     current_trade_cost = float(entry_cost)
+                    current_trade_start_step = step_num
 
             reward = transition["reward"]
             state.equity = transition["equity"]
@@ -400,12 +406,12 @@ def run_playback(
             equity_log_file.close()
 
     processed_steps = max(0, last_idx - start_idx + 1)
-    if processed_steps > last_change_idx:
-        holding_steps.append(processed_steps - last_change_idx)
     if current_trade_growth is not None:
         terminal_closes += 1
         trade_pnls.append(float(current_trade_growth - 1.0))
         trade_costs.append(float(current_trade_cost))
+        if current_trade_start_step is not None:
+            holding_steps.append(processed_steps - current_trade_start_step + 1)
 
     total_return = state.equity - 1.0
     sharpe = compute_sharpe_ratio_from_equity(equity_series)
@@ -420,7 +426,8 @@ def run_playback(
         short_ratio = action_short / total_actions
         flat_ratio = action_flat / total_actions
 
-    trade_rate_1k = (state.trades * 1000.0 / processed_steps) if processed_steps > 0 else 0.0
+    closed_trades = len(trade_pnls)
+    trade_rate_1k = (closed_trades * 1000.0 / processed_steps) if processed_steps > 0 else 0.0
     ls_imbalance = abs(long_ratio - short_ratio)
     gate_reasons: list[str] = []
     if total_return <= 0.0:
@@ -438,14 +445,14 @@ def run_playback(
     if ls_imbalance > 0.35:
         gate_reasons.append("|long-short| > 0.35")
 
-    end_index = start_idx + processed_steps
+    end_index = last_idx if last_idx >= 0 else start_idx
     start_ts = bundle.timestamps[start_idx] if start_idx < len(bundle.timestamps) else "-"
     end_ts = bundle.timestamps[end_index] if end_index < len(bundle.timestamps) else "-"
     return PlaybackResult(
         start_index=start_idx,
         end_index=end_index,
         processed_steps=processed_steps,
-        trades=state.trades,
+        trades=closed_trades,
         equity=state.equity,
         total_return=total_return,
         sharpe=sharpe,
@@ -491,7 +498,7 @@ def print_playback_result(result: PlaybackResult) -> None:
         p90_net_return = float(np.percentile(result.trade_pnls, 90))
         avg_total_cost = float(np.mean(result.trade_costs)) if result.trade_costs else 0.0
         print(
-            f"Trade stats: position_changes={result.trades} closed_trades={len(result.trade_pnls)} "
+            f"Trade stats: position_changes={result.opens + result.closes + result.reversals + result.resizes} closed_trades={len(result.trade_pnls)} "
             f"opens={result.opens} closes={result.closes} reversals={result.reversals} "
             f"resizes={result.resizes} terminal_closes={result.terminal_closes} "
             f"wins={wins} win_rate={wins / len(result.trade_pnls):.3f} "

@@ -92,6 +92,17 @@ def compute_horizon_return(closes: np.ndarray, idx: int, reward_horizon: int) ->
     return (float(closes[horizon_idx]) - base_price) / base_price
 
 
+def compute_one_bar_return(closes: np.ndarray, idx: int) -> float:
+    base_idx = max(0, int(idx))
+    if base_idx >= len(closes):
+        return 0.0
+    next_idx = min(base_idx + 1, len(closes) - 1)
+    base_price = float(closes[base_idx])
+    if base_price <= 0.0:
+        return 0.0
+    return (float(closes[next_idx]) - base_price) / base_price
+
+
 def compute_vol_target_scale(
     closes: np.ndarray,
     idx: int,
@@ -128,10 +139,13 @@ def simulate_step_transition(
     delta = float(target_position) - float(current_position)
     cost = abs(delta) * cost_rate
     holding_cost = abs(float(current_position)) * holding_cost_rate
-    price_return = compute_horizon_return(closes, idx, int(getattr(config, "reward_horizon", 1)))
+    price_return = compute_one_bar_return(closes, idx)
+    reward_return = compute_horizon_return(closes, idx, int(getattr(config, "reward_horizon", 1)))
     step_pnl = float(current_position) * float(price_return)
     net_return = step_pnl - cost - holding_cost
-    reward = net_return
+    reward_step_pnl = float(current_position) * float(reward_return)
+    reward_net_return = reward_step_pnl - cost - holding_cost
+    reward = reward_net_return
 
     prev_equity = max(float(equity), 1e-12)
     prev_peak_equity = max(float(peak_equity), prev_equity, 1e-12)
@@ -148,11 +162,11 @@ def simulate_step_transition(
     elif reward_mode == "risk_adjusted":
         reward = float(np.log(growth_factor))
     if float(config.risk_aversion) > 0.0:
-        reward -= float(config.risk_aversion) * (step_pnl ** 2)
+        reward -= float(config.risk_aversion) * (reward_step_pnl ** 2)
 
     downside_penalty = 0.0
     if reward_mode == "risk_adjusted" and float(config.downside_penalty) > 0.0:
-        downside_penalty = float(config.downside_penalty) * (min(0.0, net_return) ** 2)
+        downside_penalty = float(config.downside_penalty) * (min(0.0, reward_net_return) ** 2)
         reward -= downside_penalty
 
     drawdown_penalty = 0.0
@@ -177,6 +191,9 @@ def simulate_step_transition(
         "net_return": float(net_return),
         "price_return": float(price_return),
         "step_pnl": float(step_pnl),
+        "reward_return": float(reward_return),
+        "reward_step_pnl": float(reward_step_pnl),
+        "reward_net_return": float(reward_net_return),
         "reward": float(reward),
         "reward_mode": reward_mode,
         "downside_penalty": float(downside_penalty),
@@ -402,6 +419,9 @@ class TradingEnv(gym.Env if gym else object):
             "risk_scale": risk_info["risk_scale"],
             "price_return": transition["price_return"],
             "step_pnl": transition["step_pnl"],
+            "reward_return": transition["reward_return"],
+            "reward_step_pnl": transition["reward_step_pnl"],
+            "reward_net_return": transition["reward_net_return"],
             "reward": reward,
             "reward_mode": transition["reward_mode"],
         }

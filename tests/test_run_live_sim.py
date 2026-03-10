@@ -67,6 +67,57 @@ def test_run_playback_closes_last_open_trade_segment() -> None:
     assert result.trades == 1
     assert len(result.trade_pnls) == 1
     assert len(result.trade_costs) == 1
+    assert result.trade_rate_1k > 0
     assert result.trade_pnls[0] > 0.09
     assert result.drawdown_trough_step >= result.drawdown_peak_step
     assert result.drawdown_peak_equity >= result.drawdown_trough_equity
+
+
+def test_run_playback_holding_duration_tracks_trade_not_resize_segments() -> None:
+    bundle = PlaybackBundle(
+        features=np.zeros((5, 1), dtype=np.float32),
+        closes=np.array([100.0, 101.0, 102.0, 103.0, 104.0], dtype=np.float32),
+        timestamps=[0, 1, 2, 3, 4],
+        config=TradingConfig(
+            transaction_cost_bps=0.0,
+            slippage_bps=0.0,
+            holding_cost_bps=0.0,
+            window_size=1,
+            reward_horizon=1,
+            max_position=1.0,
+            min_position_change=0.0,
+            position_step=0.0,
+        ),
+        model=_StubModel([1.0, 0.5, 1.0, 0.0]),
+    )
+
+    result = run_playback(bundle, start_index=0, max_steps=4, quiet=True)
+
+    assert result.resizes == 2
+    assert result.trades == 1
+    assert result.holding_steps == [3]
+
+
+def test_run_playback_range_ends_at_last_processed_timestamp() -> None:
+    bundle = PlaybackBundle(
+        features=np.zeros((4, 1), dtype=np.float32),
+        closes=np.array([100.0, 101.0, 102.0, 103.0], dtype=np.float32),
+        timestamps=["t0", "t1", "t2", "t3"],
+        config=TradingConfig(
+            transaction_cost_bps=0.0,
+            slippage_bps=0.0,
+            holding_cost_bps=0.0,
+            window_size=1,
+            reward_horizon=1,
+            max_position=1.0,
+            min_position_change=0.0,
+            position_step=0.0,
+        ),
+        model=_StubModel([0.0, 0.0, 0.0]),
+    )
+
+    result = run_playback(bundle, start_index=0, max_steps=3, quiet=True)
+
+    assert result.processed_steps == 3
+    assert result.end_index == 2
+    assert result.end_ts == "t2"
