@@ -3,8 +3,10 @@ from __future__ import annotations
 import json
 import sys
 import tempfile
+from datetime import datetime
 from pathlib import Path
 from typing import Callable, Optional
+from uuid import uuid4
 
 import ast
 import re
@@ -12,6 +14,7 @@ import re
 from PySide6.QtCore import QObject, QProcess, QTimer, Signal
 
 from forex.config.paths import SRC_DIR, TRAIN_PPO_SCRIPT
+from forex.config.paths import DATA_DIR
 from forex.ui.shared.controllers.process_runner import ProcessRunner
 from forex.ui.train.state.training_state import TrainingState
 from forex.ui.shared.utils.formatters import format_training_message
@@ -24,6 +27,7 @@ class PPOTrainingController(QObject):
     optuna_trial_logged = Signal(str)
     optuna_best_params_logged = Signal(dict)
     device_resolved = Signal(str)
+    run_initialized = Signal(str, str)
 
     def __init__(
         self,
@@ -69,6 +73,8 @@ class PPOTrainingController(QObject):
             return
 
         self._state.log_message.emit(format_training_message("start"))
+        run_id, run_dir = self._prepare_run_context(params)
+        self.run_initialized.emit(run_id, str(run_dir))
         self._start_metrics_log_tailer()
         self._use_metrics_log = True
         if params.get("optuna_trials", 0) > 0:
@@ -77,6 +83,12 @@ class PPOTrainingController(QObject):
             TRAIN_PPO_SCRIPT,
             "--data",
             data_path,
+            "--model-out",
+            str(run_dir / "model.zip"),
+            "--feature-scaler-out",
+            str(run_dir / "model.scaler.json"),
+            "--env-config-out",
+            str(run_dir / "model.env.json"),
             "--total-steps",
             str(params["total_steps"]),
             "--learning-rate",
@@ -272,9 +284,8 @@ class PPOTrainingController(QObject):
             args.extend(
                 ["--optuna-min-candidates", str(params.get("optuna_min_candidates", 3))]
             )
-            top_out = str(params.get("optuna_top_out", "")).strip()
-            if top_out:
-                args.extend(["--optuna-top-out", top_out])
+            top_out = str(params.get("optuna_top_out", "")).strip() or str(run_dir / "optuna_top_params.json")
+            args.extend(["--optuna-top-out", top_out])
             if params.get("optuna_replay_enabled"):
                 args.append("--optuna-replay-enabled")
                 args.extend(
@@ -325,12 +336,10 @@ class PPOTrainingController(QObject):
                         str(params.get("optuna_replay_max_ls_imbalance", 0.2)),
                     ]
                 )
-                replay_out = str(params.get("optuna_replay_out", "")).strip()
-                if replay_out:
-                    args.extend(["--optuna-replay-out", replay_out])
-            optuna_out = params.get("optuna_out", "").strip()
-            if optuna_out:
-                args.extend(["--optuna-out", optuna_out])
+                replay_out = str(params.get("optuna_replay_out", "")).strip() or str(run_dir / "optuna_replay_results.json")
+                args.extend(["--optuna-replay-out", replay_out])
+            optuna_out = str(params.get("optuna_out", "")).strip() or str(run_dir / "optuna_best_params.json")
+            args.extend(["--optuna-out", optuna_out])
             if optuna_only:
                 args.extend(["--verbose", "0"])
         if params.get("save_best_checkpoint", True):
@@ -340,6 +349,17 @@ class PPOTrainingController(QObject):
             self._state.log_message.emit(format_training_message("start_failed"))
             self._stop_metrics_log_tailer()
             self._stop_optuna_log_tailer()
+
+    @staticmethod
+    def _prepare_run_context(params: dict) -> tuple[str, Path]:
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        profile = str(params.get("feature_profile", "raw53")).strip().lower() or "raw53"
+        seed = int(params.get("seed", 0))
+        suffix = uuid4().hex[:6]
+        run_id = f"{timestamp}_{profile}_s{seed}_{suffix}"
+        run_dir = Path(DATA_DIR) / "training" / "runs" / run_id
+        run_dir.mkdir(parents=True, exist_ok=True)
+        return run_id, run_dir
 
     def is_running(self) -> bool:
         return self._runner.is_running()

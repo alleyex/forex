@@ -248,6 +248,13 @@ class SimulationParamsPanel(QWidget):
             self._model_path.setText(path)
             self._model_path.setToolTip(path)
 
+    def set_model_path(self, path: str) -> None:
+        text = str(path or "").strip()
+        if not text:
+            return
+        self._model_path.setText(text)
+        self._model_path.setToolTip(text)
+
     def _emit_start(self) -> None:
         self._apply_path_normalization()
         self._save_params()

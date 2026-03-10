@@ -1248,9 +1248,23 @@ def main() -> None:
     )
     parser.add_argument(
         "--feature-profile",
-        choices=("raw53", "alpha4", "residual"),
+        choices=(
+            "raw53",
+            "alpha4",
+            "residual",
+            "alpha8",
+            "alpha12",
+            "alpha12_residual",
+            "alpha16",
+            "alpha16_residual",
+            "alpha20",
+            "alpha20_residual",
+            "core20",
+            "alpha4_from_core20",
+            "alpha8_from_core20",
+        ),
         default="residual",
-        help="Feature profile: full raw features, alpha layer only, or alpha plus small context anchors.",
+        help="Feature profile: raw, alpha layers, residual alpha+context, or core20-derived profiles.",
     )
     parser.add_argument(
         "--env-config-out",

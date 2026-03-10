@@ -1,4 +1,5 @@
 # ui/train/main_window.py
+from pathlib import Path
 from typing import Optional
 
 from PySide6.QtWidgets import QMainWindow
@@ -349,6 +350,12 @@ class MainWindow(QMainWindow):
         self._training_panel.flush_plot()
         self._training_params_panel.set_training_running(False)
 
+    @Slot(str, str)
+    def _on_training_run_initialized(self, run_id: str, run_dir: str) -> None:
+        self._training_params_panel.set_run_context(run_id, run_dir)
+        self._training_panel.set_reward_diagnostics_path(Path(run_dir) / "training_diagnostics.csv")
+        self._simulation_params_panel.set_model_path(str(Path(run_dir) / "model.zip"))
+
     @Slot(dict)
     def _start_simulation(self, params: dict) -> None:
         controller = self._get_simulation_controller()
@@ -421,6 +428,7 @@ class MainWindow(QMainWindow):
             self._ppo_controller.device_resolved.connect(
                 self._training_params_panel.set_resolved_device
             )
+            self._ppo_controller.run_initialized.connect(self._on_training_run_initialized)
             self._ppo_controller.replay_best_params_logged.connect(self._on_replay_best_params)
             self._ppo_controller.replay_best_summary_logged.connect(
                 self._training_params_panel.update_optuna_trial_summary

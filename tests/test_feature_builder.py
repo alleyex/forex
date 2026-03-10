@@ -7,7 +7,14 @@ import pytest
 
 from forex.ml.rl.features.feature_builder import (
     ALPHA_FEATURE_COLUMNS,
+    ALPHA8_FEATURE_COLUMNS,
+    ALPHA12_FEATURE_COLUMNS,
+    ALPHA16_FEATURE_COLUMNS,
+    ALPHA20_FEATURE_COLUMNS,
     ALPHA_SOURCE_COLUMNS,
+    CORE20_ALPHA4_FEATURE_COLUMNS,
+    CORE20_ALPHA8_FEATURE_COLUMNS,
+    CORE20_FEATURE_COLUMNS,
     RESIDUAL_CONTEXT_COLUMNS,
     apply_feature_profile,
     build_feature_frame,
@@ -53,6 +60,7 @@ def test_build_feature_frame_exposes_extended_feature_set() -> None:
         "price_z_20",
         "price_z_50",
         "price_z_100",
+        "distance_to_mean_50",
         "breakout_20",
         "breakout_50",
         "rsi_14",
@@ -61,6 +69,7 @@ def test_build_feature_frame_exposes_extended_feature_set() -> None:
         "atr_ratio_14_100",
         "vol_ratio_10_50",
         "vol_pct_72_252",
+        "volatility_regime_z",
         "bollinger_band_width_20",
         "distance_to_rolling_high_20",
         "distance_to_rolling_low_20",
@@ -68,6 +77,7 @@ def test_build_feature_frame_exposes_extended_feature_set() -> None:
         "close_location_in_bar",
         "adx_14",
         "trend_flag_25",
+        "trend_strength_20_100_atr14",
         "range_strength_10_50_atr14",
         "prev_day_return",
         "prev_day_range_pct",
@@ -333,6 +343,32 @@ def test_apply_feature_profile_alpha_and_residual_shapes() -> None:
     assert infer_feature_profile_from_names(alpha.columns) == "alpha4"
     assert infer_feature_profile_from_names(residual.columns) == "residual"
 
+    alpha8 = apply_feature_profile(raw_features, "alpha8")
+    alpha12 = apply_feature_profile(raw_features, "alpha12")
+    alpha16 = apply_feature_profile(raw_features, "alpha16")
+    alpha20 = apply_feature_profile(raw_features, "alpha20")
+    alpha12_residual = apply_feature_profile(raw_features, "alpha12_residual")
+    alpha16_residual = apply_feature_profile(raw_features, "alpha16_residual")
+    alpha20_residual = apply_feature_profile(raw_features, "alpha20_residual")
+    core20 = apply_feature_profile(raw_features, "core20")
+    core20_alpha4 = apply_feature_profile(raw_features, "alpha4_from_core20")
+    core20_alpha8 = apply_feature_profile(raw_features, "alpha8_from_core20")
+
+    assert list(alpha8.columns) == list(ALPHA8_FEATURE_COLUMNS)
+    assert list(alpha12.columns) == list(ALPHA12_FEATURE_COLUMNS)
+    assert list(alpha16.columns) == list(ALPHA16_FEATURE_COLUMNS)
+    assert list(alpha20.columns) == list(ALPHA20_FEATURE_COLUMNS)
+    assert list(alpha12_residual.columns[: len(ALPHA12_FEATURE_COLUMNS)]) == list(ALPHA12_FEATURE_COLUMNS)
+    assert list(alpha16_residual.columns[: len(ALPHA16_FEATURE_COLUMNS)]) == list(ALPHA16_FEATURE_COLUMNS)
+    assert list(alpha20_residual.columns[: len(ALPHA20_FEATURE_COLUMNS)]) == list(ALPHA20_FEATURE_COLUMNS)
+    assert list(core20.columns) == list(CORE20_FEATURE_COLUMNS)
+    assert list(core20_alpha4.columns) == list(CORE20_ALPHA4_FEATURE_COLUMNS)
+    assert list(core20_alpha8.columns) == list(CORE20_ALPHA8_FEATURE_COLUMNS)
+    assert infer_feature_profile_from_names(alpha20.columns) == "alpha20"
+    assert infer_feature_profile_from_names(alpha20_residual.columns) == "alpha20_residual"
+    assert infer_feature_profile_from_names(core20.columns) == "core20"
+    assert infer_feature_profile_from_names(core20_alpha8.columns) == "alpha8_from_core20"
+
 
 def test_build_features_infers_profile_from_scaler_names() -> None:
     rows = 320
@@ -358,11 +394,18 @@ def test_build_features_infers_profile_from_scaler_names() -> None:
 def test_required_raw_columns_for_profile() -> None:
     assert required_raw_columns_for_profile("raw53") == tuple()
     assert required_raw_columns_for_profile("alpha4") == ALPHA_SOURCE_COLUMNS
+    assert required_raw_columns_for_profile("alpha8") == ALPHA_SOURCE_COLUMNS
+    assert required_raw_columns_for_profile("alpha12") == ALPHA_SOURCE_COLUMNS
+    assert required_raw_columns_for_profile("alpha16") == ALPHA_SOURCE_COLUMNS
+    assert required_raw_columns_for_profile("alpha20") == ALPHA_SOURCE_COLUMNS
     residual_required = required_raw_columns_for_profile("residual")
     for name in ALPHA_SOURCE_COLUMNS:
         assert name in residual_required
     for name in RESIDUAL_CONTEXT_COLUMNS:
         assert name in residual_required
+    assert required_raw_columns_for_profile("core20") == CORE20_FEATURE_COLUMNS
+    assert required_raw_columns_for_profile("alpha4_from_core20") == CORE20_FEATURE_COLUMNS
+    assert required_raw_columns_for_profile("alpha8_from_core20") == CORE20_FEATURE_COLUMNS
 
 
 def test_apply_feature_profile_rejects_missing_required_columns() -> None:
