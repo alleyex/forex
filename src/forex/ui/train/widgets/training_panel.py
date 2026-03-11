@@ -853,7 +853,7 @@ class TrainingParamsPanel(QWidget):
                 "Alpha8 from Core 20",
             ]
         )
-        self._feature_profile.setCurrentIndex(2)
+        self._feature_profile.setCurrentIndex(10)
         self._feature_profile.setMinimumContentsLength(24)
         self._feature_profile.setSizeAdjustPolicy(QComboBox.SizeAdjustPolicy.AdjustToContentsOnFirstShow)
         self._feature_profile.setFixedWidth(max(spin_width, 280))
@@ -907,7 +907,7 @@ class TrainingParamsPanel(QWidget):
                 "TP/SL proxy",
             ]
         )
-        self._reward_mode.setCurrentIndex(2)
+        self._reward_mode.setCurrentIndex(5)
         self._reward_mode.setFixedWidth(spin_width)
         self._reward_mode.setToolTip(
             "Linear PnL is a pure net return baseline. Log return is a pure log(1 + net return) baseline. "
@@ -2904,10 +2904,11 @@ class TrainingPanel(QWidget):
             add_summary_row(3, "eval mean reward", self._reward_eval_value, "best eval", self._reward_best_eval_value)
             add_summary_row(4, "train-eval gap", self._reward_train_eval_gap_value, "eval trend", self._reward_eval_trend_value)
             add_summary_row(5, "rolling sharpe", self._reward_rolling_sharpe_value, "cost drag ratio", self._reward_cost_drag_ratio_value)
-            add_summary_row(6, "action/move ratio", self._reward_action_to_move_ratio_value, "checkpoint gate", self._reward_checkpoint_gate_value)
-            add_summary_row(7, "eval trade/1k", self._reward_eval_trade_rate_value, "eval max dd", self._reward_eval_max_drawdown_value)
-            add_summary_row(8, "eval flat ratio", self._reward_eval_flat_ratio_value, "eval ls imbalance", self._reward_eval_ls_imbalance_value)
-            summary_grid.setRowStretch(9, 1)
+            add_summary_row(6, "action/move ratio", self._reward_action_to_move_ratio_value, "explained variance", self._reward_explained_variance_value)
+            add_summary_row(7, "eval trade/1k", self._reward_eval_trade_rate_value, "checkpoint gate", self._reward_checkpoint_gate_value)
+            add_summary_row(8, "eval flat ratio", self._reward_eval_flat_ratio_value, "eval max dd", self._reward_eval_max_drawdown_value)
+            add_summary_single_row(9, "eval ls imbalance", self._reward_eval_ls_imbalance_value)
+            summary_grid.setRowStretch(10, 1)
             reward_group_layout.addLayout(summary_grid)
             reward_group_layout.addStretch(1)
 
@@ -2974,7 +2975,7 @@ class TrainingPanel(QWidget):
                 heuristic_grid.addWidget(value_label, row_index, 1, Qt.AlignLeft | Qt.AlignTop)
 
             add_heuristic_row(0, "signal band", self._reward_signal_band_value, "update regime", self._reward_update_regime_value)
-            add_heuristic_row(1, "explained variance", self._reward_explained_variance_value, "critic regime", self._reward_critic_regime_value)
+            add_heuristic_single_row(1, "critic regime", self._reward_critic_regime_value)
             heuristic_group_layout.addLayout(heuristic_grid)
 
             heuristic_narrative_layout = QGridLayout()

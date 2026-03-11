@@ -1004,7 +1004,7 @@ def main() -> None:
             "path_penalty",
             "tp_sl_proxy",
         ),
-        default="risk_adjusted",
+        default="tp_sl_proxy",
         help="Reward definition: raw net return, log return, risk-adjusted log return, fixed-horizon terminal reward, path-penalty reward, or take-profit/stop-loss proxy reward.",
     )
     parser.add_argument("--risk-aversion", type=float, default=0.5, help="Penalty for variance of PnL.")
@@ -1332,7 +1332,7 @@ def main() -> None:
             "alpha4_from_core20",
             "alpha8_from_core20",
         ),
-        default="residual",
+        default="alpha20_residual",
         help="Feature profile: raw, alpha layers, residual alpha+context, or core20-derived profiles.",
     )
     parser.add_argument(
