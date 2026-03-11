@@ -866,13 +866,51 @@ class TrainingParamsPanel(QWidget):
             _wrap_field(self._feature_profile),
         )
 
-        reward_group = QGroupBox("Reward shaping")
-        _apply_live_card_style(reward_group)
+        reward_group = QWidget()
         reward_group_layout = QVBoxLayout(reward_group)
-        reward_group_layout.setContentsMargins(12, 10, 12, 12)
+        reward_group_layout.setContentsMargins(0, 0, 0, 0)
         reward_group_layout.setSpacing(8)
-        reward_layout = AdaptiveFormGrid(min_cell_width=250, label_min_width=0, max_columns=2)
-        reward_group_layout.addWidget(reward_layout)
+        reward_core_group = QGroupBox("Reward Core")
+        _apply_live_card_style(reward_core_group)
+        reward_core_layout = QVBoxLayout(reward_core_group)
+        reward_core_layout.setContentsMargins(12, 10, 12, 12)
+        reward_core_layout.setSpacing(8)
+        reward_core_fields = AdaptiveFormGrid(min_cell_width=250, label_min_width=0, max_columns=2)
+        reward_core_layout.addWidget(reward_core_fields)
+        reward_group_layout.addWidget(reward_core_group)
+
+        penalty_group = QGroupBox("General Penalties")
+        _apply_live_card_style(penalty_group)
+        penalty_layout_wrap = QVBoxLayout(penalty_group)
+        penalty_layout_wrap.setContentsMargins(12, 10, 12, 12)
+        penalty_layout_wrap.setSpacing(8)
+        penalty_fields = AdaptiveFormGrid(min_cell_width=250, label_min_width=0, max_columns=2)
+        penalty_layout_wrap.addWidget(penalty_fields)
+        reward_group_layout.addWidget(penalty_group)
+
+        path_penalty_group = QGroupBox("Path Penalty Mode")
+        _apply_live_card_style(path_penalty_group)
+        path_penalty_layout = QVBoxLayout(path_penalty_group)
+        path_penalty_layout.setContentsMargins(12, 10, 12, 12)
+        path_penalty_layout.setSpacing(8)
+        path_penalty_hint = QLabel(
+            "These fields only affect the Path penalty reward mode."
+        )
+        path_penalty_hint.setProperty("class", "dialog_hint")
+        path_penalty_hint.setWordWrap(True)
+        path_penalty_layout.addWidget(path_penalty_hint)
+        path_penalty_fields = AdaptiveFormGrid(min_cell_width=250, label_min_width=0, max_columns=2)
+        path_penalty_layout.addWidget(path_penalty_fields)
+        reward_group_layout.addWidget(path_penalty_group)
+
+        control_group = QGroupBox("Volatility And Drawdown Controls")
+        _apply_live_card_style(control_group)
+        control_layout_wrap = QVBoxLayout(control_group)
+        control_layout_wrap.setContentsMargins(12, 10, 12, 12)
+        control_layout_wrap.setSpacing(8)
+        control_fields = AdaptiveFormGrid(min_cell_width=250, label_min_width=0, max_columns=2)
+        control_layout_wrap.addWidget(control_fields)
+        reward_group_layout.addWidget(control_group)
 
         self._reward_scale = TrimmedDoubleSpinBox()
         self._reward_scale.setRange(0.0, 10000.0)
@@ -880,7 +918,7 @@ class TrainingParamsPanel(QWidget):
         self._reward_scale.setSingleStep(0.1)
         self._reward_scale.setValue(1.0)
         self._reward_scale.setFixedWidth(spin_width)
-        reward_layout.add_row(
+        reward_core_fields.add_row(
             "Reward scale",
             _wrap_field(self._reward_scale),
         )
@@ -891,7 +929,7 @@ class TrainingParamsPanel(QWidget):
         self._reward_clip.setSingleStep(0.1)
         self._reward_clip.setValue(0.02)
         self._reward_clip.setFixedWidth(spin_width)
-        reward_layout.add_row(
+        reward_core_fields.add_row(
             "Reward clip",
             _wrap_field(self._reward_clip),
         )
@@ -915,7 +953,7 @@ class TrainingParamsPanel(QWidget):
             "Fixed horizon terminal penalizes terminal reward by max adverse excursion. "
             "Path penalty scores the whole forward path. TP/SL proxy approximates an early take-profit/stop-loss outcome."
         )
-        reward_layout.add_row(
+        reward_core_fields.add_row(
             "Reward mode",
             _wrap_field(self._reward_mode),
         )
@@ -926,7 +964,7 @@ class TrainingParamsPanel(QWidget):
         self._risk_aversion.setSingleStep(0.1)
         self._risk_aversion.setValue(0.5)
         self._risk_aversion.setFixedWidth(spin_width)
-        reward_layout.add_row(
+        penalty_fields.add_row(
             "Risk aversion",
             _wrap_field(self._risk_aversion),
         )
@@ -940,7 +978,7 @@ class TrainingParamsPanel(QWidget):
         self._drawdown_penalty.setToolTip(
             "Penalty applied only when drawdown worsens: drawdown_penalty * max(0, drawdown_t - drawdown_t-1)."
         )
-        reward_layout.add_row(
+        penalty_fields.add_row(
             "Drawdown penalty",
             _wrap_field(self._drawdown_penalty),
         )
@@ -955,7 +993,7 @@ class TrainingParamsPanel(QWidget):
             "Penalty applied only in risk-adjusted log return mode: "
             "downside_penalty * min(0, net_return)^2."
         )
-        reward_layout.add_row(
+        penalty_fields.add_row(
             "Downside penalty",
             _wrap_field(self._downside_penalty),
         )
@@ -969,7 +1007,7 @@ class TrainingParamsPanel(QWidget):
         self._turnover_penalty.setToolTip(
             "Extra penalty applied to absolute position change to discourage excess turnover."
         )
-        reward_layout.add_row(
+        penalty_fields.add_row(
             "Turnover penalty",
             _wrap_field(self._turnover_penalty),
         )
@@ -983,7 +1021,7 @@ class TrainingParamsPanel(QWidget):
         self._exposure_penalty.setToolTip(
             "Penalty applied to absolute target exposure to discourage oversized persistent positions."
         )
-        reward_layout.add_row(
+        penalty_fields.add_row(
             "Exposure penalty",
             _wrap_field(self._exposure_penalty),
         )
@@ -997,7 +1035,7 @@ class TrainingParamsPanel(QWidget):
         self._flat_position_penalty.setToolTip(
             "Penalty applied only when the policy stays flat from one step to the next."
         )
-        reward_layout.add_row(
+        penalty_fields.add_row(
             "Flat hold penalty",
             _wrap_field(self._flat_position_penalty),
         )
@@ -1011,7 +1049,7 @@ class TrainingParamsPanel(QWidget):
         self._flat_streak_penalty.setToolTip(
             "Extra per-step penalty multiplied by consecutive flat-hold steps after the first."
         )
-        reward_layout.add_row(
+        penalty_fields.add_row(
             "Flat streak penalty",
             _wrap_field(self._flat_streak_penalty),
         )
@@ -1025,7 +1063,7 @@ class TrainingParamsPanel(QWidget):
         self._flat_position_threshold.setToolTip(
             "Absolute position threshold treated as flat for the flat-hold penalties."
         )
-        reward_layout.add_row(
+        penalty_fields.add_row(
             "Flat threshold",
             _wrap_field(self._flat_position_threshold),
         )
@@ -1039,7 +1077,7 @@ class TrainingParamsPanel(QWidget):
         self._target_vol.setToolTip(
             "Target realized volatility used to scale raw positions. 0 disables volatility targeting."
         )
-        reward_layout.add_row(
+        control_fields.add_row(
             "Target vol",
             _wrap_field(self._target_vol),
         )
@@ -1049,7 +1087,7 @@ class TrainingParamsPanel(QWidget):
         self._vol_target_lookback.setValue(72)
         self._vol_target_lookback.setFixedWidth(spin_width)
         self._vol_target_lookback.setToolTip("Lookback bars used to estimate realized volatility.")
-        reward_layout.add_row(
+        control_fields.add_row(
             "Vol lookback",
             _wrap_field(self._vol_target_lookback),
         )
@@ -1061,7 +1099,7 @@ class TrainingParamsPanel(QWidget):
         self._vol_scale_floor.setValue(0.5)
         self._vol_scale_floor.setFixedWidth(spin_width)
         self._vol_scale_floor.setToolTip("Minimum volatility targeting scale.")
-        reward_layout.add_row(
+        control_fields.add_row(
             "Vol scale floor",
             _wrap_field(self._vol_scale_floor),
         )
@@ -1073,7 +1111,7 @@ class TrainingParamsPanel(QWidget):
         self._vol_scale_cap.setValue(1.0)
         self._vol_scale_cap.setFixedWidth(spin_width)
         self._vol_scale_cap.setToolTip("Maximum volatility targeting scale.")
-        reward_layout.add_row(
+        control_fields.add_row(
             "Vol scale cap",
             _wrap_field(self._vol_scale_cap),
         )
@@ -1087,7 +1125,7 @@ class TrainingParamsPanel(QWidget):
         self._drawdown_governor_slope.setToolTip(
             "Scales max position by max(floor, 1 - slope * drawdown). 0 disables governor."
         )
-        reward_layout.add_row(
+        control_fields.add_row(
             "DD governor slope",
             _wrap_field(self._drawdown_governor_slope),
         )
@@ -1101,9 +1139,37 @@ class TrainingParamsPanel(QWidget):
         self._drawdown_governor_floor.setToolTip(
             "Minimum scaling floor for drawdown governor."
         )
-        reward_layout.add_row(
+        control_fields.add_row(
             "DD governor floor",
             _wrap_field(self._drawdown_governor_floor),
+        )
+
+        self._path_vol_penalty = TrimmedDoubleSpinBox()
+        self._path_vol_penalty.setRange(0.0, 10.0)
+        self._path_vol_penalty.setDecimals(3)
+        self._path_vol_penalty.setSingleStep(0.05)
+        self._path_vol_penalty.setValue(0.25)
+        self._path_vol_penalty.setFixedWidth(spin_width)
+        self._path_vol_penalty.setToolTip(
+            "Path-penalty mode only: weight applied to path standard deviation."
+        )
+        path_penalty_fields.add_row(
+            "Path vol penalty",
+            _wrap_field(self._path_vol_penalty),
+        )
+
+        self._path_downside_penalty = TrimmedDoubleSpinBox()
+        self._path_downside_penalty.setRange(0.0, 10.0)
+        self._path_downside_penalty.setDecimals(3)
+        self._path_downside_penalty.setSingleStep(0.05)
+        self._path_downside_penalty.setValue(0.25)
+        self._path_downside_penalty.setFixedWidth(spin_width)
+        self._path_downside_penalty.setToolTip(
+            "Path-penalty mode only: weight applied to path downside semivariance."
+        )
+        path_penalty_fields.add_row(
+            "Path downside penalty",
+            _wrap_field(self._path_downside_penalty),
         )
 
         optuna_group = QGroupBox("Optuna Settings")
@@ -1460,6 +1526,10 @@ class TrainingParamsPanel(QWidget):
             self._drawdown_governor_slope.setValue(float(params["drawdown_governor_slope"]))
         if "drawdown_governor_floor" in params:
             self._drawdown_governor_floor.setValue(float(params["drawdown_governor_floor"]))
+        if "path_vol_penalty" in params:
+            self._path_vol_penalty.setValue(float(params["path_vol_penalty"]))
+        if "path_downside_penalty" in params:
+            self._path_downside_penalty.setValue(float(params["path_downside_penalty"]))
         if "max_position" in params:
             self._max_position.setValue(float(params["max_position"]))
 
@@ -1553,6 +1623,8 @@ class TrainingParamsPanel(QWidget):
             "flat_position_penalty": float(self._flat_position_penalty.value()),
             "flat_streak_penalty": float(self._flat_streak_penalty.value()),
             "flat_position_threshold": float(self._flat_position_threshold.value()),
+            "path_vol_penalty": float(self._path_vol_penalty.value()),
+            "path_downside_penalty": float(self._path_downside_penalty.value()),
             "target_vol": float(self._target_vol.value()),
             "vol_target_lookback": int(self._vol_target_lookback.value()),
             "vol_scale_floor": float(self._vol_scale_floor.value()),
@@ -2149,6 +2221,10 @@ class TrainingParamsPanel(QWidget):
             self._drawdown_governor_slope.setValue(float(data["drawdown_governor_slope"]))
         if "drawdown_governor_floor" in data:
             self._drawdown_governor_floor.setValue(float(data["drawdown_governor_floor"]))
+        if "path_vol_penalty" in data:
+            self._path_vol_penalty.setValue(float(data["path_vol_penalty"]))
+        if "path_downside_penalty" in data:
+            self._path_downside_penalty.setValue(float(data["path_downside_penalty"]))
         if "optuna_trials" in data:
             self._optuna_trials.setValue(int(data["optuna_trials"]))
         if "optuna_steps" in data:
@@ -2240,6 +2316,8 @@ class TrainingParamsPanel(QWidget):
         self._flat_position_penalty.valueChanged.connect(self._auto_save_params)
         self._flat_streak_penalty.valueChanged.connect(self._auto_save_params)
         self._flat_position_threshold.valueChanged.connect(self._auto_save_params)
+        self._path_vol_penalty.valueChanged.connect(self._auto_save_params)
+        self._path_downside_penalty.valueChanged.connect(self._auto_save_params)
         self._target_vol.valueChanged.connect(self._auto_save_params)
         self._vol_target_lookback.valueChanged.connect(self._auto_save_params)
         self._vol_scale_floor.valueChanged.connect(self._auto_save_params)

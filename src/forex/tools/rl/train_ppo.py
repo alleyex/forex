@@ -1204,6 +1204,18 @@ def main() -> None:
         help="Absolute position threshold treated as flat for anti-flat reward shaping.",
     )
     parser.add_argument(
+        "--path-vol-penalty",
+        type=float,
+        default=0.25,
+        help="Path-penalty mode only: weight applied to path standard deviation.",
+    )
+    parser.add_argument(
+        "--path-downside-penalty",
+        type=float,
+        default=0.25,
+        help="Path-penalty mode only: weight applied to path downside semivariance.",
+    )
+    parser.add_argument(
         "--position-bias-penalty",
         type=float,
         default=0.0,
@@ -1580,6 +1592,10 @@ def main() -> None:
         raise ValueError("--flat-streak-penalty must be >= 0.")
     if args.flat_position_threshold < 0.0:
         raise ValueError("--flat-position-threshold must be >= 0.")
+    if args.path_vol_penalty < 0.0:
+        raise ValueError("--path-vol-penalty must be >= 0.")
+    if args.path_downside_penalty < 0.0:
+        raise ValueError("--path-downside-penalty must be >= 0.")
     if args.target_vol < 0.0:
         raise ValueError("--target-vol must be >= 0.")
     if args.vol_target_lookback < 2:
@@ -1700,6 +1716,8 @@ def main() -> None:
         flat_position_penalty=args.flat_position_penalty,
         flat_streak_penalty=args.flat_streak_penalty,
         flat_position_threshold=args.flat_position_threshold,
+        path_vol_penalty=args.path_vol_penalty,
+        path_downside_penalty=args.path_downside_penalty,
         position_bias_penalty=args.position_bias_penalty,
         position_bias_threshold=args.position_bias_threshold,
         position_bias_ema_alpha=args.position_bias_ema_alpha,
@@ -1737,6 +1755,8 @@ def main() -> None:
         flat_position_penalty=args.flat_position_penalty,
         flat_streak_penalty=args.flat_streak_penalty,
         flat_position_threshold=args.flat_position_threshold,
+        path_vol_penalty=args.path_vol_penalty,
+        path_downside_penalty=args.path_downside_penalty,
         position_bias_penalty=args.position_bias_penalty,
         position_bias_threshold=args.position_bias_threshold,
         position_bias_ema_alpha=args.position_bias_ema_alpha,
