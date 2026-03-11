@@ -371,12 +371,15 @@ class MainWindow(QMainWindow):
         used_best = bool(summary.get("used_best_checkpoint"))
         missing_best = bool(summary.get("best_checkpoint_missing"))
         best_checkpoint_path = str(summary.get("best_checkpoint_path") or "").strip()
+        selection_source = str(summary.get("selection_source") or "").strip().lower()
 
         box = QMessageBox(self)
         box.setIcon(QMessageBox.Information)
         box.setWindowTitle("Training Finished")
         box.setText("Checkpoint summary")
-        if used_best and best_checkpoint_path:
+        if selection_source == "playback_top_n":
+            box.setInformativeText("A playback-selected checkpoint was promoted to the final model.")
+        elif used_best and best_checkpoint_path:
             box.setInformativeText("Best eval checkpoint was found and promoted to the final model.")
         elif missing_best:
             box.setInformativeText(
@@ -397,6 +400,20 @@ class MainWindow(QMainWindow):
             f"Last step: {summary.get('run_last_step', '-')}",
             f"Target steps: {summary.get('run_total_steps_target', '-')}",
             f"Best checkpoint path: {best_checkpoint_path or '-'}",
+            f"Selection mode: {summary.get('selection_mode', '-')}",
+            f"Selection source: {summary.get('selection_source', '-')}",
+            f"Selection top N: {summary.get('selection_top_n', '-')}",
+            f"Selection candidate count: {summary.get('selection_candidate_count', '-')}",
+            f"Selected eval step: {summary.get('selection_step', '-')}",
+            f"Selected output model path: {summary.get('selection_output_model_path', '-')}",
+            f"Selected checkpoint gate: {summary.get('selection_checkpoint_gate', '-')}",
+            f"Selected eval mean reward: {summary.get('selection_eval_mean_reward', '-')}",
+            f"Selected playback return: {summary.get('selection_playback_return', '-')}",
+            f"Selected playback sharpe: {summary.get('selection_playback_sharpe', '-')}",
+            f"Selected playback max drawdown: {summary.get('selection_playback_max_drawdown', '-')}",
+            f"Selected playback trade/1k: {summary.get('selection_playback_trade_rate_1k', '-')}",
+            f"Selected playback gate pass: {summary.get('selection_playback_gate_pass', '-')}",
+            f"Selected playback gate reasons: {summary.get('selection_playback_gate_reasons', '-')}",
             f"Best eval reward: {summary.get('best_eval_reward', '-')}",
             f"Best eval mean reward: {summary.get('best_eval_mean_reward', '-')}",
             f"Best checkpoint gate: {summary.get('best_checkpoint_gate', '-')}",

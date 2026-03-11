@@ -601,6 +601,37 @@ class PPOTrainingController(QObject):
                     )
             except Exception:
                 pass
+        selection_path = run_dir / "checkpoint_selection.json"
+        if selection_path.exists():
+            try:
+                selection_payload = json.loads(selection_path.read_text(encoding="utf-8"))
+                if isinstance(selection_payload, dict):
+                    payload.update(
+                        {
+                            "selection_mode": selection_payload.get("selection_mode") or "-",
+                            "selection_top_n": selection_payload.get("top_n"),
+                            "selection_candidate_count": selection_payload.get("candidate_count"),
+                            "selection_source": selection_payload.get("selected_source") or "-",
+                            "selection_step": selection_payload.get("selected_step"),
+                            "selection_eval_mean_reward": selection_payload.get("selected_eval_mean_reward"),
+                            "selection_checkpoint_gate": selection_payload.get("selected_checkpoint_gate") or "-",
+                            "selection_output_model_path": selection_payload.get("output_model_path") or "-",
+                        }
+                    )
+                    playback = selection_payload.get("selected_playback")
+                    if isinstance(playback, dict):
+                        payload.update(
+                            {
+                                "selection_playback_return": playback.get("total_return"),
+                                "selection_playback_sharpe": playback.get("sharpe"),
+                                "selection_playback_max_drawdown": playback.get("max_drawdown"),
+                                "selection_playback_trade_rate_1k": playback.get("trade_rate_1k"),
+                                "selection_playback_gate_pass": playback.get("gate_pass"),
+                                "selection_playback_gate_reasons": playback.get("gate_reasons") or [],
+                            }
+                        )
+            except Exception:
+                pass
         diagnostics_path = run_dir / "training_diagnostics.csv"
         if not diagnostics_path.exists():
             return payload
