@@ -99,6 +99,10 @@ class PPOTrainingController(QObject):
             str(run_dir / "model.scaler.json"),
             "--env-config-out",
             str(run_dir / "model.env.json"),
+            "--training-args-out",
+            str(run_dir / "training_args.json"),
+            "--training-status-out",
+            str(run_dir / "training_status.json"),
             "--total-steps",
             str(params["total_steps"]),
             "--learning-rate",
@@ -210,15 +214,17 @@ class PPOTrainingController(QObject):
                 str(params.get("curriculum_min_position_change", 0.05)),
             ]
         )
-        if params.get("early_stop_enabled", True):
-            args.append("--early-stop-enabled")
+        args.append(
+            "--early-stop-enabled" if params.get("early_stop_enabled", True) else "--no-early-stop-enabled"
+        )
         args.extend(["--early-stop-warmup-steps", str(params.get("early_stop_warmup_steps", 120000))])
         args.extend(
             ["--early-stop-patience-evals", str(params.get("early_stop_patience_evals", 8))]
         )
         args.extend(["--early-stop-min-delta", str(params.get("early_stop_min_delta", 0.001))])
-        if params.get("anti_flat_enabled", True):
-            args.append("--anti-flat-enabled")
+        args.append(
+            "--anti-flat-enabled" if params.get("anti_flat_enabled", True) else "--no-anti-flat-enabled"
+        )
         args.extend(["--anti-flat-warmup-steps", str(params.get("anti_flat_warmup_steps", 120000))])
         args.extend(
             ["--anti-flat-patience-evals", str(params.get("anti_flat_patience_evals", 3))]
@@ -578,6 +584,23 @@ class PPOTrainingController(QObject):
         run_dir = self._current_run_dir
         if run_dir is None:
             return payload
+        status_path = run_dir / "training_status.json"
+        if status_path.exists():
+            try:
+                status_payload = json.loads(status_path.read_text(encoding="utf-8"))
+                if isinstance(status_payload, dict):
+                    payload.update(
+                        {
+                            "run_status": status_payload.get("status") or "-",
+                            "run_stop_reason": status_payload.get("stop_reason") or "-",
+                            "run_exit_code": status_payload.get("exit_code"),
+                            "run_stopped_early": status_payload.get("stopped_early"),
+                            "run_last_step": status_payload.get("last_step"),
+                            "run_total_steps_target": status_payload.get("total_steps_target"),
+                        }
+                    )
+            except Exception:
+                pass
         diagnostics_path = run_dir / "training_diagnostics.csv"
         if not diagnostics_path.exists():
             return payload

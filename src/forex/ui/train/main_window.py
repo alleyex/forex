@@ -91,6 +91,8 @@ class MainWindow(QMainWindow):
         self._history_download_state = None
         self._history_download_presenter = None
         self._system_usage_timer: Optional[QTimer] = None
+        self._last_training_run_id = "-"
+        self._last_training_run_dir = "-"
 
         self._setup_ui()
         self._setup_connection_presenter()
@@ -349,26 +351,85 @@ class MainWindow(QMainWindow):
     def _on_ppo_training_finished(self, *_args) -> None:
         self._training_panel.flush_plot()
         self._training_params_panel.set_training_running(False)
+        self._show_checkpoint_result_dialog()
 
     @Slot(str, str)
     def _on_training_run_initialized(self, run_id: str, run_dir: str) -> None:
+        self._last_training_run_id = run_id
+        self._last_training_run_dir = run_dir
         self._training_params_panel.set_run_context(run_id, run_dir)
         self._training_panel.set_reward_diagnostics_path(Path(run_dir) / "training_diagnostics.csv")
         self._simulation_params_panel.set_model_path(str(Path(run_dir) / "model.zip"))
+
+    def _show_checkpoint_result_dialog(self) -> None:
+        controller = self._ppo_controller
+        if controller is None:
+            return
+        summary = controller.build_checkpoint_summary()
+        run_id = str(summary.get("run_id") or self._last_training_run_id or "-")
+        run_dir = str(summary.get("run_dir") or self._last_training_run_dir or "-")
+        used_best = bool(summary.get("used_best_checkpoint"))
+        missing_best = bool(summary.get("best_checkpoint_missing"))
+        best_checkpoint_path = str(summary.get("best_checkpoint_path") or "").strip()
+
+        box = QMessageBox(self)
+        box.setIcon(QMessageBox.Information)
+        box.setWindowTitle("Training Finished")
+        box.setText("Checkpoint summary")
+        if used_best and best_checkpoint_path:
+            box.setInformativeText("Best eval checkpoint was found and promoted to the final model.")
+        elif missing_best:
+            box.setInformativeText(
+                "No qualifying best checkpoint was found. The run fell back to the final model state."
+            )
+        else:
+            box.setInformativeText(
+                "Training finished without promoting a best checkpoint. Check the summary details below."
+            )
+
+        details = [
+            f"Run id: {run_id}",
+            f"Output dir: {run_dir}",
+            f"Run status: {summary.get('run_status', '-')}",
+            f"Stop reason: {summary.get('run_stop_reason', '-')}",
+            f"Exit code: {summary.get('run_exit_code', '-')}",
+            f"Stopped early: {summary.get('run_stopped_early', '-')}",
+            f"Last step: {summary.get('run_last_step', '-')}",
+            f"Target steps: {summary.get('run_total_steps_target', '-')}",
+            f"Best checkpoint path: {best_checkpoint_path or '-'}",
+            f"Best eval reward: {summary.get('best_eval_reward', '-')}",
+            f"Best eval mean reward: {summary.get('best_eval_mean_reward', '-')}",
+            f"Best checkpoint gate: {summary.get('best_checkpoint_gate', '-')}",
+            f"Best rolling sharpe: {summary.get('best_rolling_sharpe', '-')}",
+            f"Best eval trade/1k: {summary.get('best_eval_trade_rate_1k', '-')}",
+            f"Best eval L/S imbalance: {summary.get('best_eval_ls_imbalance', '-')}",
+            f"Best eval max drawdown: {summary.get('best_eval_max_drawdown', '-')}",
+            f"Last eval mean reward: {summary.get('last_eval_mean_reward', '-')}",
+            f"Last checkpoint gate: {summary.get('last_checkpoint_gate', '-')}",
+        ]
+        box.setDetailedText("\n".join(details))
+        box.exec()
 
     @Slot(dict)
     def _start_simulation(self, params: dict) -> None:
         controller = self._get_simulation_controller()
         if controller is None:
             return
+        self._simulation_params_panel.set_simulation_running(True)
         controller.start(params)
+        if not controller.is_running():
+            self._simulation_params_panel.set_simulation_running(False)
 
     @Slot()
     def _stop_simulation(self) -> None:
         controller = self._get_simulation_controller()
         if controller is None:
+            self._simulation_params_panel.set_simulation_running(False)
             return
         controller.stop()
+
+    def _on_simulation_finished(self, *_args) -> None:
+        self._simulation_params_panel.set_simulation_running(False)
 
     @Slot()
     def _open_history_download_dialog(self) -> None:
@@ -461,6 +522,7 @@ class MainWindow(QMainWindow):
                 parent=self,
                 state=self._simulation_state,
                 presenter=self._simulation_presenter,
+                on_finished=self._on_simulation_finished,
             )
         return self._simulation_controller
 

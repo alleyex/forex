@@ -519,16 +519,22 @@ class TrainingParamsPanel(QWidget):
         self._anti_flat_setting_cards: list[QWidget] = []
 
         checkpoint_group, checkpoint_layout = _build_run_section(
-            "Checkpointing",
+            "Checkpoint Gate",
             self._save_best_checkpoint,
-            "Promote the strongest validation checkpoint instead of whatever weights happen to be last.",
+            "Promote the strongest validation checkpoint. Activity thresholds are shared from the card below; this card adds checkpoint-only limits.",
         )
 
-        eval_activity_group = QGroupBox("Eval Activity")
+        eval_activity_group = QGroupBox("Shared Activity Thresholds")
         _apply_live_card_style(eval_activity_group)
         eval_activity_group_layout = QVBoxLayout(eval_activity_group)
         eval_activity_group_layout.setContentsMargins(12, 10, 12, 12)
         eval_activity_group_layout.setSpacing(8)
+        eval_activity_hint = QLabel(
+            "These thresholds are reused by both checkpoint qualification and anti-flat early stop."
+        )
+        eval_activity_hint.setProperty("class", "dialog_hint")
+        eval_activity_hint.setWordWrap(True)
+        eval_activity_group_layout.addWidget(eval_activity_hint)
         eval_activity_layout = AdaptiveFormGrid(
             min_cell_width=250,
             label_min_width=0,
@@ -552,7 +558,7 @@ class TrainingParamsPanel(QWidget):
         anti_flat_group, anti_flat_layout = _build_run_section(
             "Anti-flat",
             self._anti_flat_enabled,
-            "Profile eval activity and stop runs that collapse into no-trade or one-sided behavior.",
+            "Stop runs that collapse into no-trade or one-sided behavior. Uses the shared activity thresholds above.",
         )
 
         self._early_stop_warmup_steps = QSpinBox()
@@ -594,7 +600,7 @@ class TrainingParamsPanel(QWidget):
         self._eval_profile_steps.setRange(0, 1_000_000)
         self._eval_profile_steps.setValue(2_500)
         self._eval_profile_steps.setFixedWidth(spin_width)
-        eval_activity_layout.add_row("Eval profile steps", _wrap_field(self._eval_profile_steps))
+        eval_activity_layout.add_row("Profile steps", _wrap_field(self._eval_profile_steps))
 
         self._eval_profile_min_trade_rate = TrimmedDoubleSpinBox()
         self._eval_profile_min_trade_rate.setRange(0.0, 100.0)
@@ -655,13 +661,13 @@ class TrainingParamsPanel(QWidget):
         self._anti_flat_warmup_steps.setRange(0, 10_000_000)
         self._anti_flat_warmup_steps.setValue(120_000)
         self._anti_flat_warmup_steps.setFixedWidth(spin_width)
-        anti_flat_layout.add_row("Anti-flat warmup", _wrap_field(self._anti_flat_warmup_steps))
+        anti_flat_layout.add_row("Warmup steps", _wrap_field(self._anti_flat_warmup_steps))
 
         self._anti_flat_patience_evals = QSpinBox()
         self._anti_flat_patience_evals.setRange(1, 100)
         self._anti_flat_patience_evals.setValue(3)
         self._anti_flat_patience_evals.setFixedWidth(spin_width)
-        anti_flat_layout.add_row("Anti-flat patience", _wrap_field(self._anti_flat_patience_evals))
+        anti_flat_layout.add_row("Patience evals", _wrap_field(self._anti_flat_patience_evals))
 
         self._anti_flat_setting_cards.append(anti_flat_group)
 
@@ -891,12 +897,23 @@ class TrainingParamsPanel(QWidget):
         )
 
         self._reward_mode = QComboBox()
-        self._reward_mode.addItems(["Linear PnL", "Log return", "Risk-adjusted log return"])
+        self._reward_mode.addItems(
+            [
+                "Linear PnL",
+                "Log return",
+                "Risk-adjusted log return",
+                "Fixed horizon terminal",
+                "Path penalty",
+                "TP/SL proxy",
+            ]
+        )
         self._reward_mode.setCurrentIndex(2)
         self._reward_mode.setFixedWidth(spin_width)
         self._reward_mode.setToolTip(
             "Linear PnL is a pure net return baseline. Log return is a pure log(1 + net return) baseline. "
-            "Risk-adjusted log return adds risk, downside, drawdown, turnover, and exposure penalties."
+            "Risk-adjusted log return adds risk, downside, drawdown, turnover, and exposure penalties. "
+            "Fixed horizon terminal penalizes terminal reward by max adverse excursion. "
+            "Path penalty scores the whole forward path. TP/SL proxy approximates an early take-profit/stop-loss outcome."
         )
         reward_layout.add_row(
             "Reward mode",
@@ -1274,11 +1291,11 @@ class TrainingParamsPanel(QWidget):
         guards_layout = QVBoxLayout(guards_tab)
         guards_layout.setContentsMargins(12, 10, 18, 24)
         guards_layout.setSpacing(8)
-        guards_layout.addWidget(checkpoint_group)
         guards_layout.addWidget(eval_activity_group)
+        guards_layout.addWidget(checkpoint_group)
+        guards_layout.addWidget(anti_flat_group)
         guards_layout.addWidget(early_stop_group)
         guards_layout.addWidget(curriculum_group)
-        guards_layout.addWidget(anti_flat_group)
         guards_layout.addStretch(1)
 
         sampling_tab = QWidget()
@@ -2428,6 +2445,12 @@ class TrainingParamsPanel(QWidget):
         text = self._reward_mode.currentText()
         if text.startswith("Risk-adjusted"):
             return "risk_adjusted"
+        if text.startswith("Fixed horizon"):
+            return "terminal_horizon"
+        if text.startswith("Path penalty"):
+            return "path_penalty"
+        if text.startswith("TP/SL"):
+            return "tp_sl_proxy"
         if text.startswith("Log"):
             return "log_return"
         return "linear"
@@ -2486,6 +2509,15 @@ class TrainingParamsPanel(QWidget):
         value = (mode or "").strip().lower()
         if value == "risk_adjusted":
             self._reward_mode.setCurrentIndex(2)
+            return
+        if value == "terminal_horizon":
+            self._reward_mode.setCurrentIndex(3)
+            return
+        if value == "path_penalty":
+            self._reward_mode.setCurrentIndex(4)
+            return
+        if value == "tp_sl_proxy":
+            self._reward_mode.setCurrentIndex(5)
             return
         if value == "log_return":
             self._reward_mode.setCurrentIndex(1)
@@ -2792,6 +2824,7 @@ class TrainingPanel(QWidget):
             self._reward_checkpoint_gate_value = QLabel("-")
             self._reward_signal_band_value = QLabel("-")
             self._reward_update_regime_value = QLabel("-")
+            self._reward_explained_variance_value = QLabel("-")
             self._reward_critic_regime_value = QLabel("-")
             self._reward_quality_flags_value = QLabel("-")
             self._reward_missing_eval_fields_value = QLabel("-")
@@ -2941,7 +2974,7 @@ class TrainingPanel(QWidget):
                 heuristic_grid.addWidget(value_label, row_index, 1, Qt.AlignLeft | Qt.AlignTop)
 
             add_heuristic_row(0, "signal band", self._reward_signal_band_value, "update regime", self._reward_update_regime_value)
-            add_heuristic_single_row(1, "critic regime", self._reward_critic_regime_value)
+            add_heuristic_row(1, "explained variance", self._reward_explained_variance_value, "critic regime", self._reward_critic_regime_value)
             heuristic_group_layout.addLayout(heuristic_grid)
 
             heuristic_narrative_layout = QGridLayout()
@@ -3497,6 +3530,7 @@ class TrainingPanel(QWidget):
             self._reward_checkpoint_gate_value.setText("-")
             self._reward_signal_band_value.setText("-")
             self._reward_update_regime_value.setText("-")
+            self._reward_explained_variance_value.setText("-")
             self._reward_critic_regime_value.setText("-")
             self._reward_quality_flags_value.setText("-")
             self._reward_missing_eval_fields_value.setText("waiting for first eval")
@@ -3598,6 +3632,9 @@ class TrainingPanel(QWidget):
         self._reward_checkpoint_gate_value.setText(checkpoint_gate)
         self._reward_signal_band_value.setText(signal_band)
         self._reward_update_regime_value.setText(update_regime)
+        self._reward_explained_variance_value.setText(
+            "-" if explained_variance is None else self._format_stat(float(explained_variance))
+        )
         self._reward_critic_regime_value.setText(critic_regime)
         self._reward_quality_flags_value.setText(quality_flags or "clean")
         self._reward_missing_eval_fields_value.setText(missing_eval_fields)

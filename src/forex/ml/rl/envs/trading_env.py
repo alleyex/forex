@@ -92,6 +92,32 @@ def compute_horizon_return(closes: np.ndarray, idx: int, reward_horizon: int) ->
     return (float(closes[horizon_idx]) - base_price) / base_price
 
 
+def compute_horizon_path_returns(closes: np.ndarray, idx: int, reward_horizon: int) -> np.ndarray:
+    base_idx = max(0, int(idx))
+    if base_idx >= len(closes):
+        return np.zeros(0, dtype=np.float64)
+    base_price = float(closes[base_idx])
+    if base_price <= 0.0:
+        return np.zeros(0, dtype=np.float64)
+    horizon = max(1, int(reward_horizon))
+    horizon_idx = min(base_idx + horizon, len(closes) - 1)
+    if horizon_idx <= base_idx:
+        return np.zeros(0, dtype=np.float64)
+    future = closes[base_idx + 1 : horizon_idx + 1].astype(np.float64)
+    return (future - base_price) / base_price
+
+
+def compute_one_bar_return(closes: np.ndarray, idx: int) -> float:
+    base_idx = max(0, int(idx))
+    next_idx = min(base_idx + 1, len(closes) - 1)
+    if base_idx >= len(closes) or next_idx <= base_idx:
+        return 0.0
+    base_price = float(closes[base_idx])
+    if base_price <= 0.0:
+        return 0.0
+    return (float(closes[next_idx]) - base_price) / base_price
+
+
 def compute_vol_target_scale(
     closes: np.ndarray,
     idx: int,
@@ -128,13 +154,54 @@ def simulate_step_transition(
     delta = float(target_position) - float(current_position)
     cost = abs(delta) * cost_rate
     holding_cost = abs(float(current_position)) * holding_cost_rate
-    price_return = compute_horizon_return(closes, idx, int(getattr(config, "reward_horizon", 1)))
+    horizon = int(getattr(config, "reward_horizon", 1))
+    price_return = compute_horizon_return(closes, idx, horizon)
+    path_returns = compute_horizon_path_returns(closes, idx, horizon)
+    position = float(current_position)
+    signed_path_returns = position * path_returns
+    terminal_step_pnl = position * float(price_return)
+    mae = max(0.0, -float(np.min(signed_path_returns))) if signed_path_returns.size else 0.0
+    path_mean = float(np.mean(signed_path_returns)) if signed_path_returns.size else terminal_step_pnl
+    path_std = float(np.std(signed_path_returns)) if signed_path_returns.size else 0.0
+    downside_semivar = (
+        float(np.mean(np.square(np.minimum(signed_path_returns, 0.0))))
+        if signed_path_returns.size
+        else 0.0
+    )
+    vol_anchor = float(getattr(config, "target_vol", 0.0))
+    if vol_anchor <= 0.0:
+        vol_anchor = compute_realized_vol(
+            closes,
+            idx,
+            int(getattr(config, "vol_target_lookback", 72)),
+        )
+    take_profit = max(0.0025, 1.5 * vol_anchor)
+    stop_loss = max(0.0015, 1.0 * vol_anchor)
+    proxy_outcome = terminal_step_pnl
+    if signed_path_returns.size:
+        tp_hits = np.flatnonzero(signed_path_returns >= take_profit)
+        sl_hits = np.flatnonzero(signed_path_returns <= -stop_loss)
+        tp_idx = int(tp_hits[0]) if tp_hits.size else None
+        sl_idx = int(sl_hits[0]) if sl_hits.size else None
+        if tp_idx is not None and (sl_idx is None or tp_idx <= sl_idx):
+            proxy_outcome = take_profit
+        elif sl_idx is not None:
+            proxy_outcome = -stop_loss
+
+    reward_mode = str(getattr(config, "reward_mode", "linear") or "linear").strip().lower()
     reward_return = price_return
-    step_pnl = float(current_position) * float(price_return)
-    net_return = step_pnl - cost - holding_cost
+    step_pnl = terminal_step_pnl
     reward_step_pnl = step_pnl
-    reward_net_return = net_return
-    reward = net_return
+    if reward_mode == "terminal_horizon":
+        reward_step_pnl = terminal_step_pnl - (0.75 * mae)
+    elif reward_mode == "path_penalty":
+        reward_step_pnl = path_mean - (0.5 * path_std) - (0.5 * downside_semivar)
+    elif reward_mode == "tp_sl_proxy":
+        reward_step_pnl = proxy_outcome
+
+    net_return = step_pnl - cost - holding_cost
+    reward_net_return = reward_step_pnl - cost - holding_cost
+    reward = reward_net_return
 
     prev_equity = max(float(equity), 1e-12)
     prev_peak_equity = max(float(peak_equity), prev_equity, 1e-12)
@@ -145,11 +212,10 @@ def simulate_step_transition(
     drawdown = compute_drawdown(next_equity, next_peak_equity)
     drawdown_delta = max(0.0, drawdown - prev_drawdown)
 
-    reward_mode = str(getattr(config, "reward_mode", "linear") or "linear").strip().lower()
     if reward_mode == "log_return":
-        reward = float(np.log(growth_factor))
+        reward = float(np.log(max(1e-12, 1.0 + reward_net_return)))
     elif reward_mode == "risk_adjusted":
-        reward = float(np.log(growth_factor))
+        reward = float(np.log(max(1e-12, 1.0 + reward_net_return)))
     if float(config.risk_aversion) > 0.0:
         reward -= float(config.risk_aversion) * (reward_step_pnl ** 2)
 
@@ -186,6 +252,12 @@ def simulate_step_transition(
         "reward": float(reward),
         "reward_mode": reward_mode,
         "downside_penalty": float(downside_penalty),
+        "path_mae": float(mae),
+        "path_mean": float(path_mean),
+        "path_std": float(path_std),
+        "path_downside_semivar": float(downside_semivar),
+        "proxy_take_profit": float(take_profit),
+        "proxy_stop_loss": float(stop_loss),
         "drawdown": float(drawdown),
         "drawdown_delta": float(drawdown_delta),
         "drawdown_penalty": float(drawdown_penalty),

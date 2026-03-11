@@ -15,6 +15,8 @@ from forex.ml.rl.envs.trading_env import (
     TradingConfig,
     apply_risk_engine,
     build_window_observation,
+    compute_drawdown,
+    compute_one_bar_return,
     simulate_step_transition,
 )
 from forex.ml.rl.features.feature_builder import (
@@ -205,6 +207,8 @@ def simulate_fixed_position(bundle: PlaybackBundle, position: float, start_index
     equity = 1.0
     peak_equity = 1.0
     current_position = 0.0
+    cost_rate = (float(bundle.config.transaction_cost_bps) + float(bundle.config.slippage_bps)) / 10000.0
+    holding_cost_rate = float(bundle.config.holding_cost_bps) / 10000.0
     for idx in range(start_index, start_index + steps):
         transition = simulate_step_transition(
             current_position=current_position,
@@ -215,8 +219,13 @@ def simulate_fixed_position(bundle: PlaybackBundle, position: float, start_index
             peak_equity=peak_equity,
             config=bundle.config,
         )
-        equity = transition["equity"]
-        peak_equity = transition["peak_equity"]
+        cost = abs(float(position) - float(current_position)) * cost_rate
+        holding_cost = abs(float(current_position)) * holding_cost_rate
+        realized_return = compute_one_bar_return(bundle.closes, idx)
+        net_return = (float(current_position) * realized_return) - cost - holding_cost
+        growth_factor = max(1e-12, 1.0 + net_return)
+        equity *= growth_factor
+        peak_equity = max(peak_equity, equity)
         current_position = position
     return equity, equity - 1.0
 
@@ -279,6 +288,7 @@ def run_playback(
     current_trade_cost: float = 0.0
     current_trade_start_step: int | None = None
     last_idx = -1
+    cost_rate = (float(bundle.config.transaction_cost_bps) + float(bundle.config.slippage_bps)) / 10000.0
 
     try:
         for idx in range(start_idx, start_idx + step_limit):
@@ -336,13 +346,16 @@ def run_playback(
                 peak_equity=peak_equity,
                 config=bundle.config,
             )
-            cost_rate = (float(bundle.config.transaction_cost_bps) + float(bundle.config.slippage_bps)) / 10000.0
             exit_cost, entry_cost = _split_transition_cost(state.position, target_position, cost_rate)
+            realized_price_return = compute_one_bar_return(bundle.closes, idx)
+            realized_step_pnl = float(state.position) * float(realized_price_return)
+            realized_net_return = realized_step_pnl - float(transition["cost"]) - float(transition["holding_cost"])
+            growth_factor = max(1e-12, 1.0 + realized_net_return)
             if abs(state.position) > 1e-6:
                 if current_trade_growth is None:
                     current_trade_growth = 1.0
                     current_trade_cost = 0.0
-                trade_bar_net = transition["step_pnl"] - exit_cost - transition["holding_cost"]
+                trade_bar_net = realized_step_pnl - exit_cost - float(transition["holding_cost"])
                 current_trade_growth *= max(1e-12, 1.0 + float(trade_bar_net))
                 current_trade_cost += float(exit_cost + transition["holding_cost"])
             if abs(delta) > 1e-6:
@@ -374,14 +387,14 @@ def run_playback(
                     current_trade_start_step = step_num
 
             reward = transition["reward"]
-            state.equity = transition["equity"]
+            state.equity *= growth_factor
             equity_series.append(state.equity)
             state.position = target_position
             if state.equity >= peak_equity:
                 peak_step = step_num
                 drawdown_peak_equity = state.equity
-            peak_equity = transition["peak_equity"]
-            current_drawdown = float(transition["drawdown"])
+            peak_equity = max(peak_equity, state.equity)
+            current_drawdown = compute_drawdown(state.equity, peak_equity)
             if current_drawdown >= max_drawdown:
                 max_drawdown = current_drawdown
                 drawdown_peak_step = peak_step

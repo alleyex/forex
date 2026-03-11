@@ -44,6 +44,56 @@ from forex.tools.rl.run_live_sim import PlaybackBundle, PlaybackResult, run_play
 from forex.config.paths import DEFAULT_MODEL_PATH
 
 
+def _save_training_args_snapshot(
+    out_path: str,
+    args: argparse.Namespace,
+    *,
+    feature_profile: str,
+    requested_feature_names: list[str] | None,
+    scaler_path: str,
+    env_config_path: str,
+) -> None:
+    target = str(out_path).strip()
+    if not target:
+        return
+    path = Path(target).expanduser()
+    payload = dict(vars(args))
+    payload["feature_profile"] = feature_profile
+    payload["requested_feature_names"] = requested_feature_names
+    payload["feature_scaler_out_resolved"] = scaler_path
+    payload["env_config_out_resolved"] = env_config_path
+    payload["model_out_resolved"] = str(Path(args.model_out).expanduser())
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(payload, ensure_ascii=True, indent=2), encoding="utf-8")
+
+
+def _save_training_status(
+    out_path: str,
+    *,
+    status: str,
+    stop_reason: str = "",
+    exit_code: int | None = None,
+    stopped_early: bool | None = None,
+    total_steps_target: int | None = None,
+    last_step: int | None = None,
+) -> None:
+    target = str(out_path).strip()
+    if not target:
+        return
+    path = Path(target).expanduser()
+    payload = {
+        "status": status,
+        "stop_reason": stop_reason,
+        "exit_code": exit_code,
+        "stopped_early": stopped_early,
+        "total_steps_target": total_steps_target,
+        "last_step": last_step,
+        "updated_at": time.strftime("%Y-%m-%dT%H:%M:%S"),
+    }
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(payload, ensure_ascii=True, indent=2), encoding="utf-8")
+
+
 def _handle_termination_signal(signum, _frame) -> None:
     signal_name = signal.Signals(signum).name if signum in signal.Signals._value2member_map_ else str(signum)
     print(f"Received {signal_name}; saving current checkpoint before exit.")
@@ -946,9 +996,16 @@ def main() -> None:
     parser.add_argument("--reward-clip", type=float, default=0.02, help="Clip reward to +/- value (0 disables).")
     parser.add_argument(
         "--reward-mode",
-        choices=("linear", "log_return", "risk_adjusted"),
+        choices=(
+            "linear",
+            "log_return",
+            "risk_adjusted",
+            "terminal_horizon",
+            "path_penalty",
+            "tp_sl_proxy",
+        ),
         default="risk_adjusted",
-        help="Reward definition: raw net return, log(1 + net_return), or risk-adjusted log return.",
+        help="Reward definition: raw net return, log return, risk-adjusted log return, fixed-horizon terminal reward, path-penalty reward, or take-profit/stop-loss proxy reward.",
     )
     parser.add_argument("--risk-aversion", type=float, default=0.5, help="Penalty for variance of PnL.")
     parser.add_argument(
@@ -1283,6 +1340,16 @@ def main() -> None:
         default="",
         help="Optional JSON path to save TradingConfig (default: model_out with .env.json).",
     )
+    parser.add_argument(
+        "--training-args-out",
+        default="",
+        help="Optional JSON path to save the resolved training launch arguments for this run.",
+    )
+    parser.add_argument(
+        "--training-status-out",
+        default="",
+        help="Optional JSON path to save runtime completion status for this run.",
+    )
     parser.add_argument("--resume", action="store_true", help="Resume training from existing model.")
     parser.add_argument(
         "--save-best-checkpoint",
@@ -1568,6 +1635,27 @@ def main() -> None:
     env_config_path = str(Path(env_config_path).expanduser())
     env_dir = Path(env_config_path).parent
     env_dir.mkdir(parents=True, exist_ok=True)
+    training_args_path = args.training_args_out.strip()
+    if not training_args_path:
+        training_args_path = str(Path(args.model_out).with_name("training_args.json"))
+    training_args_path = str(Path(training_args_path).expanduser())
+    training_status_path = args.training_status_out.strip()
+    if not training_status_path:
+        training_status_path = str(Path(args.model_out).with_name("training_status.json"))
+    training_status_path = str(Path(training_status_path).expanduser())
+    _save_training_args_snapshot(
+        training_args_path,
+        args,
+        feature_profile=feature_profile,
+        requested_feature_names=requested_feature_names,
+        scaler_path=scaler_path,
+        env_config_path=env_config_path,
+    )
+    _save_training_status(
+        training_status_path,
+        status="running",
+        total_steps_target=int(args.total_steps),
+    )
 
     env = _build_env(train_features, train_closes, train_config, train_timestamps)
     eval_env = _build_env(eval_features, eval_closes, eval_config, eval_timestamps)
@@ -1638,6 +1726,7 @@ def main() -> None:
     metrics_callback = MetricsLogCallback(_write_metric)
     best_model_tmp_dir: Path | None = None
     activity_profile_steps = max(0, int(args.eval_profile_steps))
+    eval_callbacks: list[PlateauEvalCallback] = []
 
     def _profile_eval_activity(model_ref: PPO, config_ref: TradingConfig) -> dict[str, float]:
         return _profile_policy_activity(
@@ -1661,7 +1750,7 @@ def main() -> None:
                 best_model_tmp_dir = Path(tempfile.mkdtemp(prefix="ppo_best_eval_"))
             kwargs["best_model_save_path"] = str(best_model_tmp_dir)
             kwargs["log_path"] = str(best_model_tmp_dir)
-        return PlateauEvalCallback(
+        callback = PlateauEvalCallback(
             eval_env_ref,
             write_metric=_write_metric,
             early_stop_enabled=args.early_stop_enabled,
@@ -1686,6 +1775,18 @@ def main() -> None:
             checkpoint_max_drawdown=args.checkpoint_max_drawdown,
             **kwargs,
         )
+        eval_callbacks.append(callback)
+        return callback
+
+    def _resolve_callback_status() -> tuple[bool, str, int | None]:
+        for callback in reversed(eval_callbacks):
+            if getattr(callback, "stopped_early", False):
+                step = getattr(callback, "num_timesteps", None)
+                return True, str(getattr(callback, "stop_reason", "") or ""), int(step) if step is not None else None
+        if eval_callbacks:
+            step = getattr(eval_callbacks[-1], "num_timesteps", None)
+            return False, "", int(step) if step is not None else None
+        return False, "", None
 
     def _save_interrupted_checkpoint(model_ref: PPO, config_ref: TradingConfig) -> None:
         model_to_save = model_ref
@@ -1700,6 +1801,16 @@ def main() -> None:
             config_ref,
             env_config_path,
             extra=_extract_data_context(args.data),
+        )
+        stopped_early, stop_reason, last_step = _resolve_callback_status()
+        _save_training_status(
+            training_status_path,
+            status="interrupted",
+            stop_reason=stop_reason or "external signal or user interrupt",
+            exit_code=130,
+            stopped_early=stopped_early,
+            total_steps_target=int(args.total_steps),
+            last_step=last_step,
         )
 
     def _maybe_run_warm_start(model_ref: PPO) -> None:
@@ -2704,6 +2815,16 @@ def main() -> None:
         final_train_config,
         env_config_path,
         extra=_extract_data_context(args.data),
+    )
+    stopped_early, stop_reason, last_step = _resolve_callback_status()
+    _save_training_status(
+        training_status_path,
+        status="stopped_early" if stopped_early else "completed",
+        stop_reason=stop_reason,
+        exit_code=0,
+        stopped_early=stopped_early,
+        total_steps_target=int(args.total_steps),
+        last_step=last_step,
     )
     if metrics_fh:
         metrics_fh.flush()

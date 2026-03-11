@@ -8,7 +8,13 @@ import numpy as np
 import pandas as pd
 
 from forex.ml.rl.envs.trading_config_io import load_trading_config
-from forex.ml.rl.envs.trading_env import TradingConfig, apply_risk_engine, compute_horizon_return, simulate_step_transition
+from forex.ml.rl.envs.trading_env import (
+    TradingConfig,
+    apply_risk_engine,
+    compute_drawdown,
+    compute_one_bar_return,
+    simulate_step_transition,
+)
 from forex.ml.rl.features.feature_builder import (
     apply_scaler,
     build_feature_frame,
@@ -190,6 +196,10 @@ def _run_segment(
             peak_equity=peak_equity,
             config=config,
         )
+        realized_price_return = compute_one_bar_return(closes, idx)
+        realized_step_pnl = float(position) * float(realized_price_return)
+        realized_net_return = realized_step_pnl - float(transition["cost"]) - float(transition["holding_cost"])
+        growth_factor = max(1e-12, 1.0 + realized_net_return)
         if abs(delta) > 1e-6:
             current_price = closes[idx]
             if last_trade_price is not None:
@@ -197,9 +207,9 @@ def _run_segment(
                 trade_pnls.append(float(trade_pnl))
                 trade_costs.append(float(transition["cost"]))
             last_trade_price = current_price
-        equity = transition["equity"]
-        peak_equity = transition["peak_equity"]
-        max_drawdown = max(max_drawdown, float(transition["drawdown"]))
+        equity *= growth_factor
+        peak_equity = max(peak_equity, equity)
+        max_drawdown = max(max_drawdown, float(compute_drawdown(equity, peak_equity)))
         equity_series.append(equity)
         position = target_position
 
