@@ -376,6 +376,68 @@ def test_log_return_reward_uses_log_growth() -> None:
     assert info["equity"] == pytest.approx(1.1)
 
 
+def test_log_return_reward_ignores_risk_and_execution_penalties() -> None:
+    pytest.importorskip("gymnasium")
+    features = np.zeros((3, 2), dtype=np.float32)
+    closes = np.array([100.0, 110.0, 110.0], dtype=np.float64)
+    env = TradingEnv(
+        features,
+        closes,
+        TradingConfig(
+            random_start=False,
+            episode_length=2,
+            reward_horizon=1,
+            reward_mode="log_return",
+            risk_aversion=0.5,
+            drawdown_penalty=1.0,
+            turnover_penalty=0.25,
+            exposure_penalty=0.1,
+            transaction_cost_bps=0.0,
+            slippage_bps=0.0,
+            holding_cost_bps=0.0,
+        ),
+    )
+    env.reset()
+    env._position = 1.0
+    _, reward, _, _, info = env.step(np.array([0.5], dtype=np.float32))
+    assert info["reward_mode"] == "log_return"
+    assert info["turnover_penalty"] == pytest.approx(0.0)
+    assert info["exposure_penalty"] == pytest.approx(0.0)
+    assert info["drawdown_penalty"] == pytest.approx(0.0)
+    assert reward == pytest.approx(np.log(1.1))
+
+
+def test_linear_reward_ignores_risk_and_execution_penalties() -> None:
+    pytest.importorskip("gymnasium")
+    features = np.zeros((3, 2), dtype=np.float32)
+    closes = np.array([100.0, 110.0, 110.0], dtype=np.float64)
+    env = TradingEnv(
+        features,
+        closes,
+        TradingConfig(
+            random_start=False,
+            episode_length=2,
+            reward_horizon=1,
+            reward_mode="linear",
+            risk_aversion=0.5,
+            drawdown_penalty=1.0,
+            turnover_penalty=0.25,
+            exposure_penalty=0.1,
+            transaction_cost_bps=0.0,
+            slippage_bps=0.0,
+            holding_cost_bps=0.0,
+        ),
+    )
+    env.reset()
+    env._position = 1.0
+    _, reward, _, _, info = env.step(np.array([0.5], dtype=np.float32))
+    assert info["reward_mode"] == "linear"
+    assert info["turnover_penalty"] == pytest.approx(0.0)
+    assert info["exposure_penalty"] == pytest.approx(0.0)
+    assert info["drawdown_penalty"] == pytest.approx(0.0)
+    assert reward == pytest.approx(0.1)
+
+
 def test_drawdown_penalty_uses_drawdown_delta_only() -> None:
     pytest.importorskip("gymnasium")
     features = np.zeros((4, 2), dtype=np.float32)
@@ -387,6 +449,7 @@ def test_drawdown_penalty_uses_drawdown_delta_only() -> None:
             random_start=False,
             episode_length=3,
             reward_horizon=1,
+            reward_mode="risk_adjusted",
             drawdown_penalty=1.0,
         ),
     )
@@ -396,7 +459,7 @@ def test_drawdown_penalty_uses_drawdown_delta_only() -> None:
     _, reward_two, _, _, info_two = env.step(np.array([1.0], dtype=np.float32))
     assert info_one["drawdown"] == pytest.approx(0.1)
     assert info_one["drawdown_delta"] == pytest.approx(0.1)
-    assert reward_one == pytest.approx(-0.2)
+    assert reward_one == pytest.approx(np.log(0.9) - 0.1)
     assert info_two["drawdown"] == pytest.approx(0.1)
     assert info_two["drawdown_delta"] == pytest.approx(0.0)
     assert reward_two == pytest.approx(0.0)
@@ -505,13 +568,14 @@ def test_turnover_penalty_applies_additional_penalty_to_position_change() -> Non
             random_start=False,
             episode_length=2,
             reward_horizon=1,
+            reward_mode="risk_adjusted",
             turnover_penalty=0.001,
         ),
     )
     env.reset()
     _, reward, _, _, info = env.step(np.array([1.0], dtype=np.float32))
     assert info["turnover_penalty"] == pytest.approx(0.001)
-    assert reward == pytest.approx(-(info["cost"] + 0.001))
+    assert reward == pytest.approx(np.log(1.0 - info["cost"]) - 0.001)
 
 
 def test_exposure_penalty_applies_to_absolute_target_position() -> None:
@@ -525,6 +589,7 @@ def test_exposure_penalty_applies_to_absolute_target_position() -> None:
             random_start=False,
             episode_length=2,
             reward_horizon=1,
+            reward_mode="risk_adjusted",
             transaction_cost_bps=0.0,
             slippage_bps=0.0,
             holding_cost_bps=0.0,

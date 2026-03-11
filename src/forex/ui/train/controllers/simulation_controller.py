@@ -102,6 +102,9 @@ class SimulationController(QObject):
         if not self._runner.stop():
             self._state.log_message.emit(format_simulation_message("stop_failed"))
 
+    def is_running(self) -> bool:
+        return self._runner.is_running()
+
     def _show_error(self, message: str) -> None:
         self._state.log_message.emit(format_simulation_message("param_error", message=message))
         parent = self.parent()

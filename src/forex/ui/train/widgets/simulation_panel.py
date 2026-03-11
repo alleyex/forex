@@ -129,6 +129,7 @@ class SimulationParamsPanel(QWidget):
     def __init__(self, parent: Optional[QWidget] = None) -> None:
         super().__init__(parent)
         self._loading_params = False
+        self._simulation_running = False
         self._params_store = UIParamsStore("simulation")
         self._setup_ui()
         self._bind_persistence()
@@ -220,22 +221,17 @@ class SimulationParamsPanel(QWidget):
         layout.addWidget(file_group)
         layout.addWidget(params_group)
 
-        layout.addStretch(1)
-
         controls = QGridLayout()
         controls.setHorizontalSpacing(10)
         controls.setContentsMargins(0, 0, 0, 0)
 
         self._start_button = QPushButton("Start Playback")
         self._start_button.setProperty("class", PRIMARY)
-        self._start_button.clicked.connect(self._emit_start)
+        self._start_button.clicked.connect(self._toggle_simulation)
         controls.addWidget(self._start_button, 0, 0)
 
-        self._stop_button = QPushButton("Stop Playback")
-        self._stop_button.clicked.connect(self.stop_requested.emit)
-        controls.addWidget(self._stop_button, 0, 1)
-
         layout.addLayout(controls)
+        layout.addStretch(1)
 
     def _browse_data(self) -> None:
         path, _ = QFileDialog.getOpenFileName(self, "Select Data File", "", "CSV (*.csv)")
@@ -255,6 +251,16 @@ class SimulationParamsPanel(QWidget):
             return
         self._model_path.setText(text)
         self._model_path.setToolTip(text)
+
+    def set_simulation_running(self, running: bool) -> None:
+        self._simulation_running = bool(running)
+        self._start_button.setText("Stop Playback" if self._simulation_running else "Start Playback")
+
+    def _toggle_simulation(self) -> None:
+        if self._simulation_running:
+            self.stop_requested.emit()
+            return
+        self._emit_start()
 
     def _emit_start(self) -> None:
         self._apply_path_normalization()
