@@ -1800,6 +1800,7 @@ class TrainingParamsPanel(QWidget):
             "minute_of_week_cos",
             "is_monday_open_window",
             "is_london_session",
+            "is_london_pre_ny_session",
             "is_ny_session",
             "is_london_ny_overlap",
         }

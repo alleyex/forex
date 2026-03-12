@@ -25,6 +25,35 @@ def test_action_space_matches_max_position() -> None:
     assert float(env.action_space.low[0]) == pytest.approx(-2.5)
 
 
+def test_native_discrete_action_space_uses_position_count() -> None:
+    gym = pytest.importorskip("gymnasium")
+    config = TradingConfig(
+        discretize_actions=True,
+        native_discrete_actions=True,
+        discrete_positions=(-1.0, -0.5, 0.0, 0.5, 1.0),
+    )
+    env = _make_env(config)
+    assert isinstance(env.action_space, gym.spaces.Discrete)
+    assert env.action_space.n == 5
+
+
+def test_native_discrete_apply_action_maps_index_to_position() -> None:
+    pytest.importorskip("gymnasium")
+    env = _make_env(
+        TradingConfig(
+            discretize_actions=True,
+            native_discrete_actions=True,
+            discrete_positions=(-1.0, 0.0, 1.0),
+            random_start=False,
+            min_position_change=0.0,
+            position_step=0.0,
+        )
+    )
+    env.reset()
+    target, _ = env._apply_action(np.array(2, dtype=np.int64))
+    assert target == pytest.approx(1.0)
+
+
 def test_apply_action_respects_max_position_above_one() -> None:
     pytest.importorskip("gymnasium")
     env = _make_env(TradingConfig(max_position=2.5))

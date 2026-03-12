@@ -80,6 +80,7 @@ ALPHA_SOURCE_COLUMNS: tuple[str, ...] = (
     "london_to_ny_open_return",
     "ny_reversal_pressure",
     "is_london_session",
+    "is_london_pre_ny_session",
     "is_ny_session",
     "is_london_ny_overlap",
 )
@@ -87,6 +88,7 @@ RESIDUAL_CONTEXT_COLUMNS: tuple[str, ...] = (
     "atr_14",
     "vol_pct_72_252",
     "is_london_session",
+    "is_london_pre_ny_session",
     "is_ny_session",
     "is_london_ny_overlap",
     "since_london_open_return",
@@ -171,6 +173,11 @@ ALL_FEATURE_COLUMNS: tuple[str, ...] = (
     "distance_to_prev_day_low",
     "distance_to_day_high_so_far",
     "distance_to_day_low_so_far",
+    "asia_range_width_atr",
+    "distance_to_asia_high",
+    "distance_to_asia_low",
+    "london_breakout_of_asia",
+    "pre_london_compression",
     "since_london_open_return",
     "since_ny_open_return",
     "ny_open_gap_prev_close",
@@ -185,6 +192,7 @@ ALL_FEATURE_COLUMNS: tuple[str, ...] = (
     "minute_of_week_cos",
     "is_monday_open_window",
     "is_london_session",
+    "is_london_pre_ny_session",
     "is_ny_session",
     "is_london_ny_overlap",
 )
@@ -334,6 +342,7 @@ def filter_feature_rows_by_session(
         "all": None,
         "monday_open": "is_monday_open_window",
         "london": "is_london_session",
+        "london_pre_ny": "is_london_pre_ny_session",
         "ny": "is_ny_session",
         "overlap": "is_london_ny_overlap",
     }
@@ -409,13 +418,16 @@ def build_feature_frame(
     if returns_60 is not None:
         features_dict["returns_60"] = returns_60
 
-    sma_10 = close.rolling(10).mean() / close - 1.0 if wants("sma_10", "range_strength_10_50_atr14") else None
+    sma_10_price = close.rolling(10).mean() if wants("sma_10", "range_strength_10_50_atr14") else None
+    sma_10 = sma_10_price / close - 1.0 if sma_10_price is not None else None
     if "sma_10" in requested:
         features_dict["sma_10"] = sma_10
-    sma_20 = close.rolling(20).mean() / close - 1.0 if wants("sma_20", "trend_strength_20_100_atr14") else None
-    if sma_20 is not None:
+    sma_20_price = close.rolling(20).mean() if wants("sma_20", "trend_strength_20_100_atr14", "bollinger_band_width_20") else None
+    sma_20 = sma_20_price / close - 1.0 if sma_20_price is not None else None
+    if "sma_20" in requested:
         features_dict["sma_20"] = sma_20
-    sma_50 = close.rolling(50).mean() / close - 1.0 if wants("sma_50", "range_strength_10_50_atr14", "distance_to_mean_50") else None
+    sma_50_price = close.rolling(50).mean() if wants("sma_50", "range_strength_10_50_atr14", "distance_to_mean_50") else None
+    sma_50 = sma_50_price / close - 1.0 if sma_50_price is not None else None
     if "sma_50" in requested:
         features_dict["sma_50"] = sma_50
     sma_100 = close.rolling(100).mean() if wants("trend_strength_20_100_atr14") else None
@@ -432,7 +444,7 @@ def build_feature_frame(
     if "price_z_100" in requested:
         features_dict["price_z_100"] = _rolling_zscore(close, 100)
     if "distance_to_mean_50" in requested:
-        features_dict["distance_to_mean_50"] = close / sma_50.replace(0, np.nan) - 1.0
+        features_dict["distance_to_mean_50"] = close / sma_50_price.replace(0, np.nan) - 1.0
     if "breakout_20" in requested:
         features_dict["breakout_20"] = close / high.shift(1).rolling(20).max() - 1.0
     if "breakout_50" in requested:
@@ -445,6 +457,8 @@ def build_feature_frame(
         "atr_ratio_14_50",
         "atr_ratio_14_100",
         "range_strength_10_50_atr14",
+        "asia_range_width_atr",
+        "pre_london_compression",
     ) else None
     if "atr_14" in requested:
         features_dict["atr_14"] = atr_14
@@ -470,8 +484,8 @@ def build_feature_frame(
         rolling_std_252 = rolling_std_72.rolling(252, min_periods=min(252, 64)).std().replace(0, np.nan)
         features_dict["volatility_regime_z"] = (rolling_std_72 - rolling_mean_252) / rolling_std_252
     if "bollinger_band_width_20" in requested:
-        rolling_std_20 = returns_1.rolling(20).std()
-        features_dict["bollinger_band_width_20"] = (4.0 * rolling_std_20) / close.replace(0, np.nan)
+        rolling_std_20_price = close.rolling(20).std()
+        features_dict["bollinger_band_width_20"] = (4.0 * rolling_std_20_price) / sma_20_price.replace(0, np.nan)
 
     if "distance_to_rolling_high_20" in requested:
         rolling_high_20 = high.rolling(20).max()
@@ -508,6 +522,7 @@ def build_feature_frame(
         "minute_of_week_cos",
         "is_monday_open_window",
         "is_london_session",
+        "is_london_pre_ny_session",
         "is_ny_session",
         "is_london_ny_overlap",
     }
@@ -519,6 +534,11 @@ def build_feature_frame(
         "distance_to_prev_day_low",
         "distance_to_day_high_so_far",
         "distance_to_day_low_so_far",
+        "asia_range_width_atr",
+        "distance_to_asia_high",
+        "distance_to_asia_low",
+        "london_breakout_of_asia",
+        "pre_london_compression",
         "since_london_open_return",
         "since_ny_open_return",
         "ny_open_gap_prev_close",
@@ -535,6 +555,7 @@ def build_feature_frame(
             minute_of_week_cos,
             is_monday_open_window,
             is_london_session,
+            is_london_pre_ny_session,
             is_ny_session,
             is_london_ny_overlap,
         ) = _time_features(datetimes)
@@ -547,6 +568,7 @@ def build_feature_frame(
             "minute_of_week_cos": minute_of_week_cos,
             "is_monday_open_window": is_monday_open_window,
             "is_london_session": is_london_session,
+            "is_london_pre_ny_session": is_london_pre_ny_session,
             "is_ny_session": is_ny_session,
             "is_london_ny_overlap": is_london_ny_overlap,
         }
@@ -560,6 +582,7 @@ def build_feature_frame(
                 close=close,
                 high=high,
                 low=low,
+                atr_14=atr_14,
                 is_london_session=is_london_session,
                 is_ny_session=is_ny_session,
             )
@@ -572,6 +595,11 @@ def build_feature_frame(
                     "distance_to_prev_day_low",
                     "distance_to_day_high_so_far",
                     "distance_to_day_low_so_far",
+                    "asia_range_width_atr",
+                    "distance_to_asia_high",
+                    "distance_to_asia_low",
+                    "london_breakout_of_asia",
+                    "pre_london_compression",
                     "since_london_open_return",
                     "since_ny_open_return",
                     "ny_open_gap_prev_close",
@@ -922,7 +950,7 @@ def _timestamp_strings(df: pd.DataFrame, datetimes: pd.Series) -> pd.Series:
 
 def _time_features(
     datetimes: pd.Series,
-) -> tuple[pd.Series, pd.Series, pd.Series, pd.Series, pd.Series, pd.Series, pd.Series, pd.Series, pd.Series, pd.Series]:
+) -> tuple[pd.Series, pd.Series, pd.Series, pd.Series, pd.Series, pd.Series, pd.Series, pd.Series, pd.Series, pd.Series, pd.Series]:
     hours = datetimes.dt.hour.fillna(0).astype(float) + datetimes.dt.minute.fillna(0).astype(float) / 60.0
     weekdays = datetimes.dt.dayofweek.fillna(0).astype(float)
     minutes_of_week = weekdays * 24.0 * 60.0 + datetimes.dt.hour.fillna(0).astype(float) * 60.0 + datetimes.dt.minute.fillna(0).astype(float)
@@ -938,6 +966,10 @@ def _time_features(
     is_monday_open_window = ((weekdays == 0.0) & (hours < 3.0)).astype(float)
     is_london_session = ((london_hours >= 8.0) & (london_hours < 17.0)).astype(float)
     is_ny_session = ((new_york_hours >= 8.0) & (new_york_hours < 17.0)).astype(float)
+    is_london_pre_ny_session = (
+        ((london_hours >= 8.0) & (london_hours < 17.0))
+        & ~((new_york_hours >= 8.0) & (new_york_hours < 17.0))
+    ).astype(float)
     is_london_ny_overlap = (
         ((london_hours >= 8.0) & (london_hours < 17.0))
         & ((new_york_hours >= 8.0) & (new_york_hours < 17.0))
@@ -958,6 +990,7 @@ def _time_features(
         minute_of_week_cos,
         pd.Series(is_monday_open_window, index=datetimes.index),
         pd.Series(is_london_session, index=datetimes.index),
+        pd.Series(is_london_pre_ny_session, index=datetimes.index),
         pd.Series(is_ny_session, index=datetimes.index),
         pd.Series(is_london_ny_overlap, index=datetimes.index),
     )
@@ -970,6 +1003,7 @@ def _session_context_features(
     close: pd.Series,
     high: pd.Series,
     low: pd.Series,
+    atr_14: pd.Series | None,
     is_london_session: pd.Series,
     is_ny_session: pd.Series,
 ) -> tuple[
@@ -985,15 +1019,42 @@ def _session_context_features(
     pd.Series,
     pd.Series,
     pd.Series,
+    pd.Series,
+    pd.Series,
+    pd.Series,
+    pd.Series,
+    pd.Series,
 ]:
     if not datetimes.notna().any():
         zeros = pd.Series(0.0, index=close.index, dtype=float)
-        return (zeros, zeros, zeros, zeros, zeros, zeros, zeros, zeros, zeros, zeros, zeros, zeros)
+        return (
+            zeros,
+            zeros,
+            zeros,
+            zeros,
+            zeros,
+            zeros,
+            zeros,
+            zeros,
+            zeros,
+            zeros,
+            zeros,
+            zeros,
+            zeros,
+            zeros,
+            zeros,
+            zeros,
+            zeros,
+        )
 
     new_york = datetimes.dt.tz_convert("America/New_York")
     london = datetimes.dt.tz_convert("Europe/London")
     ny_dates = new_york.dt.strftime("%Y-%m-%d").fillna("")
     london_dates = london.dt.strftime("%Y-%m-%d").fillna("")
+    london_hours = london.dt.hour.fillna(0).astype(float) + london.dt.minute.fillna(0).astype(float) / 60.0
+    ny_hours = new_york.dt.hour.fillna(0).astype(float) + new_york.dt.minute.fillna(0).astype(float) / 60.0
+    london_after_open = london_hours >= 8.0
+    ny_after_open = ny_hours >= 8.0
 
     daily = pd.DataFrame(
         {
@@ -1027,12 +1088,37 @@ def _session_context_features(
     distance_to_day_high_so_far = close / day_high_so_far.replace(0, np.nan) - 1.0
     distance_to_day_low_so_far = close / day_low_so_far.replace(0, np.nan) - 1.0
 
+    asia_window = (london_hours >= 0.0) & (london_hours < 8.0)
+    asia_high = high.where(asia_window).groupby(london_dates, sort=False).transform("max")
+    asia_low = low.where(asia_window).groupby(london_dates, sort=False).transform("min")
+    asia_range = asia_high - asia_low
+    atr_abs = None
+    if atr_14 is not None:
+        atr_abs = (atr_14.astype(float) * close).replace(0, np.nan)
+    asia_range_width_atr = asia_range / atr_abs if atr_abs is not None else pd.Series(np.nan, index=close.index)
+    distance_to_asia_high = close / asia_high.replace(0, np.nan) - 1.0
+    distance_to_asia_low = close / asia_low.replace(0, np.nan) - 1.0
+    asia_range_width_atr = asia_range_width_atr.where(london_after_open, 0.0)
+    distance_to_asia_high = distance_to_asia_high.where(london_after_open, 0.0)
+    distance_to_asia_low = distance_to_asia_low.where(london_after_open, 0.0)
+
     london_start_close = close.where(is_london_session > 0.5).groupby(london_dates, sort=False).transform("first")
     ny_start_close = close.where(is_ny_session > 0.5).groupby(ny_dates, sort=False).transform("first")
-    ny_open_gap_prev_close = ny_start_close / prev_day_close.replace(0, np.nan) - 1.0
-    london_to_ny_open_return = ny_start_close / london_start_close.replace(0, np.nan) - 1.0
-    london_after_open = london.dt.hour.fillna(0).astype(float) >= 8.0
-    ny_after_open = new_york.dt.hour.fillna(0).astype(float) >= 8.0
+    ny_open_gap_prev_close = (ny_start_close / prev_day_close.replace(0, np.nan) - 1.0).where(
+        ny_after_open,
+        0.0,
+    )
+    london_to_ny_open_return = (ny_start_close / london_start_close.replace(0, np.nan) - 1.0).where(
+        ny_after_open & london_start_close.notna(),
+        0.0,
+    )
+    london_breakout_up = distance_to_asia_high.clip(lower=0.0)
+    london_breakout_down = distance_to_asia_low.clip(upper=0.0)
+    london_breakout_of_asia = (london_breakout_up + london_breakout_down).where(london_after_open, 0.0)
+    pre_london_compression = (1.0 / (1.0 + asia_range_width_atr.clip(lower=0.0))).where(
+        london_after_open & asia_range_width_atr.notna(),
+        0.0,
+    )
     since_london_open_return = (close / london_start_close.replace(0, np.nan) - 1.0).where(
         london_after_open & london_start_close.notna(),
         0.0,
@@ -1054,6 +1140,11 @@ def _session_context_features(
             distance_to_prev_day_low,
             distance_to_day_high_so_far,
             distance_to_day_low_so_far,
+            asia_range_width_atr,
+            distance_to_asia_high,
+            distance_to_asia_low,
+            london_breakout_of_asia,
+            pre_london_compression,
             since_london_open_return,
             since_ny_open_return,
             ny_open_gap_prev_close,

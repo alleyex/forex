@@ -10,7 +10,12 @@ import numpy as np
 import pandas as pd
 from ctrader_open_api.messages.OpenApiModelMessages_pb2 import ProtoOATradeSide
 
-from forex.ml.rl.envs.trading_env import TradingConfig, apply_risk_engine, build_window_observation
+from forex.ml.rl.envs.trading_env import (
+    TradingConfig,
+    apply_risk_engine,
+    build_window_observation,
+    decode_policy_action,
+)
 from forex.ml.rl.features.feature_builder import build_features
 
 
@@ -110,6 +115,7 @@ class LiveAutoTradeCoordinator:
         except Exception as exc:
             w._auto_log(f"❌ Model inference failed: {exc}")
             return
+        raw_action = decode_policy_action(action, config=config)
         equity = float(w._auto_balance) if w._auto_balance and float(w._auto_balance) > 0.0 else 1.0
         peak_equity = (
             float(w._auto_peak_balance)
@@ -117,7 +123,7 @@ class LiveAutoTradeCoordinator:
             else equity
         )
         target_position, risk_info = apply_risk_engine(
-            float(action[0]),
+            raw_action,
             current_position=float(w._auto_position),
             config=config,
             closes=np.asarray(feature_set.closes, dtype=np.float32),
@@ -133,7 +139,7 @@ class LiveAutoTradeCoordinator:
             features=int(feature_set.features.shape[1]),
             window=int(getattr(config, "window_size", 1)),
             pos=f"{w._auto_position:.3f}",
-            action=f"{float(action[0]):.3f}",
+            action=f"{raw_action:.3f}",
             target=f"{target_position:.3f}",
             vol_scale=f"{risk_info['vol_target_scale']:.3f}",
             dd_scale=f"{risk_info['drawdown_governor_scale']:.3f}",

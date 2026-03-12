@@ -129,8 +129,37 @@ def build_argument_parser() -> argparse.ArgumentParser:
     parser.add_argument("--segment-steps", type=int, default=5000, help="Playback steps per segment.")
     parser.add_argument("--segments", type=int, default=3, help="Maximum number of segments to run.")
     parser.add_argument("--stride", type=int, default=10000, help="Index stride between segment starts.")
+    parser.add_argument(
+        "--session-filter",
+        choices=("all", "monday_open", "london", "london_pre_ny", "ny", "overlap"),
+        default="all",
+        help="Optional session filter applied before playback.",
+    )
     parser.add_argument("--transaction-cost-bps", type=float, default=1.0, help="Transaction cost in bps.")
     parser.add_argument("--slippage-bps", type=float, default=0.5, help="Slippage in bps.")
+    parser.add_argument("--action-gate", action="append", default=[], help="Optional execution gate feature:min:max.")
+    parser.add_argument(
+        "--action-gate-mode",
+        choices=("force_flat", "entry_only"),
+        default="force_flat",
+        help="How action gates affect open positions.",
+    )
+    parser.add_argument(
+        "--action-scale",
+        type=float,
+        default=1.0,
+        help="Multiplier applied to raw policy actions before replay envelope logic.",
+    )
+    parser.add_argument(
+        "--threshold-bump",
+        action="append",
+        default=[],
+        help="Optional regime threshold bump feature:min:max:bump.",
+    )
+    parser.add_argument("--long-threshold", type=float, default=None, help="Optional long entry threshold for policy envelope.")
+    parser.add_argument("--short-threshold", type=float, default=None, help="Optional short entry threshold for policy envelope.")
+    parser.add_argument("--long-exit-threshold", type=float, default=None, help="Optional long exit threshold.")
+    parser.add_argument("--short-exit-threshold", type=float, default=None, help="Optional short exit threshold.")
     parser.add_argument("--stochastic", action="store_true", help="Use stochastic actions for diagnostics.")
     parser.add_argument("--json-out", default="", help="Optional JSON output path.")
     return parser
@@ -146,14 +175,49 @@ def main() -> None:
         parser.error("--segments must be > 0")
     if args.stride <= 0:
         parser.error("--stride must be > 0")
+    policy_enabled = (
+        args.long_threshold is not None
+        or args.short_threshold is not None
+        or bool(list(args.action_gate))
+        or bool(list(args.threshold_bump))
+    )
+    if policy_enabled:
+        if args.long_threshold is None or args.short_threshold is None:
+            parser.error("--long-threshold and --short-threshold are required when policy envelope options are used")
+        if float(args.short_threshold) >= float(args.long_threshold):
+            parser.error("--short-threshold must be < --long-threshold")
+        long_exit_threshold = (
+            float(args.long_threshold) if args.long_exit_threshold is None else float(args.long_exit_threshold)
+        )
+        short_exit_threshold = (
+            float(args.short_threshold) if args.short_exit_threshold is None else float(args.short_exit_threshold)
+        )
+        if long_exit_threshold > float(args.long_threshold):
+            parser.error("--long-exit-threshold must be <= --long-threshold")
+        if short_exit_threshold < float(args.short_threshold):
+            parser.error("--short-exit-threshold must be >= --short-threshold")
+        if short_exit_threshold >= long_exit_threshold:
+            parser.error("--short-exit-threshold must be < --long-exit-threshold")
+    else:
+        long_exit_threshold = None
+        short_exit_threshold = None
 
     primary_bundle = load_playback_bundle(
         data_path=args.data,
         model_path=args.model,
         feature_scaler_path=args.feature_scaler,
         env_config_path=args.env_config,
+        session_filter=args.session_filter,
         transaction_cost_bps=args.transaction_cost_bps,
         slippage_bps=args.slippage_bps,
+        action_gates=list(args.action_gate),
+        action_gate_mode=str(args.action_gate_mode),
+        action_scale=float(args.action_scale),
+        threshold_bumps=list(args.threshold_bump),
+        long_threshold=args.long_threshold,
+        short_threshold=args.short_threshold,
+        long_exit_threshold=long_exit_threshold,
+        short_exit_threshold=short_exit_threshold,
     )
     compare_bundle = None
     if args.compare_model.strip():
@@ -162,8 +226,17 @@ def main() -> None:
             model_path=args.compare_model,
             feature_scaler_path=args.compare_feature_scaler,
             env_config_path=args.compare_env_config,
+            session_filter=args.session_filter,
             transaction_cost_bps=args.transaction_cost_bps,
             slippage_bps=args.slippage_bps,
+            action_gates=list(args.action_gate),
+            action_gate_mode=str(args.action_gate_mode),
+            action_scale=float(args.action_scale),
+            threshold_bumps=list(args.threshold_bump),
+            long_threshold=args.long_threshold,
+            short_threshold=args.short_threshold,
+            long_exit_threshold=long_exit_threshold,
+            short_exit_threshold=short_exit_threshold,
         )
 
     primary_label = Path(args.model).stem
@@ -235,6 +308,7 @@ def main() -> None:
             "segments_completed": len(primary_results),
             "stride": args.stride,
             "start_index": args.start_index,
+            "session_filter": args.session_filter,
             "primary_model": args.model,
             "compare_model": args.compare_model or None,
             "primary_aggregate": primary_aggregate,

@@ -320,6 +320,30 @@ def apply_risk_engine(
     }
 
 
+def uses_native_discrete_actions(config: "TradingConfig") -> bool:
+    return bool(
+        getattr(config, "native_discrete_actions", False)
+        and getattr(config, "discretize_actions", False)
+        and len(getattr(config, "discrete_positions", ())) > 0
+    )
+
+
+def decode_policy_action(action: Any, *, config: "TradingConfig") -> float:
+    if uses_native_discrete_actions(config):
+        positions = tuple(float(value) for value in getattr(config, "discrete_positions", ()) or (0.0,))
+        action_array = np.asarray(action)
+        if action_array.size == 0:
+            index = 0
+        else:
+            index = int(action_array.reshape(-1)[0])
+        index = int(np.clip(index, 0, len(positions) - 1))
+        return float(positions[index])
+    action_array = np.asarray(action, dtype=np.float32)
+    if action_array.size == 0:
+        return 0.0
+    return float(action_array.reshape(-1)[0])
+
+
 @dataclass
 class TradingConfig:
     transaction_cost_bps: float = 1.0
@@ -330,6 +354,7 @@ class TradingConfig:
     start_mode: str = ""
     min_position_change: float = 0.0
     discretize_actions: bool = False
+    native_discrete_actions: bool = False
     discrete_positions: tuple[float, ...] = (-1.0, 0.0, 1.0)
     max_position: float = 1.0
     position_step: float = 0.0
@@ -381,10 +406,13 @@ class TradingEnv(gym.Env if gym else object):
         self._window_size = max(1, int(self._config.window_size))
 
         obs_dim = features.shape[1] * self._window_size + 1
-        # Keep action space consistent with max_position so the policy can reach it.
-        max_position = max(1.0, float(self._config.max_position))
         self.observation_space = spaces.Box(low=-np.inf, high=np.inf, shape=(obs_dim,), dtype=np.float32)
-        self.action_space = spaces.Box(low=-max_position, high=max_position, shape=(1,), dtype=np.float32)
+        if uses_native_discrete_actions(self._config):
+            self.action_space = spaces.Discrete(len(self._config.discrete_positions))
+        else:
+            # Keep action space consistent with max_position so the policy can reach it.
+            max_position = max(1.0, float(self._config.max_position))
+            self.action_space = spaces.Box(low=-max_position, high=max_position, shape=(1,), dtype=np.float32)
 
         self._idx = 0
         self._max_idx = len(self._closes) - 1
@@ -496,7 +524,7 @@ class TradingEnv(gym.Env if gym else object):
 
     def _apply_action(self, action: np.ndarray) -> tuple[float, dict[str, float]]:
         return apply_risk_engine(
-            float(action[0]),
+            decode_policy_action(action, config=self._config),
             current_position=self._position,
             config=self._config,
             closes=self._closes,

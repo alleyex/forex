@@ -86,6 +86,11 @@ def test_build_feature_frame_exposes_extended_feature_set() -> None:
         "distance_to_prev_day_low",
         "distance_to_day_high_so_far",
         "distance_to_day_low_so_far",
+        "asia_range_width_atr",
+        "distance_to_asia_high",
+        "distance_to_asia_low",
+        "london_breakout_of_asia",
+        "pre_london_compression",
         "since_london_open_return",
         "since_ny_open_return",
         "ny_open_gap_prev_close",
@@ -100,6 +105,7 @@ def test_build_feature_frame_exposes_extended_feature_set() -> None:
         "minute_of_week_cos",
         "is_monday_open_window",
         "is_london_session",
+        "is_london_pre_ny_session",
         "is_ny_session",
         "is_london_ny_overlap",
     }
@@ -164,6 +170,13 @@ def test_session_context_features_have_expected_signs() -> None:
     assert np.all(np.isfinite(features["ny_open_gap_prev_close"].to_numpy()))
     assert np.all(np.isfinite(features["london_to_ny_open_return"].to_numpy()))
     assert np.all(np.isfinite(features["ny_reversal_pressure"].to_numpy()))
+    assert set(np.unique(features["is_london_pre_ny_session"].to_numpy())).issubset({0.0, 1.0})
+    assert np.all(features["is_london_pre_ny_session"].to_numpy() <= features["is_london_session"].to_numpy())
+    assert np.all(np.isfinite(features["asia_range_width_atr"].to_numpy()))
+    assert np.all(np.isfinite(features["distance_to_asia_high"].to_numpy()))
+    assert np.all(np.isfinite(features["distance_to_asia_low"].to_numpy()))
+    assert np.all(np.isfinite(features["london_breakout_of_asia"].to_numpy()))
+    assert np.all((features["pre_london_compression"].to_numpy() >= 0.0) & (features["pre_london_compression"].to_numpy() <= 1.0))
 
 
 def test_build_feature_frame_keeps_uptrend_rows_and_sets_rsi_to_100() -> None:
@@ -230,6 +243,149 @@ def test_breakout_20_is_not_a_duplicate_of_distance_to_rolling_high_20() -> None
         features["breakout_20"].to_numpy(),
         features["distance_to_rolling_high_20"].to_numpy(),
     )
+
+
+def test_distance_to_mean_50_uses_price_mean_not_normalized_sma_feature() -> None:
+    rows = 320
+    base = np.linspace(100.0, 120.0, num=rows, dtype=np.float64)
+    wave = np.sin(np.linspace(0.0, 10.0, num=rows)) * 0.7
+    close = base + wave
+    df = pd.DataFrame(
+        {
+            "timestamp": pd.date_range("2024-01-01", periods=rows, freq="15min").astype(str),
+            "open": close - 0.1,
+            "close": close,
+            "high": close + 0.4,
+            "low": close - 0.4,
+            "volume": np.linspace(1000.0, 2000.0, num=rows),
+        }
+    )
+
+    features, _, _ = build_feature_frame(df, ["sma_50", "distance_to_mean_50"])
+    expected_ma50 = pd.Series(close).rolling(50).mean().iloc[-1]
+    expected_distance = close[-1] / expected_ma50 - 1.0
+
+    assert np.isfinite(features["distance_to_mean_50"].to_numpy()).all()
+    assert features["distance_to_mean_50"].abs().max() < 0.1
+    assert features.iloc[-1]["distance_to_mean_50"] == pytest.approx(expected_distance)
+
+
+def test_bollinger_band_width_20_uses_price_bands_over_middle_band() -> None:
+    rows = 320
+    base = np.linspace(100.0, 118.0, num=rows, dtype=np.float64)
+    wave = np.sin(np.linspace(0.0, 20.0, num=rows)) * 1.5
+    close = base + wave
+    df = pd.DataFrame(
+        {
+            "timestamp": pd.date_range("2024-01-01", periods=rows, freq="15min").astype(str),
+            "open": close - 0.1,
+            "close": close,
+            "high": close + 0.4,
+            "low": close - 0.4,
+            "volume": np.linspace(1000.0, 2000.0, num=rows),
+        }
+    )
+
+    features, _, _ = build_feature_frame(df, ["bollinger_band_width_20"])
+    close_series = pd.Series(close)
+    expected_mid = close_series.rolling(20).mean().iloc[-1]
+    expected_std = close_series.rolling(20).std().iloc[-1]
+    expected_width = (4.0 * expected_std) / expected_mid
+
+    assert np.isfinite(features["bollinger_band_width_20"].to_numpy()).all()
+    assert (features["bollinger_band_width_20"] > 0.0).all()
+    assert features.iloc[-1]["bollinger_band_width_20"] == pytest.approx(expected_width)
+
+
+def test_asia_to_london_breakout_features_capture_post_open_escape() -> None:
+    rows = 7 * 24 * 4
+    timestamps = pd.date_range("2024-01-01", periods=rows, freq="15min", tz="UTC")
+    close = np.full(rows, 100.0, dtype=np.float64)
+    london_times = timestamps.tz_convert("Europe/London")
+
+    for idx, ts in enumerate(london_times):
+        hour = ts.hour + (ts.minute / 60.0)
+        if ts.strftime("%Y-%m-%d") == "2024-01-07":
+            if 0.0 <= hour < 8.0:
+                close[idx] = 100.0 + 0.2 * np.sin(idx)
+            elif 8.0 <= hour < 12.0:
+                close[idx] = 102.5
+            else:
+                close[idx] = 101.5
+        else:
+            close[idx] = 100.0 + 0.15 * np.sin(idx / 8.0)
+
+    df = pd.DataFrame(
+        {
+            "timestamp": timestamps.astype(str),
+            "open": close - 0.1,
+            "close": close,
+            "high": close + 0.25,
+            "low": close - 0.25,
+            "volume": np.linspace(1000.0, 2000.0, num=rows),
+        }
+    )
+
+    features, _, _ = build_feature_frame(
+        df,
+        [
+            "asia_range_width_atr",
+            "distance_to_asia_high",
+            "distance_to_asia_low",
+            "london_breakout_of_asia",
+            "pre_london_compression",
+            "is_london_session",
+        ],
+    )
+
+    london_breakouts = features.loc[features["is_london_session"] > 0.5, "london_breakout_of_asia"]
+    assert london_breakouts.max() > 0.01
+    assert features["asia_range_width_atr"].max() > 0.0
+    assert features["distance_to_asia_high"].max() > 0.0
+    assert features["distance_to_asia_low"].min() >= -0.01
+
+
+def test_session_context_features_do_not_leak_future_open_information() -> None:
+    rows = 7 * 24 * 4
+    timestamps = pd.date_range("2024-01-01", periods=rows, freq="15min", tz="UTC")
+    close = 100.0 + np.sin(np.linspace(0.0, 30.0, num=rows))
+    df = pd.DataFrame(
+        {
+            "timestamp": timestamps.astype(str),
+            "open": close - 0.1,
+            "close": close,
+            "high": close + 0.4,
+            "low": close - 0.4,
+            "volume": np.linspace(1000.0, 2000.0, num=rows),
+        }
+    )
+
+    features, _, _ = build_feature_frame(
+        df,
+        [
+            "asia_range_width_atr",
+            "distance_to_asia_high",
+            "distance_to_asia_low",
+            "pre_london_compression",
+            "ny_open_gap_prev_close",
+            "london_to_ny_open_return",
+            "ny_reversal_pressure",
+        ],
+    )
+    feature_times = timestamps[-len(features) :]
+    london_hours = feature_times.tz_convert("Europe/London").hour + feature_times.tz_convert("Europe/London").minute / 60.0
+    ny_hours = feature_times.tz_convert("America/New_York").hour + feature_times.tz_convert("America/New_York").minute / 60.0
+
+    before_london = london_hours < 8.0
+    before_ny = ny_hours < 8.0
+
+    assert np.allclose(features.loc[before_london, "asia_range_width_atr"], 0.0)
+    assert np.allclose(features.loc[before_london, "distance_to_asia_high"], 0.0)
+    assert np.allclose(features.loc[before_london, "distance_to_asia_low"], 0.0)
+    assert np.allclose(features.loc[before_london, "pre_london_compression"], 0.0)
+    assert np.allclose(features.loc[before_ny, "ny_open_gap_prev_close"], 0.0)
+    assert np.allclose(features.loc[before_ny, "london_to_ny_open_return"], 0.0)
+    assert np.allclose(features.loc[before_ny, "ny_reversal_pressure"], 0.0)
 
 
 def test_select_feature_columns_preserves_requested_order() -> None:

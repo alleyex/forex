@@ -173,6 +173,7 @@ SESSION_FILTERS = {
     "all": None,
     "monday_open": "is_monday_open_window",
     "london": "is_london_session",
+    "london_pre_ny": "is_london_pre_ny_session",
     "ny": "is_ny_session",
     "overlap": "is_london_ny_overlap",
 }
@@ -391,7 +392,7 @@ def build_argument_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--sessions",
         default="all",
-        help="Comma-separated session filters: all,monday_open,london,ny,overlap.",
+        help="Comma-separated session filters: all,monday_open,london,london_pre_ny,ny,overlap.",
     )
     parser.add_argument("--json-out", default="", help="Optional JSON path to save summary rows.")
     return parser

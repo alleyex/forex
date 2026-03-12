@@ -158,7 +158,7 @@ class PPOTrainingController(QObject):
             "--reward-clip",
             str(params["reward_clip"]),
             "--reward-mode",
-            str(params.get("reward_mode", "tp_sl_proxy")),
+            str(params.get("reward_mode", "path_penalty")),
             "--risk-aversion",
             str(params["risk_aversion"]),
             "--drawdown-penalty",

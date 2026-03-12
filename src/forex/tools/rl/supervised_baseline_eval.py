@@ -12,6 +12,7 @@ from forex.ml.rl.envs.trading_env import (
     TradingConfig,
     apply_risk_engine,
     compute_drawdown,
+    compute_horizon_return,
     compute_one_bar_return,
     simulate_step_transition,
 )
@@ -27,15 +28,148 @@ from forex.tools.rl.run_live_sim import PlaybackResult, print_playback_result
 from forex.utils.metrics import compute_sharpe_ratio_from_equity
 
 
+def _parse_gate_specs(raw_specs: list[str], *, arg_name: str) -> list[dict[str, float | str | None]]:
+    gates: list[dict[str, float | str | None]] = []
+    for raw_spec in raw_specs:
+        spec = str(raw_spec).strip()
+        if not spec:
+            continue
+        parts = spec.split(":")
+        if len(parts) != 3:
+            raise ValueError(
+                f"{arg_name} must use feature:min:max format, e.g. pre_london_compression:0.6:"
+            )
+        name = parts[0].strip()
+        if not name:
+            raise ValueError(f"{arg_name} requires a feature name")
+        min_value = float(parts[1]) if parts[1].strip() else None
+        max_value = float(parts[2]) if parts[2].strip() else None
+        if min_value is not None and max_value is not None and min_value > max_value:
+            raise ValueError(f"{arg_name} has min > max for {name}")
+        gates.append({"feature": name, "min": min_value, "max": max_value})
+    return gates
+
+
+def _parse_feature_gate_specs(raw_specs: list[str]) -> list[dict[str, float | str | None]]:
+    return _parse_gate_specs(raw_specs, arg_name="--feature-gate")
+
+
+def _parse_action_gate_specs(raw_specs: list[str]) -> list[dict[str, float | str | None]]:
+    return _parse_gate_specs(raw_specs, arg_name="--action-gate")
+
+
+def _parse_threshold_bump_specs(raw_specs: list[str]) -> list[dict[str, float | str | None]]:
+    bumps: list[dict[str, float | str | None]] = []
+    for raw_spec in raw_specs:
+        spec = str(raw_spec).strip()
+        if not spec:
+            continue
+        parts = spec.split(":")
+        if len(parts) != 4:
+            raise ValueError(
+                "--threshold-bump must use feature:min:max:bump format, e.g. volatility_regime_z:0.8::0.05"
+            )
+        name = parts[0].strip()
+        if not name:
+            raise ValueError("--threshold-bump requires a feature name")
+        min_value = float(parts[1]) if parts[1].strip() else None
+        max_value = float(parts[2]) if parts[2].strip() else None
+        bump_value = float(parts[3]) if parts[3].strip() else 0.0
+        if min_value is not None and max_value is not None and min_value > max_value:
+            raise ValueError(f"--threshold-bump has min > max for {name}")
+        if bump_value < 0.0:
+            raise ValueError(f"--threshold-bump requires non-negative bump for {name}")
+        bumps.append({"feature": name, "min": min_value, "max": max_value, "bump": bump_value})
+    return bumps
+
+
+def _build_gate_mask(
+    features_frame: pd.DataFrame,
+    gate_specs: list[dict[str, float | str | None]],
+) -> np.ndarray:
+    if not gate_specs:
+        return np.ones(len(features_frame), dtype=bool)
+
+    mask = np.ones(len(features_frame), dtype=bool)
+    for gate in gate_specs:
+        feature_name = str(gate["feature"])
+        if feature_name not in features_frame.columns:
+            raise ValueError(f"Unknown gate feature: {feature_name}")
+        values = features_frame[feature_name].to_numpy(dtype=np.float64, copy=False)
+        min_value = gate["min"]
+        max_value = gate["max"]
+        if min_value is not None:
+            mask &= values >= float(min_value)
+        if max_value is not None:
+            mask &= values <= float(max_value)
+    return mask
+
+
+def _build_threshold_bump_array(
+    features_frame: pd.DataFrame,
+    bump_specs: list[dict[str, float | str | None]],
+) -> np.ndarray:
+    bumps = np.zeros(len(features_frame), dtype=np.float32)
+    if not bump_specs:
+        return bumps
+    for bump_spec in bump_specs:
+        mask = _build_gate_mask(
+            features_frame,
+            [
+                {
+                    "feature": bump_spec["feature"],
+                    "min": bump_spec["min"],
+                    "max": bump_spec["max"],
+                }
+            ],
+        )
+        bumps[mask] += float(bump_spec["bump"])
+    return bumps
+
+
+def _apply_feature_gates(
+    features_frame: pd.DataFrame,
+    closes: pd.Series,
+    timestamps: list[object],
+    gate_specs: list[dict[str, float | str | None]],
+) -> tuple[pd.DataFrame, pd.Series, list[object]]:
+    if not gate_specs:
+        return features_frame, closes, timestamps
+
+    mask = _build_gate_mask(features_frame, gate_specs)
+    filtered_features = features_frame.loc[mask].reset_index(drop=True)
+    filtered_closes = closes.loc[mask].reset_index(drop=True)
+    filtered_timestamps = [ts for ts, keep in zip(timestamps, mask) if keep]
+    if filtered_features.empty:
+        raise ValueError("Feature gates removed all rows")
+    return filtered_features, filtered_closes, filtered_timestamps
+
+
+def _future_path_excursions(closes: np.ndarray, idx: int, horizon: int) -> tuple[float, float]:
+    current = float(closes[idx])
+    if current <= 0.0:
+        return 0.0, 0.0
+    end = min(len(closes), idx + max(1, int(horizon)) + 1)
+    if idx + 1 >= end:
+        return 0.0, 0.0
+    future = np.asarray(closes[idx + 1 : end], dtype=np.float64)
+    upside = max(0.0, float(np.max(future) / current - 1.0))
+    downside = max(0.0, float(1.0 - np.min(future) / current))
+    return upside, downside
+
+
 def _load_dataset(
     *,
     data_path: str,
     env_config_path: str,
     session_filter: str,
     feature_subset_path: str,
+    feature_gate_specs: list[dict[str, float | str | None]],
+    action_gate_specs: list[dict[str, float | str | None]],
+    threshold_bump_specs: list[dict[str, float | str | None]],
     transaction_cost_bps: float,
     slippage_bps: float,
-) -> tuple[np.ndarray, np.ndarray, list[object], TradingConfig]:
+) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray, list[object], TradingConfig]:
     df = load_csv(data_path)
     features_frame, closes, timestamps = build_feature_frame(df)
     features_frame, closes, timestamps = filter_feature_rows_by_session(
@@ -44,6 +178,14 @@ def _load_dataset(
         timestamps,
         session_filter,
     )
+    features_frame, closes, timestamps = _apply_feature_gates(
+        features_frame,
+        closes,
+        timestamps,
+        feature_gate_specs,
+    )
+    action_gate_mask = _build_gate_mask(features_frame, action_gate_specs)
+    threshold_bumps = _build_threshold_bump_array(features_frame, threshold_bump_specs)
     subset_path = str(feature_subset_path).strip()
     if subset_path:
         subset_payload = json.loads(Path(subset_path).expanduser().read_text(encoding="utf-8"))
@@ -65,25 +207,43 @@ def _load_dataset(
     return (
         features_frame.to_numpy(dtype=np.float32),
         closes.to_numpy(dtype=np.float32),
+        action_gate_mask.astype(bool, copy=False),
+        threshold_bumps.astype(np.float32, copy=False),
         list(timestamps),
         config,
     )
 
 
-def _build_targets(closes: np.ndarray, horizon: int, threshold: float) -> tuple[np.ndarray, np.ndarray]:
+def _build_targets(
+    closes: np.ndarray,
+    horizon: int,
+    threshold: float,
+    *,
+    target_mode: str = "forward_return",
+    follow_through_ratio: float = 1.25,
+) -> tuple[np.ndarray, np.ndarray]:
     horizon = max(1, int(horizon))
     threshold = max(0.0, float(threshold))
+    mode = str(target_mode).strip().lower() or "forward_return"
+    if mode not in {"forward_return", "breakout_follow_through"}:
+        raise ValueError(f"Unknown target mode: {target_mode}")
+    ratio = max(1.0, float(follow_through_ratio))
     future_returns = np.zeros(len(closes), dtype=np.float32)
     labels = np.zeros(len(closes), dtype=np.int32)
     for idx in range(len(closes)):
         ret = compute_horizon_return(closes, idx, horizon)
         future_returns[idx] = float(ret)
-        if ret > threshold:
+        if mode == "forward_return":
+            if ret > threshold:
+                labels[idx] = 1
+            elif ret < -threshold:
+                labels[idx] = -1
+            continue
+        upside_exc, downside_exc = _future_path_excursions(closes, idx, horizon)
+        if ret > 0.0 and upside_exc >= threshold and upside_exc >= ratio * downside_exc:
             labels[idx] = 1
-        elif ret < -threshold:
+        elif ret < 0.0 and downside_exc >= threshold and downside_exc >= ratio * upside_exc:
             labels[idx] = -1
-        else:
-            labels[idx] = 0
     return labels, future_returns
 
 
@@ -107,18 +267,95 @@ def _fit_linear_model(train_x: np.ndarray, train_y: np.ndarray, ridge_alpha: flo
     return weights.astype(np.float32, copy=False)
 
 
+def _classify_position_change(old_position: float, new_position: float, eps: float = 1e-6) -> str:
+    old_abs = abs(float(old_position))
+    new_abs = abs(float(new_position))
+    if abs(float(new_position) - float(old_position)) <= eps:
+        return "none"
+    if old_abs <= eps and new_abs > eps:
+        return "open"
+    if old_abs > eps and new_abs <= eps:
+        return "close"
+    if np.sign(old_position) != np.sign(new_position):
+        return "reversal"
+    return "resize"
+
+
+def _score_to_raw_target(
+    score: float,
+    *,
+    current_position: float,
+    long_threshold: float,
+    short_threshold: float,
+    long_exit_threshold: float,
+    short_exit_threshold: float,
+    max_position: float,
+    eps: float = 1e-6,
+) -> float:
+    max_position = float(max_position)
+    current_position = float(current_position)
+    if abs(current_position) <= eps:
+        if score >= long_threshold:
+            return max_position
+        if score <= short_threshold:
+            return -max_position
+        return 0.0
+    if current_position > 0.0:
+        if score <= short_threshold:
+            return -max_position
+        if score <= long_exit_threshold:
+            return 0.0
+        return max_position
+    if score >= long_threshold:
+        return max_position
+    if score >= short_exit_threshold:
+        return 0.0
+    return -max_position
+
+
+def _apply_action_gate(
+    raw_target: float,
+    *,
+    current_position: float,
+    gate_enabled: bool,
+    action_gate_mode: str,
+    eps: float = 1e-6,
+) -> float:
+    if gate_enabled:
+        return float(raw_target)
+
+    mode = str(action_gate_mode).strip().lower() or "force_flat"
+    if mode == "force_flat":
+        return 0.0
+    if mode != "entry_only":
+        raise ValueError(f"Unknown action gate mode: {action_gate_mode}")
+
+    if abs(float(current_position)) <= eps:
+        return 0.0
+    if np.sign(raw_target) == np.sign(current_position) and abs(float(raw_target)) > eps:
+        return float(current_position)
+    return 0.0
+
+
 def _run_segment(
     *,
     features: np.ndarray,
     closes: np.ndarray,
+    action_gate_mask: np.ndarray,
+    threshold_bumps: np.ndarray,
+    action_gate_mode: str,
     timestamps: list[object],
     config: TradingConfig,
     train_end: int,
     test_steps: int,
     horizon: int,
     target_threshold: float,
+    target_mode: str,
+    follow_through_ratio: float,
     long_threshold: float,
     short_threshold: float,
+    long_exit_threshold: float,
+    short_exit_threshold: float,
     ridge_alpha: float,
 ) -> PlaybackResult | None:
     if train_end <= 500 or train_end >= len(features) - 2:
@@ -128,7 +365,13 @@ def _run_segment(
     if test_end - test_start <= 1:
         return None
 
-    labels, _future_returns = _build_targets(closes, horizon, target_threshold)
+    labels, _future_returns = _build_targets(
+        closes,
+        horizon,
+        target_threshold,
+        target_mode=target_mode,
+        follow_through_ratio=follow_through_ratio,
+    )
     train_frame = pd.DataFrame(features[:train_end])
     test_frame = pd.DataFrame(features[test_start:test_end])
     scaler = fit_scaler(train_frame)
@@ -149,10 +392,21 @@ def _run_segment(
     holding_steps: list[int] = []
     equity_series = [equity]
     max_drawdown = 0.0
+    drawdown_peak_step = 0
+    drawdown_trough_step = 0
+    drawdown_peak_equity = equity
+    drawdown_trough_equity = equity
+    peak_step = 0
     action_sum = 0.0
+    action_abs_sum = 0.0
     action_long = 0
     action_short = 0
     action_flat = 0
+    opens = 0
+    closes_count = 0
+    reversals = 0
+    resizes = 0
+    terminal_closes = 0
 
     scores = (test_x @ weights[:-1]) + weights[-1]
     last_idx = -1
@@ -160,12 +414,23 @@ def _run_segment(
         last_idx = idx
         step_num = offset + 1
         score = float(scores[offset])
-        if score >= long_threshold:
-            raw_target = float(config.max_position)
-        elif score <= short_threshold:
-            raw_target = float(-config.max_position)
-        else:
-            raw_target = 0.0
+        gate_enabled = bool(action_gate_mask[idx]) if len(action_gate_mask) > idx else True
+        threshold_bump = float(threshold_bumps[idx]) if len(threshold_bumps) > idx else 0.0
+        raw_target = _score_to_raw_target(
+            score,
+            current_position=position,
+            long_threshold=long_threshold + threshold_bump,
+            short_threshold=short_threshold - threshold_bump,
+            long_exit_threshold=long_exit_threshold,
+            short_exit_threshold=short_exit_threshold,
+            max_position=float(config.max_position),
+        )
+        raw_target = _apply_action_gate(
+            raw_target,
+            current_position=position,
+            gate_enabled=gate_enabled,
+            action_gate_mode=action_gate_mode,
+        )
         target_position, _ = apply_risk_engine(
             raw_target,
             current_position=position,
@@ -176,6 +441,7 @@ def _run_segment(
             peak_equity=peak_equity,
         )
         action_sum += target_position
+        action_abs_sum += abs(target_position)
         if target_position > 0.05:
             action_long += 1
         elif target_position < -0.05:
@@ -184,6 +450,15 @@ def _run_segment(
             action_flat += 1
         delta = target_position - position
         if abs(delta) > 1e-6:
+            change_kind = _classify_position_change(position, target_position)
+            if change_kind == "open":
+                opens += 1
+            elif change_kind == "close":
+                closes_count += 1
+            elif change_kind == "reversal":
+                reversals += 1
+            elif change_kind == "resize":
+                resizes += 1
             trades += 1
             holding_steps.append(step_num - 1 - last_change_idx)
             last_change_idx = step_num - 1
@@ -208,18 +483,30 @@ def _run_segment(
                 trade_costs.append(float(transition["cost"]))
             last_trade_price = current_price
         equity *= growth_factor
+        if equity >= peak_equity:
+            peak_step = step_num
         peak_equity = max(peak_equity, equity)
-        max_drawdown = max(max_drawdown, float(compute_drawdown(equity, peak_equity)))
+        current_drawdown = float(compute_drawdown(equity, peak_equity))
+        if current_drawdown >= max_drawdown:
+            max_drawdown = current_drawdown
+            drawdown_peak_step = peak_step
+            drawdown_trough_step = step_num
+            drawdown_peak_equity = peak_equity
+            drawdown_trough_equity = equity
         equity_series.append(equity)
         position = target_position
 
     processed_steps = max(0, last_idx - test_start + 1)
     if processed_steps <= 0:
         return None
+    if abs(position) > 1e-6:
+        terminal_closes += 1
     if processed_steps > last_change_idx:
         holding_steps.append(processed_steps - last_change_idx)
     total_return = equity - 1.0
     sharpe = compute_sharpe_ratio_from_equity(equity_series)
+    action_avg = action_sum / processed_steps if processed_steps > 0 else 0.0
+    action_abs_avg = action_abs_sum / processed_steps if processed_steps > 0 else 0.0
     total_actions = action_long + action_short + action_flat
     long_ratio = action_long / total_actions if total_actions else 0.0
     short_ratio = action_short / total_actions if total_actions else 0.0
@@ -254,7 +541,13 @@ def _run_segment(
         trade_pnls=trade_pnls,
         trade_costs=trade_costs,
         holding_steps=holding_steps,
-        action_avg=(action_sum / processed_steps) if processed_steps > 0 else 0.0,
+        opens=opens,
+        closes=closes_count,
+        reversals=reversals,
+        resizes=resizes,
+        terminal_closes=terminal_closes,
+        action_avg=action_avg,
+        action_abs_avg=action_abs_avg,
         long_ratio=long_ratio,
         short_ratio=short_ratio,
         flat_ratio=flat_ratio,
@@ -262,6 +555,10 @@ def _run_segment(
         ls_imbalance=ls_imbalance,
         start_ts=timestamps[test_start],
         end_ts=timestamps[end_index] if end_index < len(timestamps) else timestamps[-1],
+        drawdown_peak_step=drawdown_peak_step,
+        drawdown_trough_step=drawdown_trough_step,
+        drawdown_peak_equity=drawdown_peak_equity,
+        drawdown_trough_equity=drawdown_trough_equity,
         gate_reasons=gate_reasons,
     )
 
@@ -299,7 +596,7 @@ def build_argument_parser() -> argparse.ArgumentParser:
     parser.add_argument("--env-config", default="", help="Optional env config JSON.")
     parser.add_argument(
         "--session-filter",
-        choices=("all", "monday_open", "london", "ny", "overlap"),
+        choices=("all", "monday_open", "london", "london_pre_ny", "ny", "overlap"),
         default="all",
         help="Session filter applied before training and evaluation.",
     )
@@ -308,12 +605,60 @@ def build_argument_parser() -> argparse.ArgumentParser:
         default="",
         help="Optional JSON file containing selected_features for feature ablation.",
     )
+    parser.add_argument(
+        "--feature-gate",
+        action="append",
+        default=[],
+        help="Optional row filter in feature:min:max format. May be repeated.",
+    )
+    parser.add_argument(
+        "--action-gate",
+        action="append",
+        default=[],
+        help="Optional execution gate in feature:min:max format. May be repeated.",
+    )
+    parser.add_argument(
+        "--action-gate-mode",
+        choices=("force_flat", "entry_only"),
+        default="force_flat",
+        help="How action gates affect positions when the gate is closed.",
+    )
+    parser.add_argument(
+        "--threshold-bump",
+        action="append",
+        default=[],
+        help="Optional regime-conditioned threshold bump in feature:min:max:bump format. May be repeated.",
+    )
     parser.add_argument("--transaction-cost-bps", type=float, default=1.0)
     parser.add_argument("--slippage-bps", type=float, default=0.5)
     parser.add_argument("--horizon", type=int, default=20, help="Forward-return label horizon in bars.")
     parser.add_argument("--target-threshold", type=float, default=0.0, help="Dead-zone threshold for labels.")
+    parser.add_argument(
+        "--target-mode",
+        choices=("forward_return", "breakout_follow_through"),
+        default="forward_return",
+        help="Label definition for supervised targets.",
+    )
+    parser.add_argument(
+        "--follow-through-ratio",
+        type=float,
+        default=1.25,
+        help="Directional dominance ratio for breakout_follow_through targets.",
+    )
     parser.add_argument("--long-threshold", type=float, default=0.15, help="Score threshold for long.")
     parser.add_argument("--short-threshold", type=float, default=-0.15, help="Score threshold for short.")
+    parser.add_argument(
+        "--long-exit-threshold",
+        type=float,
+        default=None,
+        help="Optional long exit threshold. Defaults to --long-threshold.",
+    )
+    parser.add_argument(
+        "--short-exit-threshold",
+        type=float,
+        default=None,
+        help="Optional short exit threshold. Defaults to --short-threshold.",
+    )
     parser.add_argument("--ridge-alpha", type=float, default=1.0, help="L2 regularization strength for linear model.")
     parser.add_argument("--segments", type=int, default=6, help="Number of walk-forward segments.")
     parser.add_argument("--test-steps", type=int, default=10000, help="Steps per walk-forward test segment.")
@@ -328,12 +673,30 @@ def main() -> None:
     args = parser.parse_args()
     if args.short_threshold >= args.long_threshold:
         raise ValueError("--short-threshold must be < --long-threshold")
+    long_exit_threshold = (
+        float(args.long_threshold) if args.long_exit_threshold is None else float(args.long_exit_threshold)
+    )
+    short_exit_threshold = (
+        float(args.short_threshold) if args.short_exit_threshold is None else float(args.short_exit_threshold)
+    )
+    if long_exit_threshold > float(args.long_threshold):
+        raise ValueError("--long-exit-threshold must be <= --long-threshold")
+    if short_exit_threshold < float(args.short_threshold):
+        raise ValueError("--short-exit-threshold must be >= --short-threshold")
+    if short_exit_threshold >= long_exit_threshold:
+        raise ValueError("--short-exit-threshold must be < --long-exit-threshold")
+    gate_specs = _parse_feature_gate_specs(list(args.feature_gate))
+    action_gate_specs = _parse_action_gate_specs(list(args.action_gate))
+    threshold_bump_specs = _parse_threshold_bump_specs(list(args.threshold_bump))
 
-    features, closes, timestamps, config = _load_dataset(
+    features, closes, action_gate_mask, threshold_bumps, timestamps, config = _load_dataset(
         data_path=args.data,
         env_config_path=args.env_config,
         session_filter=args.session_filter,
         feature_subset_path=args.feature_subset_json,
+        feature_gate_specs=gate_specs,
+        action_gate_specs=action_gate_specs,
+        threshold_bump_specs=threshold_bump_specs,
         transaction_cost_bps=float(args.transaction_cost_bps),
         slippage_bps=float(args.slippage_bps),
     )
@@ -343,14 +706,21 @@ def main() -> None:
         result = _run_segment(
             features=features,
             closes=closes,
+            action_gate_mask=action_gate_mask,
+            threshold_bumps=threshold_bumps,
+            action_gate_mode=str(args.action_gate_mode),
             timestamps=timestamps,
             config=config,
             train_end=train_end,
             test_steps=int(args.test_steps),
             horizon=int(args.horizon),
             target_threshold=float(args.target_threshold),
+            target_mode=str(args.target_mode),
+            follow_through_ratio=float(args.follow_through_ratio),
             long_threshold=float(args.long_threshold),
             short_threshold=float(args.short_threshold),
+            long_exit_threshold=long_exit_threshold,
+            short_exit_threshold=short_exit_threshold,
             ridge_alpha=float(args.ridge_alpha),
         )
         if result is None:
@@ -373,10 +743,18 @@ def main() -> None:
         payload = {
             "session_filter": args.session_filter,
             "feature_subset_json": str(args.feature_subset_json).strip(),
+            "feature_gates": gate_specs,
+            "action_gates": action_gate_specs,
+            "action_gate_mode": str(args.action_gate_mode),
+            "threshold_bumps": threshold_bump_specs,
             "horizon": int(args.horizon),
             "target_threshold": float(args.target_threshold),
+            "target_mode": str(args.target_mode),
+            "follow_through_ratio": float(args.follow_through_ratio),
             "long_threshold": float(args.long_threshold),
             "short_threshold": float(args.short_threshold),
+            "long_exit_threshold": long_exit_threshold,
+            "short_exit_threshold": short_exit_threshold,
             "ridge_alpha": float(args.ridge_alpha),
             "aggregate": aggregate,
             "segments": [
