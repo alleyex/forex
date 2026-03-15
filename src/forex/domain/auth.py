@@ -1,5 +1,4 @@
 from dataclasses import dataclass
-from typing import Optional
 
 
 @dataclass
@@ -13,7 +12,8 @@ class Credentials:
 @dataclass
 class Tokens:
     """OAuth token bundle."""
+
     access_token: str
     refresh_token: str
-    expires_at: Optional[int]
-    account_id: Optional[int]
+    expires_at: int | None
+    account_id: int | None

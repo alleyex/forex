@@ -1,14 +1,13 @@
 import logging
 import os
-from typing import Optional
 
 
 def setup_logging(
-    level: Optional[int] = None,
-    level_name: Optional[str] = None,
-    log_file: Optional[str] = None,
+    level: int | None = None,
+    level_name: str | None = None,
+    log_file: str | None = None,
 ) -> None:
-    resolved_level: Optional[int] = level
+    resolved_level: int | None = level
     if resolved_level is None:
         env_level = (level_name or os.getenv("LOG_LEVEL", "INFO")).upper()
         resolved_level = getattr(logging, env_level, logging.INFO)

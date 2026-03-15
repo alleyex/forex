@@ -1,49 +1,49 @@
 from dataclasses import dataclass
-from typing import Optional
 
 
 @dataclass
 class Account:
     """Simplified account descriptor."""
+
     account_id: int
-    is_live: Optional[bool]
-    trader_login: Optional[int]
-    permission_scope: Optional[int] = None
-    last_closing_deal_timestamp: Optional[int] = None
-    last_balance_update_timestamp: Optional[int] = None
+    is_live: bool | None
+    trader_login: int | None
+    permission_scope: int | None = None
+    last_closing_deal_timestamp: int | None = None
+    last_balance_update_timestamp: int | None = None
 
 
 @dataclass
 class AccountFundsSnapshot:
-    balance: Optional[float]
-    balance_version: Optional[int]
-    equity: Optional[float]
-    free_margin: Optional[float]
-    used_margin: Optional[float]
-    margin_level: Optional[float]
-    currency: Optional[str]
-    money_digits: Optional[int]
-    ctid_trader_account_id: Optional[int]
-    manager_bonus: Optional[float]
-    ib_bonus: Optional[float]
-    non_withdrawable_bonus: Optional[float]
-    access_rights: Optional[int]
-    deposit_asset_id: Optional[int]
-    swap_free: Optional[bool]
-    leverage_in_cents: Optional[int]
-    total_margin_calculation_type: Optional[int]
-    max_leverage: Optional[int]
-    french_risk: Optional[bool]
-    trader_login: Optional[int]
-    account_type: Optional[int]
-    broker_name: Optional[str]
-    registration_timestamp: Optional[int]
-    is_limited_risk: Optional[bool]
-    limited_risk_margin_calculation_strategy: Optional[int]
-    fair_stop_out: Optional[bool]
-    stop_out_strategy: Optional[int]
+    balance: float | None
+    balance_version: int | None
+    equity: float | None
+    free_margin: float | None
+    used_margin: float | None
+    margin_level: float | None
+    currency: str | None
+    money_digits: int | None
+    ctid_trader_account_id: int | None
+    manager_bonus: float | None
+    ib_bonus: float | None
+    non_withdrawable_bonus: float | None
+    access_rights: int | None
+    deposit_asset_id: int | None
+    swap_free: bool | None
+    leverage_in_cents: int | None
+    total_margin_calculation_type: int | None
+    max_leverage: int | None
+    french_risk: bool | None
+    trader_login: int | None
+    account_type: int | None
+    broker_name: str | None
+    registration_timestamp: int | None
+    is_limited_risk: bool | None
+    limited_risk_margin_calculation_strategy: int | None
+    fair_stop_out: bool | None
+    stop_out_strategy: int | None
 
 
 @dataclass
 class AccountProfile:
-    user_id: Optional[int]
+    user_id: int | None

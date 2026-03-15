@@ -4,7 +4,7 @@ import json
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Optional
+from typing import Any
 
 SCHEMA_VERSION = 1
 
@@ -43,11 +43,14 @@ def write_metadata_for_csv(
         details=details,
     )
     meta_path = path.with_suffix(path.suffix + ".meta.json")
-    meta_path.write_text(json.dumps(metadata.to_dict(), indent=2, ensure_ascii=False), encoding="utf-8")
+    meta_path.write_text(
+        json.dumps(metadata.to_dict(), indent=2, ensure_ascii=False),
+        encoding="utf-8",
+    )
     return str(meta_path)
 
 
-def normalize_timeframe(timeframe: Optional[str]) -> str:
+def normalize_timeframe(timeframe: str | None) -> str:
     if not timeframe:
         return "unknown"
     return timeframe.upper()
