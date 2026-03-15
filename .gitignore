@@ -28,7 +28,13 @@ config/local/*
 !config/local/.gitkeep
 
 # Generated data/models
-src/forex/ml/rl/models/
+src/forex/ml/rl/models/*
+!src/forex/ml/rl/models/__init__.py
+!src/forex/ml/rl/models/*.py
+src/forex/ml/rl/models/__pycache__/
+src/forex/ml/rl/models/*.zip
+src/forex/ml/rl/models/*.env.json
+src/forex/ml/rl/models/*.scaler.json
 data/*
 !data/.gitkeep
 !data/README.md
