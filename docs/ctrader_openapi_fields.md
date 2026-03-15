@@ -2,9 +2,20 @@
 
 This document is generated from the official Protobuf definitions. The inferred descriptions are direct name-based translations/guesses and are provided for comprehension only.
 
-## Open API Messages
+## Quick Navigation
 
-### Messages
+- [Open API Messages](#open-api-messages)
+- [Open API Model Messages](#open-api-model-messages)
+- [Common Messages](#common-messages)
+- [Common Model Messages](#common-model-messages)
+
+## How To Use This Document
+
+- Treat this file as a broad field inventory rather than a normative specification.
+- Prefer the official cTrader Open API definitions when behavior or semantics are ambiguous.
+- Use the account-focused companion document for cleaner auth and account descriptions: [ctrader_openapi_fields_accounts.md](/Users/alleyex/Documents/forex/docs/ctrader_openapi_fields_accounts.md#L1)
+
+## Open API Messages
 
 ### ProtoOAAccountAuthReq
 Inferred description (name-based): Account authentication request
@@ -790,8 +801,6 @@ Inferred description (name-based): Version response
 
 ## Open API Model Messages
 
-### Messages
-
 ### ProtoOAArchivedSymbol
 Inferred description (name-based): Archived symbol
 | Field | Type | Label | Inferred description (name-based) |
@@ -1143,8 +1152,6 @@ Inferred description (name-based): Trendbar
 | deltaClose | uint64 | optional | close |
 | deltaHigh | uint64 | optional | high |
 | utcTimestampInMinutes | uint32 | optional | timestamp in minutes |
-
-### Enums
 
 ### ProtoOAAccessRights
 Inferred description (name-based): Access rights
@@ -1544,8 +1551,6 @@ Inferred description (name-based): Trendbar period
 
 ## Common Messages
 
-### Messages
-
 ### ProtoErrorRes
 Inferred description (name-based): Error response
 | Field | Type | Label | Inferred description (name-based) |
@@ -1571,8 +1576,6 @@ Inferred description (name-based): Message
 
 ## Common Model Messages
 
-### Enums
-
 ### ProtoErrorCode
 Inferred description (name-based): Error code
 | Name | Value | Inferred description (name-based) |
@@ -1595,4 +1598,3 @@ Inferred description (name-based): Payload type
 | PROTO_MESSAGE | 5 | PROTOMESSAGE |
 | ERROR_RES | 50 | ERRORRES |
 | HEARTBEAT_EVENT | 51 | HEARTBEATEVENT |
-

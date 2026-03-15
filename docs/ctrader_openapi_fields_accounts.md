@@ -2,6 +2,19 @@
 
 This file is compiled from the official Open API documentation. Descriptions are English paraphrases derived from the official text.
 
+## Quick Navigation
+
+- [Messages (Accounts, Authentication, and Tokens)](#messages-accounts-authentication-and-tokens)
+- [Model Messages (Account Related)](#model-messages-account-related)
+- [Common Messages](#common-messages)
+- [Common Model Messages](#common-model-messages)
+
+## How To Use This Document
+
+- Use this file as the readable reference for account, token, and authentication payloads.
+- Prefer this document over the generated field inventory when you need implementation-facing context.
+- Fall back to the exhaustive companion file for wider enum and payload coverage: [ctrader_openapi_fields.md](/Users/alleyex/Documents/forex/docs/ctrader_openapi_fields.md#L1)
+
 ## Messages (Accounts, Authentication, and Tokens)
 
 ### ProtoOAApplicationAuthReq
@@ -181,8 +194,8 @@ Purpose: Event emitted when the trader account is updated on the server side.
 |---|---|---|
 | FULL_ACCESS | 0 | All trading is allowed. |
 | CLOSE_ONLY | 1 | Only closing positions is allowed. |
-| NO_TRADING | 2 | view-only. |
-| NO_LOGIN | 3 | no access rights. |
+| NO_TRADING | 2 | View-only. |
+| NO_LOGIN | 3 | No access rights. |
 
 ### ProtoOAAccountType (ENUM)
 
