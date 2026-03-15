@@ -242,7 +242,7 @@ class AdaptiveFormGrid(QWidget):
             self._grid.addWidget(cell, row, col, Qt.AlignLeft | Qt.AlignTop)
 
         # Align fields per visual column: label width = longest label in the column + small gap.
-        cjk_gap = max(1, self.fontMetrics().horizontalAdvance("中"))
+        cjk_gap = max(1, self.fontMetrics().horizontalAdvance("M"))
         for col_idx in range(cols):
             col_labels = [self._labels[idx] for idx in range(col_idx, len(self._labels), cols)]
             if not col_labels:

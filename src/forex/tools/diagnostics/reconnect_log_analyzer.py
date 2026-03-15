@@ -44,30 +44,30 @@ def analyze_reconnect_log(lines: Iterable[str]) -> ReconnectLogStats:
             continue
         lower = line.lower()
 
-        if "偵測到斷線" in line or "[network] 已斷線" in lower:
+        if "detected disconnect" in lower or "[network] disconnected" in lower:
             stats.disconnect_events += 1
-        if "後重連" in line and "attempt" in lower:
+        if "reconnecting in" in lower and "attempt" in lower:
             stats.reconnect_scheduled += 1
             m = _ATTEMPT_RE.search(line)
             if m:
                 stats.max_attempt = max(stats.max_attempt, int(m.group(1)))
-        if "正在連線到 ctrader" in lower:
+        if "connecting to ctrader" in lower:
             stats.connect_started += 1
-        if "已連線！" in line:
+        if "connected!" in lower:
             stats.connected += 1
-        if "正在發送應用程式認證" in line:
+        if "sending application authentication" in lower:
             stats.app_auth_sent += 1
-        if "應用程式認證成功" in line or "應用程式已授權" in line:
+        if "application authentication succeeded" in lower or "application authorized" in lower:
             stats.app_auth_success += 1
-        if "帳戶認證成功" in line or "帳戶已授權" in line:
+        if "account authentication succeeded" in lower or "account authorized" in lower:
             stats.account_auth_success += 1
-        if "[timeout] 取得帳戶資金逾時" in lower:
+        if "[timeout] account funds request timed out" in lower:
             stats.funds_timeout += 1
-        if "請求逾時或失敗" in line and "deferred" in lower:
+        if "request timed out or failed" in lower and "deferred" in lower:
             stats.request_deferred += 1
         if "dns lookup failed" in lower:
             stats.dns_lookup_failed += 1
-        if "app 認證逾時" in line:
+        if "app authentication timed out" in lower:
             stats.app_auth_timeout += 1
         if "runtime_stalled" in lower:
             stats.runtime_stalled += 1

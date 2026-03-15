@@ -1,5 +1,5 @@
 """
-基礎認證對話框
+Base authentication dialog.
 """
 import json
 import os
@@ -21,12 +21,12 @@ from forex.ui.shared.widgets.status_widget import StatusWidget
 
 @dataclass
 class DialogState:
-    """共用對話框Status"""
+    """Shared dialog state."""
     in_progress: bool = False
 
 
 class BaseAuthDialog(QDialog):
-    """提供共用 UI 與日誌/Status功能的基底對話框"""
+    """Base dialog with shared UI, logging, and status helpers."""
 
     def __init__(
         self,
@@ -49,7 +49,7 @@ class BaseAuthDialog(QDialog):
         # Defer auto start to subclasses after they finish initialization.
 
     # ─────────────────────────────────────────────────────────────
-    # 共用 UI
+    # Shared UI
     # ─────────────────────────────────────────────────────────────
 
     def _create_log_widget(self, title: str = "Connection Log:") -> LogWidget:
@@ -61,7 +61,7 @@ class BaseAuthDialog(QDialog):
         return self._status_widget
 
     # ─────────────────────────────────────────────────────────────
-    # 日誌處理
+    # Log handling
     # ─────────────────────────────────────────────────────────────
 
     def _append_log(self, message: str) -> None:
@@ -83,7 +83,7 @@ class BaseAuthDialog(QDialog):
         self._append_log(format_log_error(message))
 
     # ─────────────────────────────────────────────────────────────
-    # Status處理
+    # Status handling
     # ─────────────────────────────────────────────────────────────
 
     @Slot(int)
@@ -92,7 +92,7 @@ class BaseAuthDialog(QDialog):
             self._status_widget.update_status(status)
 
     # ─────────────────────────────────────────────────────────────
-    # 資料處理
+    # Data handling
     # ─────────────────────────────────────────────────────────────
 
     def _read_json_file(self) -> dict | None:
@@ -108,7 +108,7 @@ class BaseAuthDialog(QDialog):
         return None
 
     # ─────────────────────────────────────────────────────────────
-    # 內部連接
+    # Internal wiring
     # ─────────────────────────────────────────────────────────────
 
     def _connect_common_signals(self) -> None:

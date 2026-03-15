@@ -1,6 +1,4 @@
-"""
-CTID Profile 服務
-"""
+"""CTID profile service."""
 from __future__ import annotations
 
 import time
@@ -59,7 +57,7 @@ class CtidProfileService(
     OperationStateMixin,
 ):
     """
-    透過存取權杖取得 CTID Profile
+    Fetch the CTID profile using an access token.
     """
 
     def __init__(self, app_auth_service: AppAuthService, access_token: str):
@@ -89,7 +87,7 @@ class CtidProfileService(
 
     def fetch(self, timeout_seconds: int | None = None) -> None:
         if not self._access_token:
-            self._emit_error(error_message(ErrorCode.VALIDATION, "缺少存取權杖"))
+            self._emit_error(error_message(ErrorCode.VALIDATION, "Missing access token"))
             return
 
         if not self._start_operation():
@@ -106,7 +104,7 @@ class CtidProfileService(
     def _send_request(self) -> None:
         request = ProtoOAGetCtidProfileByTokenReq()
         request.accessToken = self._access_token
-        self._log(format_request("正在取得 CTID Profile..."))
+        self._log(format_request("Fetching CTID profile..."))
         if not self._send_request_with_client(
             request=request,
             timeout_tracker=self._timeout_tracker,
@@ -135,7 +133,7 @@ class CtidProfileService(
         profile = getattr(msg, "profile", None)
         user_id = None if profile is None else int(getattr(profile, "userId", 0))
         data = CtidProfile(user_id=user_id if user_id else None)
-        self._log(format_success("已接收 CTID Profile"))
+        self._log(format_success("Received CTID profile"))
         metrics.inc("ctrader.ctid_profile.success")
         started_at = getattr(self, "_metrics_started_at", None)
         if started_at is not None:
@@ -162,11 +160,11 @@ class CtidProfileService(
             handler=self._handle_message,
         )
         metrics.inc("ctrader.ctid_profile.timeout")
-        self._emit_error(error_message(ErrorCode.TIMEOUT, "取得 CTID Profile 逾時"))
+        self._emit_error(error_message(ErrorCode.TIMEOUT, "CTID profile request timed out"))
 
     def _retry_request(self, attempt: int) -> None:
         if not self._in_progress:
             return
-        self._log(format_warning(f"CTID Profile 逾時，重試第 {attempt} 次"))
+        self._log(format_warning(f"CTID profile timed out, retry attempt {attempt}"))
         metrics.inc("ctrader.ctid_profile.retry")
         self._send_request()

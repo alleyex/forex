@@ -38,14 +38,14 @@ from forex.utils.reactor_manager import reactor_manager
 
 @dataclass
 class OAuthDialogState(DialogState):
-    """OAuth 對話框Status"""
+    """OAuth dialog state."""
     auth_in_progress: bool = False
     login_in_progress: bool = False
     accounts_in_progress: bool = False
 
 
 class TokenFormWidget(QWidget):
-    """Token 輸入表單元件"""
+    """Token input form widget."""
     
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -80,7 +80,7 @@ class TokenFormWidget(QWidget):
         layout.addRow(QLabel("Authorization Code:"), self.auth_code)
     
     def set_enabled(self, enabled: bool) -> None:
-        """啟用或停用所有欄位"""
+        """Enable or disable all fields."""
         for field in [
             self.access_token, self.refresh_token, self.expires_at,
             self.account_id, self.redirect_uri, self.auth_code
@@ -88,14 +88,14 @@ class TokenFormWidget(QWidget):
             field.setEnabled(enabled)
     
     def load_tokens(self, tokens: OAuthTokens) -> None:
-        """載入 Token 到表單"""
+        """Load tokens into the form."""
         self.access_token.setText(tokens.access_token or "")
         self.refresh_token.setText(tokens.refresh_token or "")
         self.expires_at.setText("" if tokens.expires_at is None else str(tokens.expires_at))
         self.account_id.setText("" if tokens.account_id is None else str(tokens.account_id))
     
     def get_data(self) -> dict:
-        """取得表單資料"""
+        """Return form data."""
         return {
             "access_token": self.access_token.text().strip(),
             "refresh_token": self.refresh_token.text().strip(),
@@ -106,7 +106,7 @@ class TokenFormWidget(QWidget):
         }
     
     def validate_for_auth(self) -> str | None:
-        """驗證認證所需欄位"""
+        """Validate fields required for account authentication."""
         data = self.get_data()
         if not data["access_token"]:
             return "Access Token is required"
@@ -121,7 +121,7 @@ class TokenFormWidget(QWidget):
         return None
     
     def validate_for_login(self) -> str | None:
-        """驗證登入所需欄位"""
+        """Validate fields required for login."""
         data = self.get_data()
         if not data["redirect_uri"]:
             return "Redirect URI is required"
@@ -131,7 +131,7 @@ class TokenFormWidget(QWidget):
 class OAuthDialog(BaseAuthDialog):
     """OAuth authentication dialog"""
 
-    # 訊號
+    # Signals
     authSucceeded = Signal(object)
     authFailed = Signal(str)
     logReceived = Signal(str)
@@ -182,32 +182,32 @@ class OAuthDialog(BaseAuthDialog):
         self._maybe_auto_start()
 
     def _setup_ui(self) -> None:
-        """初始化 UI"""
+        """Initialize the UI."""
         self.setWindowTitle("cTrader OAuth")
         self.setMinimumSize(520, 340)
 
         layout = QVBoxLayout(self)
         layout.setSpacing(10)
 
-        # Token 表單
+        # Token form
         self._form = TokenFormWidget()
         layout.addWidget(self._form)
 
-        # 按鈕列
+        # Button row
         layout.addLayout(self._create_button_layout())
 
-        # 日誌區域
+        # Log area
         self._log_widget = self._create_log_widget("Connection Log:")
         layout.addWidget(self._log_widget)
 
         layout.addStretch()
 
-        # Status指示器
+        # Status indicator
         self._status_widget = self._create_status_widget()
         layout.addWidget(self._status_widget)
 
     def _create_button_layout(self) -> QHBoxLayout:
-        """建立按鈕列"""
+        """Create the button row."""
         layout = QHBoxLayout()
         
         self._btn_authorize = QPushButton("🌐 Authorize")
@@ -230,7 +230,7 @@ class OAuthDialog(BaseAuthDialog):
         return layout
 
     def _connect_signals(self) -> None:
-        """連接訊號"""
+        """Connect signals."""
         self._btn_authorize.clicked.connect(self._start_authorize)
         self._btn_exchange_code.clicked.connect(self._exchange_auth_code)
         self._btn_fetch_accounts.clicked.connect(self._fetch_accounts)
@@ -249,7 +249,7 @@ class OAuthDialog(BaseAuthDialog):
         self.statusChanged.connect(self._handle_status_changed)
 
     def _load_initial_data(self) -> None:
-        """載入初始資料"""
+        """Load initial data."""
         try:
             tokens = OAuthTokens.from_file(self._token_file)
             self._form.load_tokens(tokens)
@@ -268,12 +268,12 @@ class OAuthDialog(BaseAuthDialog):
             self._form.redirect_uri.setText("http://127.0.0.1:8765/callback")
 
     # ─────────────────────────────────────────────────────────────
-    # OAuth 流程
+    # OAuth flow
     # ─────────────────────────────────────────────────────────────
 
     @Slot()
     def _start_authorize(self) -> None:
-        """Start OAuth 授權流程（自動取得授權碼）"""
+        """Start the OAuth authorization flow and capture the code automatically."""
         if self._state.login_in_progress:
             return
 
@@ -307,7 +307,7 @@ class OAuthDialog(BaseAuthDialog):
 
     @Slot()
     def _exchange_auth_code(self) -> None:
-        """交換授權碼取得 token"""
+        """Exchange an authorization code for tokens."""
         if self._state.login_in_progress:
             return
 
@@ -349,7 +349,7 @@ class OAuthDialog(BaseAuthDialog):
 
     @Slot()
     def _fetch_accounts(self) -> None:
-        """取得帳戶列表"""
+        """Fetch the authorized account list."""
         if self._state.accounts_in_progress:
             return
 
@@ -419,7 +419,7 @@ class OAuthDialog(BaseAuthDialog):
 
     @Slot()
     def _start_auth(self) -> None:
-        """Start帳戶認證"""
+        """Start account authentication."""
         if self._state.auth_in_progress:
             return
         if self._service and self._service.status == ConnectionStatus.ACCOUNT_AUTHENTICATED:
@@ -484,7 +484,7 @@ class OAuthDialog(BaseAuthDialog):
 
     @Slot()
     # ─────────────────────────────────────────────────────────────
-    # 槽函式
+    # Slots
     # ─────────────────────────────────────────────────────────────
 
     @Slot(object)
@@ -666,7 +666,7 @@ class OAuthDialog(BaseAuthDialog):
         self._refresh_controls()
 
     # ─────────────────────────────────────────────────────────────
-    # 控制項Status
+    # Control state
     # ─────────────────────────────────────────────────────────────
 
     def _refresh_controls(self) -> None:
@@ -683,7 +683,7 @@ class OAuthDialog(BaseAuthDialog):
         self._btn_connect.setEnabled(enabled)
 
     # ─────────────────────────────────────────────────────────────
-    # 輔助方法
+    # Helpers
     # ─────────────────────────────────────────────────────────────
 
     def _build_tokens_from_form(self) -> OAuthTokens:
@@ -712,13 +712,13 @@ class OAuthDialog(BaseAuthDialog):
         )
 
     # ─────────────────────────────────────────────────────────────
-    # 公開 API
+    # Public API
     # ─────────────────────────────────────────────────────────────
 
     def get_service(self) -> OAuthServiceLike | None:
-        """取得認證後的服務實例"""
+        """Return the authenticated service instance."""
         return self._service
 
     def get_selected_account(self) -> Account | None:
-        """取得已選擇的帳戶資訊"""
+        """Return the selected account information."""
         return self._selected_account

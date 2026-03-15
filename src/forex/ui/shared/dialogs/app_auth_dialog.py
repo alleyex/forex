@@ -29,7 +29,7 @@ from forex.utils.reactor_manager import reactor_manager
 
 
 class CredentialsFormWidget(QWidget):
-    """憑證輸入表單元件"""
+    """Credential input form widget."""
     
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -39,7 +39,7 @@ class CredentialsFormWidget(QWidget):
         layout = QFormLayout(self)
         configure_form_layout(layout, horizontal_spacing=12, vertical_spacing=10)
 
-        # Environment選擇
+        # Environment selection
         self._host_type = "demo"
         self._host_locked = False
         self._host_group = QButtonGroup(self)
@@ -68,20 +68,20 @@ class CredentialsFormWidget(QWidget):
         layout.addRow(QLabel("Client Secret:"), self.client_secret)
     
     def set_enabled(self, enabled: bool) -> None:
-        """啟用或停用所有欄位"""
+        """Enable or disable all fields."""
         if not self._host_locked:
             self.set_host_enabled(enabled)
         self.client_id.setEnabled(enabled)
         self.client_secret.setEnabled(enabled)
 
     def set_host_enabled(self, enabled: bool) -> None:
-        """鎖定或解鎖Environment選擇"""
+        """Lock or unlock environment selection."""
         self._host_locked = not enabled
         self._host_demo.setEnabled(enabled)
         self._host_live.setEnabled(enabled)
 
     def get_data(self) -> dict:
-        """取得表單資料"""
+        """Return form data."""
         if self._host_live.isChecked():
             self._host_type = "live"
         else:
@@ -93,7 +93,7 @@ class CredentialsFormWidget(QWidget):
         }
     
     def load_data(self, host: str, client_id: str, client_secret: str) -> None:
-        """載入資料到表單"""
+        """Load data into the form."""
         if host in ("demo", "live"):
             self._host_type = host
             if host == "live":
@@ -104,7 +104,7 @@ class CredentialsFormWidget(QWidget):
         self.client_secret.setText(client_secret)
     
     def validate(self) -> str | None:
-        """驗證表單，回傳error訊息或 None"""
+        """Validate the form and return an error message or `None`."""
         data = self.get_data()
         if not data["client_id"]:
             return "Client ID is required"
@@ -116,8 +116,8 @@ class CredentialsFormWidget(QWidget):
 class AppAuthDialog(BaseAuthDialog):
     """cTrader app auth dialog"""
     
-    # 訊號
-    authSucceeded = Signal(object)  # 發送 Client
+    # Signals
+    authSucceeded = Signal(object)  # Emits the client
     authFailed = Signal(str)
     logReceived = Signal(str)
     statusChanged = Signal(int)
@@ -152,46 +152,46 @@ class AppAuthDialog(BaseAuthDialog):
         self._maybe_auto_start()
 
     def _setup_ui(self) -> None:
-        """初始化 UI"""
+        """Initialize the UI."""
         self.setWindowTitle("cTrader App Authentication")
         self.setMinimumSize(600, 350)
         
         layout = QVBoxLayout(self)
         layout.setSpacing(10)
         
-        # 憑證表單
+        # Credential form
         self._form = CredentialsFormWidget()
         layout.addWidget(self._form)
         
-        # Connect按鈕
+        # Connect button
         self._btn_connect = QPushButton("🔗 Connect")
         layout.addWidget(self._btn_connect)
         
-        # 日誌區域
+        # Log area
         self._log_widget = self._create_log_widget("Connection Log:")
         layout.addWidget(self._log_widget)
         
-        # 彈性空間
+        # Flexible spacer
         layout.addStretch()
         
-        # Status指示器
+        # Status indicator
         self._status_widget = self._create_status_widget()
         layout.addWidget(self._status_widget)
 
     def _connect_signals(self) -> None:
-        """連接訊號"""
+        """Connect signals."""
         self._btn_connect.clicked.connect(self._start_auth)
         self.authSucceeded.connect(self._handle_success)
         self.authFailed.connect(self._handle_error)
         self.statusChanged.connect(self._handle_status_changed)
 
     # ─────────────────────────────────────────────────────────────
-    # 認證流程
+    # Authentication flow
     # ─────────────────────────────────────────────────────────────
 
     @Slot()
     def _start_auth(self) -> None:
-        """Start認證流程"""
+        """Start the authentication flow."""
         if self._state.in_progress:
             return
         if self._service:
@@ -203,18 +203,18 @@ class AppAuthDialog(BaseAuthDialog):
                 self.accept()
                 return
 
-        # 驗證表單
+        # Validate the form
         if error := self._form.validate():
             self._log_error(error)
             return
         
         data = self._form.get_data()
         
-        # 儲存憑證
+        # Save credentials
         if not self._save_credentials(data):
             return
         
-        # 建立或重用服務
+        # Create or reuse the service
         if self._service is None:
             try:
                 use_cases = self._use_cases
@@ -229,7 +229,7 @@ class AppAuthDialog(BaseAuthDialog):
         self._state.in_progress = True
         self._set_controls_enabled(False)
         
-        # 設定回調
+        # Configure callbacks
         self._service.set_callbacks(
             on_app_auth_success=lambda c: self.authSucceeded.emit(c),
             on_error=lambda e: self.authFailed.emit(e),
@@ -237,32 +237,32 @@ class AppAuthDialog(BaseAuthDialog):
             on_status_changed=lambda s: self.statusChanged.emit(int(s)),
         )
         
-        # 啟動Connect
+        # Start the connection
         reactor_manager.ensure_running()
         
         from twisted.internet import reactor
         reactor.callFromThread(self._service.connect)
 
     # ─────────────────────────────────────────────────────────────
-    # 槽函式
+    # Slots
     # ─────────────────────────────────────────────────────────────
 
     @Slot(object)
     def _handle_success(self, client) -> None:
-        """認證成功"""
+        """Handle successful authentication."""
         self._log_success("App authentication succeeded!")
         self.accept()
 
     @Slot(str)
     def _handle_error(self, error: str) -> None:
-        """認證失敗"""
+        """Handle authentication failure."""
         self._log_error(error)
         self._set_controls_enabled(True)
         self._state.in_progress = False
 
     @Slot(int)
     def _handle_status_changed(self, status: int) -> None:
-        """同步按鈕Status與認證Status"""
+        """Keep button state aligned with authentication status."""
         if self._app_state:
             self._app_state.update_app_status(status)
         if self._event_bus:
@@ -274,20 +274,20 @@ class AppAuthDialog(BaseAuthDialog):
             self._set_controls_enabled(True)
 
     # ─────────────────────────────────────────────────────────────
-    # 控制項Status
+    # Control state
     # ─────────────────────────────────────────────────────────────
 
     def _set_controls_enabled(self, enabled: bool) -> None:
-        """啟用或停用所有控制項"""
+        """Enable or disable all controls."""
         self._form.set_enabled(enabled)
         self._btn_connect.setEnabled(enabled)
 
     # ─────────────────────────────────────────────────────────────
-    # 憑證處理
+    # Credential handling
     # ─────────────────────────────────────────────────────────────
 
     def _load_credentials(self) -> None:
-        """從檔案載入憑證"""
+        """Load credentials from disk."""
         data = self._read_json_file()
         
         if not data:
@@ -305,11 +305,11 @@ class AppAuthDialog(BaseAuthDialog):
             client_id=str(data.get("client_id", "")),
             client_secret=str(data.get("client_secret", "")),
         )
-        # Token 已存在時鎖定Environment選擇
+        # Lock environment selection when token data already exists.
         self._form.set_host_enabled(False)
 
     def _save_credentials(self, data: dict) -> bool:
-        """儲存憑證到檔案"""
+        """Save credentials to disk."""
         try:
             AppCredentials(
                 host=data["host_type"],
@@ -322,9 +322,9 @@ class AppAuthDialog(BaseAuthDialog):
             return False
 
     # ─────────────────────────────────────────────────────────────
-    # 公開 API
+    # Public API
     # ─────────────────────────────────────────────────────────────
 
     def get_service(self) -> AppAuthServiceLike | None:
-        """取得認證後的服務實例"""
+        """Return the authenticated service instance."""
         return self._service

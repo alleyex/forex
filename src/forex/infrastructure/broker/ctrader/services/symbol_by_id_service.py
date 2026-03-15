@@ -85,10 +85,10 @@ class SymbolByIdService(
         timeout_seconds: int | None = None,
     ) -> None:
         if not account_id:
-            self._emit_error(error_message(ErrorCode.VALIDATION, "缺少帳戶 ID"))
+            self._emit_error(error_message(ErrorCode.VALIDATION, "Missing account ID"))
             return
         if not symbol_ids:
-            self._emit_error(error_message(ErrorCode.VALIDATION, "缺少 Symbol ID"))
+            self._emit_error(error_message(ErrorCode.VALIDATION, "Missing symbol ID"))
             return
         if not self._start_operation():
             return
@@ -100,7 +100,7 @@ class SymbolByIdService(
                 request.symbolId.append(int(symbol_id))
         if hasattr(request, "includeArchivedSymbols"):
             request.includeArchivedSymbols = bool(include_archived)
-        self._log(format_request("正在取得 symbol details..."))
+        self._log(format_request("Fetching symbol details..."))
         self._app_auth_service.add_message_handler(self._handle_message)
         if not self._send_request_with_client(
             request=request,
@@ -123,7 +123,7 @@ class SymbolByIdService(
     def _on_symbols_received(self, msg: SymbolByIdMessage) -> None:
         self._cleanup_request_lifecycle(timeout_tracker=None, handler=self._handle_message)
         symbols = self._parse_symbols(getattr(msg, "symbol", []))
-        self._log(format_success(f"已接收 symbol details: {len(symbols)} 筆"))
+        self._log(format_success(f"Received symbol details: {len(symbols)}"))
         if self._callbacks.on_symbols_received:
             self._callbacks.on_symbols_received(symbols)
 

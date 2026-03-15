@@ -28,8 +28,8 @@ def format_confirm(message: str, payload_type: int) -> str:
 def format_error(error_code: Any, description: str) -> str:
     name = describe_error_code(error_code)
     if name:
-        return f"錯誤 {error_code}({name}): {description}"
-    return f"錯誤 {error_code}: {description}"
+        return f"Error {error_code}({name}): {description}"
+    return f"Error {error_code}: {description}"
 
 
 def format_success(message: str) -> str:
@@ -53,7 +53,7 @@ def format_sent_unsubscribe(message: str) -> str:
 
 
 def format_unhandled(payload_type: int) -> str:
-    return f"📩 未處理的訊息類型: {int(payload_type)}"
+    return f"📩 Unhandled message type: {int(payload_type)}"
 
 
 def dispatch_payload(msg: Any, handlers: Mapping[int, Callable[[Any], None]]) -> bool:

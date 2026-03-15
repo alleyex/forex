@@ -1,6 +1,4 @@
-"""
-帳戶資金狀態服務
-"""
+"""Account funds state service."""
 import time
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass
@@ -91,7 +89,7 @@ class AccountFunds:
 
 @dataclass
 class AccountFundsServiceCallbacks(BaseCallbacks):
-    """AccountFundsService 的回調函式"""
+    """Callbacks for AccountFundsService."""
     on_funds_received: Callable[[AccountFunds], None] | None = None
     on_position_pnl: Callable[[dict[int, float]], None] | None = None
 
@@ -102,7 +100,7 @@ class AccountFundsService(
     OperationStateMixin,
 ):
     """
-    取得帳戶資金狀態（餘額、淨值、保證金）
+    Fetch account funds state (balance, equity, and margin).
     """
 
     def __init__(self, app_auth_service: AppAuthService):
@@ -122,7 +120,7 @@ class AccountFundsService(
         on_error: Callable[[str], None] | None = None,
         on_log: Callable[[str], None] | None = None,
     ) -> None:
-        """設定回調函式"""
+        """Set callbacks."""
         self._callbacks = build_callbacks(
             AccountFundsServiceCallbacks,
             on_funds_received=on_funds_received,
@@ -133,9 +131,9 @@ class AccountFundsService(
         self._replay_log_history()
 
     def fetch(self, account_id: int, timeout_seconds: int | None = None) -> None:
-        """取得帳戶資金狀態"""
+        """Fetch account funds state."""
         if not self._start_operation():
-            self._log("⚠️ 帳戶資金查詢進行中")
+            self._log("⚠️ Account funds request already in progress")
             return
 
         self._reset_state()
@@ -223,7 +221,7 @@ class AccountFundsService(
         self._client.send(request)
 
     def _handle_message(self, client: Client, msg: object) -> bool:
-        """處理帳戶資金相關回應"""
+        """Handle account-funds-related responses."""
         if not self._in_progress:
             return False
 
@@ -419,7 +417,7 @@ class AccountFundsService(
             self._cleanup()
             return
         metrics.inc("ctrader.account_funds.timeout")
-        self._emit_error(error_message(ErrorCode.TIMEOUT, "取得帳戶資金逾時"))
+        self._emit_error(error_message(ErrorCode.TIMEOUT, "Account funds request timed out"))
         self._cleanup()
 
     def _retry_request(self, attempt: int) -> None:
@@ -430,7 +428,7 @@ class AccountFundsService(
         ):
             self._cleanup()
             return
-        self._log(format_warning(f"帳戶資金逾時，重試第 {attempt} 次"))
+        self._log(format_warning(f"Account funds timed out, retry attempt {attempt}"))
         metrics.inc("ctrader.account_funds.retry")
         if not self._client or self._account_id is None:
             return

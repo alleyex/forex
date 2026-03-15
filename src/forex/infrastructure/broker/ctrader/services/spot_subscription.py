@@ -32,7 +32,7 @@ def send_spot_subscribe(
     request.subscribeToSpotTimestamp = subscribe_to_spot_timestamp
     client.send(request)
     if log:
-        log(format_sent_subscribe(f"已送出報價訂閱：{symbol_id}"))
+        log(format_sent_subscribe(f"Quote subscription sent: {symbol_id}"))
 
 
 def send_spot_unsubscribe(
@@ -50,4 +50,4 @@ def send_spot_unsubscribe(
         request.symbolId.append(int(symbol_id))
     client.send(request)
     if log:
-        log(format_sent_unsubscribe(f"已送出報價退訂：{symbol_id}"))
+        log(format_sent_unsubscribe(f"Quote unsubscribe sent: {symbol_id}"))

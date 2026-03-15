@@ -100,12 +100,12 @@ class LogWidget(QWidget):
     }
     appendRequested = Signal(str)
     """
-    日誌顯示元件
+    Log display widget.
 
-    提供：
-    - 唯讀的文字區域
-    - 自動捲動到最新訊息
-    - 可選的標題標籤
+    Provides:
+    - A read-only text area
+    - Auto-scroll to the latest message
+    - An optional title label
     """
 
     def __init__(
@@ -129,17 +129,17 @@ class LogWidget(QWidget):
             re.IGNORECASE,
         )
         self._history_request_pattern = re.compile(
-            r"(?:fetch|取得)\s+([A-Za-z0-9]+)\s+(?:history|歷史資料)[:：](\d+)\s+rows\s+\(milliseconds,\s*window=([^,]+),\s*from=([^,]+),\s*to=([^)]+)\)"
+            r"fetch\s+([A-Za-z0-9]+)\s+history[:：](\d+)\s+rows\s+\(milliseconds,\s*window=([^,]+),\s*from=([^,]+),\s*to=([^)]+)\)"
         )
         self._request_history_pattern = re.compile(
             r"Request history\s+\(account_id=(\d+),\s*symbol_id=(\d+)\)"
         )
         self._loaded_candles_pattern = re.compile(r"Loaded\s+(\d+)\s+candles", re.IGNORECASE)
         self._unhandled_type_pattern = re.compile(
-            r"(?:Unhandled message type|未處理的訊息類型)[:：]\s*(\d+)"
+            r"Unhandled message type[:：]\s*(\d+)"
         )
         self._error_invalid_pattern = re.compile(
-            r"(?:ERROR|錯誤)\s+INVALID_REQUEST[:：]\s*(.+)",
+            r"ERROR\s+INVALID_REQUEST[:：]\s*(.+)",
             re.IGNORECASE,
         )
         self._strategy_profile_pattern = re.compile(
@@ -325,7 +325,7 @@ class LogWidget(QWidget):
 
     @Slot(str)
     def _append_on_ui_thread(self, message: str) -> None:
-        """新增訊息並捲動到底部"""
+        """Append a message and scroll to the bottom."""
         message = self._normalize_message(message)
         if self._with_timestamp:
             ts = datetime.now().strftime("%H:%M:%S")
@@ -366,7 +366,7 @@ class LogWidget(QWidget):
         return True
 
     def clear_logs(self) -> None:
-        """Clear所有日誌"""
+        """Clear all logs."""
         self._entries.clear()
         self._last_entry_text = ""
         self._last_entry_ts = 0.0
@@ -453,9 +453,9 @@ class LogWidget(QWidget):
 
         if "funds received" in lower:
             return "funds_received"
-        if "發送 heartbeat" in body or "sending heartbeat" in lower:
+        if "sending heartbeat" in lower:
             return "heartbeat_sent"
-        if "已送出報價訂閱" in body or "quotes subscribed" in lower:
+        if "quotes subscribed" in lower:
             value = (
                 body.split("：", 1)[-1].strip()
                 if "：" in body
@@ -464,9 +464,9 @@ class LogWidget(QWidget):
             return f"quotes_subscribed | symbols={value}"
         if lower.startswith("order executed"):
             return body.replace("Order executed", "order_executed", 1)
-        if "正在取得 symbol details" in body or "fetching symbol details" in lower:
+        if "fetching symbol details" in lower:
             return "symbol_details_request"
-        if "已接收 symbol details" in body or "symbol details received" in lower:
+        if "symbol details received" in lower:
             return "symbol_details_received"
         return self._normalize_event_prefix(body)
 

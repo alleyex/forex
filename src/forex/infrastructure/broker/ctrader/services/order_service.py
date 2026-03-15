@@ -275,7 +275,12 @@ class OrderService(CTraderServiceBase[OrderServiceCallbacks]):
 
     def _ensure_trade_allowed(self) -> bool:
         if self._permission_scope == 0:
-            self._emit_error(error_message(ErrorCode.AUTH, "帳戶權限僅檢視，禁止交易"))
+            self._emit_error(
+                error_message(
+                    ErrorCode.AUTH,
+                    "Account is view-only; trading is blocked",
+                )
+            )
             return False
         return True
 

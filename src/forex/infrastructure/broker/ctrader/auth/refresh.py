@@ -15,7 +15,7 @@ def refresh_tokens(
 ) -> OAuthTokens:
     credentials = AppCredentials.from_file(token_file)
     if credentials is None:
-        raise RuntimeError("無法讀取 OAuth 憑證")
+        raise RuntimeError("Unable to read OAuth credentials")
     exchanger = TokenExchanger(credentials)
     return exchanger.refresh_tokens(
         refresh_token,

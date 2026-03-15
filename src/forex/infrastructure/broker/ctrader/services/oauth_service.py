@@ -1,6 +1,4 @@
-"""
-OAuth 帳戶認證服務
-"""
+"""OAuth account authentication service."""
 import time
 from collections.abc import Callable
 from dataclasses import dataclass
@@ -43,16 +41,16 @@ class OAuthMessage(Protocol):
 
 @dataclass
 class OAuthServiceCallbacks(BaseCallbacks):
-    """OAuthService 的回調函式"""
+    """Callbacks for OAuthService."""
     on_oauth_success: Callable[[OAuthTokens], None] | None = None
     on_status_changed: Callable[[ConnectionStatus], None] | None = None
 
 
 class OAuthService(CTraderServiceBase[OAuthServiceCallbacks]):
     """
-    處理 OAuth 帳戶認證流程
+    Handle the OAuth account authentication flow.
 
-    使用方式：
+    Usage:
         service = OAuthService.create(app_auth_service, TOKEN_FILE)
         service.set_callbacks(on_oauth_success=..., on_error=...)
         service.connect()
@@ -81,7 +79,7 @@ class OAuthService(CTraderServiceBase[OAuthServiceCallbacks]):
         app_auth_service: AppAuthService,
         token_file: str = TOKEN_FILE,
     ) -> "OAuthService":
-        """工廠方法：從設定檔建立服務實例"""
+        """Factory method that builds a service instance from configuration."""
         tokens = OAuthTokens.from_file(token_file)
         client = app_auth_service.get_client()
         return cls(
@@ -93,7 +91,7 @@ class OAuthService(CTraderServiceBase[OAuthServiceCallbacks]):
 
     @property
     def tokens(self) -> OAuthTokens:
-        """取得目前的 Token"""
+        """Return the current token set."""
         return self._tokens
 
     @property
@@ -101,7 +99,7 @@ class OAuthService(CTraderServiceBase[OAuthServiceCallbacks]):
         return self._last_authenticated_account_id
 
     def update_tokens(self, tokens: OAuthTokens) -> None:
-        """更新 Token（例如切換帳戶後）"""
+        """Update tokens, for example after switching accounts."""
         self._tokens = tokens
 
     def set_callbacks(
@@ -111,7 +109,7 @@ class OAuthService(CTraderServiceBase[OAuthServiceCallbacks]):
         on_log: Callable[[str], None] | None = None,
         on_status_changed: Callable[[ConnectionStatus], None] | None = None,
     ) -> None:
-        """設定回調函式"""
+        """Set callbacks."""
         self._callbacks = build_callbacks(
             OAuthServiceCallbacks,
             on_oauth_success=on_oauth_success,
@@ -122,12 +120,12 @@ class OAuthService(CTraderServiceBase[OAuthServiceCallbacks]):
         self._replay_log_history()
 
     def connect(self, timeout_seconds: int | None = None) -> None:
-        """發送帳戶認證請求"""
+        """Send the account authentication request."""
         if self._status == ConnectionStatus.ACCOUNT_AUTHENTICATED:
-            self._log("ℹ️ 帳戶已授權，略過重複認證")
+            self._log("ℹ️ Account already authorized; skipping duplicate authentication")
             return
         self._set_status(ConnectionStatus.CONNECTING)
-        self._log("🔐 正在發送帳戶認證...")
+        self._log("🔐 Sending account authentication...")
         self._metrics_started_at = time.monotonic()
         self._refresh_attempted = False
 
@@ -157,41 +155,44 @@ class OAuthService(CTraderServiceBase[OAuthServiceCallbacks]):
         self._send_auth_request()
 
     def disconnect(self) -> None:
-        """中斷帳戶認證流程"""
+        """Interrupt the account authentication flow."""
         if self._in_progress:
             self._end_operation()
         self._timeout_tracker.cancel()
         self._unbind_handler(self._handle_message)
         self._set_status(ConnectionStatus.DISCONNECTED)
-        self._log("🔌 已中斷帳戶連線")
+        self._log("🔌 Account connection interrupted")
 
     def logout(self) -> None:
-        """向伺服器送出帳戶登出請求"""
+        """Send an account logout request to the server."""
         account_id = self._tokens.account_id
         if not account_id:
-            self._log("⚠️ 無帳戶 ID，略過帳戶登出")
+            self._log("⚠️ Missing account ID; skipping account logout")
             return
         try:
             client = self._app_auth_service.get_client()
         except Exception as exc:
-            self._log(f"⚠️ 無法登出帳戶: {exc}")
+            self._log(f"⚠️ Unable to log out the account: {exc}")
             return
         self._logout_requested = True
         request = ProtoOAAccountLogoutReq()
         request.ctidTraderAccountId = int(account_id)
-        self._log(f"🚪 帳戶登出請求 account_id={int(account_id)}")
+        self._log(f"🚪 Account logout request account_id={int(account_id)}")
         client.send(request)
 
     def _validate_tokens(self) -> str | None:
-        """驗證 Token，若無效則回傳錯誤訊息"""
+        """Validate tokens and return an error message if they are invalid."""
         if not self._tokens.access_token:
-            return error_message(ErrorCode.AUTH, "缺少存取權杖")
+            return error_message(ErrorCode.AUTH, "Missing access token")
         if not self._tokens.account_id:
-            return error_message(ErrorCode.AUTH, "缺少帳戶 ID")
+            return error_message(ErrorCode.AUTH, "Missing account ID")
         if self._tokens.is_expired():
             if not self._tokens.refresh_token:
                 metrics.inc("ctrader.oauth.refresh.missing")
-                return error_message(ErrorCode.AUTH, "Token 已過期，且缺少 refresh token")
+                return error_message(
+                    ErrorCode.AUTH,
+                    "Token expired and no refresh token is available",
+                )
             try:
                 refreshed = refresh_tokens(
                     token_file=self._token_file,
@@ -200,15 +201,15 @@ class OAuthService(CTraderServiceBase[OAuthServiceCallbacks]):
                 )
                 refreshed.save(self._token_file)
                 self._tokens = refreshed
-                self._log("🔁 已自動刷新 OAuth Token")
+                self._log("🔁 OAuth token refreshed automatically")
                 metrics.inc("ctrader.oauth.refresh.success")
             except Exception as exc:
                 metrics.inc("ctrader.oauth.refresh.failure")
-                return error_message(ErrorCode.AUTH, "Token 刷新失敗", str(exc))
+                return error_message(ErrorCode.AUTH, "Token refresh failed", str(exc))
         return None
 
     def _send_auth_request(self) -> None:
-        """發送認證請求"""
+        """Send the authentication request."""
         request = ProtoOAAccountAuthReq()
         request.accessToken = self._tokens.access_token
         request.ctidTraderAccountId = int(self._tokens.account_id)
@@ -216,7 +217,7 @@ class OAuthService(CTraderServiceBase[OAuthServiceCallbacks]):
         self._client.send(request)
 
     def _handle_message(self, client: Client, msg: OAuthMessage) -> bool:
-        """處理帳戶認證回應"""
+        """Handle the account authentication response."""
         if self._in_progress:
             return dispatch_payload(
                 msg,
@@ -238,7 +239,7 @@ class OAuthService(CTraderServiceBase[OAuthServiceCallbacks]):
         return False
 
     def _on_auth_success(self) -> None:
-        """認證成功處理"""
+        """Handle authentication success."""
         self._end_operation()
         self._timeout_tracker.cancel()
         self._set_status(ConnectionStatus.ACCOUNT_AUTHENTICATED)
@@ -246,7 +247,7 @@ class OAuthService(CTraderServiceBase[OAuthServiceCallbacks]):
             self._last_authenticated_account_id = int(self._tokens.account_id)
         except Exception:
             self._last_authenticated_account_id = None
-        self._log(format_success("帳戶已授權！"))
+        self._log(format_success("Account authorized!"))
         metrics.inc("ctrader.oauth.success")
         if self._metrics_started_at is not None:
             metrics.observe("ctrader.oauth.latency_s", time.monotonic() - self._metrics_started_at)
@@ -259,7 +260,7 @@ class OAuthService(CTraderServiceBase[OAuthServiceCallbacks]):
         self._emit_error(error_message(ErrorCode.AUTH, message, detail))
 
     def _on_auth_error(self, msg: OAuthMessage) -> None:
-        """認證錯誤處理"""
+        """Handle authentication errors."""
         if (
             not self._refresh_attempted
             and is_invalid_token_error(getattr(msg, "errorCode", -1))
@@ -274,13 +275,16 @@ class OAuthService(CTraderServiceBase[OAuthServiceCallbacks]):
                 )
                 refreshed.save(self._token_file)
                 self._tokens = refreshed
-                self._log("🔁 Token 失效，已自動刷新並重試認證")
+                self._log(
+                    "🔁 Token became invalid; "
+                    "refreshed automatically and retried authentication"
+                )
                 metrics.inc("ctrader.oauth.refresh.success")
                 self._send_auth_request()
                 return
             except Exception as exc:
                 metrics.inc("ctrader.oauth.refresh.failure")
-                self._log(f"⚠️ Token 刷新失敗: {exc}")
+                self._log(f"⚠️ Token refresh failed: {exc}")
 
         self._end_operation()
         self._unbind_handler(self._handle_message)
@@ -295,13 +299,13 @@ class OAuthService(CTraderServiceBase[OAuthServiceCallbacks]):
         self._end_operation()
         self._unbind_handler(self._handle_message)
         metrics.inc("ctrader.oauth.timeout")
-        self._emit_error(error_message(ErrorCode.TIMEOUT, "帳戶認證逾時"))
+        self._emit_error(error_message(ErrorCode.TIMEOUT, "Account authentication timed out"))
         self._set_status(ConnectionStatus.DISCONNECTED)
 
     def _retry_auth_request(self, attempt: int) -> None:
         if not self._in_progress:
             return
-        self._log(f"⚠️ 帳戶認證逾時，重試第 {attempt} 次")
+        self._log(f"⚠️ Account authentication timed out, retry attempt {attempt}")
         metrics.inc("ctrader.oauth.retry")
         self._send_auth_request()
 
@@ -313,11 +317,11 @@ class OAuthService(CTraderServiceBase[OAuthServiceCallbacks]):
             and int(account_id) != int(self._tokens.account_id)
         ):
             return
-        self._log("⚠️ 帳戶已在伺服器端中斷，請重新授權")
+        self._log("⚠️ The account was disconnected by the server; reauthorization is required")
         metrics.inc("ctrader.oauth.disconnect.event")
         if self._logout_requested:
-            self._log("✅ 帳戶登出完成")
-        self._set_disconnected_with_error("帳戶連線已中斷")
+            self._log("✅ Account logout completed")
+        self._set_disconnected_with_error("Account connection was interrupted")
 
     def _on_accounts_token_invalidated(self, msg: OAuthMessage) -> None:
         account_ids = getattr(msg, "ctidTraderAccountIds", None)
@@ -326,7 +330,7 @@ class OAuthService(CTraderServiceBase[OAuthServiceCallbacks]):
             return
         if account_ids and int(current_id) not in {int(a) for a in account_ids}:
             return
-        reason = getattr(msg, "reason", "") or "Token 已失效或被撤銷"
-        self._log(f"⚠️ 帳戶 Token 失效: {reason}")
+        reason = getattr(msg, "reason", "") or "Token became invalid or was revoked"
+        self._log(f"⚠️ Account token invalidated: {reason}")
         metrics.inc("ctrader.oauth.token_invalidated.event")
-        self._set_disconnected_with_error("帳戶 Token 已失效", reason)
+        self._set_disconnected_with_error("Account token is no longer valid", reason)

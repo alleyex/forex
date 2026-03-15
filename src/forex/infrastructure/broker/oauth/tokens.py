@@ -1,6 +1,4 @@
-"""
-OAuth Token 交換工具
-"""
+"""OAuth token exchange utilities."""
 
 import json
 import time
@@ -11,11 +9,11 @@ from forex.config.settings import AppCredentials, OAuthTokens
 
 class TokenExchanger:
     """
-    處理 OAuth Token 交換操作
-    
-    負責：
-    - 建構授權 URL
-    - 將授權碼交換為 Token
+    Handle OAuth token exchange operations.
+
+    Responsibilities:
+    - build the authorization URL
+    - exchange an authorization code for tokens
     """
     
     TOKEN_URL = "https://openapi.ctrader.com/apps/token"
@@ -26,7 +24,7 @@ class TokenExchanger:
         self._redirect_uri = redirect_uri
 
     def build_authorize_url(self) -> str:
-        """建構 OAuth 授權 URL"""
+        """Build the OAuth authorization URL."""
         if not self._redirect_uri:
             raise ValueError("redirect_uri is required to build authorize URL")
         params = {
@@ -42,17 +40,17 @@ class TokenExchanger:
         existing_account_id: int | None = None,
     ) -> OAuthTokens:
         """
-        將授權碼交換為 Token
-        
+        Exchange an authorization code for tokens.
+
         Args:
-            code: 授權碼
-            existing_account_id: 現有的帳戶 ID（可選，用於保留）
-            
+            code: Authorization code.
+            existing_account_id: Existing account id to preserve, if available.
+
         Returns:
-            OAuthTokens 實例
-            
+            OAuthTokens instance.
+
         Raises:
-            RuntimeError: Token 交換失敗
+            RuntimeError: Token exchange failed.
         """
         if not self._redirect_uri:
             raise ValueError("redirect_uri is required to exchange code")
@@ -81,7 +79,7 @@ class TokenExchanger:
         return self._parse_token_response(response, existing_account_id)
     
     def _post_request(self, data: dict) -> dict:
-        """發送 POST 請求並回傳解析後的 JSON 回應"""
+        """Send a POST request and return the parsed JSON response."""
         encoded = parse.urlencode(data).encode()
         req = request.Request(self.TOKEN_URL, data=encoded, method="POST")
 
@@ -95,7 +93,7 @@ class TokenExchanger:
         parsed: dict,
         existing_account_id: int | None,
     ) -> OAuthTokens:
-        """解析 Token 回應"""
+        """Parse the token response."""
         if "error" in parsed:
             raise RuntimeError(parsed.get("error_description") or parsed["error"])
 
@@ -111,8 +109,8 @@ class TokenExchanger:
     
     @staticmethod
     def _safe_json_loads(payload: str) -> dict:
-        """安全地解析 JSON"""
+        """Safely parse JSON."""
         try:
             return json.loads(payload)
         except Exception as exc:
-            raise RuntimeError(f"無效的 Token 回應: {exc}") from exc
+            raise RuntimeError(f"Invalid token response: {exc}") from exc

@@ -11,12 +11,12 @@ from forex.ui.shared.utils.formatters import format_status_label
 
 class StatusWidget(QLabel):
     """
-    Status顯示元件
+    Status display widget.
 
-    根據 ConnectionStatus 顯示對應的文字和顏色
+    Shows the matching label and color for a `ConnectionStatus`.
     """
 
-    # 預設Status對應表
+    # Default status mapping
     DEFAULT_STATUS_MAP: dict[ConnectionStatus, tuple[str, str]] = {
         ConnectionStatus.DISCONNECTED: ("Disconnected", "color: red"),
         ConnectionStatus.CONNECTING: ("Connecting...", "color: orange"),
@@ -38,10 +38,10 @@ class StatusWidget(QLabel):
     @Slot(int)
     def update_status(self, status: int) -> None:
         """
-        更新Status顯示
+        Update the displayed status.
 
         Args:
-            status: ConnectionStatus 的整數值
+            status: Integer value of `ConnectionStatus`.
         """
         status_enum = ConnectionStatus(status) if isinstance(status, int) else status
         text, style = self._status_map.get(status_enum, ("Unknown", ""))

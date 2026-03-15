@@ -88,7 +88,7 @@ class SymbolListService(
         timeout_seconds: int | None = None,
     ) -> None:
         if not account_id:
-            self._emit_error(error_message(ErrorCode.VALIDATION, "缺少帳戶 ID"))
+            self._emit_error(error_message(ErrorCode.VALIDATION, "Missing account ID"))
             return
 
         if not self._start_operation():
@@ -108,7 +108,7 @@ class SymbolListService(
         request = ProtoOASymbolsListReq()
         request.ctidTraderAccountId = int(self._account_id or 0)
         request.includeArchivedSymbols = bool(self._include_archived)
-        self._log(format_request("正在取得 symbol list..."))
+        self._log(format_request("Fetching symbol list..."))
         if not self._send_request_with_client(
             request=request,
             timeout_tracker=self._timeout_tracker,
@@ -133,7 +133,7 @@ class SymbolListService(
             handler=self._handle_message,
         )
         symbols = self._parse_symbols(msg.symbol)
-        self._log(format_success(f"已接收 symbol: {len(symbols)} 筆"))
+        self._log(format_success(f"Received symbols: {len(symbols)}"))
         metrics.inc("ctrader.symbol_list.success")
         started_at = getattr(self, "_metrics_started_at", None)
         if started_at is not None:
@@ -160,12 +160,12 @@ class SymbolListService(
             handler=self._handle_message,
         )
         metrics.inc("ctrader.symbol_list.timeout")
-        self._emit_error(error_message(ErrorCode.TIMEOUT, "取得 symbol list 逾時"))
+        self._emit_error(error_message(ErrorCode.TIMEOUT, "Symbol list request timed out"))
 
     def _retry_request(self, attempt: int) -> None:
         if not self._in_progress:
             return
-        self._log(format_warning(f"symbol list 逾時，重試第 {attempt} 次"))
+        self._log(format_warning(f"Symbol list timed out, retry attempt {attempt}"))
         metrics.inc("ctrader.symbol_list.retry")
         self._send_request()
 

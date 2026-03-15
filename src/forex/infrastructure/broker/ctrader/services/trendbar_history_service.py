@@ -1,6 +1,4 @@
-"""
-取得 K 線歷史資料服務
-"""
+"""Trendbar history retrieval service."""
 import threading
 import time
 from collections.abc import Callable, Sequence
@@ -58,7 +56,7 @@ class ErrorMessage(Protocol):
 
 @dataclass
 class TrendbarHistoryCallbacks(BaseCallbacks):
-    """TrendbarHistoryService 的回調函式"""
+    """Callbacks for TrendbarHistoryService."""
     on_history_received: Callable[[list], None] | None = None
 
 
@@ -68,7 +66,7 @@ class TrendbarHistoryService(
     OperationStateMixin,
 ):
     """
-    取得指定週期的 K 線歷史資料
+    Fetch historical trendbar data for a specific timeframe.
     """
 
     _MIN_TIMESTAMP_MS = 0
@@ -118,7 +116,7 @@ class TrendbarHistoryService(
         on_error: Callable[[str], None] | None = None,
         on_log: Callable[[str], None] | None = None,
     ) -> None:
-        """設定回調函式"""
+        """Set callbacks."""
         self._callbacks = build_callbacks(
             TrendbarHistoryCallbacks,
             on_history_received=on_history_received,
@@ -137,7 +135,7 @@ class TrendbarHistoryService(
         to_ts: int | None = None,
     ) -> None:
         if not self._start_operation():
-            self._log("⚠️ 歷史資料查詢進行中")
+            self._log("⚠️ Historical data request already in progress")
             return
         self._account_id = int(account_id)
         self._symbol_id = int(symbol_id)
@@ -311,7 +309,7 @@ class TrendbarHistoryService(
             return
         period_label = self._period_label()
         self._log(
-            f"📥 取得 {period_label} 歷史資料：{self._last_request_count} 筆 "
+            f"📥 Fetching {period_label} history: {self._last_request_count} rows "
             f"({self._last_request_mode}, window={self._last_request_window}, "
             f"from={self._pending_request.fromTimestamp}, to={self._pending_request.toTimestamp})"
         )
@@ -332,7 +330,7 @@ class TrendbarHistoryService(
         if not bars and not self._retried_wide:
             self._retried_wide = True
             wide_window = 60 * 24 * 14
-            self._log("⚠️ 歷史資料為空，改用較大時間區間重新嘗試")
+            self._log("⚠️ History response was empty; retrying with a wider time window")
             self._prepare_request(
                 self._last_request_count,
                 use_seconds=False,
@@ -346,7 +344,7 @@ class TrendbarHistoryService(
             self._retried_m1 = True
             prev_period_label = self._period_label()
             self._period = ProtoOATrendbarPeriod.M1
-            self._log(f"⚠️ {prev_period_label} 為空，改用 M1 嘗試")
+            self._log(f"⚠️ {prev_period_label} was empty; retrying with M1")
             self._prepare_request(
                 self._last_request_count,
                 use_seconds=False,
@@ -358,7 +356,7 @@ class TrendbarHistoryService(
             return
         if not bars:
             self._log(
-                f"⚠️ 歷史資料為空 (symbol={msg.symbolId}, period={msg.period}, "
+                f"⚠️ History response was empty (symbol={msg.symbolId}, period={msg.period}, "
                 f"timestamp={msg.timestamp})"
             )
         else:
@@ -389,7 +387,7 @@ class TrendbarHistoryService(
             self._completed_ranges += 1
             range_text = self._format_range(self._current_range)
             suffix = f" ({range_text})" if range_text else ""
-            self._log(f"📦 已完成 {self._completed_ranges}/{self._total_ranges}{suffix}")
+            self._log(f"📦 Completed {self._completed_ranges}/{self._total_ranges}{suffix}")
 
         if self._request_ranges:
             next_range = self._request_ranges.pop(0)

@@ -76,8 +76,8 @@ def test_connect_timeout_reconnects_before_tcp_connected(monkeypatch) -> None:
     service._on_connect_timeout()
 
     assert calls["stopped"] == 1
-    assert calls["reason"] == "連線逾時"
-    assert any("連線逾時" in message for message in logs)
+    assert calls["reason"] == "Connection timed out"
+    assert any("Connection timed out" in message for message in logs)
     assert service.status == ConnectionStatus.DISCONNECTED
     assert service._client is None
 
@@ -106,8 +106,8 @@ def test_connect_timeout_reconnects_after_tcp_connected(monkeypatch) -> None:
     service._on_connect_timeout()
 
     assert calls["stopped"] == 1
-    assert calls["reason"] == "App 認證逾時"
-    assert any("App 認證逾時" in message for message in logs)
+    assert calls["reason"] == "App authentication timed out"
+    assert any("App authentication timed out" in message for message in logs)
     assert service.status == ConnectionStatus.DISCONNECTED
     assert service._client is None
 
@@ -135,7 +135,7 @@ def test_connect_timeout_schedules_reconnect_when_no_client(monkeypatch) -> None
     service._on_connect_timeout()
 
     assert calls["stopped"] == 1
-    assert calls["reason"] == "連線逾時"
+    assert calls["reason"] == "Connection timed out"
 
 
 def test_handle_disconnected_skips_duplicate_schedule_when_reconnect_pending(monkeypatch) -> None:
