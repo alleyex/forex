@@ -24,8 +24,18 @@ These values should be kept in sync.
 make bump-version VERSION=0.1.1
 ```
 
-3. Confirm the changelog and version metadata are ready, then run:
-4. Create and push a git tag in the format `vX.Y.Z`
+3. Validate release metadata and changelog coverage:
+
+```bash
+make check-release-metadata
+```
+
+4. Run the full preflight:
+
+```bash
+make release-check
+```
+5. Create and push a git tag in the format `vX.Y.Z`
 
 Example:
 
@@ -41,6 +51,7 @@ The release workflow runs on version tags matching `v*`.
 It validates that:
 
 - the git tag matches the package version in `pyproject.toml`
+- the changelog includes both `[Unreleased]` and a release entry for the tagged version
 - the release preflight passes
 - the package builds successfully
 

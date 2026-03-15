@@ -8,27 +8,7 @@ cd "$ROOT_DIR"
 PYTHON_BIN="${PYTHON:-python3}"
 
 echo "[release-check] Verifying package version metadata"
-"$PYTHON_BIN" - <<'PY'
-from pathlib import Path
-import re
-
-pyproject_text = Path("pyproject.toml").read_text(encoding="utf-8")
-package_text = Path("src/forex/__init__.py").read_text(encoding="utf-8")
-
-pyproject_match = re.search(r'^version = "([^"]+)"$', pyproject_text, re.MULTILINE)
-package_match = re.search(r'^__version__ = "([^"]+)"$', package_text, re.MULTILINE)
-
-if pyproject_match is None:
-    raise SystemExit("Could not find project version in pyproject.toml")
-if package_match is None:
-    raise SystemExit("Could not find __version__ in src/forex/__init__.py")
-if pyproject_match.group(1) != package_match.group(1):
-    raise SystemExit(
-        "Version mismatch: "
-        f"pyproject.toml={pyproject_match.group(1)!r}, "
-        f"src/forex/__init__.py={package_match.group(1)!r}"
-    )
-PY
+"$PYTHON_BIN" ./scripts/validate_release_metadata.py
 
 echo "[release-check] Ensuring release build tools are available"
 "$PYTHON_BIN" - <<'PY'
