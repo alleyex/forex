@@ -54,5 +54,6 @@ It validates that:
 - the changelog includes both `[Unreleased]` and a release entry for the tagged version
 - the release preflight passes
 - the package builds successfully
+- release artifacts include a `SHA256SUMS.txt` checksum manifest
 
 It then uploads build artifacts to the GitHub release for that tag.

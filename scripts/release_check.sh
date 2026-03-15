@@ -31,7 +31,10 @@ make check-hygiene
 echo "[release-check] Building distribution artifacts"
 "$PYTHON_BIN" -m build
 
+echo "[release-check] Generating artifact checksums"
+"$PYTHON_BIN" ./scripts/generate_release_checksums.py --dist-dir dist
+
 echo "[release-check] Validating distribution metadata"
-"$PYTHON_BIN" -m twine check dist/*
+"$PYTHON_BIN" -m twine check dist/*.whl dist/*.tar.gz
 
 echo "[release-check] Completed successfully"

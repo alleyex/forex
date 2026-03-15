@@ -3,7 +3,7 @@ PIP ?= $(PYTHON) -m pip
 RUFF ?= $(PYTHON) -m ruff
 PYTEST ?= $(PYTHON) -m pytest
 
-.PHONY: help install-dev lint test check check-core check-hygiene check-architecture check-deadcode check-unused check-release-metadata release-check bump-version
+.PHONY: help install-dev lint test check check-core check-hygiene check-architecture check-deadcode check-unused check-release-metadata release-check bump-version release-checksums
 
 help:
 	@echo "Targets:"
@@ -16,6 +16,7 @@ help:
 	@echo "  make check-unused        # unused imports and variables"
 	@echo "  make check-deadcode      # vulture dead code scan"
 	@echo "  make check-release-metadata # validate version and changelog release metadata"
+	@echo "  make release-checksums   # generate SHA256SUMS.txt for dist artifacts"
 	@echo "  make release-check       # release preflight validation and package build"
 	@echo "  make bump-version        # synchronize package version metadata (VERSION=x.y.z)"
 	@echo "  make check               # run all quality gates"
@@ -41,6 +42,9 @@ check-deadcode:
 
 check-release-metadata:
 	$(PYTHON) ./scripts/validate_release_metadata.py
+
+release-checksums:
+	$(PYTHON) ./scripts/generate_release_checksums.py --dist-dir dist
 
 check-core: test check-architecture
 
