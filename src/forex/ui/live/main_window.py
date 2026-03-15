@@ -1,12 +1,20 @@
 from __future__ import annotations
 
-from typing import Optional
 import time
 from pathlib import Path
 
-from PySide6.QtCore import Qt, Signal, Slot, QTimer, QMetaObject, QThread, QCoreApplication
+from PySide6.QtCore import (
+    QCoreApplication,
+    QMetaObject,
+    Qt,
+    QThread,
+    QTimer,
+    Signal,
+    Slot,
+)
 from PySide6.QtGui import QAction
 from PySide6.QtWidgets import (
+    QApplication,
     QFileDialog,
     QGroupBox,
     QLabel,
@@ -15,7 +23,6 @@ from PySide6.QtWidgets import (
     QToolBar,
     QVBoxLayout,
     QWidget,
-    QApplication,
 )
 
 try:
@@ -36,25 +43,25 @@ from forex.config.constants import ConnectionStatus
 from forex.config.paths import MODEL_DIR, SYMBOL_LIST_FILE, TOKEN_FILE
 from forex.config.settings import OAuthTokens
 from forex.ui.live.controllers.account_controller import LiveAccountController
+from forex.ui.live.controllers.market_data_controller import LiveMarketDataController
+from forex.ui.live.controllers.positions_controller import LivePositionsController
+from forex.ui.live.controllers.quote_controller import LiveQuoteController
+from forex.ui.live.controllers.symbol_controller import LiveSymbolController
+from forex.ui.live.orchestration.autotrade_coordinator import LiveAutoTradeCoordinator
+from forex.ui.live.orchestration.chart_coordinator import LiveChartCoordinator
+from forex.ui.live.orchestration.layout_coordinator import LiveLayoutCoordinator
+from forex.ui.live.orchestration.session_orchestrator import LiveSessionOrchestrator
 from forex.ui.live.services.auto_lifecycle_service import LiveAutoLifecycleService
 from forex.ui.live.services.auto_log_service import LiveAutoLogService
 from forex.ui.live.services.auto_recovery_service import LiveAutoRecoveryService
 from forex.ui.live.services.auto_runtime_service import LiveAutoRuntimeService
 from forex.ui.live.services.auto_settings_persistence import LiveAutoSettingsPersistence
 from forex.ui.live.services.auto_settings_validator import AutoTradeSettingsValidator
-from forex.ui.live.orchestration.autotrade_coordinator import LiveAutoTradeCoordinator
+from forex.ui.live.services.value_formatter_service import LiveValueFormatterService
+from forex.ui.live.state.window_state import initialize_live_window_state
+from forex.ui.live.ui_builder import LiveUIBuilder
 from forex.ui.live.widgets.chart_items import CandlestickItem, TimeAxisItem
 from forex.ui.live.widgets.panel_factory import LivePanelFactory
-from forex.ui.live.orchestration.chart_coordinator import LiveChartCoordinator
-from forex.ui.live.controllers.market_data_controller import LiveMarketDataController
-from forex.ui.live.controllers.positions_controller import LivePositionsController
-from forex.ui.live.controllers.quote_controller import LiveQuoteController
-from forex.ui.live.services.value_formatter_service import LiveValueFormatterService
-from forex.ui.live.orchestration.layout_coordinator import LiveLayoutCoordinator
-from forex.ui.live.controllers.symbol_controller import LiveSymbolController
-from forex.ui.live.orchestration.session_orchestrator import LiveSessionOrchestrator
-from forex.ui.live.ui_builder import LiveUIBuilder
-from forex.ui.live.state.window_state import initialize_live_window_state
 from forex.ui.shared.controllers.connection_controller import ConnectionController
 from forex.ui.shared.controllers.service_binding import clear_log_history_safe, set_callbacks_safe
 from forex.ui.shared.utils.formatters import (
@@ -87,10 +94,10 @@ class LiveMainWindow(QMainWindow):
         self,
         *,
         use_cases: BrokerUseCases,
-        event_bus: Optional[EventBus] = None,
-        app_state: Optional[AppState] = None,
-        service: Optional[AppAuthServiceLike] = None,
-        oauth_service: Optional[OAuthServiceLike] = None,
+        event_bus: EventBus | None = None,
+        app_state: AppState | None = None,
+        service: AppAuthServiceLike | None = None,
+        oauth_service: OAuthServiceLike | None = None,
         parent=None,
     ) -> None:
         super().__init__(parent)
@@ -145,7 +152,10 @@ class LiveMainWindow(QMainWindow):
             except Exception:
                 pass
         self._service = service
-        if self._connection_controller and self._connection_controller.service is not service:
+        if (
+            self._connection_controller
+            and self._connection_controller.service is not service
+        ):
             self._connection_controller.seed_services(service, self._oauth_service)
         clear_log_history_safe(self._service)
         set_callbacks_safe(
@@ -161,7 +171,10 @@ class LiveMainWindow(QMainWindow):
 
     def set_oauth_service(self, service: OAuthServiceLike) -> None:
         self._oauth_service = service
-        if self._connection_controller and self._connection_controller.oauth_service is not service:
+        if (
+            self._connection_controller
+            and self._connection_controller.oauth_service is not service
+        ):
             self._connection_controller.seed_services(self._service, service)
         clear_log_history_safe(self._oauth_service)
         set_callbacks_safe(
@@ -265,7 +278,10 @@ class LiveMainWindow(QMainWindow):
         current_path = self._resolve_model_path(current_text) if current_text else Path.cwd()
         start_path = current_path if current_path.exists() else current_path.parent
         path, _ = QFileDialog.getOpenFileName(
-            self, "Select model file", str(start_path), "Model (*.zip);;All files (*)"
+            self,
+            "Select model file",
+            str(start_path),
+            "Model (*.zip);;All files (*)",
         )
         if path:
             self._model_path.setText(self._normalize_model_path_text(path))
@@ -303,7 +319,7 @@ class LiveMainWindow(QMainWindow):
         return relative.as_posix()
 
     # Auto Trade Logging / Debug
-    def _auto_log(self, message: str, *, level: Optional[str] = None) -> None:
+    def _auto_log(self, message: str, *, level: str | None = None) -> None:
         self._auto_log_service.emit(message, level=level)
 
     def _auto_debug_enabled(self) -> bool:
@@ -334,11 +350,17 @@ class LiveMainWindow(QMainWindow):
         self._auto_recovery_service.history_poll_tick()
 
     def _start_history_polling(self) -> None:
-        if getattr(self, "_history_poll_timer", None) and not self._history_poll_timer.isActive():
+        if (
+            getattr(self, "_history_poll_timer", None)
+            and not self._history_poll_timer.isActive()
+        ):
             self._history_poll_timer.start()
 
     def _stop_history_polling(self) -> None:
-        if getattr(self, "_history_poll_timer", None) and self._history_poll_timer.isActive():
+        if (
+            getattr(self, "_history_poll_timer", None)
+            and self._history_poll_timer.isActive()
+        ):
             self._history_poll_timer.stop()
 
     def _set_quote_chart_mode(self, enabled: bool) -> None:
@@ -385,7 +407,7 @@ class LiveMainWindow(QMainWindow):
             self._quote_affects_chart,
         ]
 
-    def _apply_trade_permission(self, scope: Optional[int]) -> None:
+    def _apply_trade_permission(self, scope: int | None) -> None:
         trading_allowed = scope != 0
         for widget in self._trading_widgets():
             if widget:
@@ -420,10 +442,17 @@ class LiveMainWindow(QMainWindow):
         self._last_history_success_key = None
         self._stop_live_trendbar()
         if self._is_broker_runtime_ready():
-            self._session_orchestrator.try_resume_runtime_loops(reason="trade_permission_updated")
+            self._session_orchestrator.try_resume_runtime_loops(
+                reason="trade_permission_updated"
+            )
 
-    def _sync_trade_symbol_choices(self, preferred_symbol: Optional[str] = None) -> None:
-        self._symbol_controller.sync_trade_symbol_choices(preferred_symbol=preferred_symbol)
+    def _sync_trade_symbol_choices(
+        self,
+        preferred_symbol: str | None = None,
+    ) -> None:
+        self._symbol_controller.sync_trade_symbol_choices(
+            preferred_symbol=preferred_symbol
+        )
 
     def _sync_lot_value_style(self) -> None:
         self._auto_settings_persistence.sync_lot_value_style()
@@ -467,8 +496,16 @@ class LiveMainWindow(QMainWindow):
     def _volume_to_lots(volume_value: float) -> float:
         return LivePositionsController.volume_to_lots(volume_value)
 
-    def _current_price_text(self, *, symbol_id: Optional[int], side_value: Optional[int]) -> str:
-        return self._value_formatter.current_price_text(symbol_id=symbol_id, side_value=side_value)
+    def _current_price_text(
+        self,
+        *,
+        symbol_id: int | None,
+        side_value: int | None,
+    ) -> str:
+        return self._value_formatter.current_price_text(
+            symbol_id=symbol_id,
+            side_value=side_value,
+        )
 
     def _format_spot_time(self, spot_ts) -> str:
         return self._value_formatter.format_spot_time(spot_ts)
@@ -479,10 +516,15 @@ class LiveMainWindow(QMainWindow):
     def _symbol_list_path(self) -> Path:
         return self._project_root / SYMBOL_LIST_FILE
 
-    def _normalize_price(self, value, *, digits: Optional[int] = None) -> Optional[float]:
+    def _normalize_price(
+        self,
+        value,
+        *,
+        digits: int | None = None,
+    ) -> float | None:
         return self._value_formatter.normalize_price(value, digits=digits)
 
-    def _format_price(self, value, *, digits: Optional[int] = None) -> str:
+    def _format_price(self, value, *, digits: int | None = None) -> str:
         return self._value_formatter.format_price(value, digits=digits)
 
     # Connection / Account Orchestration
@@ -575,7 +617,9 @@ class LiveMainWindow(QMainWindow):
     @Slot(int)
     def _handle_oauth_status(self, status: int) -> None:
         self._oauth_label.setText(format_oauth_status(ConnectionStatus(status)))
-        self.logRequested.emit(f"ℹ️ OAuth status -> {ConnectionStatus(status).name}")
+        self.logRequested.emit(
+            f"ℹ️ OAuth status -> {ConnectionStatus(status).name}"
+        )
         self._session_orchestrator.handle_oauth_status(status)
         self._update_reconnect_status(reason="oauth_status_changed")
 
@@ -590,7 +634,11 @@ class LiveMainWindow(QMainWindow):
         if "Trading account is not authorized" not in message:
             self._update_reconnect_status(reason="oauth_error")
             return
-        token_account = getattr(getattr(self._oauth_service, "tokens", None), "account_id", None)
+        token_account = getattr(
+            getattr(self._oauth_service, "tokens", None),
+            "account_id",
+            None,
+        )
         if token_account:
             try:
                 self._unauthorized_accounts.add(int(token_account))
@@ -600,8 +648,15 @@ class LiveMainWindow(QMainWindow):
         self.logRequested.emit("⚠️ Selected account is not authorized for Open API.")
         self._enter_account_authorization_lockout()
         self._update_reconnect_status(reason="oauth_error_unauthorized")
-        if self._last_authorized_account_id and token_account and int(token_account) != int(self._last_authorized_account_id):
-            self.logRequested.emit("ℹ️ Account is not authorized. Switch to an available account and reconnect manually")
+        if (
+            self._last_authorized_account_id
+            and token_account
+            and int(token_account) != int(self._last_authorized_account_id)
+        ):
+            self.logRequested.emit(
+                "ℹ️ Account is not authorized. Switch to an available "
+                "account and reconnect manually"
+            )
 
     @staticmethod
     def _is_not_authorized_message(message: str) -> bool:
@@ -612,7 +667,7 @@ class LiveMainWindow(QMainWindow):
         self._session_orchestrator.enter_authorization_lockout()
         self._update_reconnect_status(reason="authorization_lockout")
 
-    def _load_tokens_for_accounts(self) -> Optional[OAuthTokens]:
+    def _load_tokens_for_accounts(self) -> OAuthTokens | None:
         try:
             return OAuthTokens.from_file(TOKEN_FILE)
         except Exception as exc:
@@ -631,14 +686,18 @@ class LiveMainWindow(QMainWindow):
     def _handle_account_combo_changed(self, index: int) -> None:
         self._account_controller.handle_account_combo_changed(index)
 
-    def _sync_account_combo(self, account_id: Optional[int]) -> None:
+    def _sync_account_combo(self, account_id: int | None) -> None:
         self._account_controller.sync_account_combo(account_id)
 
     @Slot()
     def _schedule_full_reconnect(self) -> None:
         app = QApplication.instance()
         if app is not None and QThread.currentThread() != app.thread():
-            QMetaObject.invokeMethod(self, "_schedule_full_reconnect", Qt.QueuedConnection)
+            QMetaObject.invokeMethod(
+                self,
+                "_schedule_full_reconnect",
+                Qt.QueuedConnection,
+            )
             return
         if self._pending_full_reconnect:
             return
@@ -652,7 +711,9 @@ class LiveMainWindow(QMainWindow):
             if not controller:
                 return
             if getattr(controller, "transition_in_progress", False):
-                self.logRequested.emit("⏳ Reconnect skipped: transition already in progress")
+                self.logRequested.emit(
+                    "⏳ Reconnect skipped: transition already in progress"
+                )
                 return
             self.logRequested.emit("🔁 Reconnecting to apply account switch")
             app_auth = bool(controller.is_app_authenticated())
@@ -671,7 +732,9 @@ class LiveMainWindow(QMainWindow):
         if not controller:
             return
         if getattr(controller, "transition_in_progress", False):
-            self.logRequested.emit("⏳ Reconnect connect-phase skipped: transition already in progress")
+            self.logRequested.emit(
+                "⏳ Reconnect connect-phase skipped: transition already in progress"
+            )
             return
         if controller.is_app_authenticated() or controller.is_oauth_authenticated():
             # Still authenticated; wait for next reconnect trigger rather than re-entering.
@@ -784,7 +847,11 @@ class LiveMainWindow(QMainWindow):
         quote_pm = (quote_delta / elapsed) * 60.0 if elapsed > 0 else 0.0
 
         log_entries = len(getattr(self._log_panel, "_entries", [])) if self._log_panel else 0
-        auto_entries = len(getattr(self._auto_log_panel, "_recent_raw", [])) if self._auto_log_panel else 0
+        auto_entries = (
+            len(getattr(self._auto_log_panel, "_recent_raw", []))
+            if self._auto_log_panel
+            else 0
+        )
         handler_count = 0
         service = getattr(self, "_service", None)
         if service is not None:
@@ -823,7 +890,9 @@ class LiveMainWindow(QMainWindow):
         layout = QVBoxLayout(panel)
 
         if pg is None:
-            notice = QLabel("PyQtGraph is not installed. Please install pyqtgraph to view the chart.")
+            notice = QLabel(
+                "PyQtGraph is not installed. Please install pyqtgraph to view the chart."
+            )
             notice.setProperty("class", "placeholder")
             layout.addWidget(notice)
             return panel
@@ -844,7 +913,9 @@ class LiveMainWindow(QMainWindow):
         plot.getAxis("left").setTextPen(axis_text)
         try:
             plot_item = plot.getPlotItem()
-            plot.getViewBox().sigRangeChangedFinished.connect(self._handle_chart_range_changed)
+            plot.getViewBox().sigRangeChangedFinished.connect(
+                self._handle_chart_range_changed
+            )
             auto_button = getattr(plot_item, "autoBtn", None)
             if auto_button is not None and hasattr(auto_button, "clicked"):
                 # Override pyqtgraph default auto-range behavior: it can include
