@@ -1,0 +1,61 @@
+ci:
+  - changed-files:
+      - any-glob-to-any-file:
+          - ".github/workflows/**"
+          - ".pre-commit-config.yaml"
+
+docs:
+  - changed-files:
+      - any-glob-to-any-file:
+          - "README.md"
+          - "CHANGELOG.md"
+          - "CONTRIBUTING.md"
+          - "SECURITY.md"
+          - "SUPPORT.md"
+          - "docs/**"
+
+governance:
+  - changed-files:
+      - any-glob-to-any-file:
+          - ".github/CODEOWNERS"
+          - ".github/PULL_REQUEST_TEMPLATE.md"
+          - ".github/ISSUE_TEMPLATE/**"
+          - ".github/dependabot.yml"
+
+release:
+  - changed-files:
+      - any-glob-to-any-file:
+          - "pyproject.toml"
+          - "Makefile"
+          - "scripts/release_*.py"
+          - "scripts/release_check.sh"
+          - "scripts/bump_version.py"
+          - "src/forex/__init__.py"
+
+tests:
+  - changed-files:
+      - any-glob-to-any-file:
+          - "tests/**"
+
+ui:
+  - changed-files:
+      - any-glob-to-any-file:
+          - "src/forex/ui/**"
+
+broker:
+  - changed-files:
+      - any-glob-to-any-file:
+          - "src/forex/infrastructure/broker/**"
+          - "src/forex/application/broker/**"
+
+ml:
+  - changed-files:
+      - any-glob-to-any-file:
+          - "src/forex/ml/**"
+          - "src/forex/tools/rl/**"
+
+config:
+  - changed-files:
+      - any-glob-to-any-file:
+          - ".env.example"
+          - "src/forex/config/**"
