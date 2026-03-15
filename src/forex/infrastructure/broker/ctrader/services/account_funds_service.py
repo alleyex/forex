@@ -1,9 +1,10 @@
 """
 帳戶資金狀態服務
 """
-from dataclasses import dataclass
 import time
-from typing import Callable, Optional, Protocol, Sequence
+from collections.abc import Callable, Sequence
+from dataclasses import dataclass
+from typing import Protocol
 
 from ctrader_open_api import Client
 from ctrader_open_api.messages.OpenApiMessages_pb2 import (
@@ -15,16 +16,21 @@ from ctrader_open_api.messages.OpenApiMessages_pb2 import (
 from ctrader_open_api.messages.OpenApiModelMessages_pb2 import ProtoOAPayloadType
 
 from forex.config.constants import ConnectionStatus
-from forex.infrastructure.broker.base import BaseCallbacks, LogHistoryMixin, OperationStateMixin, build_callbacks
-from forex.infrastructure.broker.errors import ErrorCode, error_message
+from forex.infrastructure.broker.base import (
+    BaseCallbacks,
+    LogHistoryMixin,
+    OperationStateMixin,
+    build_callbacks,
+)
 from forex.infrastructure.broker.ctrader.services.app_auth_service import AppAuthService
 from forex.infrastructure.broker.ctrader.services.base import CTraderRequestLifecycleMixin
 from forex.infrastructure.broker.ctrader.services.message_helpers import (
     format_error,
-    is_already_subscribed,
     format_warning,
+    is_already_subscribed,
 )
 from forex.infrastructure.broker.ctrader.services.timeout_tracker import TimeoutTracker
+from forex.infrastructure.broker.errors import ErrorCode, error_message
 from forex.utils.metrics import metrics
 
 
@@ -54,40 +60,40 @@ class ErrorMessage(Protocol):
 
 @dataclass(frozen=True)
 class AccountFunds:
-    balance: Optional[float]
-    balance_version: Optional[int]
-    equity: Optional[float]
-    free_margin: Optional[float]
-    used_margin: Optional[float]
-    margin_level: Optional[float]
-    currency: Optional[str]
-    money_digits: Optional[int]
-    ctid_trader_account_id: Optional[int]
-    manager_bonus: Optional[float]
-    ib_bonus: Optional[float]
-    non_withdrawable_bonus: Optional[float]
-    access_rights: Optional[int]
-    deposit_asset_id: Optional[int]
-    swap_free: Optional[bool]
-    leverage_in_cents: Optional[int]
-    total_margin_calculation_type: Optional[int]
-    max_leverage: Optional[int]
-    french_risk: Optional[bool]
-    trader_login: Optional[int]
-    account_type: Optional[int]
-    broker_name: Optional[str]
-    registration_timestamp: Optional[int]
-    is_limited_risk: Optional[bool]
-    limited_risk_margin_calculation_strategy: Optional[int]
-    fair_stop_out: Optional[bool]
-    stop_out_strategy: Optional[int]
+    balance: float | None
+    balance_version: int | None
+    equity: float | None
+    free_margin: float | None
+    used_margin: float | None
+    margin_level: float | None
+    currency: str | None
+    money_digits: int | None
+    ctid_trader_account_id: int | None
+    manager_bonus: float | None
+    ib_bonus: float | None
+    non_withdrawable_bonus: float | None
+    access_rights: int | None
+    deposit_asset_id: int | None
+    swap_free: bool | None
+    leverage_in_cents: int | None
+    total_margin_calculation_type: int | None
+    max_leverage: int | None
+    french_risk: bool | None
+    trader_login: int | None
+    account_type: int | None
+    broker_name: str | None
+    registration_timestamp: int | None
+    is_limited_risk: bool | None
+    limited_risk_margin_calculation_strategy: int | None
+    fair_stop_out: bool | None
+    stop_out_strategy: int | None
 
 
 @dataclass
 class AccountFundsServiceCallbacks(BaseCallbacks):
     """AccountFundsService 的回調函式"""
-    on_funds_received: Optional[Callable[[AccountFunds], None]] = None
-    on_position_pnl: Optional[Callable[[dict[int, float]], None]] = None
+    on_funds_received: Callable[[AccountFunds], None] | None = None
+    on_position_pnl: Callable[[dict[int, float]], None] | None = None
 
 
 class AccountFundsService(
@@ -111,10 +117,10 @@ class AccountFundsService(
 
     def set_callbacks(
         self,
-        on_funds_received: Optional[Callable[[AccountFunds], None]] = None,
-        on_position_pnl: Optional[Callable[[dict[int, float]], None]] = None,
-        on_error: Optional[Callable[[str], None]] = None,
-        on_log: Optional[Callable[[str], None]] = None,
+        on_funds_received: Callable[[AccountFunds], None] | None = None,
+        on_position_pnl: Callable[[dict[int, float]], None] | None = None,
+        on_error: Callable[[str], None] | None = None,
+        on_log: Callable[[str], None] | None = None,
     ) -> None:
         """設定回調函式"""
         self._callbacks = build_callbacks(
@@ -126,7 +132,7 @@ class AccountFundsService(
         )
         self._replay_log_history()
 
-    def fetch(self, account_id: int, timeout_seconds: Optional[int] = None) -> None:
+    def fetch(self, account_id: int, timeout_seconds: int | None = None) -> None:
         """取得帳戶資金狀態"""
         if not self._start_operation():
             self._log("⚠️ 帳戶資金查詢進行中")
@@ -159,34 +165,34 @@ class AccountFundsService(
         self._send_asset_list_request()
 
     def _reset_state(self) -> None:
-        self._client: Optional[Client] = None
-        self._account_id: Optional[int] = None
+        self._client: Client | None = None
+        self._account_id: int | None = None
         self._await_trader = False
         self._await_reconcile = False
         self._await_pnl = False
         self._await_assets = False
-        self._balance: Optional[float] = None
-        self._balance_version: Optional[int] = None
-        self._deposit_asset_id: Optional[int] = None
-        self._money_digits: Optional[int] = None
-        self._ctid_trader_account_id: Optional[int] = None
-        self._manager_bonus: Optional[float] = None
-        self._ib_bonus: Optional[float] = None
-        self._non_withdrawable_bonus: Optional[float] = None
-        self._access_rights: Optional[int] = None
-        self._swap_free: Optional[bool] = None
-        self._leverage_in_cents: Optional[int] = None
-        self._total_margin_calculation_type: Optional[int] = None
-        self._max_leverage: Optional[int] = None
-        self._french_risk: Optional[bool] = None
-        self._trader_login: Optional[int] = None
-        self._account_type: Optional[int] = None
-        self._broker_name: Optional[str] = None
-        self._registration_timestamp: Optional[int] = None
-        self._is_limited_risk: Optional[bool] = None
-        self._limited_risk_margin_calculation_strategy: Optional[int] = None
-        self._fair_stop_out: Optional[bool] = None
-        self._stop_out_strategy: Optional[int] = None
+        self._balance: float | None = None
+        self._balance_version: int | None = None
+        self._deposit_asset_id: int | None = None
+        self._money_digits: int | None = None
+        self._ctid_trader_account_id: int | None = None
+        self._manager_bonus: float | None = None
+        self._ib_bonus: float | None = None
+        self._non_withdrawable_bonus: float | None = None
+        self._access_rights: int | None = None
+        self._swap_free: bool | None = None
+        self._leverage_in_cents: int | None = None
+        self._total_margin_calculation_type: int | None = None
+        self._max_leverage: int | None = None
+        self._french_risk: bool | None = None
+        self._trader_login: int | None = None
+        self._account_type: int | None = None
+        self._broker_name: str | None = None
+        self._registration_timestamp: int | None = None
+        self._is_limited_risk: bool | None = None
+        self._limited_risk_margin_calculation_strategy: int | None = None
+        self._fair_stop_out: bool | None = None
+        self._stop_out_strategy: int | None = None
         self._used_margin: float = 0.0
         self._net_unrealized_pnl: float = 0.0
         self._assets_by_id: dict[int, str] = {}
@@ -239,9 +245,17 @@ class AccountFundsService(
             return True
 
         if payload == ProtoOAPayloadType.PROTO_OA_ERROR_RES:
-            if is_already_subscribed(getattr(msg, "errorCode", ""), getattr(msg, "description", "")):
+            if is_already_subscribed(
+                getattr(msg, "errorCode", ""),
+                getattr(msg, "description", ""),
+            ):
                 return True
-            self._log(format_error(getattr(msg, "errorCode", ""), getattr(msg, "description", "")))
+            self._log(
+                format_error(
+                    getattr(msg, "errorCode", ""),
+                    getattr(msg, "description", ""),
+                )
+            )
             self._on_error(msg)
             return True
 
@@ -389,12 +403,17 @@ class AccountFundsService(
         self._cleanup()
 
     def _cleanup(self) -> None:
-        self._cleanup_request_lifecycle(timeout_tracker=self._timeout_tracker, handler=self._handle_message)
+        self._cleanup_request_lifecycle(
+            timeout_tracker=self._timeout_tracker,
+            handler=self._handle_message,
+        )
 
     def _on_timeout(self) -> None:
         if not self._in_progress:
             return
-        if int(getattr(self._app_auth_service, "status", 0) or 0) < int(ConnectionStatus.APP_AUTHENTICATED):
+        if int(getattr(self._app_auth_service, "status", 0) or 0) < int(
+            ConnectionStatus.APP_AUTHENTICATED
+        ):
             # During reconnect/auth handshake, pending funds requests may timeout
             # against stale transport; silently collapse instead of spamming logs.
             self._cleanup()
@@ -406,7 +425,9 @@ class AccountFundsService(
     def _retry_request(self, attempt: int) -> None:
         if not self._in_progress:
             return
-        if int(getattr(self._app_auth_service, "status", 0) or 0) < int(ConnectionStatus.APP_AUTHENTICATED):
+        if int(getattr(self._app_auth_service, "status", 0) or 0) < int(
+            ConnectionStatus.APP_AUTHENTICATED
+        ):
             self._cleanup()
             return
         self._log(format_warning(f"帳戶資金逾時，重試第 {attempt} 次"))
