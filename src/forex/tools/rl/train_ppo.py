@@ -1107,7 +1107,9 @@ def _resolve_replay_policy(
             "enabled": False,
         }
     action_gate_mask = (
-        _build_gate_mask(frame, action_gate_specs) if action_gate_specs else np.ones(len(frame), dtype=bool)
+        _build_gate_mask(frame, action_gate_specs)
+        if action_gate_specs
+        else np.ones(len(frame), dtype=bool)
     )
     threshold_bumps = (
         _build_threshold_bump_array(frame, threshold_bump_specs)
@@ -1298,14 +1300,21 @@ def _profile_policy_activity(
         raw_actions.append(raw_action)
         threshold_bump = (
             float(bundle.threshold_bumps[idx])
-            if bundle.threshold_bumps is not None and len(bundle.threshold_bumps) > idx
+            if (
+                bundle.threshold_bumps is not None
+                and len(bundle.threshold_bumps) > idx
+            )
             else 0.0
         )
         long_threshold = (
-            float(bundle.long_threshold) + threshold_bump if bundle.long_threshold is not None else None
+            float(bundle.long_threshold) + threshold_bump
+            if bundle.long_threshold is not None
+            else None
         )
         short_threshold = (
-            float(bundle.short_threshold) - threshold_bump if bundle.short_threshold is not None else None
+            float(bundle.short_threshold) - threshold_bump
+            if bundle.short_threshold is not None
+            else None
         )
         if long_threshold is not None and raw_action >= long_threshold:
             raw_entry_hits += 1
@@ -1478,7 +1487,12 @@ def main() -> None:
         default="auto",
         help="Training device selection for Stable-Baselines3.",
     )
-    parser.add_argument("--seed", type=int, default=0, help="Random seed for reproducible training runs.")
+    parser.add_argument(
+        "--seed",
+        type=int,
+        default=0,
+        help="Random seed for reproducible training runs.",
+    )
     parser.add_argument(
         "--curriculum-enabled",
         action="store_true",
@@ -1688,7 +1702,12 @@ def main() -> None:
         default="",
         help="Episode reset mode. Empty keeps backward-compatible random_start behavior.",
     )
-    parser.add_argument("--min-position-change", type=float, default=0.2, help="Minimum position change.")
+    parser.add_argument(
+        "--min-position-change",
+        type=float,
+        default=0.2,
+        help="Minimum position change.",
+    )
     parser.add_argument(
         "--discretize-actions",
         action="store_true",
@@ -1760,12 +1779,20 @@ def main() -> None:
             "path-penalty reward, or take-profit/stop-loss proxy reward."
         ),
     )
-    parser.add_argument("--risk-aversion", type=float, default=0.5, help="Penalty for variance of PnL.")
+    parser.add_argument(
+        "--risk-aversion",
+        type=float,
+        default=0.5,
+        help="Penalty for variance of PnL.",
+    )
     parser.add_argument(
         "--drawdown-penalty",
         type=float,
         default=2.0,
-        help="Penalty applied when drawdown worsens: drawdown_penalty * drawdown_delta.",
+        help=(
+            "Penalty applied when drawdown worsens: "
+            "drawdown_penalty * drawdown_delta."
+        ),
     )
     parser.add_argument(
         "--downside-penalty",
@@ -1777,13 +1804,19 @@ def main() -> None:
         "--turnover-penalty",
         type=float,
         default=1e-4,
-        help="Extra penalty applied to absolute position change to discourage excess turnover.",
+        help=(
+            "Extra penalty applied to absolute position change "
+            "to discourage excess turnover."
+        ),
     )
     parser.add_argument(
         "--exposure-penalty",
         type=float,
         default=1e-4,
-        help="Penalty applied to absolute target exposure to discourage oversized persistent positions.",
+        help=(
+            "Penalty applied to absolute target exposure "
+            "to discourage oversized persistent positions."
+        ),
     )
     parser.add_argument(
         "--flat-position-penalty",
@@ -1795,13 +1828,19 @@ def main() -> None:
         "--flat-streak-penalty",
         type=float,
         default=0.0,
-        help="Additional per-step penalty multiplied by consecutive flat-hold steps after the first.",
+        help=(
+            "Additional per-step penalty multiplied by consecutive "
+            "flat-hold steps after the first."
+        ),
     )
     parser.add_argument(
         "--flat-position-threshold",
         type=float,
         default=1e-6,
-        help="Absolute position threshold treated as flat for anti-flat reward shaping.",
+        help=(
+            "Absolute position threshold treated as flat "
+            "for anti-flat reward shaping."
+        ),
     )
     parser.add_argument(
         "--path-vol-penalty",
@@ -1975,14 +2014,36 @@ def main() -> None:
         "--anti-flat-profile-steps",
         type=int,
         default=2500,
-        help="Playback steps used to profile eval activity for anti-flat checks (0 uses full eval tail).",
+        help=(
+            "Playback steps used to profile eval activity for anti-flat checks "
+            "(0 uses full eval tail)."
+        ),
     )
     parser.add_argument("--verbose", type=int, default=1, help="PPO verbosity level.")
     parser.add_argument("--metrics-log", default="", help="Optional CSV path to append metrics.")
-    parser.add_argument("--metrics-log-every", type=int, default=1, help="Write metrics every N log entries.")
-    parser.add_argument("--optuna-trials", type=int, default=0, help="Run Optuna hyperparameter search.")
-    parser.add_argument("--optuna-steps", type=int, default=50_000, help="Timesteps per Optuna trial.")
-    parser.add_argument("--optuna-train-best", action="store_true", help="Train final model with best params.")
+    parser.add_argument(
+        "--metrics-log-every",
+        type=int,
+        default=1,
+        help="Write metrics every N log entries.",
+    )
+    parser.add_argument(
+        "--optuna-trials",
+        type=int,
+        default=0,
+        help="Run Optuna hyperparameter search.",
+    )
+    parser.add_argument(
+        "--optuna-steps",
+        type=int,
+        default=50_000,
+        help="Timesteps per Optuna trial.",
+    )
+    parser.add_argument(
+        "--optuna-train-best",
+        action="store_true",
+        help="Train final model with best params.",
+    )
     parser.add_argument(
         "--optuna-auto-select",
         action="store_true",
@@ -2034,39 +2095,61 @@ def main() -> None:
         "--optuna-replay-walk-forward-segments",
         type=int,
         default=3,
-        help="Walk-forward segments to evaluate per replay seed when score_mode=walk_forward.",
+        help=(
+            "Walk-forward segments to evaluate per replay seed "
+            "when score_mode=walk_forward."
+        ),
     )
     parser.add_argument(
         "--optuna-replay-walk-forward-steps",
         type=int,
         default=2500,
-        help="Playback steps per walk-forward segment when score_mode=walk_forward.",
+        help=(
+            "Playback steps per walk-forward segment "
+            "when score_mode=walk_forward."
+        ),
     )
     parser.add_argument(
         "--optuna-replay-walk-forward-stride",
         type=int,
         default=2500,
-        help="Start-index stride between walk-forward segments when score_mode=walk_forward.",
+        help=(
+            "Start-index stride between walk-forward segments "
+            "when score_mode=walk_forward."
+        ),
     )
     parser.add_argument(
         "--optuna-replay-max-flat-ratio",
         type=float,
         default=0.98,
-        help="Reject replay candidates whose average flat ratio exceeds this threshold.",
+        help=(
+            "Reject replay candidates whose average flat ratio "
+            "exceeds this threshold."
+        ),
     )
     parser.add_argument(
         "--optuna-replay-max-ls-imbalance",
         type=float,
         default=0.2,
-        help="Reject replay candidates whose average |long-short| ratio exceeds this threshold.",
+        help=(
+            "Reject replay candidates whose average |long-short| ratio "
+            "exceeds this threshold."
+        ),
     )
     parser.add_argument(
         "--optuna-replay-min-trade-rate",
         type=float,
         default=5.0,
-        help="Reject replay candidates whose average trades per 1k bars is below this threshold.",
+        help=(
+            "Reject replay candidates whose average trades per 1k bars "
+            "is below this threshold."
+        ),
     )
-    parser.add_argument("--optuna-out", default="", help="Optional JSON path for best Optuna params.")
+    parser.add_argument(
+        "--optuna-out",
+        default="",
+        help="Optional JSON path for best Optuna params.",
+    )
     parser.add_argument(
         "--optuna-top-out",
         default="data/optuna/top_params.json",
@@ -2090,7 +2173,12 @@ def main() -> None:
         default="all",
         help="Optional session filter applied before train/eval split.",
     )
-    parser.add_argument("--replay-action-gate", action="append", default=[], help="Optional replay execution gate feature:min:max.")
+    parser.add_argument(
+        "--replay-action-gate",
+        action="append",
+        default=[],
+        help="Optional replay execution gate feature:min:max.",
+    )
     parser.add_argument(
         "--replay-action-gate-mode",
         choices=("force_flat", "entry_only"),
@@ -2109,14 +2197,37 @@ def main() -> None:
         default=[],
         help="Optional replay regime threshold bump feature:min:max:bump.",
     )
-    parser.add_argument("--replay-long-threshold", type=float, default=None, help="Optional replay long entry threshold.")
-    parser.add_argument("--replay-short-threshold", type=float, default=None, help="Optional replay short entry threshold.")
-    parser.add_argument("--replay-long-exit-threshold", type=float, default=None, help="Optional replay long exit threshold.")
-    parser.add_argument("--replay-short-exit-threshold", type=float, default=None, help="Optional replay short exit threshold.")
+    parser.add_argument(
+        "--replay-long-threshold",
+        type=float,
+        default=None,
+        help="Optional replay long entry threshold.",
+    )
+    parser.add_argument(
+        "--replay-short-threshold",
+        type=float,
+        default=None,
+        help="Optional replay short entry threshold.",
+    )
+    parser.add_argument(
+        "--replay-long-exit-threshold",
+        type=float,
+        default=None,
+        help="Optional replay long exit threshold.",
+    )
+    parser.add_argument(
+        "--replay-short-exit-threshold",
+        type=float,
+        default=None,
+        help="Optional replay short exit threshold.",
+    )
     parser.add_argument(
         "--feature-scaler-out",
         default="",
-        help="Optional JSON path to save feature scaler (default: model_out with .scaler.json).",
+        help=(
+            "Optional JSON path to save feature scaler "
+            "(default: model_out with .scaler.json)."
+        ),
     )
     parser.add_argument(
         "--feature-profile",
@@ -2137,24 +2248,40 @@ def main() -> None:
             "alpha8_from_core20",
         ),
         default="alpha20_residual",
-        help="Feature profile: raw, alpha layers, residual alpha+context, or core20-derived profiles.",
+        help=(
+            "Feature profile: raw, alpha layers, residual alpha+context, "
+            "or core20-derived profiles."
+        ),
     )
     parser.add_argument(
         "--env-config-out",
         default="",
-        help="Optional JSON path to save TradingConfig (default: model_out with .env.json).",
+        help=(
+            "Optional JSON path to save TradingConfig "
+            "(default: model_out with .env.json)."
+        ),
     )
     parser.add_argument(
         "--training-args-out",
         default="",
-        help="Optional JSON path to save the resolved training launch arguments for this run.",
+        help=(
+            "Optional JSON path to save the resolved training launch "
+            "arguments for this run."
+        ),
     )
     parser.add_argument(
         "--training-status-out",
         default="",
-        help="Optional JSON path to save runtime completion status for this run.",
+        help=(
+            "Optional JSON path to save runtime completion status "
+            "for this run."
+        ),
     )
-    parser.add_argument("--resume", action="store_true", help="Resume training from existing model.")
+    parser.add_argument(
+        "--resume",
+        action="store_true",
+        help="Resume training from existing model.",
+    )
     parser.add_argument(
         "--save-best-checkpoint",
         action="store_true",
@@ -2249,7 +2376,10 @@ def main() -> None:
         raise ValueError("--drawdown-governor-floor must be in [0, 1].")
     if not (0.0 < args.eval_split < 1.0):
         raise ValueError("--eval-split must be in (0, 1).")
-    replay_action_gate_specs = _parse_gate_specs(list(args.replay_action_gate), arg_name="--replay-action-gate")
+    replay_action_gate_specs = _parse_gate_specs(
+        list(args.replay_action_gate),
+        arg_name="--replay-action-gate",
+    )
     replay_threshold_bump_specs = _parse_threshold_bump_specs(list(args.replay_threshold_bump))
     replay_policy_enabled = (
         args.replay_long_threshold is not None
@@ -2259,7 +2389,10 @@ def main() -> None:
     )
     if replay_policy_enabled:
         if args.replay_long_threshold is None or args.replay_short_threshold is None:
-            raise ValueError("--replay-long-threshold and --replay-short-threshold are required when replay policy is enabled.")
+            raise ValueError(
+                "--replay-long-threshold and --replay-short-threshold "
+                "are required when replay policy is enabled."
+            )
         if float(args.replay_short_threshold) >= float(args.replay_long_threshold):
             raise ValueError("--replay-short-threshold must be < --replay-long-threshold.")
         replay_long_exit_threshold = (
@@ -2273,11 +2406,20 @@ def main() -> None:
             else float(args.replay_short_exit_threshold)
         )
         if replay_long_exit_threshold > float(args.replay_long_threshold):
-            raise ValueError("--replay-long-exit-threshold must be <= --replay-long-threshold.")
+            raise ValueError(
+                "--replay-long-exit-threshold "
+                "must be <= --replay-long-threshold."
+            )
         if replay_short_exit_threshold < float(args.replay_short_threshold):
-            raise ValueError("--replay-short-exit-threshold must be >= --replay-short-threshold.")
+            raise ValueError(
+                "--replay-short-exit-threshold "
+                "must be >= --replay-short-threshold."
+            )
         if replay_short_exit_threshold >= replay_long_exit_threshold:
-            raise ValueError("--replay-short-exit-threshold must be < --replay-long-exit-threshold.")
+            raise ValueError(
+                "--replay-short-exit-threshold "
+                "must be < --replay-long-exit-threshold."
+            )
     else:
         replay_long_exit_threshold = None
         replay_short_exit_threshold = None
@@ -2335,7 +2477,10 @@ def main() -> None:
             print(
                 "Feature subset ignored for profile",
                 feature_profile,
-                f"(selected names not present in profiled frame; using {features_frame.shape[1]} profiled features).",
+                (
+                    "selected names not present in profiled frame; "
+                    f"using {features_frame.shape[1]} profiled features"
+                ),
             )
     total_rows = len(features_frame)
     eval_size = int(total_rows * args.eval_split)
@@ -2490,7 +2635,12 @@ def main() -> None:
         discrete_positions=curriculum_positions,
     )
     if _continuous_supervision_supported(train_config):
-        warm_start_obs, warm_start_actions, warm_start_weights, warm_start_summary = _build_warm_start_dataset(
+        (
+            warm_start_obs,
+            warm_start_actions,
+            warm_start_weights,
+            warm_start_summary,
+        ) = _build_warm_start_dataset(
             train_features,
             train_closes,
             train_config,
@@ -2541,7 +2691,9 @@ def main() -> None:
     if not training_status_path:
         training_status_path = str(Path(args.model_out).with_name("training_status.json"))
     training_status_path = str(Path(training_status_path).expanduser())
-    checkpoint_selection_path = str(Path(args.model_out).with_name("checkpoint_selection.json").expanduser())
+    checkpoint_selection_path = str(
+        Path(args.model_out).with_name("checkpoint_selection.json").expanduser()
+    )
     _save_training_args_snapshot(
         training_args_path,
         args,
@@ -2600,7 +2752,12 @@ def main() -> None:
             f"raw_long_ratio={warm_start_summary.get('raw_long_ratio', 0.0):.3f}",
             f"raw_short_ratio={warm_start_summary.get('raw_short_ratio', 0.0):.3f}",
             f"raw_flat_ratio={warm_start_summary.get('raw_flat_ratio', 1.0):.3f}",
-            f"weights=({warm_start_summary.get('long_weight', 1.0):.2f},{warm_start_summary.get('short_weight', 1.0):.2f},{warm_start_summary.get('flat_weight', 1.0):.2f})",
+            (
+                "weights=("
+                f"{warm_start_summary.get('long_weight', 1.0):.2f},"
+                f"{warm_start_summary.get('short_weight', 1.0):.2f},"
+                f"{warm_start_summary.get('flat_weight', 1.0):.2f})"
+            ),
         )
 
     metrics_log_path = args.metrics_log.strip()
@@ -2695,7 +2852,9 @@ def main() -> None:
             early_stop_patience_evals=args.early_stop_patience_evals,
             early_stop_min_delta=args.early_stop_min_delta,
             activity_profiler=(
-                lambda model_ref, config_ref=eval_config_ref: _profile_eval_activity(model_ref, config_ref)
+                lambda model_ref, config_ref=eval_config_ref: _profile_eval_activity(
+                    model_ref, config_ref
+                )
             )
             if (args.anti_flat_enabled or args.save_best_checkpoint or args.early_stop_enabled)
             else None,
@@ -2729,7 +2888,11 @@ def main() -> None:
         for callback in reversed(eval_callbacks):
             if getattr(callback, "stopped_early", False):
                 step = getattr(callback, "num_timesteps", None)
-                return True, str(getattr(callback, "stop_reason", "") or ""), int(step) if step is not None else None
+                return (
+                    True,
+                    str(getattr(callback, "stop_reason", "") or ""),
+                    int(step) if step is not None else None,
+                )
         if eval_callbacks:
             step = getattr(eval_callbacks[-1], "num_timesteps", None)
             return False, "", int(step) if step is not None else None
@@ -2770,9 +2933,19 @@ def main() -> None:
             print("Warm-start skipped: no samples")
             return
         _write_metric(0, "warm_start/active", 1.0)
-        _write_metric(0, "warm_start/samples", float(warm_start_summary.get("samples", 0.0)))
-        _write_metric(0, "warm_start/avg_abs_action", float(warm_start_summary.get("avg_abs_action", 0.0)))
-        _write_metric(0, "warm_start/max_abs_action", float(warm_start_summary.get("max_abs_action", 0.0)))
+        _write_metric(
+            0, "warm_start/samples", float(warm_start_summary.get("samples", 0.0))
+        )
+        _write_metric(
+            0,
+            "warm_start/avg_abs_action",
+            float(warm_start_summary.get("avg_abs_action", 0.0)),
+        )
+        _write_metric(
+            0,
+            "warm_start/max_abs_action",
+            float(warm_start_summary.get("max_abs_action", 0.0)),
+        )
         _write_metric(0, "warm_start/epochs_requested", float(int(args.warm_start_epochs)))
         print(
             "Warm-start:",
