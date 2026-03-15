@@ -3,58 +3,43 @@ from __future__ import annotations
 import csv
 import json
 import math
+from collections import deque
+from collections.abc import Sequence
 from datetime import datetime
 from pathlib import Path
-from typing import Optional
 
 try:
     import pyqtgraph as pg
 except ImportError:  # pragma: no cover - optional dependency
     pg = None
-from collections import deque
-from PySide6.QtCore import Qt, Signal, QElapsedTimer
+
+from PySide6.QtCore import QElapsedTimer, Qt, Signal
 from PySide6.QtWidgets import (
-    QWidget,
-    QVBoxLayout,
-    QHBoxLayout,
-    QFormLayout,
-    QGridLayout,
-    QLabel,
-    QSpinBox,
-    QDoubleSpinBox,
-    QPushButton,
     QCheckBox,
     QComboBox,
-    QLineEdit,
-    QFileDialog,
-    QSizePolicy,
-    QGroupBox,
-    QTabWidget,
-    QStackedWidget,
-    QInputDialog,
-    QMessageBox,
-    QRadioButton,
-    QSplitter,
     QDialog,
-    QPlainTextEdit,
+    QDoubleSpinBox,
+    QFileDialog,
+    QFormLayout,
+    QGridLayout,
+    QGroupBox,
+    QHBoxLayout,
+    QInputDialog,
+    QLabel,
+    QLineEdit,
+    QMessageBox,
+    QPushButton,
+    QRadioButton,
     QScrollArea,
+    QSizePolicy,
+    QSpinBox,
+    QSplitter,
+    QStackedWidget,
+    QTabWidget,
+    QVBoxLayout,
+    QWidget,
 )
 
-from forex.ui.shared.utils.formatters import (
-    format_optuna_best_params,
-    format_optuna_empty_best,
-    format_optuna_empty_trial,
-    format_optuna_trial_summary,
-)
-from forex.ui.shared.widgets.layout_helpers import (
-    apply_form_label_width,
-    align_form_fields,
-    build_browse_row,
-    configure_form_layout,
-)
-from forex.ui.shared.widgets.log_widget import LogWidget
-from forex.ui.shared.utils.path_utils import latest_file_in_dir
-from forex.ui.shared.styles.tokens import FORM_LABEL_WIDTH_COMPACT, PRIMARY, TRAINING_PARAMS
 from forex.config.paths import DATA_DIR, RAW_HISTORY_DIR
 from forex.ml.rl.features.feature_builder import (
     ALPHA_FEATURE_COLUMNS,
@@ -62,6 +47,21 @@ from forex.ml.rl.features.feature_builder import (
     build_feature_frame,
     load_csv,
 )
+from forex.ui.shared.styles.tokens import FORM_LABEL_WIDTH_COMPACT, PRIMARY, TRAINING_PARAMS
+from forex.ui.shared.utils.formatters import (
+    format_optuna_best_params,
+    format_optuna_empty_best,
+    format_optuna_empty_trial,
+    format_optuna_trial_summary,
+)
+from forex.ui.shared.utils.path_utils import latest_file_in_dir
+from forex.ui.shared.widgets.layout_helpers import (
+    align_form_fields,
+    apply_form_label_width,
+    build_browse_row,
+    configure_form_layout,
+)
+from forex.ui.shared.widgets.log_widget import LogWidget
 from forex.ui.train.services import UIParamsStore
 
 
@@ -178,7 +178,7 @@ class AdaptiveFormGrid(QWidget):
         label_min_width: int = 0,
         max_columns: int = 2,
         split_labels: bool = True,
-        parent: Optional[QWidget] = None,
+        parent: QWidget | None = None,
     ) -> None:
         super().__init__(parent)
         self._min_cell_width = max(220, int(min_cell_width))
@@ -275,7 +275,7 @@ class TrainingParamsPanel(QWidget):
     history_download_requested = Signal()
     tab_changed = Signal(str)
 
-    def __init__(self, parent: Optional[QWidget] = None) -> None:
+    def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
         self._training_running = False
         self._loading_params = False
@@ -479,7 +479,11 @@ class TrainingParamsPanel(QWidget):
             layout.addWidget(widget)
             return container
 
-        def _build_run_section(title: str, checkbox: QCheckBox, note: str) -> tuple[QGroupBox, AdaptiveFormGrid]:
+        def _build_run_section(
+            title: str,
+            checkbox: QCheckBox,
+            note: str,
+        ) -> tuple[QGroupBox, AdaptiveFormGrid]:
             group = QGroupBox(title)
             _apply_live_card_style(group)
             group_layout = QVBoxLayout(group)
@@ -521,7 +525,11 @@ class TrainingParamsPanel(QWidget):
         checkpoint_group, checkpoint_layout = _build_run_section(
             "Checkpoint Gate",
             self._save_best_checkpoint,
-            "Promote the strongest validation checkpoint. Activity thresholds are shared from the card below; this card adds checkpoint-only limits.",
+            (
+                "Promote the strongest validation checkpoint. "
+                "Activity thresholds are shared from the card below; "
+                "this card adds checkpoint-only limits."
+            ),
         )
 
         eval_activity_group = QGroupBox("Shared Activity Thresholds")
@@ -558,7 +566,10 @@ class TrainingParamsPanel(QWidget):
         anti_flat_group, anti_flat_layout = _build_run_section(
             "Anti-flat",
             self._anti_flat_enabled,
-            "Stop runs that collapse into no-trade or one-sided behavior. Uses the shared activity thresholds above.",
+            (
+                "Stop runs that collapse into no-trade or one-sided behavior. "
+                "Uses the shared activity thresholds above."
+            ),
         )
 
         self._early_stop_warmup_steps = QSpinBox()
@@ -608,7 +619,10 @@ class TrainingParamsPanel(QWidget):
         self._eval_profile_min_trade_rate.setSingleStep(0.1)
         self._eval_profile_min_trade_rate.setValue(5.0)
         self._eval_profile_min_trade_rate.setFixedWidth(spin_width)
-        eval_activity_layout.add_row("Min trades/1k", _wrap_field(self._eval_profile_min_trade_rate))
+        eval_activity_layout.add_row(
+            "Min trades/1k",
+            _wrap_field(self._eval_profile_min_trade_rate),
+        )
 
         self._eval_profile_max_flat_ratio = TrimmedDoubleSpinBox()
         self._eval_profile_max_flat_ratio.setRange(0.0, 1.0)
@@ -616,7 +630,10 @@ class TrainingParamsPanel(QWidget):
         self._eval_profile_max_flat_ratio.setSingleStep(0.01)
         self._eval_profile_max_flat_ratio.setValue(0.98)
         self._eval_profile_max_flat_ratio.setFixedWidth(spin_width)
-        eval_activity_layout.add_row("Max flat ratio", _wrap_field(self._eval_profile_max_flat_ratio))
+        eval_activity_layout.add_row(
+            "Max flat ratio",
+            _wrap_field(self._eval_profile_max_flat_ratio),
+        )
 
         self._eval_profile_max_ls_imbalance = TrimmedDoubleSpinBox()
         self._eval_profile_max_ls_imbalance.setRange(0.0, 1.0)
@@ -624,7 +641,10 @@ class TrainingParamsPanel(QWidget):
         self._eval_profile_max_ls_imbalance.setSingleStep(0.01)
         self._eval_profile_max_ls_imbalance.setValue(0.2)
         self._eval_profile_max_ls_imbalance.setFixedWidth(spin_width)
-        eval_activity_layout.add_row("Max L/S imbalance", _wrap_field(self._eval_profile_max_ls_imbalance))
+        eval_activity_layout.add_row(
+            "Max L/S imbalance",
+            _wrap_field(self._eval_profile_max_ls_imbalance),
+        )
 
         self._curriculum_steps = QSpinBox()
         self._curriculum_steps.setRange(0, 10_000_000)
@@ -654,7 +674,10 @@ class TrainingParamsPanel(QWidget):
         self._curriculum_min_position_change.setSingleStep(0.01)
         self._curriculum_min_position_change.setValue(0.05)
         self._curriculum_min_position_change.setFixedWidth(spin_width)
-        curriculum_layout.add_row("Curriculum min change", _wrap_field(self._curriculum_min_position_change))
+        curriculum_layout.add_row(
+            "Curriculum min change",
+            _wrap_field(self._curriculum_min_position_change),
+        )
         self._curriculum_setting_cards.append(curriculum_group)
 
         self._anti_flat_warmup_steps = QSpinBox()
@@ -1534,7 +1557,7 @@ class TrainingParamsPanel(QWidget):
             self._max_position.setValue(float(params["max_position"]))
 
     @staticmethod
-    def _set_label_text_safe(label: Optional[QLabel], text: str) -> None:
+    def _set_label_text_safe(label: QLabel | None, text: str) -> None:
         if label is None:
             return
         try:
@@ -2020,12 +2043,12 @@ class TrainingParamsPanel(QWidget):
         self.apply_optuna_params(params)
         self.update_optuna_best_params(params)
         self.update_optuna_trial_summary(
-            (
+            
                 f"Replay selected: trial={selected.get('trial', '?')} "
                 f"score={float(selected.get('score', 0.0)):.6g} "
                 f"mean_reward={float(selected.get('mean_reward', 0.0)):.6g} "
                 f"std={float(selected.get('std_reward', 0.0)):.6g}"
-            )
+            
         )
         self._auto_save_params()
 
@@ -2662,7 +2685,7 @@ class TrainingParamsPanel(QWidget):
 
 
 class TrainingPanel(QWidget):
-    def __init__(self, parent: Optional[QWidget] = None) -> None:
+    def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
         self._current_step = 0
         self._charts_available = pg is not None
@@ -3965,7 +3988,7 @@ class TrainingPanel(QWidget):
         return f"{value:.6g}"
 
     @staticmethod
-    def _format_csv_metric_value(value: Optional[float]) -> str:
+    def _format_csv_metric_value(value: float | None) -> str:
         if value is None:
             return ""
         if math.isinf(value):
@@ -3973,7 +3996,7 @@ class TrainingPanel(QWidget):
         return f"{value:.10g}"
 
     @staticmethod
-    def _safe_subtract(base: Optional[float], *parts: Optional[float]) -> Optional[float]:
+    def _safe_subtract(base: float | None, *parts: float | None) -> float | None:
         if base is None:
             return None
         total = float(base)
@@ -3983,14 +4006,14 @@ class TrainingPanel(QWidget):
         return total
 
     @staticmethod
-    def _safe_add(*parts: Optional[float]) -> Optional[float]:
+    def _safe_add(*parts: float | None) -> float | None:
         values = [float(part) for part in parts if part is not None]
         if not values:
             return None
         return sum(values)
 
     @staticmethod
-    def _safe_divide(numerator: Optional[float], denominator: Optional[float]) -> Optional[float]:
+    def _safe_divide(numerator: float | None, denominator: float | None) -> float | None:
         if numerator is None or denominator is None or abs(float(denominator)) <= 1e-12:
             return None
         return float(numerator) / float(denominator)
@@ -4007,8 +4030,8 @@ class TrainingPanel(QWidget):
 
     @staticmethod
     def _classify_update_regime(
-        approx_kl: Optional[float],
-        clip_fraction: Optional[float],
+        approx_kl: float | None,
+        clip_fraction: float | None,
     ) -> str:
         if approx_kl is None and clip_fraction is None:
             return "unknown"
@@ -4021,7 +4044,7 @@ class TrainingPanel(QWidget):
         return "healthy"
 
     @staticmethod
-    def _classify_critic_regime(explained_variance: Optional[float]) -> str:
+    def _classify_critic_regime(explained_variance: float | None) -> str:
         if explained_variance is None:
             return "unknown"
         value = float(explained_variance)
@@ -4044,10 +4067,10 @@ class TrainingPanel(QWidget):
 
     @staticmethod
     def _missing_eval_fields(
-        eval_trade_rate_1k: Optional[float],
-        eval_flat_ratio: Optional[float],
-        eval_ls_imbalance: Optional[float],
-        eval_max_drawdown: Optional[float],
+        eval_trade_rate_1k: float | None,
+        eval_flat_ratio: float | None,
+        eval_ls_imbalance: float | None,
+        eval_max_drawdown: float | None,
     ) -> str:
         mapping = [
             ("trade_rate", eval_trade_rate_1k),
@@ -4065,10 +4088,10 @@ class TrainingPanel(QWidget):
     @staticmethod
     def _classify_checkpoint_gate(
         *,
-        eval_trade_rate_1k: Optional[float],
-        eval_flat_ratio: Optional[float],
-        eval_ls_imbalance: Optional[float],
-        eval_max_drawdown: Optional[float],
+        eval_trade_rate_1k: float | None,
+        eval_flat_ratio: float | None,
+        eval_ls_imbalance: float | None,
+        eval_max_drawdown: float | None,
     ) -> str:
         if any(value is None for value in (eval_trade_rate_1k, eval_flat_ratio, eval_ls_imbalance, eval_max_drawdown)):
             return "waiting"
@@ -4092,12 +4115,12 @@ class TrainingPanel(QWidget):
         cls,
         *,
         snr: float,
-        eval_mean_reward: Optional[float],
-        approx_kl: Optional[float],
-        clip_fraction: Optional[float],
-        explained_variance: Optional[float],
-        abs_delta_mean: Optional[float],
-        abs_price_return_mean: Optional[float],
+        eval_mean_reward: float | None,
+        approx_kl: float | None,
+        clip_fraction: float | None,
+        explained_variance: float | None,
+        abs_delta_mean: float | None,
+        abs_price_return_mean: float | None,
     ) -> str:
         flags: list[str] = []
         if not math.isinf(snr) and snr < 0.5:
@@ -4152,7 +4175,7 @@ class TrainingPanel(QWidget):
         return ordered[lower] * (1.0 - weight) + ordered[upper] * weight
 
     @staticmethod
-    def _compute_rolling_sharpe(values: deque[float]) -> Optional[float]:
+    def _compute_rolling_sharpe(values: deque[float]) -> float | None:
         count = len(values)
         if count < 2:
             return None
@@ -4169,7 +4192,7 @@ class TrainingPanel(QWidget):
         return datetime.now().isoformat(timespec="seconds")
 
     @staticmethod
-    def _parse_kv_line(line: str) -> Optional[tuple[str, float]]:
+    def _parse_kv_line(line: str) -> tuple[str, float] | None:
         parts = [part.strip() for part in line.split("|") if part.strip()]
         if len(parts) < 2:
             return None
@@ -4179,7 +4202,7 @@ class TrainingPanel(QWidget):
             return None
 
     @staticmethod
-    def _parse_csv_line(line: str) -> Optional[tuple[int, str, float]]:
+    def _parse_csv_line(line: str) -> tuple[int, str, float] | None:
         if "," not in line:
             return None
         parts = line.strip().split(",", 2)
@@ -4194,7 +4217,7 @@ class TrainingPanel(QWidget):
         return step, metric, value
 
     @staticmethod
-    def _parse_optuna_csv_line(line: str) -> Optional[tuple[float, float, float, float]]:
+    def _parse_optuna_csv_line(line: str) -> tuple[float, float, float, float] | None:
         if "," not in line:
             return None
         parts = line.strip().split(",", 3)
@@ -4212,7 +4235,7 @@ class TrainingPanel(QWidget):
         return trial, trial_value, best_value, duration
 
     @staticmethod
-    def _parse_float(key: str, line: str) -> Optional[float]:
+    def _parse_float(key: str, line: str) -> float | None:
         parts = [part.strip() for part in line.split("|") if part.strip()]
         if len(parts) < 2:
             return None
@@ -4224,7 +4247,7 @@ class TrainingPanel(QWidget):
             return None
 
     @staticmethod
-    def _parse_int(key: str, line: str) -> Optional[int]:
+    def _parse_int(key: str, line: str) -> int | None:
         value = TrainingPanel._parse_float(key, line)
         if value is None:
             return None
