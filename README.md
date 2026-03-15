@@ -27,6 +27,8 @@ Additional project guidance:
 - Security policy: [`SECURITY.md`](SECURITY.md)
 - Changelog: [`CHANGELOG.md`](CHANGELOG.md)
 
+Published package metadata includes project URLs, classifiers, and release governance links so release artifacts are self-describing in package indexes and build outputs.
+
 ## Quick Start
 
 Recommended Python version: `3.10+`

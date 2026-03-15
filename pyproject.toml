@@ -9,8 +9,28 @@ description = "Forex trading UI, broker integration, and RL tooling"
 readme = "README.md"
 requires-python = ">=3.10"
 license = { text = "Proprietary" }
+keywords = ["ctrader", "desktop-ui", "forex", "reinforcement-learning", "trading"]
+classifiers = [
+  "Development Status :: 3 - Alpha",
+  "Environment :: X11 Applications :: Qt",
+  "Intended Audience :: Developers",
+  "Intended Audience :: Financial and Insurance Industry",
+  "Operating System :: OS Independent",
+  "Programming Language :: Python :: 3",
+  "Programming Language :: Python :: 3.10",
+  "Programming Language :: Python :: 3.11",
+  "Topic :: Office/Business :: Financial :: Investment",
+  "Topic :: Scientific/Engineering :: Artificial Intelligence",
+  "Typing :: Typed",
+]
 
 dependencies = []
+
+[project.urls]
+Homepage = "https://github.com/alleyex/forex"
+Repository = "https://github.com/alleyex/forex"
+Issues = "https://github.com/alleyex/forex/issues"
+Changelog = "https://github.com/alleyex/forex/blob/main/CHANGELOG.md"
 
 [project.scripts]
 forex = "forex.app.cli.launcher:main"
