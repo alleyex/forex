@@ -86,6 +86,7 @@ make lint
 make test
 make check-core
 make check-hygiene
+make release-check
 ```
 
 ## Configuration

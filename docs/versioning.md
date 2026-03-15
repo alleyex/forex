@@ -23,8 +23,7 @@ These values should be kept in sync.
 4. Run:
 
 ```bash
-make check-core
-make check-hygiene
+make release-check
 ```
 
 5. Create and push a git tag in the format `vX.Y.Z`
@@ -43,7 +42,7 @@ The release workflow runs on version tags matching `v*`.
 It validates that:
 
 - the git tag matches the package version in `pyproject.toml`
+- the release preflight passes
 - the package builds successfully
 
 It then uploads build artifacts to the GitHub release for that tag.
-

@@ -3,7 +3,7 @@ PIP ?= $(PYTHON) -m pip
 RUFF ?= $(PYTHON) -m ruff
 PYTEST ?= $(PYTHON) -m pytest
 
-.PHONY: help install-dev lint test check check-core check-hygiene check-architecture check-deadcode check-unused
+.PHONY: help install-dev lint test check check-core check-hygiene check-architecture check-deadcode check-unused release-check
 
 help:
 	@echo "Targets:"
@@ -15,6 +15,7 @@ help:
 	@echo "  make check-architecture  # import-linter contracts"
 	@echo "  make check-unused        # unused imports and variables"
 	@echo "  make check-deadcode      # vulture dead code scan"
+	@echo "  make release-check       # release preflight validation and package build"
 	@echo "  make check               # run all quality gates"
 
 install-dev:
@@ -39,5 +40,8 @@ check-deadcode:
 check-core: test check-architecture
 
 check-hygiene: lint check-unused check-deadcode
+
+release-check:
+	./scripts/release_check.sh
 
 check: check-core check-hygiene
