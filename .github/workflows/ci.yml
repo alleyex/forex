@@ -8,9 +8,14 @@ on:
       - 'codex/**'
   pull_request:
 
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   core-quality:
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     env:
       QT_QPA_PLATFORM: offscreen
       QT_OPENGL: software
@@ -26,6 +31,7 @@ jobs:
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
+          cache: pip
           python-version: ${{ matrix.python-version }}
 
       - name: Install dependencies
@@ -41,6 +47,7 @@ jobs:
 
   hygiene:
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     strategy:
       matrix:
         python-version: ['3.10']
@@ -52,6 +59,7 @@ jobs:
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
+          cache: pip
           python-version: ${{ matrix.python-version }}
 
       - name: Install dependencies
