@@ -2,7 +2,6 @@
 from __future__ import annotations
 
 from datetime import datetime, timezone
-from typing import Optional
 
 from PySide6.QtCore import Qt
 from PySide6.QtWidgets import (
@@ -23,7 +22,7 @@ class TradePanel(QWidget):
         super().__init__()
         self._field_labels: dict[str, QLabel] = {}
         self._cards: list[QWidget] = []
-        self._grid_layout: Optional[QGridLayout] = None
+        self._grid_layout: QGridLayout | None = None
         self._setup_ui()
 
     def _setup_ui(self) -> None:
@@ -321,10 +320,10 @@ class TradePanel(QWidget):
         )
         self._set_field("fair_stop_out", self._format_bool(snapshot.fair_stop_out))
 
-    def update_profile_info(self, user_id: Optional[int]) -> None:
+    def update_profile_info(self, user_id: int | None) -> None:
         self._set_field("ctid_user_id", self._format_int(user_id))
 
-    def update_token_info(self, expires_at: Optional[int], seconds_to_expiry: Optional[int]) -> None:
+    def update_token_info(self, expires_at: int | None, seconds_to_expiry: int | None) -> None:
         self._set_field("token_expires_at", self._format_timestamp_s(expires_at))
         self._set_field("token_seconds_to_expiry", self._format_int(seconds_to_expiry))
 
@@ -389,13 +388,13 @@ class TradePanel(QWidget):
             label.setText(value)
 
     @staticmethod
-    def _format_int(value: Optional[int]) -> str:
+    def _format_int(value: int | None) -> str:
         if value is None:
             return "-"
         return str(value)
 
     @staticmethod
-    def _format_money(value: Optional[float], digits: int) -> str:
+    def _format_money(value: float | None, digits: int) -> str:
         if value is None:
             return "-"
         if digits <= 0:
@@ -403,19 +402,19 @@ class TradePanel(QWidget):
         return f"{value:.{digits}f}"
 
     @staticmethod
-    def _format_percent(value: Optional[float]) -> str:
+    def _format_percent(value: float | None) -> str:
         if value is None:
             return "-"
         return f"{value:.2f}%"
 
     @staticmethod
-    def _format_bool(value: Optional[bool]) -> str:
+    def _format_bool(value: bool | None) -> str:
         if value is None:
             return "-"
         return "Yes" if value else "No"
 
     @staticmethod
-    def _format_enum(value: Optional[int], mapping: dict[int, str]) -> str:
+    def _format_enum(value: int | None, mapping: dict[int, str]) -> str:
         if value is None:
             return "-"
         name = mapping.get(int(value))
@@ -424,7 +423,7 @@ class TradePanel(QWidget):
         return f"{name} ({value})"
 
     @staticmethod
-    def _format_leverage(value: Optional[int]) -> str:
+    def _format_leverage(value: int | None) -> str:
         if value is None:
             return "-"
         if value <= 0:
@@ -437,7 +436,7 @@ class TradePanel(QWidget):
         return f"1:{ratio_text} ({value})"
 
     @staticmethod
-    def _format_timestamp_ms(value: Optional[int]) -> str:
+    def _format_timestamp_ms(value: int | None) -> str:
         if value is None:
             return "-"
         if value <= 0:
@@ -446,7 +445,7 @@ class TradePanel(QWidget):
         return dt.strftime("%Y-%m-%d %H:%M:%S UTC")
 
     @staticmethod
-    def _format_timestamp_s(value: Optional[int]) -> str:
+    def _format_timestamp_s(value: int | None) -> str:
         if value is None:
             return "-"
         if value <= 0:

@@ -1,37 +1,36 @@
 from __future__ import annotations
 
-from typing import Optional
-
-from PySide6.QtCore import Qt, QDateTime
+from PySide6.QtCore import QDateTime, Qt
 from PySide6.QtWidgets import (
+    QButtonGroup,
     QComboBox,
     QDateTimeEdit,
     QDialog,
     QDialogButtonBox,
+    QFileDialog,
     QFormLayout,
     QGroupBox,
     QHBoxLayout,
     QLabel,
     QLineEdit,
+    QMessageBox,
+    QRadioButton,
     QSizePolicy,
     QVBoxLayout,
-    QButtonGroup,
-    QRadioButton,
-    QFileDialog,
-    QMessageBox,
     QWidget,
 )
 
+from forex.ui.shared.styles.tokens import DIALOG_HINT, FORM_LABEL_WIDTH_WIDE, HISTORY_DIALOG
 from forex.ui.shared.widgets.layout_helpers import (
-    apply_form_label_width,
     align_form_fields,
+    apply_form_label_width,
     build_browse_row,
     configure_form_layout,
 )
-from forex.ui.shared.styles.tokens import DIALOG_HINT, FORM_LABEL_WIDTH_WIDE, HISTORY_DIALOG
+
 
 class HistoryDownloadDialog(QDialog):
-    def __init__(self, symbol_id: int, parent: Optional[QWidget] = None) -> None:
+    def __init__(self, symbol_id: int, parent: QWidget | None = None) -> None:
         super().__init__(parent)
         self._symbol_id = symbol_id
         self._setup_ui()
@@ -157,7 +156,12 @@ class HistoryDownloadDialog(QDialog):
         self._start_time.setDateTime(utc_now.addYears(-years))
 
     def _browse_path(self) -> None:
-        path, _ = QFileDialog.getSaveFileName(self, "Choose Save File", "history.csv", "CSV (*.csv)")
+        path, _ = QFileDialog.getSaveFileName(
+            self,
+            "Choose Save File",
+            "history.csv",
+            "CSV (*.csv)",
+        )
         if path:
             self._output_path.setText(path)
 
