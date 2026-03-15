@@ -5,7 +5,11 @@ import csv
 import json
 from pathlib import Path
 
-from forex.ml.rl.features.feature_builder import build_feature_frame, filter_feature_rows_by_session, load_csv
+from forex.ml.rl.features.feature_builder import (
+    build_feature_frame,
+    filter_feature_rows_by_session,
+    load_csv,
+)
 from forex.ml.rl.features.feature_redundancy import compute_feature_redundancy_report
 
 
@@ -26,7 +30,10 @@ def _parse_horizons(raw: str) -> list[int]:
 
 def build_argument_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
-        description="Report redundant features and low-signal noise candidates using Spearman correlation and SNR."
+        description=(
+            "Report redundant features and low-signal noise candidates "
+            "using Spearman correlation and SNR."
+        )
     )
     parser.add_argument("--data", required=True, help="Path to raw history CSV.")
     parser.add_argument(
@@ -35,9 +42,23 @@ def build_argument_parser() -> argparse.ArgumentParser:
         choices=("all", "monday_open", "london", "london_pre_ny", "ny", "overlap"),
         help="Optional session subset.",
     )
-    parser.add_argument("--horizons", default="1,5,20", help="Comma-separated forward return horizons in bars.")
-    parser.add_argument("--quantile", type=float, default=0.2, help="Top/bottom quantile threshold for SNR stats.")
-    parser.add_argument("--min-samples", type=int, default=50, help="Minimum aligned rows for valid SNR rows.")
+    parser.add_argument(
+        "--horizons",
+        default="1,5,20",
+        help="Comma-separated forward return horizons in bars.",
+    )
+    parser.add_argument(
+        "--quantile",
+        type=float,
+        default=0.2,
+        help="Top/bottom quantile threshold for SNR stats.",
+    )
+    parser.add_argument(
+        "--min-samples",
+        type=int,
+        default=50,
+        help="Minimum aligned rows for valid SNR rows.",
+    )
     parser.add_argument(
         "--corr-threshold",
         type=float,
@@ -52,7 +73,11 @@ def build_argument_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument("--top-k", type=int, default=15, help="Rows to print for each section.")
     parser.add_argument("--json-out", default="", help="Optional JSON output path.")
-    parser.add_argument("--csv-out", default="", help="Optional CSV output path for feature rows.")
+    parser.add_argument(
+        "--csv-out",
+        default="",
+        help="Optional CSV output path for feature rows.",
+    )
     return parser
 
 

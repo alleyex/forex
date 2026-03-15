@@ -28,7 +28,11 @@ from forex.tools.rl.run_live_sim import PlaybackResult, print_playback_result
 from forex.utils.metrics import compute_sharpe_ratio_from_equity
 
 
-def _parse_gate_specs(raw_specs: list[str], *, arg_name: str) -> list[dict[str, float | str | None]]:
+def _parse_gate_specs(
+    raw_specs: list[str],
+    *,
+    arg_name: str,
+) -> list[dict[str, float | str | None]]:
     gates: list[dict[str, float | str | None]] = []
     for raw_spec in raw_specs:
         spec = str(raw_spec).strip()
@@ -67,7 +71,8 @@ def _parse_threshold_bump_specs(raw_specs: list[str]) -> list[dict[str, float | 
         parts = spec.split(":")
         if len(parts) != 4:
             raise ValueError(
-                "--threshold-bump must use feature:min:max:bump format, e.g. volatility_regime_z:0.8::0.05"
+                "--threshold-bump must use feature:min:max:bump format, "
+                "e.g. volatility_regime_z:0.8::0.05"
             )
         name = parts[0].strip()
         if not name:
@@ -79,7 +84,14 @@ def _parse_threshold_bump_specs(raw_specs: list[str]) -> list[dict[str, float | 
             raise ValueError(f"--threshold-bump has min > max for {name}")
         if bump_value < 0.0:
             raise ValueError(f"--threshold-bump requires non-negative bump for {name}")
-        bumps.append({"feature": name, "min": min_value, "max": max_value, "bump": bump_value})
+        bumps.append(
+            {
+                "feature": name,
+                "min": min_value,
+                "max": max_value,
+                "bump": bump_value,
+            }
+        )
     return bumps
 
 
@@ -139,7 +151,9 @@ def _apply_feature_gates(
     mask = _build_gate_mask(features_frame, gate_specs)
     filtered_features = features_frame.loc[mask].reset_index(drop=True)
     filtered_closes = closes.loc[mask].reset_index(drop=True)
-    filtered_timestamps = [ts for ts, keep in zip(timestamps, mask) if keep]
+    filtered_timestamps = [
+        ts for ts, keep in zip(timestamps, mask, strict=False) if keep
+    ]
     if filtered_features.empty:
         raise ValueError("Feature gates removed all rows")
     return filtered_features, filtered_closes, filtered_timestamps
@@ -188,8 +202,14 @@ def _load_dataset(
     threshold_bumps = _build_threshold_bump_array(features_frame, threshold_bump_specs)
     subset_path = str(feature_subset_path).strip()
     if subset_path:
-        subset_payload = json.loads(Path(subset_path).expanduser().read_text(encoding="utf-8"))
-        subset_names = subset_payload.get("selected_features", []) if isinstance(subset_payload, dict) else subset_payload
+        subset_payload = json.loads(
+            Path(subset_path).expanduser().read_text(encoding="utf-8")
+        )
+        subset_names = (
+            subset_payload.get("selected_features", [])
+            if isinstance(subset_payload, dict)
+            else subset_payload
+        )
         features_frame = select_feature_columns(features_frame, subset_names)
     config = TradingConfig(
         transaction_cost_bps=transaction_cost_bps,
@@ -247,7 +267,11 @@ def _build_targets(
     return labels, future_returns
 
 
-def _fit_linear_model(train_x: np.ndarray, train_y: np.ndarray, ridge_alpha: float) -> np.ndarray | None:
+def _fit_linear_model(
+    train_x: np.ndarray,
+    train_y: np.ndarray,
+    ridge_alpha: float,
+) -> np.ndarray | None:
     mask = train_y != 0
     if int(np.sum(mask)) < 200:
         return None
@@ -267,7 +291,11 @@ def _fit_linear_model(train_x: np.ndarray, train_y: np.ndarray, ridge_alpha: flo
     return weights.astype(np.float32, copy=False)
 
 
-def _classify_position_change(old_position: float, new_position: float, eps: float = 1e-6) -> str:
+def _classify_position_change(
+    old_position: float,
+    new_position: float,
+    eps: float = 1e-6,
+) -> str:
     old_abs = abs(float(old_position))
     new_abs = abs(float(new_position))
     if abs(float(new_position) - float(old_position)) <= eps:
@@ -414,8 +442,12 @@ def _run_segment(
         last_idx = idx
         step_num = offset + 1
         score = float(scores[offset])
-        gate_enabled = bool(action_gate_mask[idx]) if len(action_gate_mask) > idx else True
-        threshold_bump = float(threshold_bumps[idx]) if len(threshold_bumps) > idx else 0.0
+        gate_enabled = (
+            bool(action_gate_mask[idx]) if len(action_gate_mask) > idx else True
+        )
+        threshold_bump = (
+            float(threshold_bumps[idx]) if len(threshold_bumps) > idx else 0.0
+        )
         raw_target = _score_to_raw_target(
             score,
             current_position=position,
@@ -473,12 +505,18 @@ def _run_segment(
         )
         realized_price_return = compute_one_bar_return(closes, idx)
         realized_step_pnl = float(position) * float(realized_price_return)
-        realized_net_return = realized_step_pnl - float(transition["cost"]) - float(transition["holding_cost"])
+        realized_net_return = (
+            realized_step_pnl
+            - float(transition["cost"])
+            - float(transition["holding_cost"])
+        )
         growth_factor = max(1e-12, 1.0 + realized_net_return)
         if abs(delta) > 1e-6:
             current_price = closes[idx]
             if last_trade_price is not None:
-                trade_pnl = position * (current_price - last_trade_price) / last_trade_price
+                trade_pnl = (
+                    position * (current_price - last_trade_price) / last_trade_price
+                )
                 trade_pnls.append(float(trade_pnl))
                 trade_costs.append(float(transition["cost"]))
             last_trade_price = current_price
@@ -591,7 +629,9 @@ def _aggregate(results: list[PlaybackResult]) -> dict[str, float]:
 
 
 def build_argument_parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(description="Walk-forward logistic-regression baseline on RL features.")
+    parser = argparse.ArgumentParser(
+        description="Walk-forward logistic-regression baseline on RL features."
+    )
     parser.add_argument("--data", required=True, help="Path to raw history CSV.")
     parser.add_argument("--env-config", default="", help="Optional env config JSON.")
     parser.add_argument(
@@ -627,12 +667,25 @@ def build_argument_parser() -> argparse.ArgumentParser:
         "--threshold-bump",
         action="append",
         default=[],
-        help="Optional regime-conditioned threshold bump in feature:min:max:bump format. May be repeated.",
+        help=(
+            "Optional regime-conditioned threshold bump in "
+            "feature:min:max:bump format. May be repeated."
+        ),
     )
     parser.add_argument("--transaction-cost-bps", type=float, default=1.0)
     parser.add_argument("--slippage-bps", type=float, default=0.5)
-    parser.add_argument("--horizon", type=int, default=20, help="Forward-return label horizon in bars.")
-    parser.add_argument("--target-threshold", type=float, default=0.0, help="Dead-zone threshold for labels.")
+    parser.add_argument(
+        "--horizon",
+        type=int,
+        default=20,
+        help="Forward-return label horizon in bars.",
+    )
+    parser.add_argument(
+        "--target-threshold",
+        type=float,
+        default=0.0,
+        help="Dead-zone threshold for labels.",
+    )
     parser.add_argument(
         "--target-mode",
         choices=("forward_return", "breakout_follow_through"),
@@ -645,8 +698,18 @@ def build_argument_parser() -> argparse.ArgumentParser:
         default=1.25,
         help="Directional dominance ratio for breakout_follow_through targets.",
     )
-    parser.add_argument("--long-threshold", type=float, default=0.15, help="Score threshold for long.")
-    parser.add_argument("--short-threshold", type=float, default=-0.15, help="Score threshold for short.")
+    parser.add_argument(
+        "--long-threshold",
+        type=float,
+        default=0.15,
+        help="Score threshold for long.",
+    )
+    parser.add_argument(
+        "--short-threshold",
+        type=float,
+        default=-0.15,
+        help="Score threshold for short.",
+    )
     parser.add_argument(
         "--long-exit-threshold",
         type=float,
@@ -659,11 +722,36 @@ def build_argument_parser() -> argparse.ArgumentParser:
         default=None,
         help="Optional short exit threshold. Defaults to --short-threshold.",
     )
-    parser.add_argument("--ridge-alpha", type=float, default=1.0, help="L2 regularization strength for linear model.")
-    parser.add_argument("--segments", type=int, default=6, help="Number of walk-forward segments.")
-    parser.add_argument("--test-steps", type=int, default=10000, help="Steps per walk-forward test segment.")
-    parser.add_argument("--stride", type=int, default=20000, help="Stride between successive train/test boundaries.")
-    parser.add_argument("--train-min-rows", type=int, default=20000, help="Minimum train rows before first test segment.")
+    parser.add_argument(
+        "--ridge-alpha",
+        type=float,
+        default=1.0,
+        help="L2 regularization strength for linear model.",
+    )
+    parser.add_argument(
+        "--segments",
+        type=int,
+        default=6,
+        help="Number of walk-forward segments.",
+    )
+    parser.add_argument(
+        "--test-steps",
+        type=int,
+        default=10000,
+        help="Steps per walk-forward test segment.",
+    )
+    parser.add_argument(
+        "--stride",
+        type=int,
+        default=20000,
+        help="Stride between successive train/test boundaries.",
+    )
+    parser.add_argument(
+        "--train-min-rows",
+        type=int,
+        default=20000,
+        help="Minimum train rows before first test segment.",
+    )
     parser.add_argument("--json-out", default="", help="Optional JSON output path.")
     return parser
 
@@ -674,10 +762,14 @@ def main() -> None:
     if args.short_threshold >= args.long_threshold:
         raise ValueError("--short-threshold must be < --long-threshold")
     long_exit_threshold = (
-        float(args.long_threshold) if args.long_exit_threshold is None else float(args.long_exit_threshold)
+        float(args.long_threshold)
+        if args.long_exit_threshold is None
+        else float(args.long_exit_threshold)
     )
     short_exit_threshold = (
-        float(args.short_threshold) if args.short_exit_threshold is None else float(args.short_exit_threshold)
+        float(args.short_threshold)
+        if args.short_exit_threshold is None
+        else float(args.short_exit_threshold)
     )
     if long_exit_threshold > float(args.long_threshold):
         raise ValueError("--long-exit-threshold must be <= --long-threshold")

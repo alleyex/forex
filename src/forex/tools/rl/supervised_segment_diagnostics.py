@@ -7,8 +7,16 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 
-from forex.ml.rl.features.feature_builder import build_feature_frame, filter_feature_rows_by_session, load_csv
-from forex.tools.rl.supervised_baseline_eval import _apply_feature_gates, _build_gate_mask, _build_targets
+from forex.ml.rl.features.feature_builder import (
+    build_feature_frame,
+    filter_feature_rows_by_session,
+    load_csv,
+)
+from forex.tools.rl.supervised_baseline_eval import (
+    _apply_feature_gates,
+    _build_gate_mask,
+    _build_targets,
+)
 
 DEFAULT_FEATURES = [
     "pre_london_compression",
@@ -32,7 +40,10 @@ def _segment_label_stats(labels: np.ndarray) -> dict[str, float]:
     }
 
 
-def _segment_feature_stats(frame: pd.DataFrame, feature_names: list[str]) -> dict[str, dict[str, float]]:
+def _segment_feature_stats(
+    frame: pd.DataFrame,
+    feature_names: list[str],
+) -> dict[str, dict[str, float]]:
     stats: dict[str, dict[str, float]] = {}
     for name in feature_names:
         if name not in frame.columns:
@@ -45,7 +56,10 @@ def _segment_feature_stats(frame: pd.DataFrame, feature_names: list[str]) -> dic
     return stats
 
 
-def _pick_focus_segment(segments: list[dict[str, object]], focus_segment: int | None) -> int:
+def _pick_focus_segment(
+    segments: list[dict[str, object]],
+    focus_segment: int | None,
+) -> int:
     if focus_segment is not None:
         idx = int(focus_segment) - 1
         if idx < 0 or idx >= len(segments):
@@ -56,16 +70,31 @@ def _pick_focus_segment(segments: list[dict[str, object]], focus_segment: int | 
 
 
 def build_argument_parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(description="Diagnose feature/label differences for supervised walk-forward segments.")
-    parser.add_argument("--eval-json", required=True, help="Path to supervised_baseline_eval JSON output.")
-    parser.add_argument("--data", required=True, help="Path to raw history CSV used for the evaluation.")
+    parser = argparse.ArgumentParser(
+        description="Diagnose feature/label differences for supervised walk-forward segments."
+    )
+    parser.add_argument(
+        "--eval-json",
+        required=True,
+        help="Path to supervised_baseline_eval JSON output.",
+    )
+    parser.add_argument(
+        "--data",
+        required=True,
+        help="Path to raw history CSV used for the evaluation.",
+    )
     parser.add_argument(
         "--feature",
         action="append",
         default=[],
         help="Feature name to include in the diagnostic comparison. May be repeated.",
     )
-    parser.add_argument("--focus-segment", type=int, default=None, help="1-based segment index to focus on.")
+    parser.add_argument(
+        "--focus-segment",
+        type=int,
+        default=None,
+        help="1-based segment index to focus on.",
+    )
     parser.add_argument("--json-out", default="", help="Optional JSON output path.")
     return parser
 
@@ -79,7 +108,9 @@ def main() -> None:
     if not segments:
         raise ValueError("Evaluation JSON contains no segments")
 
-    feature_names = [str(item).strip() for item in list(args.feature) if str(item).strip()]
+    feature_names = [
+        str(item).strip() for item in list(args.feature) if str(item).strip()
+    ]
     if not feature_names:
         feature_names = list(DEFAULT_FEATURES)
 
@@ -99,7 +130,10 @@ def main() -> None:
             timestamps,
             feature_gates,
         )
-    action_gate_mask = _build_gate_mask(features_frame, list(payload.get("action_gates", [])))
+    action_gate_mask = _build_gate_mask(
+        features_frame,
+        list(payload.get("action_gates", [])),
+    )
     labels, _future_returns = _build_targets(
         closes.to_numpy(dtype=np.float32),
         int(payload.get("horizon", 20)),
@@ -125,7 +159,9 @@ def main() -> None:
                 "max_drawdown": float(segment.get("max_drawdown", 0.0)),
                 "trade_rate_1k": float(segment.get("trade_rate_1k", 0.0)),
                 "flat_ratio": float(segment.get("flat_ratio", 1.0)),
-                "gate_open_ratio": float(np.mean(segment_gate)) if len(segment_gate) else 0.0,
+                "gate_open_ratio": (
+                    float(np.mean(segment_gate)) if len(segment_gate) else 0.0
+                ),
                 "label_stats": _segment_label_stats(segment_labels),
                 "feature_stats": _segment_feature_stats(segment_frame, feature_names),
             }
@@ -139,8 +175,16 @@ def main() -> None:
 
     feature_deltas: dict[str, dict[str, float]] = {}
     for name in feature_names:
-        focus_stats = focus_row["feature_stats"].get(name) if isinstance(focus_row["feature_stats"], dict) else None
-        peer_stats = [row["feature_stats"].get(name) for row in peer_rows if isinstance(row["feature_stats"], dict)]
+        focus_stats = (
+            focus_row["feature_stats"].get(name)
+            if isinstance(focus_row["feature_stats"], dict)
+            else None
+        )
+        peer_stats = [
+            row["feature_stats"].get(name)
+            for row in peer_rows
+            if isinstance(row["feature_stats"], dict)
+        ]
         peer_stats = [item for item in peer_stats if item]
         if not focus_stats or not peer_stats:
             continue
@@ -151,8 +195,12 @@ def main() -> None:
             "peer_median": float(np.mean([float(item["median"]) for item in peer_stats])),
         }
 
-    peer_gate_open = float(np.mean([float(row["gate_open_ratio"]) for row in peer_rows]))
-    peer_nonzero = float(np.mean([float(row["label_stats"]["nonzero_ratio"]) for row in peer_rows]))
+    peer_gate_open = float(
+        np.mean([float(row["gate_open_ratio"]) for row in peer_rows])
+    )
+    peer_nonzero = float(
+        np.mean([float(row["label_stats"]["nonzero_ratio"]) for row in peer_rows])
+    )
     report = {
         "eval_json": str(args.eval_json),
         "data": str(args.data),
