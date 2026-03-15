@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
-from typing import Optional
 
 from forex.application.broker.protocols import BrokerUseCaseFactory
 from forex.config.paths import TOKEN_FILE
@@ -21,7 +20,11 @@ class BrokerProvider(BrokerUseCaseFactory, ABC):
         ...
 
     @abstractmethod
-    def create_oauth_login(self, token_file: str = TOKEN_FILE, redirect_uri: Optional[str] = None):
+    def create_oauth_login(
+        self,
+        token_file: str = TOKEN_FILE,
+        redirect_uri: str | None = None,
+    ):
         ...
 
     @abstractmethod

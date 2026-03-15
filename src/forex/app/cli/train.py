@@ -1,11 +1,10 @@
+import os
 import sys
 import traceback
-import os
 from importlib import resources
 
-from PySide6.QtWidgets import QApplication
 from PySide6.QtCore import qInstallMessageHandler
-from PySide6.QtWidgets import QMessageBox
+from PySide6.QtWidgets import QApplication, QMessageBox
 
 from forex.app.bootstrap import bootstrap
 from forex.ui.train.main_window import MainWindow

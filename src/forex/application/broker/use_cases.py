@@ -1,7 +1,8 @@
 from __future__ import annotations
 
+from collections.abc import Callable
 from dataclasses import dataclass
-from typing import Any, Callable, Generic, Optional, Protocol, TypeVar
+from typing import Any, Generic, Protocol, TypeVar
 
 from forex.application.broker.adapters import (
     AccountFundsServiceAdapter,
@@ -18,14 +19,13 @@ from forex.application.broker.protocols import (
     CtidProfileUseCaseLike,
     OAuthLoginServiceLike,
     OAuthServiceLike,
+    OrderServiceLike,
     SymbolByIdUseCaseLike,
     SymbolListUseCaseLike,
     TrendbarHistoryServiceLike,
     TrendbarServiceLike,
-    OrderServiceLike,
 )
 from forex.config.paths import TOKEN_FILE
-
 
 TUseCase = TypeVar("TUseCase")
 TFetchUseCase = TypeVar("TFetchUseCase", bound="_FetchUseCase")
@@ -43,14 +43,14 @@ class _FetchUseCase(Protocol):
 
 @dataclass
 class _UseCaseCache(Generic[TUseCase]):
-    use_case: Optional[TUseCase] = None
-    owner: Optional[AppAuthServiceLike] = None
+    use_case: TUseCase | None = None
+    owner: AppAuthServiceLike | None = None
 
     def get(
         self,
         owner: AppAuthServiceLike,
         create: Callable[[], TUseCase],
-        update: Optional[Callable[[TUseCase], None]] = None,
+        update: Callable[[TUseCase], None] | None = None,
     ) -> TUseCase:
         if self.use_case is None or self.owner is not owner:
             self.use_case = create()
@@ -85,7 +85,9 @@ class BrokerUseCases:
         return self._provider.create_oauth(app_auth_service, token_file)
 
     def create_oauth_login(
-        self, token_file: str = TOKEN_FILE, redirect_uri: Optional[str] = None
+        self,
+        token_file: str = TOKEN_FILE,
+        redirect_uri: str | None = None,
     ) -> OAuthLoginServiceLike:
         return self._provider.create_oauth_login(token_file=token_file, redirect_uri=redirect_uri)
 
@@ -105,7 +107,10 @@ class BrokerUseCases:
         )
         return CtidProfileUseCase(CtidProfileServiceAdapter(service))
 
-    def create_account_funds(self, app_auth_service: AppAuthServiceLike) -> AccountFundsUseCaseLike:
+    def create_account_funds(
+        self,
+        app_auth_service: AppAuthServiceLike,
+    ) -> AccountFundsUseCaseLike:
         service = self._provider.create_account_funds_service(app_auth_service=app_auth_service)
         return AccountFundsUseCase(AccountFundsServiceAdapter(service))
 
@@ -120,7 +125,10 @@ class BrokerUseCases:
     def create_trendbar(self, app_auth_service: AppAuthServiceLike) -> TrendbarServiceLike:
         return self._provider.create_trendbar_service(app_auth_service=app_auth_service)
 
-    def create_trendbar_history(self, app_auth_service: AppAuthServiceLike) -> TrendbarHistoryServiceLike:
+    def create_trendbar_history(
+        self,
+        app_auth_service: AppAuthServiceLike,
+    ) -> TrendbarHistoryServiceLike:
         return self._provider.create_trendbar_history_service(app_auth_service=app_auth_service)
 
     def create_order_service(self, app_auth_service: AppAuthServiceLike) -> OrderServiceLike:
@@ -138,7 +146,7 @@ class BrokerUseCases:
         create: Callable[[], TFetchUseCase],
         fetch: Callable[[TFetchUseCase], None],
         callbacks: dict[str, Any],
-        update: Optional[Callable[[TFetchUseCase], None]] = None,
+        update: Callable[[TFetchUseCase], None] | None = None,
     ) -> bool:
         use_case = cache.get(owner, create, update=update)
         if use_case.in_progress:
@@ -167,7 +175,7 @@ class BrokerUseCases:
         on_accounts_received=None,
         on_error=None,
         on_log=None,
-        timeout_seconds: Optional[int] = None,
+        timeout_seconds: int | None = None,
     ) -> bool:
         return self._run_cached_fetch(
             cache=self._account_list_cache,
@@ -189,7 +197,7 @@ class BrokerUseCases:
         on_profile_received=None,
         on_error=None,
         on_log=None,
-        timeout_seconds: Optional[int] = None,
+        timeout_seconds: int | None = None,
     ) -> bool:
         return self._run_cached_fetch(
             cache=self._ctid_profile_cache,
@@ -211,7 +219,7 @@ class BrokerUseCases:
         on_funds_received=None,
         on_error=None,
         on_log=None,
-        timeout_seconds: Optional[int] = None,
+        timeout_seconds: int | None = None,
     ) -> bool:
         return self._run_cached_fetch(
             cache=self._account_funds_cache,
@@ -233,7 +241,7 @@ class BrokerUseCases:
         on_symbols_received=None,
         on_error=None,
         on_log=None,
-        timeout_seconds: Optional[int] = None,
+        timeout_seconds: int | None = None,
     ) -> bool:
         return self._run_cached_fetch(
             cache=self._symbol_list_cache,
@@ -260,7 +268,7 @@ class BrokerUseCases:
         on_symbols_received=None,
         on_error=None,
         on_log=None,
-        timeout_seconds: Optional[int] = None,
+        timeout_seconds: int | None = None,
     ) -> bool:
         return self._run_cached_fetch(
             cache=self._symbol_by_id_cache,
@@ -302,7 +310,7 @@ class AccountListUseCase(_AdapterUseCaseBase):
     def set_access_token(self, access_token: str) -> None:
         self._adapter.set_access_token(access_token)
 
-    def fetch(self, timeout_seconds: Optional[int] = None) -> None:
+    def fetch(self, timeout_seconds: int | None = None) -> None:
         self._adapter.fetch(timeout_seconds)
 
 
@@ -313,7 +321,7 @@ class CtidProfileUseCase(_AdapterUseCaseBase):
     def set_access_token(self, access_token: str) -> None:
         self._adapter.set_access_token(access_token)
 
-    def fetch(self, timeout_seconds: Optional[int] = None) -> None:
+    def fetch(self, timeout_seconds: int | None = None) -> None:
         self._adapter.fetch(timeout_seconds)
 
 
@@ -321,7 +329,7 @@ class AccountFundsUseCase(_AdapterUseCaseBase):
     def __init__(self, adapter: AccountFundsServiceAdapter):
         super().__init__(adapter)
 
-    def fetch(self, account_id: int, timeout_seconds: Optional[int] = None) -> None:
+    def fetch(self, account_id: int, timeout_seconds: int | None = None) -> None:
         self._adapter.fetch(account_id, timeout_seconds)
 
 
@@ -333,7 +341,7 @@ class SymbolListUseCase(_AdapterUseCaseBase):
         self,
         account_id: int,
         include_archived: bool = False,
-        timeout_seconds: Optional[int] = None,
+        timeout_seconds: int | None = None,
     ) -> None:
         self._adapter.fetch(
             account_id=account_id,
@@ -351,7 +359,7 @@ class SymbolByIdUseCase(_AdapterUseCaseBase):
         account_id: int,
         symbol_ids: list[int],
         include_archived: bool = False,
-        timeout_seconds: Optional[int] = None,
+        timeout_seconds: int | None = None,
     ) -> None:
         self._adapter.fetch(
             account_id=account_id,

@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Iterable, Optional
+from collections.abc import Iterable
 
 from forex.application.broker.protocols import (
     AccountFundsLike,
@@ -21,7 +21,11 @@ def to_accounts_from_dicts(raw_accounts: Iterable[dict]) -> list[Account]:
             accounts.append(
                 Account(
                     account_id=int(item.get("account_id", 0)),
-                    is_live=bool(item.get("is_live", False)) if item.get("is_live") is not None else None,
+                    is_live=(
+                        bool(item.get("is_live", False))
+                        if item.get("is_live") is not None
+                        else None
+                    ),
                     trader_login=item.get("trader_login"),
                     permission_scope=item.get("permission_scope"),
                     last_closing_deal_timestamp=item.get("last_closing_deal_timestamp"),
@@ -95,7 +99,7 @@ class AccountListServiceAdapter:
     def clear_log_history(self) -> None:
         self._service.clear_log_history()
 
-    def fetch(self, timeout_seconds: Optional[int] = None) -> None:
+    def fetch(self, timeout_seconds: int | None = None) -> None:
         self._service.fetch(timeout_seconds)
 
 
@@ -107,7 +111,13 @@ class AccountFundsServiceAdapter:
     def in_progress(self) -> bool:
         return self._service.in_progress
 
-    def set_callbacks(self, on_funds_received=None, on_position_pnl=None, on_error=None, on_log=None) -> None:
+    def set_callbacks(
+        self,
+        on_funds_received=None,
+        on_position_pnl=None,
+        on_error=None,
+        on_log=None,
+    ) -> None:
         def handle_funds(funds: AccountFundsLike) -> None:
             snapshot = to_funds_snapshot(funds)
             if on_funds_received:
@@ -123,7 +133,7 @@ class AccountFundsServiceAdapter:
     def clear_log_history(self) -> None:
         self._service.clear_log_history()
 
-    def fetch(self, account_id: int, timeout_seconds: Optional[int] = None) -> None:
+    def fetch(self, account_id: int, timeout_seconds: int | None = None) -> None:
         self._service.fetch(account_id, timeout_seconds)
 
 
@@ -153,7 +163,7 @@ class SymbolListServiceAdapter:
         self,
         account_id: int,
         include_archived: bool = False,
-        timeout_seconds: Optional[int] = None,
+        timeout_seconds: int | None = None,
     ) -> None:
         self._service.fetch(
             account_id=account_id,
@@ -189,7 +199,7 @@ class SymbolByIdServiceAdapter:
         account_id: int,
         symbol_ids: list[int],
         include_archived: bool = False,
-        timeout_seconds: Optional[int] = None,
+        timeout_seconds: int | None = None,
     ) -> None:
         self._service.fetch(
             account_id=account_id,
@@ -225,5 +235,5 @@ class CtidProfileServiceAdapter:
     def clear_log_history(self) -> None:
         self._service.clear_log_history()
 
-    def fetch(self, timeout_seconds: Optional[int] = None) -> None:
+    def fetch(self, timeout_seconds: int | None = None) -> None:
         self._service.fetch(timeout_seconds)

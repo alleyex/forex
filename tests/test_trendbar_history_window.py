@@ -1,6 +1,8 @@
 from __future__ import annotations
 
-from forex.infrastructure.broker.ctrader.services.trendbar_history_service import TrendbarHistoryService
+from forex.infrastructure.broker.ctrader.services.trendbar_history_service import (
+    TrendbarHistoryService,
+)
 
 
 class _DummyClient:
