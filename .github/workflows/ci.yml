@@ -41,7 +41,6 @@ jobs:
 
   hygiene:
     runs-on: ubuntu-latest
-    continue-on-error: true
     strategy:
       matrix:
         python-version: ['3.10']
@@ -60,8 +59,5 @@ jobs:
           python -m pip install --upgrade pip
           pip install -e '.[dev,ui,ml,ctrader]'
 
-      - name: Lint
-        run: python -m ruff check src tests
-
-      - name: Dead code check
-        run: python -m vulture src tests vulture_whitelist.py --min-confidence 60
+      - name: Hygiene checks
+        run: make check-hygiene
