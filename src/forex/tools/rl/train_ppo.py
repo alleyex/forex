@@ -11,15 +11,16 @@ import sys
 import tempfile
 import time
 from pathlib import Path
+
 import numpy as np
 import torch
 from stable_baselines3 import PPO
-from stable_baselines3.common.vec_env import DummyVecEnv
-from stable_baselines3.common.monitor import Monitor
 from stable_baselines3.common.callbacks import BaseCallback, CallbackList, EvalCallback
 from stable_baselines3.common.evaluation import evaluate_policy
-from stable_baselines3.common.vec_env import sync_envs_normalization
+from stable_baselines3.common.monitor import Monitor
+from stable_baselines3.common.vec_env import DummyVecEnv, sync_envs_normalization
 
+from forex.config.paths import DEFAULT_MODEL_PATH
 from forex.ml.rl.envs.trading_env import (
     TradingConfig,
     TradingEnv,
@@ -53,7 +54,6 @@ from forex.tools.rl.run_live_sim import (
     _policy_enabled,
     run_playback,
 )
-from forex.config.paths import DEFAULT_MODEL_PATH
 
 
 def _save_training_args_snapshot(
@@ -116,13 +116,19 @@ def _save_checkpoint_selection(out_path: str, payload: dict) -> None:
 
 
 def _handle_termination_signal(signum, _frame) -> None:
-    signal_name = signal.Signals(signum).name if signum in signal.Signals._value2member_map_ else str(signum)
+    signal_name = (
+        signal.Signals(signum).name
+        if signum in signal.Signals._value2member_map_
+        else str(signum)
+    )
     print(f"Received {signal_name}; saving current checkpoint before exit.")
     raise KeyboardInterrupt
 
 
 def _build_env(features, closes, config: TradingConfig, timestamps=None) -> DummyVecEnv:
-    return DummyVecEnv([lambda: Monitor(TradingEnv(features, closes, config, timestamps=timestamps))])
+    return DummyVecEnv(
+        [lambda: Monitor(TradingEnv(features, closes, config, timestamps=timestamps))]
+    )
 
 
 def _build_curriculum_positions(max_position: float, position_step: float) -> tuple[float, ...]:
@@ -132,7 +138,9 @@ def _build_curriculum_positions(max_position: float, position_step: float) -> tu
         return (0.0,)
     count = max(1, int(round(max_position / position_step)))
     positions = [round(idx * position_step, 10) for idx in range(-count, count + 1)]
-    clipped = sorted({float(np.clip(value, -max_position, max_position)) for value in positions})
+    clipped = sorted(
+        {float(np.clip(value, -max_position, max_position)) for value in positions}
+    )
     if 0.0 not in clipped:
         clipped.append(0.0)
     return tuple(sorted(clipped))
@@ -281,7 +289,10 @@ def _build_warm_start_dataset(
     max_position = max(0.0, float(config.max_position))
     if max_position <= 0.0:
         return (
-            np.zeros((0, features.shape[1] * max(1, int(config.window_size)) + 1), dtype=np.float32),
+            np.zeros(
+                (0, features.shape[1] * max(1, int(config.window_size)) + 1),
+                dtype=np.float32,
+            ),
             np.zeros((0, 1), dtype=np.float32),
             np.zeros((0, 1), dtype=np.float32),
             {"samples": 0.0},
@@ -323,11 +334,23 @@ def _build_warm_start_dataset(
     raw_flat_count = len(flat_indices)
     directional_target = min(raw_long_count, raw_short_count)
     if directional_target > 0:
-        long_indices = _sample_balanced_indices(np.asarray(long_indices, dtype=np.int32), directional_target).tolist()
-        short_indices = _sample_balanced_indices(np.asarray(short_indices, dtype=np.int32), directional_target).tolist()
+        long_indices = _sample_balanced_indices(
+            np.asarray(long_indices, dtype=np.int32),
+            directional_target,
+        ).tolist()
+        short_indices = _sample_balanced_indices(
+            np.asarray(short_indices, dtype=np.int32),
+            directional_target,
+        ).tolist()
         flat_target = min(raw_flat_count, max(directional_target, 1))
-        flat_indices = _sample_balanced_indices(np.asarray(flat_indices, dtype=np.int32), flat_target).tolist()
-        balanced_indices = np.asarray(sorted(long_indices + short_indices + flat_indices), dtype=np.int32)
+        flat_indices = _sample_balanced_indices(
+            np.asarray(flat_indices, dtype=np.int32),
+            flat_target,
+        ).tolist()
+        balanced_indices = np.asarray(
+            sorted(long_indices + short_indices + flat_indices),
+            dtype=np.int32,
+        )
     else:
         balanced_indices = np.asarray(indices, dtype=np.int32)
 
@@ -623,7 +646,11 @@ class PlateauEvalCallback(EvalCallback):
         self._checkpoint_max_ls_imbalance = float(checkpoint_max_ls_imbalance)
         self._checkpoint_max_drawdown = float(checkpoint_max_drawdown)
         self._anti_flat_violation_evals = 0
-        self._playback_candidate_dir = Path(playback_candidate_dir).expanduser() if str(playback_candidate_dir).strip() else None
+        self._playback_candidate_dir = (
+            Path(playback_candidate_dir).expanduser()
+            if str(playback_candidate_dir).strip()
+            else None
+        )
         self._playback_top_n = max(0, int(playback_top_n))
         self._collect_playback_candidates = bool(collect_playback_candidates)
         self._playback_candidates: list[dict[str, object]] = []
@@ -641,7 +668,11 @@ class PlateauEvalCallback(EvalCallback):
         ls_imbalance: float | None,
         max_drawdown: float | None,
     ) -> None:
-        if not self._collect_playback_candidates or self._playback_candidate_dir is None or self._playback_top_n <= 0:
+        if (
+            not self._collect_playback_candidates
+            or self._playback_candidate_dir is None
+            or self._playback_top_n <= 0
+        ):
             return
         current = {
             "step": int(step),
@@ -652,13 +683,23 @@ class PlateauEvalCallback(EvalCallback):
             "eval_ls_imbalance": None if ls_imbalance is None else float(ls_imbalance),
             "eval_max_drawdown": None if max_drawdown is None else float(max_drawdown),
         }
-        existing = next((row for row in self._playback_candidates if int(row.get("step", -1)) == int(step)), None)
+        existing = next(
+            (
+                row
+                for row in self._playback_candidates
+                if int(row.get("step", -1)) == int(step)
+            ),
+            None,
+        )
         if existing is not None:
             existing.update(current)
             return
         should_add = len(self._playback_candidates) < self._playback_top_n
         if not should_add:
-            worst = min(self._playback_candidates, key=lambda row: float(row.get("eval_mean_reward", float("-inf"))))
+            worst = min(
+                self._playback_candidates,
+                key=lambda row: float(row.get("eval_mean_reward", float("-inf"))),
+            )
             should_add = float(mean_reward) > float(worst.get("eval_mean_reward", float("-inf")))
             if should_add:
                 old_path = str(worst.get("path") or "").strip()
@@ -673,7 +714,10 @@ class PlateauEvalCallback(EvalCallback):
         current["path"] = str(candidate_path)
         self._playback_candidates.append(current)
         self._playback_candidates.sort(
-            key=lambda row: (float(row.get("eval_mean_reward", float("-inf"))), -int(row.get("step", 0))),
+            key=lambda row: (
+                float(row.get("eval_mean_reward", float("-inf"))),
+                -int(row.get("step", 0)),
+            ),
             reverse=True,
         )
         while len(self._playback_candidates) > self._playback_top_n:
@@ -741,8 +785,14 @@ class PlateauEvalCallback(EvalCallback):
         self.last_mean_reward = mean_reward
 
         if self.verbose >= 1:
-            print(f"Eval num_timesteps={self.num_timesteps}, episode_reward={mean_reward:.2f} +/- {std_reward:.2f}")
-            print(f"Episode length: {mean_ep_length:.2f} +/- {float(np.std(episode_lengths)):.2f}")
+            print(
+                f"Eval num_timesteps={self.num_timesteps}, "
+                f"episode_reward={mean_reward:.2f} +/- {std_reward:.2f}"
+            )
+            print(
+                f"Episode length: {mean_ep_length:.2f} "
+                f"+/- {float(np.std(episode_lengths)):.2f}"
+            )
 
         self.logger.record("eval/mean_reward", mean_reward)
         self.logger.record("eval/mean_ep_length", mean_ep_length)
@@ -778,10 +828,26 @@ class PlateauEvalCallback(EvalCallback):
             self._write_metric(step, "eval/ls_imbalance", ls_imbalance)
             self._write_metric(step, "eval/max_drawdown", max_drawdown)
             self._write_metric(step, "eval/raw_action_abs_mean", raw_action_abs_mean)
-            self._write_metric(step, "eval/raw_action_flatish_ratio", raw_action_flatish_ratio)
-            self._write_metric(step, "eval/raw_action_over_005_ratio", raw_action_over_005_ratio)
-            self._write_metric(step, "eval/raw_action_over_010_ratio", raw_action_over_010_ratio)
-            self._write_metric(step, "eval/raw_action_over_025_ratio", raw_action_over_025_ratio)
+            self._write_metric(
+                step,
+                "eval/raw_action_flatish_ratio",
+                raw_action_flatish_ratio,
+            )
+            self._write_metric(
+                step,
+                "eval/raw_action_over_005_ratio",
+                raw_action_over_005_ratio,
+            )
+            self._write_metric(
+                step,
+                "eval/raw_action_over_010_ratio",
+                raw_action_over_010_ratio,
+            )
+            self._write_metric(
+                step,
+                "eval/raw_action_over_025_ratio",
+                raw_action_over_025_ratio,
+            )
             self._write_metric(step, "eval/raw_entry_hit_ratio", raw_entry_hit_ratio)
             if trade_rate_1k < self._checkpoint_min_trade_rate:
                 checkpoint_reasons.append(
@@ -825,7 +891,11 @@ class PlateauEvalCallback(EvalCallback):
                     self._anti_flat_violation_evals = 0
         allow_checkpoint_updates = not checkpoint_reasons
         if not allow_checkpoint_updates and self.verbose >= 1:
-            print("Best checkpoint skipped:", f"step={step}", " ".join(checkpoint_reasons))
+            print(
+                "Best checkpoint skipped:",
+                f"step={step}",
+                " ".join(checkpoint_reasons),
+            )
         checkpoint_gate = "pass" if allow_checkpoint_updates else f"fail: {', '.join(checkpoint_reasons)}"
         if allow_checkpoint_updates and not anti_flat_violation:
             self._maybe_record_playback_candidate(
@@ -2794,7 +2864,7 @@ def main() -> None:
                 "max_drawdown": float(max_drawdown),
             }
 
-        def objective(trial: "optuna.Trial") -> float:
+        def objective(trial: optuna.Trial) -> float:
             n_steps = trial.suggest_categorical("n_steps", [512, 1024, 2048])
             batch_sizes = [64, 128, 256]
             batch_sizes = [size for size in batch_sizes if size <= n_steps]
@@ -2820,8 +2890,14 @@ def main() -> None:
             vol_target_lookback = trial.suggest_categorical("vol_target_lookback", [48, 72, 96])
             vol_scale_floor = trial.suggest_categorical("vol_scale_floor", [0.5, 0.7])
             vol_scale_cap = trial.suggest_categorical("vol_scale_cap", [1.0, 1.15, 1.3])
-            drawdown_governor_slope = trial.suggest_categorical("drawdown_governor_slope", [2.0, 3.0, 4.0, 5.0])
-            drawdown_governor_floor = trial.suggest_categorical("drawdown_governor_floor", [0.25, 0.3, 0.4])
+            drawdown_governor_slope = trial.suggest_categorical(
+                "drawdown_governor_slope",
+                [2.0, 3.0, 4.0, 5.0],
+            )
+            drawdown_governor_floor = trial.suggest_categorical(
+                "drawdown_governor_floor",
+                [0.25, 0.3, 0.4],
+            )
             max_position = trial.suggest_categorical("max_position", [0.25, 0.35, 0.5])
             episode_length = trial.suggest_categorical("episode_length", [2048, 4096, 8192])
             reward_clip = trial.suggest_categorical("reward_clip", [0.01, 0.02, 0.05])
@@ -2868,8 +2944,18 @@ def main() -> None:
                 max_position=max_position,
                 reward_clip=reward_clip,
             )
-            trial_env = _build_env(train_features, train_closes, trial_train_config, train_timestamps)
-            trial_eval_env = _build_env(eval_features, eval_closes, trial_eval_config, eval_timestamps)
+            trial_env = _build_env(
+                train_features,
+                train_closes,
+                trial_train_config,
+                train_timestamps,
+            )
+            trial_eval_env = _build_env(
+                eval_features,
+                eval_closes,
+                trial_eval_config,
+                eval_timestamps,
+            )
 
             model = _train_model(
                 env=trial_env,
@@ -2935,7 +3021,7 @@ def main() -> None:
             trial.set_user_attr("max_drawdown", objective_profile["max_drawdown"])
             return objective_score
 
-        def _log_optuna_trial(study: "optuna.Study", trial: "optuna.Trial") -> None:
+        def _log_optuna_trial(study: optuna.Study, trial: optuna.Trial) -> None:
             if not optuna_fh or trial.value is None:
                 if not trials_csv_writer:
                     return
@@ -2971,9 +3057,15 @@ def main() -> None:
                 window_size=int(params.get("window_size", 1)),
                 risk_aversion=float(params["risk_aversion"]),
                 drawdown_penalty=float(params.get("drawdown_penalty", 0.0)),
-                downside_penalty=float(params.get("downside_penalty", train_config.downside_penalty)),
-                turnover_penalty=float(params.get("turnover_penalty", train_config.turnover_penalty)),
-                exposure_penalty=float(params.get("exposure_penalty", train_config.exposure_penalty)),
+                downside_penalty=float(
+                    params.get("downside_penalty", train_config.downside_penalty)
+                ),
+                turnover_penalty=float(
+                    params.get("turnover_penalty", train_config.turnover_penalty)
+                ),
+                exposure_penalty=float(
+                    params.get("exposure_penalty", train_config.exposure_penalty)
+                ),
                 target_vol=float(params.get("target_vol", 0.0)),
                 vol_target_lookback=int(params.get("vol_target_lookback", 72)),
                 vol_scale_floor=float(params.get("vol_scale_floor", 0.5)),
@@ -3521,7 +3613,7 @@ def main() -> None:
                 shutil.rmtree(best_model_tmp_dir, ignore_errors=True)
             if playback_candidate_tmp_dir is not None:
                 shutil.rmtree(playback_candidate_tmp_dir, ignore_errors=True)
-            raise SystemExit(130)
+            raise SystemExit(130) from None
     elif args.resume:
         if not model_path.exists():
             raise FileNotFoundError(f"Resume requested but model not found: {model_path}")
@@ -3549,7 +3641,7 @@ def main() -> None:
                 shutil.rmtree(best_model_tmp_dir, ignore_errors=True)
             if playback_candidate_tmp_dir is not None:
                 shutil.rmtree(playback_candidate_tmp_dir, ignore_errors=True)
-            raise SystemExit(130)
+            raise SystemExit(130) from None
     else:
         final_train_config = train_config
         final_eval_config_used = eval_config
@@ -3592,7 +3684,7 @@ def main() -> None:
                 shutil.rmtree(best_model_tmp_dir, ignore_errors=True)
             if playback_candidate_tmp_dir is not None:
                 shutil.rmtree(playback_candidate_tmp_dir, ignore_errors=True)
-            raise SystemExit(130)
+            raise SystemExit(130) from None
 
     model_to_save = model
     checkpoint_selection_payload: dict[str, object] = {
