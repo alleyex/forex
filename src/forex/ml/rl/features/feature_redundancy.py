@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-from collections import defaultdict
 from collections.abc import Sequence
 
 import numpy as np
@@ -132,9 +131,13 @@ def compute_feature_redundancy_report(
             "avg_abs_rank_ic": float(summary_map.get(name, {}).get("avg_abs_rank_ic", 0.0)),
             "avg_sign_sharpe": float(summary_map.get(name, {}).get("avg_sign_sharpe", 0.0)),
             "valid_horizons": int(summary_map.get(name, {}).get("valid_horizons", 0)),
-            "max_abs_spearman": float(max_pair["abs_spearman"]) if max_pair is not None else 0.0,
+            "max_abs_spearman": (
+                float(max_pair["abs_spearman"]) if max_pair is not None else 0.0
+            ),
             "most_similar_feature": (
-                str(max_pair["feature_b"]) if str(max_pair["feature_a"]) == name else str(max_pair["feature_a"])
+                str(max_pair["feature_b"])
+                if str(max_pair["feature_a"]) == name
+                else str(max_pair["feature_a"])
             )
             if max_pair is not None
             else "",
@@ -183,7 +186,9 @@ def compute_feature_redundancy_report(
                         "group_id": next_group_id,
                         "abs_spearman_to_representative": float(corr_to_rep),
                         "summary_score": float(grouped_feature_rows[name]["summary_score"]),
-                        "representative_score": float(grouped_feature_rows[representative]["summary_score"]),
+                        "representative_score": float(
+                            grouped_feature_rows[representative]["summary_score"]
+                        ),
                         "score_gap": float(
                             grouped_feature_rows[representative]["summary_score"]
                             - grouped_feature_rows[name]["summary_score"]
