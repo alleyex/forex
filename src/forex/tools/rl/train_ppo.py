@@ -21,6 +21,7 @@ from stable_baselines3.common.monitor import Monitor
 from stable_baselines3.common.vec_env import DummyVecEnv, sync_envs_normalization
 
 from forex.config.paths import DEFAULT_MODEL_PATH
+from forex.ml.rl.envs.trading_config_io import save_trading_config
 from forex.ml.rl.envs.trading_env import (
     TradingConfig,
     TradingEnv,
@@ -30,7 +31,6 @@ from forex.ml.rl.envs.trading_env import (
     simulate_step_transition,
     uses_native_discrete_actions,
 )
-from forex.ml.rl.envs.trading_config_io import save_trading_config
 from forex.ml.rl.features.feature_builder import (
     apply_feature_profile,
     apply_scaler,
@@ -741,7 +741,9 @@ class PlateauEvalCallback(EvalCallback):
             except AttributeError as e:
                 raise AssertionError(
                     "Training and eval env are not wrapped the same way, "
-                    "see https://stable-baselines3.readthedocs.io/en/master/guide/callbacks.html#evalcallback "
+                    "see "
+                    "https://stable-baselines3.readthedocs.io/en/master/guide/"
+                    "callbacks.html#evalcallback "
                     "and warning above."
                 ) from e
 
@@ -818,10 +820,18 @@ class PlateauEvalCallback(EvalCallback):
             ls_imbalance = float(profile.get("ls_imbalance", 0.0))
             max_drawdown = float(profile.get("max_drawdown", 0.0))
             raw_action_abs_mean = float(profile.get("raw_action_abs_mean", 0.0))
-            raw_action_flatish_ratio = float(profile.get("raw_action_flatish_ratio", 1.0))
-            raw_action_over_005_ratio = float(profile.get("raw_action_over_005_ratio", 0.0))
-            raw_action_over_010_ratio = float(profile.get("raw_action_over_010_ratio", 0.0))
-            raw_action_over_025_ratio = float(profile.get("raw_action_over_025_ratio", 0.0))
+            raw_action_flatish_ratio = float(
+                profile.get("raw_action_flatish_ratio", 1.0)
+            )
+            raw_action_over_005_ratio = float(
+                profile.get("raw_action_over_005_ratio", 0.0)
+            )
+            raw_action_over_010_ratio = float(
+                profile.get("raw_action_over_010_ratio", 0.0)
+            )
+            raw_action_over_025_ratio = float(
+                profile.get("raw_action_over_025_ratio", 0.0)
+            )
             raw_entry_hit_ratio = float(profile.get("raw_entry_hit_ratio", 0.0))
             self._write_metric(step, "eval/trade_rate_1k", trade_rate_1k)
             self._write_metric(step, "eval/flat_ratio", flat_ratio)
@@ -853,7 +863,10 @@ class PlateauEvalCallback(EvalCallback):
                 checkpoint_reasons.append(
                     f"trade_rate({trade_rate_1k:.3f}<{self._checkpoint_min_trade_rate:.3f})"
                 )
-            if self._checkpoint_max_trade_rate > 0.0 and trade_rate_1k > self._checkpoint_max_trade_rate:
+            if (
+                self._checkpoint_max_trade_rate > 0.0
+                and trade_rate_1k > self._checkpoint_max_trade_rate
+            ):
                 checkpoint_reasons.append(
                     f"trade_rate({trade_rate_1k:.3f}>{self._checkpoint_max_trade_rate:.3f})"
                 )
@@ -896,18 +909,32 @@ class PlateauEvalCallback(EvalCallback):
                 f"step={step}",
                 " ".join(checkpoint_reasons),
             )
-        checkpoint_gate = "pass" if allow_checkpoint_updates else f"fail: {', '.join(checkpoint_reasons)}"
+        checkpoint_gate = (
+            "pass"
+            if allow_checkpoint_updates
+            else f"fail: {', '.join(checkpoint_reasons)}"
+        )
         if allow_checkpoint_updates and not anti_flat_violation:
             self._maybe_record_playback_candidate(
                 step=step,
                 mean_reward=mean_reward,
                 checkpoint_gate=checkpoint_gate,
-                trade_rate_1k=trade_rate_1k if self._activity_profiler is not None else None,
+                trade_rate_1k=(
+                    trade_rate_1k if self._activity_profiler is not None else None
+                ),
                 flat_ratio=flat_ratio if self._activity_profiler is not None else None,
-                ls_imbalance=ls_imbalance if self._activity_profiler is not None else None,
-                max_drawdown=max_drawdown if self._activity_profiler is not None else None,
+                ls_imbalance=(
+                    ls_imbalance if self._activity_profiler is not None else None
+                ),
+                max_drawdown=(
+                    max_drawdown if self._activity_profiler is not None else None
+                ),
             )
-        if allow_checkpoint_updates and (not anti_flat_violation) and mean_reward > self.best_mean_reward:
+        if (
+            allow_checkpoint_updates
+            and (not anti_flat_violation)
+            and mean_reward > self.best_mean_reward
+        ):
             if self.verbose >= 1:
                 print("New best mean reward!")
             if self.best_model_save_path is not None:
@@ -1561,19 +1588,28 @@ def main() -> None:
     parser.add_argument(
         "--imitation-enabled",
         action="store_true",
-        help="Continue applying warm-start imitation loss during the first training updates.",
+        help=(
+            "Continue applying warm-start imitation loss during the first "
+            "training updates."
+        ),
     )
     parser.add_argument(
         "--imitation-steps",
         type=int,
         default=20_000,
-        help="Maximum PPO timesteps that receive additional imitation updates after each rollout.",
+        help=(
+            "Maximum PPO timesteps that receive additional imitation "
+            "updates after each rollout."
+        ),
     )
     parser.add_argument(
         "--imitation-epochs-per-rollout",
         type=int,
         default=1,
-        help="Supervised epochs to run after each rollout while imitation is active.",
+        help=(
+            "Supervised epochs to run after each rollout while imitation "
+            "is active."
+        ),
     )
     parser.add_argument(
         "--imitation-batch-size",
@@ -1587,16 +1623,65 @@ def main() -> None:
         default=1.0,
         help="Multiplier applied to the rollout-time imitation loss.",
     )
-    parser.add_argument("--vf-coef", type=float, default=0.7, help="PPO value function coefficient.")
-    parser.add_argument("--n-epochs", type=int, default=10, help="PPO epochs per update.")
-    parser.add_argument("--episode-length", type=int, default=4096, help="Episode length in bars.")
-    parser.add_argument("--eval-split", type=float, default=0.2, help="Eval split (fraction from tail).")
-    parser.add_argument("--eval-freq", type=int, default=10_000, help="Eval frequency in timesteps.")
-    parser.add_argument("--eval-episodes", type=int, default=8, help="Eval episodes per evaluation.")
-    parser.add_argument("--transaction-cost-bps", type=float, default=1.0, help="Transaction cost in bps.")
-    parser.add_argument("--slippage-bps", type=float, default=0.5, help="Slippage in bps.")
-    parser.add_argument("--holding-cost-bps", type=float, default=0.1, help="Holding cost in bps per step.")
-    parser.add_argument("--no-random-start", action="store_true", help="Disable random episode starts.")
+    parser.add_argument(
+        "--vf-coef",
+        type=float,
+        default=0.7,
+        help="PPO value function coefficient.",
+    )
+    parser.add_argument(
+        "--n-epochs",
+        type=int,
+        default=10,
+        help="PPO epochs per update.",
+    )
+    parser.add_argument(
+        "--episode-length",
+        type=int,
+        default=4096,
+        help="Episode length in bars.",
+    )
+    parser.add_argument(
+        "--eval-split",
+        type=float,
+        default=0.2,
+        help="Eval split (fraction from tail).",
+    )
+    parser.add_argument(
+        "--eval-freq",
+        type=int,
+        default=10_000,
+        help="Eval frequency in timesteps.",
+    )
+    parser.add_argument(
+        "--eval-episodes",
+        type=int,
+        default=8,
+        help="Eval episodes per evaluation.",
+    )
+    parser.add_argument(
+        "--transaction-cost-bps",
+        type=float,
+        default=1.0,
+        help="Transaction cost in bps.",
+    )
+    parser.add_argument(
+        "--slippage-bps",
+        type=float,
+        default=0.5,
+        help="Slippage in bps.",
+    )
+    parser.add_argument(
+        "--holding-cost-bps",
+        type=float,
+        default=0.1,
+        help="Holding cost in bps per step.",
+    )
+    parser.add_argument(
+        "--no-random-start",
+        action="store_true",
+        help="Disable random episode starts.",
+    )
     parser.add_argument(
         "--start-mode",
         choices=["random", "first", "weekly_open"],
@@ -1604,7 +1689,11 @@ def main() -> None:
         help="Episode reset mode. Empty keeps backward-compatible random_start behavior.",
     )
     parser.add_argument("--min-position-change", type=float, default=0.2, help="Minimum position change.")
-    parser.add_argument("--discretize-actions", action="store_true", help="Snap actions to discrete positions.")
+    parser.add_argument(
+        "--discretize-actions",
+        action="store_true",
+        help="Snap actions to discrete positions.",
+    )
     parser.add_argument(
         "--native-discrete-actions",
         action="store_true",
@@ -1615,17 +1704,45 @@ def main() -> None:
         default="-1,0,1",
         help="Comma-separated discrete positions (e.g. -1,0,1).",
     )
-    parser.add_argument("--max-position", type=float, default=1.0, help="Maximum absolute position size.")
-    parser.add_argument("--position-step", type=float, default=0.1, help="Position step size (0 disables).")
-    parser.add_argument("--reward-horizon", type=int, default=4, help="Reward uses return over the next N bars.")
+    parser.add_argument(
+        "--max-position",
+        type=float,
+        default=1.0,
+        help="Maximum absolute position size.",
+    )
+    parser.add_argument(
+        "--position-step",
+        type=float,
+        default=0.1,
+        help="Position step size (0 disables).",
+    )
+    parser.add_argument(
+        "--reward-horizon",
+        type=int,
+        default=4,
+        help="Reward uses return over the next N bars.",
+    )
     parser.add_argument(
         "--window-size",
         type=int,
         default=16,
-        help="Observation window size. Uses the latest N bars of features flattened into one vector.",
+        help=(
+            "Observation window size. Uses the latest N bars of features "
+            "flattened into one vector."
+        ),
     )
-    parser.add_argument("--reward-scale", type=float, default=1.0, help="Scale reward by this factor.")
-    parser.add_argument("--reward-clip", type=float, default=0.02, help="Clip reward to +/- value (0 disables).")
+    parser.add_argument(
+        "--reward-scale",
+        type=float,
+        default=1.0,
+        help="Scale reward by this factor.",
+    )
+    parser.add_argument(
+        "--reward-clip",
+        type=float,
+        default=0.02,
+        help="Clip reward to +/- value (0 disables).",
+    )
     parser.add_argument(
         "--reward-mode",
         choices=(
@@ -1637,7 +1754,11 @@ def main() -> None:
             "tp_sl_proxy",
         ),
         default="tp_sl_proxy",
-        help="Reward definition: raw net return, log return, risk-adjusted log return, fixed-horizon terminal reward, path-penalty reward, or take-profit/stop-loss proxy reward.",
+        help=(
+            "Reward definition: raw net return, log return, "
+            "risk-adjusted log return, fixed-horizon terminal reward, "
+            "path-penalty reward, or take-profit/stop-loss proxy reward."
+        ),
     )
     parser.add_argument("--risk-aversion", type=float, default=0.5, help="Penalty for variance of PnL.")
     parser.add_argument(
@@ -1698,7 +1819,10 @@ def main() -> None:
         "--position-bias-penalty",
         type=float,
         default=0.0,
-        help="Penalty applied to persistent long/short imbalance measured from an EMA of normalized position.",
+        help=(
+            "Penalty applied to persistent long/short imbalance measured "
+            "from an EMA of normalized position."
+        ),
     )
     parser.add_argument(
         "--position-bias-threshold",
@@ -1760,8 +1884,18 @@ def main() -> None:
         default=120_000,
         help="Do not early stop before this many timesteps.",
     )
-    parser.add_argument("--early-stop-patience-evals", type=int, default=6, help="Number of eval rounds without improvement before stopping.")
-    parser.add_argument("--early-stop-min-delta", type=float, default=0.0005, help="Minimum eval reward improvement to reset patience.")
+    parser.add_argument(
+        "--early-stop-patience-evals",
+        type=int,
+        default=6,
+        help="Number of eval rounds without improvement before stopping.",
+    )
+    parser.add_argument(
+        "--early-stop-min-delta",
+        type=float,
+        default=0.0005,
+        help="Minimum eval reward improvement to reset patience.",
+    )
     parser.add_argument(
         "--anti-flat-enabled",
         action=argparse.BooleanOptionalAction,
@@ -1784,7 +1918,10 @@ def main() -> None:
         "--eval-profile-steps",
         type=int,
         default=2500,
-        help="Playback steps used to profile eval activity for checkpoint and anti-flat checks (0 uses full eval tail).",
+        help=(
+            "Playback steps used to profile eval activity for checkpoint "
+            "and anti-flat checks (0 uses full eval tail)."
+        ),
     )
     parser.add_argument(
         "--checkpoint-min-trade-rate",
@@ -2877,17 +3014,44 @@ def main() -> None:
             target_kl = trial.suggest_float("target_kl", 0.005, 0.02)
             vf_coef = trial.suggest_float("vf_coef", 0.2, 0.8)
             n_epochs = trial.suggest_categorical("n_epochs", [5, 10])
-            min_position_change = trial.suggest_float("min_position_change", 0.03, 0.18, step=0.01)
+            min_position_change = trial.suggest_float(
+                "min_position_change",
+                0.03,
+                0.18,
+                step=0.01,
+            )
             position_step = trial.suggest_categorical("position_step", [0.05, 0.1])
             reward_horizon = trial.suggest_categorical("reward_horizon", [16, 32, 48, 96])
             window_size = trial.suggest_categorical("window_size", [16, 32, 48, 72])
             risk_aversion = trial.suggest_float("risk_aversion", 0.1, 0.4, step=0.01)
-            drawdown_penalty = trial.suggest_float("drawdown_penalty", 0.05, 0.30, step=0.01)
-            downside_penalty = trial.suggest_float("downside_penalty", 0.02, 0.20, step=0.01)
-            turnover_penalty = trial.suggest_categorical("turnover_penalty", [0.0, 1e-4, 5e-4])
-            exposure_penalty = trial.suggest_categorical("exposure_penalty", [0.0, 1e-4, 5e-4])
-            target_vol = trial.suggest_categorical("target_vol", [0.0025, 0.005, 0.01])
-            vol_target_lookback = trial.suggest_categorical("vol_target_lookback", [48, 72, 96])
+            drawdown_penalty = trial.suggest_float(
+                "drawdown_penalty",
+                0.05,
+                0.30,
+                step=0.01,
+            )
+            downside_penalty = trial.suggest_float(
+                "downside_penalty",
+                0.02,
+                0.20,
+                step=0.01,
+            )
+            turnover_penalty = trial.suggest_categorical(
+                "turnover_penalty",
+                [0.0, 1e-4, 5e-4],
+            )
+            exposure_penalty = trial.suggest_categorical(
+                "exposure_penalty",
+                [0.0, 1e-4, 5e-4],
+            )
+            target_vol = trial.suggest_categorical(
+                "target_vol",
+                [0.0025, 0.005, 0.01],
+            )
+            vol_target_lookback = trial.suggest_categorical(
+                "vol_target_lookback",
+                [48, 72, 96],
+            )
             vol_scale_floor = trial.suggest_categorical("vol_scale_floor", [0.5, 0.7])
             vol_scale_cap = trial.suggest_categorical("vol_scale_cap", [1.0, 1.15, 1.3])
             drawdown_governor_slope = trial.suggest_categorical(
