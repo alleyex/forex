@@ -1,13 +1,15 @@
 from __future__ import annotations
 
 import re
-from typing import Optional
 
 
 class LiveAutoLogService:
     """Formats and emits Auto Trade logs for LiveMainWindow."""
 
-    _LOG_LEVEL_PREFIX = re.compile(r"^\s*\[(DEBUG|TRADE|TRADING|INFO|OK|WARN|ERROR)\]\s*", re.IGNORECASE)
+    _LOG_LEVEL_PREFIX = re.compile(
+        r"^\s*\[(DEBUG|TRADE|TRADING|INFO|OK|WARN|ERROR)\]\s*",
+        re.IGNORECASE,
+    )
 
     def __init__(self, window) -> None:
         self._window = window
@@ -38,7 +40,7 @@ class LiveAutoLogService:
             return "OK"
         return "INFO"
 
-    def emit(self, message: str, *, level: Optional[str] = None) -> None:
+    def emit(self, message: str, *, level: str | None = None) -> None:
         text = str(message).strip()
         if not text:
             return

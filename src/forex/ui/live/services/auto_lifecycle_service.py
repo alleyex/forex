@@ -1,9 +1,10 @@
 from __future__ import annotations
 
-import time
 import threading
+import time
 
 from PySide6.QtCore import QObject, Signal
+
 
 class _AutoStartBridge(QObject):
     finished = Signal(int, bool)

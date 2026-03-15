@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import time
 
+
 class LiveAutoRecoveryService:
     """Owns watchdog and history-poll recovery logic for auto trade."""
 

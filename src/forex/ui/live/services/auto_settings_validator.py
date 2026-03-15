@@ -1,7 +1,5 @@
 from __future__ import annotations
 
-from typing import List, Tuple
-
 
 class AutoTradeSettingsValidator:
     """Validates Auto Trade UI settings before starting trading."""
@@ -11,9 +9,9 @@ class AutoTradeSettingsValidator:
     def __init__(self, window) -> None:
         self._window = window
 
-    def validate_start(self) -> Tuple[bool, List[str]]:
+    def validate_start(self) -> tuple[bool, list[str]]:
         w = self._window
-        errors: List[str] = []
+        errors: list[str] = []
 
         symbol = ""
         timeframe = ""
@@ -71,4 +69,3 @@ class AutoTradeSettingsValidator:
             errors.append("Invalid Lot / Risk% value.")
 
         return len(errors) == 0, errors
-
