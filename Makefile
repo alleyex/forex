@@ -1,16 +1,13 @@
 PYTHON ?= python3
 PIP ?= $(PYTHON) -m pip
-BLACK ?= $(PYTHON) -m black
 RUFF ?= $(PYTHON) -m ruff
 PYTEST ?= $(PYTHON) -m pytest
 
-.PHONY: help install-dev format format-check lint test check check-core check-hygiene check-architecture check-deadcode check-unused
+.PHONY: help install-dev lint test check check-core check-hygiene check-architecture check-deadcode check-unused
 
 help:
 	@echo "Targets:"
 	@echo "  make install-dev         # install editable package with dev dependencies"
-	@echo "  make format              # run code formatter"
-	@echo "  make format-check        # verify formatting"
 	@echo "  make lint                # run Ruff"
 	@echo "  make test                # run pytest"
 	@echo "  make check-core          # blocking CI-quality checks"
@@ -23,13 +20,6 @@ help:
 install-dev:
 	$(PIP) install -U pip
 	$(PIP) install -e '.[dev,ui,ml,ctrader]'
-
-format:
-	$(BLACK) src tests
-	$(RUFF) check src tests --fix
-
-format-check:
-	$(BLACK) --check src tests
 
 lint:
 	$(RUFF) check src tests
@@ -48,6 +38,6 @@ check-deadcode:
 
 check-core: test check-architecture
 
-check-hygiene: format-check lint check-unused check-deadcode
+check-hygiene: lint check-unused check-deadcode
 
 check: check-core check-hygiene

@@ -19,6 +19,20 @@ _on_rollout_end
 
 # BaseHTTPRequestHandler hook.
 do_GET
+log_message
+forward
+
+# Training/evaluation helpers referenced indirectly.
+last_mean_reward
+_profile_policy
+_holding_cost_rate
+_load_optuna_defaults
+_format_metric_value
+
+# UI state kept for widget lifecycle / layout management.
+_details_splitter
+_optuna_best_summary_grid
+_reward_group
 
 # Protobuf / cTrader dynamic fields accessed by attribute name.
 _.accessToken

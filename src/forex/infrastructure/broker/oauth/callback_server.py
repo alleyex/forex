@@ -24,7 +24,7 @@ class OAuthCallbackHandler(BaseHTTPRequestHandler):
         self.end_headers()
         self.wfile.write("授權完成，您可以關閉此視窗。".encode())
 
-    def log_message(self, format: str, *args) -> None:
+    def log_message(self, _format: str, *args) -> None:
         """抑制日誌輸出"""
         pass
 
