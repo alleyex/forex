@@ -25,6 +25,7 @@ Additional project guidance:
 - Data governance: [`docs/data_governance.md`](docs/data_governance.md)
 - Versioning and releases: [`docs/versioning.md`](docs/versioning.md)
 - Security policy: [`SECURITY.md`](SECURITY.md)
+- Support guide: [`SUPPORT.md`](SUPPORT.md)
 - Changelog: [`CHANGELOG.md`](CHANGELOG.md)
 
 Published package metadata includes project URLs, classifiers, and release governance links so release artifacts are self-describing in package indexes and build outputs.
