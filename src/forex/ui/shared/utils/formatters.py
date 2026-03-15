@@ -1,10 +1,9 @@
 import re
-from typing import Optional
 
 from forex.config.constants import ConnectionStatus
 
 
-def format_app_auth_status(status: Optional[ConnectionStatus]) -> str:
+def format_app_auth_status(status: ConnectionStatus | None) -> str:
     if status is None:
         return "App Auth Status: ⛔ Disconnected"
 
@@ -19,7 +18,7 @@ def format_app_auth_status(status: Optional[ConnectionStatus]) -> str:
     return f"App Auth Status: {text}"
 
 
-def format_oauth_status(status: Optional[ConnectionStatus]) -> str:
+def format_oauth_status(status: ConnectionStatus | None) -> str:
     if status is None:
         return "OAuth Status: ⛔ Disconnected"
 
@@ -34,7 +33,7 @@ def format_oauth_status(status: Optional[ConnectionStatus]) -> str:
     return f"OAuth Status: {text}"
 
 
-def format_kv_lines(text: str, label_map: Optional[dict[str, str]] = None) -> str:
+def format_kv_lines(text: str, label_map: dict[str, str] | None = None) -> str:
     if not text or text.strip() == "-":
         return "-"
     pattern = re.compile(r"(\\w+)=([^=]+?)(?=\\s+\\w+=|$)")
@@ -80,7 +79,10 @@ def format_status_label(text: str) -> str:
     return f"Status: {text}"
 
 
-def format_timestamped_message(message: str, timestamp: Optional[str] = None) -> str:
+def format_timestamped_message(
+    message: str,
+    timestamp: str | None = None,
+) -> str:
     if timestamp:
         return f"[{timestamp}] {message}"
     return message

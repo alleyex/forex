@@ -1,16 +1,15 @@
 """
 Account selection dialog
 """
-from typing import List, Optional
 
 from PySide6.QtWidgets import (
     QDialog,
-    QVBoxLayout,
     QHBoxLayout,
+    QLabel,
     QPushButton,
     QTableWidget,
     QTableWidgetItem,
-    QLabel,
+    QVBoxLayout,
 )
 
 from forex.domain.accounts import Account
@@ -19,10 +18,10 @@ from forex.domain.accounts import Account
 class AccountDialog(QDialog):
     """Account selection dialog"""
 
-    def __init__(self, accounts: List[Account], parent=None):
+    def __init__(self, accounts: list[Account], parent=None):
         super().__init__(parent)
         self._accounts = accounts
-        self._selected: Optional[Account] = None
+        self._selected: Account | None = None
         self._setup_ui()
 
     def _setup_ui(self) -> None:
@@ -36,7 +35,9 @@ class AccountDialog(QDialog):
 
         self._table = QTableWidget(self)
         self._table.setColumnCount(4)
-        self._table.setHorizontalHeaderLabels(["Account ID", "Environment", "Trader Login", "Permission"])
+        self._table.setHorizontalHeaderLabels(
+            ["Account ID", "Environment", "Trader Login", "Permission"]
+        )
         self._table.setRowCount(len(self._accounts))
         self._table.setSelectionBehavior(QTableWidget.SelectRows)
         self._table.setSelectionMode(QTableWidget.SingleSelection)
@@ -87,5 +88,5 @@ class AccountDialog(QDialog):
         self._selected = self._accounts[row]
         self.accept()
 
-    def get_selected_account(self) -> Optional[Account]:
+    def get_selected_account(self) -> Account | None:
         return self._selected
