@@ -1,21 +1,20 @@
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Optional
 
 from PySide6.QtCore import QObject, QTimer
 from PySide6.QtWidgets import QWidget
 
+from forex.application.broker.history_download_pipeline import HistoryDownloadPipeline
 from forex.application.broker.protocols import AppAuthServiceLike, OAuthServiceLike
 from forex.application.broker.use_cases import BrokerUseCases
-from forex.application.broker.history_download_pipeline import HistoryDownloadPipeline
 from forex.config.constants import ConnectionStatus
 from forex.config.paths import SYMBOL_LIST_FILE, TIMEFRAMES_FILE, TOKEN_FILE
 from forex.config.settings import OAuthTokens
 from forex.infrastructure.storage.json_store import read_json, write_json
 from forex.ui.train.dialogs.history_download_dialog import HistoryDownloadDialog
-from forex.ui.train.state.history_download_state import HistoryDownloadState
 from forex.ui.train.presenters.history_download_presenter import HistoryDownloadPresenter
+from forex.ui.train.state.history_download_state import HistoryDownloadState
 from forex.utils.reactor_manager import reactor_manager
 
 
@@ -37,8 +36,8 @@ class HistoryDownloadController(QObject):
         self._oauth_service = oauth_service
         self._state = state
         self._presenter = presenter
-        self._download_pipeline: Optional[HistoryDownloadPipeline] = None
-        self._dialog: Optional[HistoryDownloadDialog] = None
+        self._download_pipeline: HistoryDownloadPipeline | None = None
+        self._dialog: HistoryDownloadDialog | None = None
 
     def open_download_dialog(self, default_symbol_id: int) -> None:
         account_id = self._get_account_id()
@@ -100,14 +99,17 @@ class HistoryDownloadController(QObject):
             on_log=self._presenter.emit_async_message,
         )
 
-    def _get_account_id(self) -> Optional[int]:
+    def _get_account_id(self) -> int | None:
         if not self._app_auth_service:
             self._presenter.emit("app_auth_missing")
             return None
         if not self._app_auth_service.is_app_authenticated:
             self._presenter.emit("app_auth_disconnected")
             return None
-        if not self._oauth_service or self._oauth_service.status != ConnectionStatus.ACCOUNT_AUTHENTICATED:
+        if (
+            not self._oauth_service
+            or self._oauth_service.status != ConnectionStatus.ACCOUNT_AUTHENTICATED
+        ):
             self._presenter.emit("oauth_missing")
             return None
 

@@ -1,7 +1,7 @@
 from __future__ import annotations
 
+from collections.abc import Callable
 from dataclasses import dataclass
-from typing import Callable
 
 from PySide6.QtWidgets import (
     QHBoxLayout,
@@ -11,6 +11,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
+from forex.ui.shared.widgets.log_widget import LogWidget
 from forex.ui.train.controllers.toolbar_controller import ToolbarController
 from forex.ui.train.layout.dock_manager import DockManagerController
 from forex.ui.train.layout.panel_switcher import PanelSet, PanelSwitcher
@@ -19,7 +20,6 @@ from forex.ui.train.presenters.training_presenter import TrainingPresenter
 from forex.ui.train.state.history_download_state import HistoryDownloadState
 from forex.ui.train.state.simulation_state import SimulationState
 from forex.ui.train.state.training_state import TrainingState
-from forex.ui.shared.widgets.log_widget import LogWidget
 from forex.ui.train.widgets.history_integrity_panel import HistoryIntegrityPanel
 from forex.ui.train.widgets.simulation_panel import (
     SimulationPanel,

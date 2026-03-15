@@ -1,7 +1,7 @@
 from __future__ import annotations
 
+from collections.abc import Callable
 from dataclasses import dataclass
-from typing import Callable, Optional
 
 from PySide6.QtCore import QObject, Qt
 from PySide6.QtGui import QAction

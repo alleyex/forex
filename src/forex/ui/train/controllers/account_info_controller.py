@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Callable, Optional
+from collections.abc import Callable
 
 from PySide6.QtCore import QObject, Signal
 
@@ -20,18 +20,18 @@ class AccountInfoController(QObject):
         *,
         parent: QObject,
         log: Callable[[str], None],
-        use_cases: Optional[BrokerUseCases] = None,
-        service: Optional[AppAuthServiceLike] = None,
+        use_cases: BrokerUseCases | None = None,
+        service: AppAuthServiceLike | None = None,
     ) -> None:
         super().__init__(parent)
         self._log = log
         self._use_cases = use_cases
         self._service = service
 
-    def set_service(self, service: Optional[AppAuthServiceLike]) -> None:
+    def set_service(self, service: AppAuthServiceLike | None) -> None:
         self._service = service
 
-    def handle_accounts_received(self, accounts: list, account_id: Optional[int]) -> None:
+    def handle_accounts_received(self, accounts: list, account_id: int | None) -> None:
         try:
             self._log(format_connection_message("account_count", count=len(accounts)))
             if not accounts:
@@ -51,10 +51,26 @@ class AccountInfoController(QObject):
             login_text = "-" if selected.trader_login is None else str(selected.trader_login)
             self._log(format_connection_message("account_info_header"))
             self._log(
-                format_connection_message("account_field", label="Account ID", value=selected.account_id)
+                format_connection_message(
+                    "account_field",
+                    label="Account ID",
+                    value=selected.account_id,
+                )
             )
-            self._log(format_connection_message("account_field", label="Environment", value=env_text))
-            self._log(format_connection_message("account_field", label="Trader Login", value=login_text))
+            self._log(
+                format_connection_message(
+                    "account_field",
+                    label="Environment",
+                    value=env_text,
+                )
+            )
+            self._log(
+                format_connection_message(
+                    "account_field",
+                    label="Trader Login",
+                    value=login_text,
+                )
+            )
             self.accountSelected.emit(selected)
             self._fetch_account_funds(selected.account_id)
         except Exception as exc:
@@ -130,7 +146,7 @@ class AccountInfoController(QObject):
         )
 
     @staticmethod
-    def _format_money(value: Optional[float], digits: int) -> str:
+    def _format_money(value: float | None, digits: int) -> str:
         if value is None:
             return "-"
         if digits <= 0:
