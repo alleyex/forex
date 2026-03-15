@@ -37,10 +37,26 @@ class LiveUIBuilder:
         layout.setSpacing(10)
 
         tabs = self._create_tabs(layout)
-        _model_tab, model_tab_layout, form_model = self._create_tab_form(tabs, "Model Lab", object_name="modelTab")
-        _basic_tab, _basic_tab_layout, form_basic = self._create_tab_form(tabs, "Basic", object_name="basicTab")
-        _trade_tab, _trade_tab_layout, form_trade = self._create_tab_form(tabs, "Trade", object_name="tradeTab")
-        _adv_tab, _adv_tab_layout, form_adv = self._create_tab_form(tabs, "Advanced", object_name="advancedTab")
+        _model_tab, model_tab_layout, form_model = self._create_tab_form(
+            tabs,
+            "Model Lab",
+            object_name="modelTab",
+        )
+        _basic_tab, _basic_tab_layout, form_basic = self._create_tab_form(
+            tabs,
+            "Basic",
+            object_name="basicTab",
+        )
+        _trade_tab, _trade_tab_layout, form_trade = self._create_tab_form(
+            tabs,
+            "Trade",
+            object_name="tradeTab",
+        )
+        _adv_tab, _adv_tab_layout, form_adv = self._create_tab_form(
+            tabs,
+            "Advanced",
+            object_name="advancedTab",
+        )
 
         self._apply_tabs_style(tabs)
         self._build_model_tab(form_model=form_model, model_tab_layout=model_tab_layout, panel=panel)
@@ -293,10 +309,19 @@ class LiveUIBuilder:
         tabs_style = tabs_style.replace(
             "__CARD_LINE_TITLE_FONT_SIZE_PX__", str(w._CARD_LINE_TITLE_FONT_SIZE_PX)
         )
-        tabs_style = tabs_style.replace("__CARD_LINE_TITLE_OFFSET_PX__", str(w._CARD_LINE_TITLE_OFFSET_PX))
+        tabs_style = tabs_style.replace(
+            "__CARD_LINE_TITLE_OFFSET_PX__",
+            str(w._CARD_LINE_TITLE_OFFSET_PX),
+        )
         tabs.setStyleSheet(tabs_style)
 
-    def _build_model_tab(self, *, form_model: QFormLayout, model_tab_layout: QVBoxLayout, panel: QWidget) -> None:
+    def _build_model_tab(
+        self,
+        *,
+        form_model: QFormLayout,
+        model_tab_layout: QVBoxLayout,
+        panel: QWidget,
+    ) -> None:
         w = self._window
         model_row = QWidget()
         model_layout = QVBoxLayout(model_row)
@@ -467,7 +492,10 @@ class LiveUIBuilder:
 
     def _build_advanced_tab(self, *, form_adv: QFormLayout) -> None:
         w = self._window
-        advanced_card, advanced_card_form = self._create_card("Advanced Settings", title_tone="line")
+        advanced_card, advanced_card_form = self._create_card(
+            "Advanced Settings",
+            title_tone="line",
+        )
         w._min_signal_interval = QSpinBox()
         w._min_signal_interval.setRange(0, 3600)
         w._min_signal_interval.setValue(5)

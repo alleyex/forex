@@ -201,7 +201,11 @@ class LiveSessionOrchestrator:
         w = self._window
         if int(status) < int(ConnectionStatus.APP_AUTHENTICATED):
             oauth = w._oauth_service
-            if oauth is not None and int(getattr(oauth, "status", 0) or 0) != int(ConnectionStatus.DISCONNECTED):
+            if (
+                oauth is not None
+                and int(getattr(oauth, "status", 0) or 0)
+                != int(ConnectionStatus.DISCONNECTED)
+            ):
                 try:
                     oauth.disconnect()
                 except Exception:
@@ -233,13 +237,26 @@ class LiveSessionOrchestrator:
             if not w._accounts:
                 w._refresh_accounts()
             if w._account_switch_in_progress and w._app_state and w._app_state.selected_account_id:
-                token_account = getattr(getattr(w._oauth_service, "tokens", None), "account_id", None)
-                if token_account and int(token_account) == int(w._app_state.selected_account_id):
+                token_account = getattr(
+                    getattr(w._oauth_service, "tokens", None),
+                    "account_id",
+                    None,
+                )
+                if (
+                    token_account
+                    and int(token_account) == int(w._app_state.selected_account_id)
+                ):
                     w._account_switch_in_progress = False
             if w._app_state and w._app_state.selected_account_id:
-                if last_auth_id is not None and int(w._app_state.selected_account_id) != int(last_auth_id):
+                if (
+                    last_auth_id is not None
+                    and int(w._app_state.selected_account_id) != int(last_auth_id)
+                ):
                     w._account_switch_in_progress = True
-                    w.logRequested.emit("⏳ Waiting for account authorization (account switch pending)")
+                    w.logRequested.emit(
+                        "⏳ Waiting for account authorization "
+                        "(account switch pending)"
+                    )
                     w._schedule_full_reconnect()
                     return
             self._auto_enable_after_auth_ready()

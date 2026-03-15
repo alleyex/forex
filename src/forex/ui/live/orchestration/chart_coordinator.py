@@ -4,6 +4,7 @@ import time
 
 from PySide6.QtCore import QTimer
 
+
 class LiveChartCoordinator:
     """Encapsulates live chart update and range-control behavior."""
 
@@ -293,7 +294,9 @@ class LiveChartCoordinator:
             w._chart_adjusting_range = False
 
     @staticmethod
-    def compute_chart_y_range(candles: list[tuple[float, float, float, float, float]]) -> tuple[float, float]:
+    def compute_chart_y_range(
+        candles: list[tuple[float, float, float, float, float]],
+    ) -> tuple[float, float]:
         lows = [float(c[3]) for c in candles]
         highs = [float(c[2]) for c in candles]
         raw_low = min(lows)
