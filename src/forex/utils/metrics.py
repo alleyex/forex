@@ -1,19 +1,18 @@
 from __future__ import annotations
 
+import logging
 import os
 import time
-import logging
 from dataclasses import dataclass
-from typing import Dict, FrozenSet, Optional, Tuple
 
 import numpy as np
 
 logger = logging.getLogger("metrics")
 
-TagSet = FrozenSet[Tuple[str, str]]
+TagSet = frozenset[tuple[str, str]]
 
 
-def _normalize_tags(tags: Optional[dict[str, str]] = None) -> TagSet:
+def _normalize_tags(tags: dict[str, str] | None = None) -> TagSet:
     if not tags:
         return frozenset()
     return frozenset((str(k), str(v)) for k, v in sorted(tags.items()))
@@ -50,14 +49,14 @@ class Observation:
 
 
 class MetricsRegistry:
-    def __init__(self, *, log_interval_seconds: Optional[float] = None) -> None:
+    def __init__(self, *, log_interval_seconds: float | None = None) -> None:
         interval = log_interval_seconds
         if interval is None:
             interval = float(os.getenv("METRICS_LOG_INTERVAL", "60"))
         self._log_interval_seconds = max(0.0, interval)
         self._last_log_ts = 0.0
-        self._counts: Dict[MetricKey, int] = {}
-        self._observations: Dict[MetricKey, Observation] = {}
+        self._counts: dict[MetricKey, int] = {}
+        self._observations: dict[MetricKey, Observation] = {}
 
     def inc(self, name: str, value: int = 1, **tags: str) -> None:
         key = MetricKey(name, _normalize_tags(tags))
@@ -99,7 +98,9 @@ class MetricsRegistry:
             lines.append(f"count {name}={value}")
         for name, obs in sorted(observations.items()):
             lines.append(
-                f"observe {name} count={obs.count} avg={obs.average:.4f} min={obs.minimum:.4f} max={obs.maximum:.4f}"
+                "observe "
+                f"{name} count={obs.count} avg={obs.average:.4f} "
+                f"min={obs.minimum:.4f} max={obs.maximum:.4f}"
             )
         logger.info(" | ".join(lines))
 
@@ -116,7 +117,7 @@ class _Timer:
         self._registry = registry
         self._name = name
         self._tags = tags
-        self._start: Optional[float] = None
+        self._start: float | None = None
 
     def __enter__(self):
         self._start = time.monotonic()

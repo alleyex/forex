@@ -52,20 +52,24 @@ def evaluate_soak(stats: ReconnectLogStats, thresholds: SoakThresholds) -> list[
     if stats.max_attempt > thresholds.max_attempt:
         failures.append(f"max_attempt={stats.max_attempt} > {thresholds.max_attempt}")
     if stats.funds_timeout > thresholds.max_funds_timeout:
-        failures.append(f"funds_timeout={stats.funds_timeout} > {thresholds.max_funds_timeout}")
+        failures.append(
+            f"funds_timeout={stats.funds_timeout} > {thresholds.max_funds_timeout}"
+        )
 
     if stats.reconnect_scheduled > 0:
         if stats.reconnect_success_ratio < thresholds.min_reconnect_success_ratio:
             failures.append(
                 "reconnect_success_ratio="
-                f"{stats.reconnect_success_ratio:.2f} < {thresholds.min_reconnect_success_ratio:.2f}"
+                f"{stats.reconnect_success_ratio:.2f} < "
+                f"{thresholds.min_reconnect_success_ratio:.2f}"
             )
 
     if stats.runtime_stalled > 0:
         resume_ratio = stats.runtime_resume / float(stats.runtime_stalled)
         if resume_ratio < thresholds.min_runtime_resume_ratio:
             failures.append(
-                f"runtime_resume_ratio={resume_ratio:.2f} < {thresholds.min_runtime_resume_ratio:.2f}"
+                "runtime_resume_ratio="
+                f"{resume_ratio:.2f} < {thresholds.min_runtime_resume_ratio:.2f}"
             )
 
     return failures

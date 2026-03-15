@@ -3,9 +3,9 @@ from __future__ import annotations
 import argparse
 import os
 import re
+from collections.abc import Iterable
 from dataclasses import dataclass
 from pathlib import Path
-
 
 _ATTEMPT_RE = re.compile(r"attempt\s+(\d+)", re.IGNORECASE)
 
@@ -36,10 +36,10 @@ class ReconnectLogStats:
         return self.app_auth_success / float(self.reconnect_scheduled)
 
 
-def analyze_reconnect_log(lines: list[str]) -> ReconnectLogStats:
-    stats = ReconnectLogStats(lines=len(lines))
-    for raw in lines:
-        line = str(raw or "")
+def analyze_reconnect_log(lines: Iterable[str]) -> ReconnectLogStats:
+    normalized_lines = [str(raw or "") for raw in lines]
+    stats = ReconnectLogStats(lines=len(normalized_lines))
+    for line in normalized_lines:
         if not line:
             continue
         lower = line.lower()
@@ -167,7 +167,10 @@ def main() -> int:
     resolved, info = resolve_log_file(requested, cwd=Path.cwd())
     if resolved is None:
         print(f"log file not found: {requested} (cwd: {Path.cwd()})")
-        print("tip: pass full path, run from project root, or set LOG_FILE when starting forex-live")
+        print(
+            "tip: pass full path, run from project root, "
+            "or set LOG_FILE when starting forex-live"
+        )
         return 2
     if info:
         print(info)
