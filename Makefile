@@ -3,7 +3,7 @@ PIP ?= $(PYTHON) -m pip
 RUFF ?= $(PYTHON) -m ruff
 PYTEST ?= $(PYTHON) -m pytest
 
-.PHONY: help install-dev lint test check check-core check-hygiene check-architecture check-deadcode check-unused release-check
+.PHONY: help install-dev lint test check check-core check-hygiene check-architecture check-deadcode check-unused release-check bump-version
 
 help:
 	@echo "Targets:"
@@ -16,6 +16,7 @@ help:
 	@echo "  make check-unused        # unused imports and variables"
 	@echo "  make check-deadcode      # vulture dead code scan"
 	@echo "  make release-check       # release preflight validation and package build"
+	@echo "  make bump-version        # synchronize package version metadata (VERSION=x.y.z)"
 	@echo "  make check               # run all quality gates"
 
 install-dev:
@@ -43,5 +44,9 @@ check-hygiene: lint check-unused check-deadcode
 
 release-check:
 	./scripts/release_check.sh
+
+bump-version:
+	@test -n "$(VERSION)" || (echo "VERSION is required, e.g. make bump-version VERSION=0.1.1" && exit 1)
+	$(PYTHON) ./scripts/bump_version.py "$(VERSION)"
 
 check: check-core check-hygiene

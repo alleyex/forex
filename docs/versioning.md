@@ -18,15 +18,14 @@ These values should be kept in sync.
 ## Release Flow
 
 1. Update `CHANGELOG.md`
-2. Bump the version in `pyproject.toml`
-3. Bump `forex.__version__` in `src/forex/__init__.py`
-4. Run:
+2. Bump the version metadata in one step:
 
 ```bash
-make release-check
+make bump-version VERSION=0.1.1
 ```
 
-5. Create and push a git tag in the format `vX.Y.Z`
+3. Confirm the changelog and version metadata are ready, then run:
+4. Create and push a git tag in the format `vX.Y.Z`
 
 Example:
 

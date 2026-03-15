@@ -87,6 +87,7 @@ make test
 make check-core
 make check-hygiene
 make release-check
+make bump-version VERSION=0.1.1
 ```
 
 ## Configuration
