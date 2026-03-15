@@ -7,10 +7,7 @@
 3. Copy `.env.example` to `.env` if local runtime configuration is needed.
 
 ```bash
-python3 -m venv .venv
-source .venv/bin/activate
-python3 -m pip install -U pip
-pip install -e '.[dev,ui,ml,ctrader]'
+./scripts/bootstrap.sh
 ```
 
 ## Daily Workflow
@@ -19,9 +16,14 @@ Before opening a change for review:
 
 ```bash
 make format
-make lint
 make test
-make check
+make check-core
+```
+
+Recommended before opening a larger cleanup PR:
+
+```bash
+make check-hygiene
 ```
 
 ## Project Structure
@@ -38,6 +40,7 @@ make check
 
 - Keep domain code isolated from UI, app, and infrastructure concerns.
 - Prefer extending existing entrypoints and services instead of creating parallel flows.
+- Add convenience automation under `scripts/` instead of new root-level executable files.
 - Add or update tests for behavior changes.
 - Keep generated data, secrets, and machine-local artifacts out of version control.
 - Use small, reviewable commits with a clear scope.

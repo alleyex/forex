@@ -4,7 +4,7 @@ BLACK ?= $(PYTHON) -m black
 RUFF ?= $(PYTHON) -m ruff
 PYTEST ?= $(PYTHON) -m pytest
 
-.PHONY: help install-dev format format-check lint test check check-architecture check-deadcode check-unused
+.PHONY: help install-dev format format-check lint test check check-core check-hygiene check-architecture check-deadcode check-unused
 
 help:
 	@echo "Targets:"
@@ -13,6 +13,8 @@ help:
 	@echo "  make format-check        # verify formatting"
 	@echo "  make lint                # run Ruff"
 	@echo "  make test                # run pytest"
+	@echo "  make check-core          # blocking CI-quality checks"
+	@echo "  make check-hygiene       # non-blocking hygiene checks for gradual cleanup"
 	@echo "  make check-architecture  # import-linter contracts"
 	@echo "  make check-unused        # unused imports and variables"
 	@echo "  make check-deadcode      # vulture dead code scan"
@@ -44,4 +46,8 @@ check-unused:
 check-deadcode:
 	$(PYTHON) -m vulture src tests vulture_whitelist.py --min-confidence 60
 
-check: format-check lint test check-architecture check-unused check-deadcode
+check-core: test check-architecture
+
+check-hygiene: format-check lint check-unused check-deadcode
+
+check: check-core check-hygiene

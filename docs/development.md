@@ -9,21 +9,17 @@
 ## Initial Setup
 
 ```bash
-python3 -m venv .venv
-source .venv/bin/activate
-python3 -m pip install -U pip
-pip install -e '.[dev,ui,ml,ctrader]'
+./scripts/bootstrap.sh
 ```
 
 ## Common Commands
 
 ```bash
 make help
-make install-dev
 make format
-make lint
 make test
-make check
+make check-core
+make check-hygiene
 ```
 
 ## Entry Points
@@ -38,6 +34,13 @@ Module equivalents:
 python3 -m forex.app.cli.launcher
 python3 -m forex.app.cli.train
 python3 -m forex.app.cli.live
+```
+
+Shell convenience scripts:
+
+```bash
+./scripts/run-train.sh
+./scripts/run-live.sh
 ```
 
 ## Architecture Expectations
@@ -62,4 +65,4 @@ These files are intentionally local-only and should not be committed:
 
 ## CI Expectations
 
-Continuous integration runs formatting, linting, architecture checks, and tests on pushes and pull requests. Keep local commands aligned with CI before submitting changes.
+Continuous integration enforces core gates first, and reports hygiene drift separately. This keeps the repository shippable while older code is gradually normalized.

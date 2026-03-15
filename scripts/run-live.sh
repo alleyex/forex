@@ -1,0 +1,9 @@
+#!/usr/bin/env bash
+
+set -euo pipefail
+
+export QT_OPENGL="${QT_OPENGL:-software}"
+export QT_QUICK_BACKEND="${QT_QUICK_BACKEND:-software}"
+export LOG_LEVEL="${LOG_LEVEL:-INFO}"
+
+exec python3 -m forex.app.cli.live "$@"

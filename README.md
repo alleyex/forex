@@ -20,18 +20,17 @@ Additional project guidance:
 - Development workflow: [`docs/development.md`](docs/development.md)
 - Contribution guide: [`CONTRIBUTING.md`](CONTRIBUTING.md)
 - Architecture notes: [`docs/architecture.md`](docs/architecture.md)
+- Repository structure: [`docs/project_structure.md`](docs/project_structure.md)
 - Operations runbook: [`docs/operations.md`](docs/operations.md)
 - Data governance: [`docs/data_governance.md`](docs/data_governance.md)
+- Security policy: [`SECURITY.md`](SECURITY.md)
 
 ## Quick Start
 
 Recommended Python version: `3.10+`
 
 ```bash
-python3 -m venv .venv
-source .venv/bin/activate
-python3 -m pip install -U pip
-pip install -e '.[dev,ui,ml,ctrader]'
+./scripts/bootstrap.sh
 ```
 
 Create local configuration from the sample file before running live features:
@@ -68,6 +67,13 @@ python3 -m forex.app.cli.train
 python3 -m forex.app.cli.live
 ```
 
+Convenience scripts:
+
+```bash
+./scripts/run-train.sh
+./scripts/run-live.sh
+```
+
 ## Development Commands
 
 Use `make help` to list the available workflows.
@@ -77,7 +83,8 @@ make install-dev
 make format
 make lint
 make test
-make check
+make check-core
+make check-hygiene
 ```
 
 ## Configuration
@@ -101,6 +108,7 @@ Common variables:
 
 - Production code lives under `src/`
 - Tests live under `tests/`
+- Developer scripts live under `scripts/`
 - Runtime artifacts stay in `runtime/` or ignored local files
 - Research outputs and operational notes stay in `docs/`
 - Generated data belongs in `data/` and should not be committed unless intentional

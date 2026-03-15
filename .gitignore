@@ -11,6 +11,7 @@ __pycache__/
 .coverage.*
 .hypothesis/
 .tox/
+.envrc
 *.egg-info/
 
 *.csv
@@ -39,3 +40,7 @@ docs/operation_outline.md
 # IDE
 .idea/
 .vscode/settings.json
+
+# macOS Finder
+.AppleDouble
+.LSOverride
