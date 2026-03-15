@@ -1,36 +1,38 @@
 """
 OAuth 帳戶認證服務
 """
-from dataclasses import dataclass
 import time
-from typing import Callable, Optional, Protocol
+from collections.abc import Callable
+from dataclasses import dataclass
+from typing import Protocol
 
 from ctrader_open_api import Client
-from ctrader_open_api.messages.OpenApiMessages_pb2 import ProtoOAAccountAuthReq, ProtoOAAccountLogoutReq
+from ctrader_open_api.messages.OpenApiMessages_pb2 import (
+    ProtoOAAccountAuthReq,
+    ProtoOAAccountLogoutReq,
+)
 
+from forex.config.constants import ConnectionStatus, MessageType
+from forex.config.paths import TOKEN_FILE
+from forex.config.runtime import load_config, retry_policy_from_config
+from forex.config.settings import OAuthTokens
 from forex.infrastructure.broker.base import BaseCallbacks, build_callbacks
-from forex.infrastructure.broker.ctrader.services.base import CTraderServiceBase
-from forex.infrastructure.broker.errors import ErrorCode, error_message
-from forex.infrastructure.broker.ctrader.auth.refresh import refresh_tokens
-from forex.infrastructure.broker.ctrader.auth.policy import is_invalid_token_error
 from forex.infrastructure.broker.ctrader.auth.events import (
     ACCOUNT_DISCONNECT_EVENT,
     ACCOUNTS_TOKEN_INVALIDATED_EVENT,
 )
+from forex.infrastructure.broker.ctrader.auth.policy import is_invalid_token_error
+from forex.infrastructure.broker.ctrader.auth.refresh import refresh_tokens
 from forex.infrastructure.broker.ctrader.services.app_auth_service import AppAuthService
+from forex.infrastructure.broker.ctrader.services.base import CTraderServiceBase
 from forex.infrastructure.broker.ctrader.services.message_helpers import (
     dispatch_payload,
     format_error,
     format_success,
 )
 from forex.infrastructure.broker.ctrader.services.timeout_tracker import TimeoutTracker
-from forex.config.constants import ConnectionStatus, MessageType
-from forex.config.paths import TOKEN_FILE
-from forex.config.runtime import load_config, retry_policy_from_config
-from forex.config.settings import OAuthTokens
+from forex.infrastructure.broker.errors import ErrorCode, error_message
 from forex.utils.metrics import metrics
-
-
 
 
 class OAuthMessage(Protocol):
@@ -42,8 +44,8 @@ class OAuthMessage(Protocol):
 @dataclass
 class OAuthServiceCallbacks(BaseCallbacks):
     """OAuthService 的回調函式"""
-    on_oauth_success: Optional[Callable[[OAuthTokens], None]] = None
-    on_status_changed: Optional[Callable[[ConnectionStatus], None]] = None
+    on_oauth_success: Callable[[OAuthTokens], None] | None = None
+    on_status_changed: Callable[[ConnectionStatus], None] | None = None
 
 
 class OAuthService(CTraderServiceBase[OAuthServiceCallbacks]):
@@ -68,17 +70,26 @@ class OAuthService(CTraderServiceBase[OAuthServiceCallbacks]):
         self._tokens = tokens
         self._token_file = token_file
         self._timeout_tracker = TimeoutTracker(self._on_timeout)
-        self._last_authenticated_account_id: Optional[int] = None
-        self._metrics_started_at: Optional[float] = None
+        self._last_authenticated_account_id: int | None = None
+        self._metrics_started_at: float | None = None
         self._refresh_attempted: bool = False
         self._logout_requested: bool = False
 
     @classmethod
-    def create(cls, app_auth_service: AppAuthService, token_file: str = TOKEN_FILE) -> "OAuthService":
+    def create(
+        cls,
+        app_auth_service: AppAuthService,
+        token_file: str = TOKEN_FILE,
+    ) -> "OAuthService":
         """工廠方法：從設定檔建立服務實例"""
         tokens = OAuthTokens.from_file(token_file)
         client = app_auth_service.get_client()
-        return cls(app_auth_service=app_auth_service, client=client, tokens=tokens, token_file=token_file)
+        return cls(
+            app_auth_service=app_auth_service,
+            client=client,
+            tokens=tokens,
+            token_file=token_file,
+        )
 
     @property
     def tokens(self) -> OAuthTokens:
@@ -86,7 +97,7 @@ class OAuthService(CTraderServiceBase[OAuthServiceCallbacks]):
         return self._tokens
 
     @property
-    def last_authenticated_account_id(self) -> Optional[int]:
+    def last_authenticated_account_id(self) -> int | None:
         return self._last_authenticated_account_id
 
     def update_tokens(self, tokens: OAuthTokens) -> None:
@@ -95,10 +106,10 @@ class OAuthService(CTraderServiceBase[OAuthServiceCallbacks]):
 
     def set_callbacks(
         self,
-        on_oauth_success: Optional[Callable[[OAuthTokens], None]] = None,
-        on_error: Optional[Callable[[str], None]] = None,
-        on_log: Optional[Callable[[str], None]] = None,
-        on_status_changed: Optional[Callable[[ConnectionStatus], None]] = None,
+        on_oauth_success: Callable[[OAuthTokens], None] | None = None,
+        on_error: Callable[[str], None] | None = None,
+        on_log: Callable[[str], None] | None = None,
+        on_status_changed: Callable[[ConnectionStatus], None] | None = None,
     ) -> None:
         """設定回調函式"""
         self._callbacks = build_callbacks(
@@ -110,7 +121,7 @@ class OAuthService(CTraderServiceBase[OAuthServiceCallbacks]):
         )
         self._replay_log_history()
 
-    def connect(self, timeout_seconds: Optional[int] = None) -> None:
+    def connect(self, timeout_seconds: int | None = None) -> None:
         """發送帳戶認證請求"""
         if self._status == ConnectionStatus.ACCOUNT_AUTHENTICATED:
             self._log("ℹ️ 帳戶已授權，略過重複認證")
@@ -171,7 +182,7 @@ class OAuthService(CTraderServiceBase[OAuthServiceCallbacks]):
         self._log(f"🚪 帳戶登出請求 account_id={int(account_id)}")
         client.send(request)
 
-    def _validate_tokens(self) -> Optional[str]:
+    def _validate_tokens(self) -> str | None:
         """驗證 Token，若無效則回傳錯誤訊息"""
         if not self._tokens.access_token:
             return error_message(ErrorCode.AUTH, "缺少存取權杖")
@@ -242,7 +253,7 @@ class OAuthService(CTraderServiceBase[OAuthServiceCallbacks]):
         if self._callbacks.on_oauth_success:
             self._callbacks.on_oauth_success(self._tokens)
 
-    def _set_disconnected_with_error(self, message: str, detail: Optional[str] = None) -> None:
+    def _set_disconnected_with_error(self, message: str, detail: str | None = None) -> None:
         self._unbind_handler(self._handle_message)
         self._set_status(ConnectionStatus.DISCONNECTED)
         self._emit_error(error_message(ErrorCode.AUTH, message, detail))
@@ -296,7 +307,11 @@ class OAuthService(CTraderServiceBase[OAuthServiceCallbacks]):
 
     def _on_account_disconnect(self, msg: OAuthMessage) -> None:
         account_id = getattr(msg, "ctidTraderAccountId", None)
-        if account_id and self._tokens.account_id and int(account_id) != int(self._tokens.account_id):
+        if (
+            account_id
+            and self._tokens.account_id
+            and int(account_id) != int(self._tokens.account_id)
+        ):
             return
         self._log("⚠️ 帳戶已在伺服器端中斷，請重新授權")
         metrics.inc("ctrader.oauth.disconnect.event")

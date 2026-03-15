@@ -1,24 +1,29 @@
 """
 OAuth 登入服務（瀏覽器流程）
 """
-from dataclasses import dataclass
 import threading
-from typing import Callable, Optional
+from collections.abc import Callable
+from dataclasses import dataclass
 
-from forex.infrastructure.broker.base import BaseCallbacks, LogHistoryMixin, OperationStateMixin, build_callbacks
-from forex.infrastructure.broker.errors import ErrorCode, error_message
-from forex.infrastructure.broker.oauth.tokens import TokenExchanger
-from forex.infrastructure.broker.oauth.callback_server import CallbackServer
 from forex.config.paths import TOKEN_FILE
 from forex.config.runtime import load_config
-from forex.config.settings import OAuthTokens, AppCredentials
+from forex.config.settings import AppCredentials, OAuthTokens
+from forex.infrastructure.broker.base import (
+    BaseCallbacks,
+    LogHistoryMixin,
+    OperationStateMixin,
+    build_callbacks,
+)
 from forex.infrastructure.broker.ctrader.services.message_helpers import format_success
+from forex.infrastructure.broker.errors import ErrorCode, error_message
+from forex.infrastructure.broker.oauth.callback_server import CallbackServer
+from forex.infrastructure.broker.oauth.tokens import TokenExchanger
 
 
 @dataclass
 class OAuthLoginServiceCallbacks(BaseCallbacks):
     """OAuthLoginService 的回調函式"""
-    on_oauth_login_success: Optional[Callable[[OAuthTokens], None]] = None
+    on_oauth_login_success: Callable[[OAuthTokens], None] | None = None
 
 
 class OAuthLoginService(LogHistoryMixin[OAuthLoginServiceCallbacks], OperationStateMixin):
@@ -45,16 +50,20 @@ class OAuthLoginService(LogHistoryMixin[OAuthLoginServiceCallbacks], OperationSt
         self._log_history = []
 
     @classmethod
-    def create(cls, token_file: str = TOKEN_FILE, redirect_uri: str = "http://127.0.0.1:8765/callback") -> "OAuthLoginService":
+    def create(
+        cls,
+        token_file: str = TOKEN_FILE,
+        redirect_uri: str = "http://127.0.0.1:8765/callback",
+    ) -> "OAuthLoginService":
         """工廠方法：從設定檔建立服務實例"""
         credentials = AppCredentials.from_file(token_file)
         return cls(credentials=credentials, redirect_uri=redirect_uri, token_file=token_file)
 
     def set_callbacks(
         self,
-        on_oauth_login_success: Optional[Callable[[OAuthTokens], None]] = None,
-        on_error: Optional[Callable[[str], None]] = None,
-        on_log: Optional[Callable[[str], None]] = None,
+        on_oauth_login_success: Callable[[OAuthTokens], None] | None = None,
+        on_error: Callable[[str], None] | None = None,
+        on_log: Callable[[str], None] | None = None,
     ) -> None:
         """設定回調函式"""
         self._callbacks = build_callbacks(
@@ -106,7 +115,7 @@ class OAuthLoginService(LogHistoryMixin[OAuthLoginServiceCallbacks], OperationSt
         finally:
             self._end_operation()
 
-    def _get_existing_account_id(self) -> Optional[int]:
+    def _get_existing_account_id(self) -> int | None:
         """嘗試從 Token 檔案取得現有帳戶 ID"""
         try:
             existing = OAuthTokens.from_file(self._token_file)

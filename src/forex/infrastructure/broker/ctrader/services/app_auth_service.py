@@ -1,24 +1,24 @@
 """
 cTrader 應用程式層級認證服務
 """
-from dataclasses import dataclass
 import random
 import threading
 import time
-from typing import Callable, Optional, Protocol
+from collections.abc import Callable
+from dataclasses import dataclass
+from typing import Protocol
 
-from ctrader_open_api import Client, Protobuf, TcpProtocol, EndPoints
+from ctrader_open_api import Client, EndPoints, Protobuf, TcpProtocol
 from ctrader_open_api.messages.OpenApiCommonMessages_pb2 import ProtoHeartbeatEvent
 from ctrader_open_api.messages.OpenApiMessages_pb2 import ProtoOAApplicationAuthReq
 from ctrader_open_api.messages.OpenApiModelMessages_pb2 import ProtoOAPayloadType
 
-from forex.infrastructure.broker.base import BaseCallbacks, build_callbacks
-from forex.infrastructure.broker.ctrader.services.base import CTraderAuthServiceBase
-from forex.infrastructure.broker.errors import ErrorCode, error_message
-from forex.config.constants import MessageType, ConnectionStatus
+from forex.config.constants import ConnectionStatus, MessageType
 from forex.config.paths import TOKEN_FILE
 from forex.config.runtime import load_config
 from forex.config.settings import AppCredentials
+from forex.infrastructure.broker.base import BaseCallbacks, build_callbacks
+from forex.infrastructure.broker.ctrader.services.base import CTraderAuthServiceBase
 from forex.infrastructure.broker.ctrader.services.message_helpers import (
     format_confirm,
     format_error,
@@ -27,6 +27,7 @@ from forex.infrastructure.broker.ctrader.services.message_helpers import (
     is_already_subscribed,
     is_non_subscribed_trendbar_unsubscribe,
 )
+from forex.infrastructure.broker.errors import ErrorCode, error_message
 from forex.utils.metrics import metrics
 from forex.utils.reactor_manager import reactor_manager
 
@@ -34,8 +35,8 @@ from forex.utils.reactor_manager import reactor_manager
 @dataclass
 class AppAuthServiceCallbacks(BaseCallbacks):
     """AppAuthService 的回調函式容器"""
-    on_app_auth_success: Optional[Callable[[Client], None]] = None
-    on_status_changed: Optional[Callable[[ConnectionStatus], None]] = None
+    on_app_auth_success: Callable[[Client], None] | None = None
+    on_status_changed: Callable[[ConnectionStatus], None] | None = None
 
 
 class AppAuthMessage(Protocol):
@@ -80,31 +81,31 @@ class AppAuthService(CTraderAuthServiceBase[AppAuthServiceCallbacks, AppAuthMess
         self._credentials = credentials
         self._host = host
         self._port = port
-        self._client: Optional[Client] = None
+        self._client: Client | None = None
         self._send_wrapped = False
         self._raw_client_send = None
         self._heartbeat_interval = heartbeat_interval
         self._heartbeat_timeout = heartbeat_timeout
         self._connect_timeout = connect_timeout
-        self._connect_started_ts: Optional[float] = None
-        self._connect_watchdog_timer: Optional[threading.Timer] = None
+        self._connect_started_ts: float | None = None
+        self._connect_watchdog_timer: threading.Timer | None = None
         self._heartbeat_stop = threading.Event()
-        self._heartbeat_thread: Optional[threading.Thread] = None
-        self._last_message_ts: Optional[float] = None
-        self._last_heartbeat_log_ts: Optional[float] = None
+        self._heartbeat_thread: threading.Thread | None = None
+        self._last_message_ts: float | None = None
+        self._last_heartbeat_log_ts: float | None = None
         self._heartbeat_log_interval = heartbeat_log_interval
         self._reconnect_delay = reconnect_delay
         self._reconnect_max_delay = max(reconnect_delay, reconnect_max_delay)
         self._reconnect_max_attempts = max(0, int(reconnect_max_attempts))
         self._reconnect_jitter_ratio = max(0.0, min(0.5, float(reconnect_jitter_ratio)))
         self._reconnect_attempt = 0
-        self._reconnect_timer: Optional[threading.Timer] = None
+        self._reconnect_timer: threading.Timer | None = None
         self._auto_reconnect = auto_reconnect
         self._manual_disconnect = False
         self._app_auth_retry_count = 0
-        self._app_auth_retry_timer: Optional[threading.Timer] = None
+        self._app_auth_retry_timer: threading.Timer | None = None
         self._send_failure_streak = 0
-        self._last_send_failure_ts: Optional[float] = None
+        self._last_send_failure_ts: float | None = None
 
     @classmethod
     def create(cls, host_type: str, token_file: str = TOKEN_FILE) -> "AppAuthService":
@@ -156,10 +157,10 @@ class AppAuthService(CTraderAuthServiceBase[AppAuthServiceCallbacks, AppAuthMess
 
     def set_callbacks(
         self,
-        on_app_auth_success: Optional[Callable[[Client], None]] = None,
-        on_error: Optional[Callable[[str], None]] = None,
-        on_log: Optional[Callable[[str], None]] = None,
-        on_status_changed: Optional[Callable[[ConnectionStatus], None]] = None,
+        on_app_auth_success: Callable[[Client], None] | None = None,
+        on_error: Callable[[str], None] | None = None,
+        on_log: Callable[[str], None] | None = None,
+        on_status_changed: Callable[[ConnectionStatus], None] | None = None,
     ) -> None:
         """設定回調函式"""
         self._callbacks = build_callbacks(
@@ -219,18 +220,22 @@ class AppAuthService(CTraderAuthServiceBase[AppAuthServiceCallbacks, AppAuthMess
         self._connect_started_ts = None
         self._log("🔌 已手動斷線")
 
-    def seconds_since_last_message(self) -> Optional[float]:
+    def seconds_since_last_message(self) -> float | None:
         if self._last_message_ts is None:
             return None
         return max(0.0, time.time() - self._last_message_ts)
 
-    def is_transport_fresh(self, *, max_idle_seconds: Optional[float] = None) -> bool:
+    def is_transport_fresh(self, *, max_idle_seconds: float | None = None) -> bool:
         if self._status < ConnectionStatus.CONNECTED:
             return False
         age = self.seconds_since_last_message()
         if age is None:
             return False
-        threshold = self._heartbeat_timeout if max_idle_seconds is None else max(1.0, float(max_idle_seconds))
+        threshold = (
+            self._heartbeat_timeout
+            if max_idle_seconds is None
+            else max(1.0, float(max_idle_seconds))
+        )
         return age <= threshold
 
     def get_client(self) -> Client:
@@ -519,7 +524,7 @@ class AppAuthService(CTraderAuthServiceBase[AppAuthServiceCallbacks, AppAuthMess
         self._heartbeat_stop.set()
         self._heartbeat_thread = None
 
-    def _stop_client_service(self, client: Optional[Client], *, context: str) -> None:
+    def _stop_client_service(self, client: Client | None, *, context: str) -> None:
         if client is None:
             return
         try:
@@ -605,7 +610,10 @@ class AppAuthService(CTraderAuthServiceBase[AppAuthServiceCallbacks, AppAuthMess
 
     def _start_connect_watchdog(self) -> None:
         self._cancel_connect_watchdog()
-        self._connect_watchdog_timer = threading.Timer(self._connect_timeout, self._on_connect_timeout)
+        self._connect_watchdog_timer = threading.Timer(
+            self._connect_timeout,
+            self._on_connect_timeout,
+        )
         self._connect_watchdog_timer.daemon = True
         self._connect_watchdog_timer.start()
 
