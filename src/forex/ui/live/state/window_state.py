@@ -64,7 +64,10 @@ def initialize_live_window_state(window) -> None:
     window._last_price_label = None
     window._project_root = Path(__file__).resolve().parents[2]
     window._symbol_names, window._symbol_id_map = window._load_symbol_catalog()
-    window._symbol_id_to_name = {symbol_id: name for name, symbol_id in window._symbol_id_map.items()}
+    window._symbol_id_to_name = {
+        symbol_id: name
+        for name, symbol_id in window._symbol_id_map.items()
+    }
     window._symbol_volume_constraints = {}
     window._symbol_volume_loaded = False
     window._symbol_details_by_id = {}
@@ -147,7 +150,10 @@ def initialize_live_window_state(window) -> None:
         "GBPUSD": 5,
         "AUDUSD": 5,
     }
-    window._quote_symbol_ids = {name: window._resolve_symbol_id(name) for name in window._quote_symbols}
+    window._quote_symbol_ids = {
+        name: window._resolve_symbol_id(name)
+        for name in window._quote_symbols
+    }
     window._quote_rows = {}
     window._quote_row_digits = {}
     window._quote_last_mid = {}

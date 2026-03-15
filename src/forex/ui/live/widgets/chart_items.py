@@ -52,7 +52,12 @@ if pg is not None:
             max_x = max(times) + width
             min_y = min(lows)
             max_y = max(highs)
-            self._bounds = QtCore.QRectF(min_x, min_y, max(max_x - min_x, 1.0), max(max_y - min_y, 1e-8))
+            self._bounds = QtCore.QRectF(
+                min_x,
+                min_y,
+                max(max_x - min_x, 1.0),
+                max(max_y - min_y, 1e-8),
+            )
             for candle_ts, open_price, high, low, close in self._data:
                 wick_pen = pg.mkPen("#9ca3af", width=1)
                 painter.setPen(wick_pen)
@@ -62,7 +67,12 @@ if pg is not None:
                     rect = QtCore.QRectF(candle_ts - width, close, width * 2, open_price - close)
                 else:
                     color = "#10b981"
-                    rect = QtCore.QRectF(candle_ts - width, open_price, width * 2, close - open_price)
+                    rect = QtCore.QRectF(
+                        candle_ts - width,
+                        open_price,
+                        width * 2,
+                        close - open_price,
+                    )
                 if rect.height() == 0:
                     painter.setPen(pg.mkPen(color, width=2))
                     painter.drawLine(
@@ -79,7 +89,11 @@ if pg is not None:
             if len(self._data) < 2:
                 return 20.0
             times = [point[0] for point in self._data]
-            diffs = [b - a for a, b in zip(times, times[1:]) if b > a]
+            diffs = [
+                b - a
+                for a, b in zip(times, times[1:], strict=False)
+                if b > a
+            ]
             if not diffs:
                 return 20.0
             diffs.sort()

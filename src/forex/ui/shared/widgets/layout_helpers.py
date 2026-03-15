@@ -1,13 +1,13 @@
 from __future__ import annotations
 
-from typing import Callable, Optional, Sequence
+from collections.abc import Callable, Sequence
 
 from PySide6.QtCore import Qt
 from PySide6.QtWidgets import (
     QFormLayout,
     QHBoxLayout,
-    QPushButton,
     QLineEdit,
+    QPushButton,
     QWidget,
 )
 
@@ -15,12 +15,12 @@ from PySide6.QtWidgets import (
 def configure_form_layout(
     form: QFormLayout,
     *,
-    label_alignment: Optional[Qt.AlignmentFlag] = None,
+    label_alignment: Qt.AlignmentFlag | None = None,
     form_alignment: Qt.AlignmentFlag = Qt.AlignTop,
     horizontal_spacing: int = 12,
     vertical_spacing: int = 10,
     margins: Sequence[int] = (0, 0, 0, 0),
-    field_growth_policy: Optional[QFormLayout.FieldGrowthPolicy] = None,
+    field_growth_policy: QFormLayout.FieldGrowthPolicy | None = None,
 ) -> None:
     form.setLabelAlignment(label_alignment or (Qt.AlignRight | Qt.AlignVCenter))
     form.setFormAlignment(form_alignment)
@@ -35,7 +35,7 @@ def apply_form_label_width(
     form: QFormLayout,
     width: int,
     *,
-    alignment: Optional[Qt.AlignmentFlag] = None,
+    alignment: Qt.AlignmentFlag | None = None,
 ) -> None:
     for row in range(form.rowCount()):
         item = form.itemAt(row, QFormLayout.LabelRole)

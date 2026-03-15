@@ -1,15 +1,15 @@
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass
 from datetime import datetime
-import re
 
-from PySide6.QtCore import Qt, Signal, Slot, QThread
+from PySide6.QtCore import Qt, QThread, Signal, Slot
 from PySide6.QtWidgets import (
+    QGridLayout,
     QGroupBox,
     QHBoxLayout,
     QLabel,
-    QGridLayout,
     QVBoxLayout,
     QWidget,
 )
@@ -29,7 +29,10 @@ class _DecisionEntry:
 class DecisionInspectorWidget(QWidget):
     appendRequested = Signal(str)
 
-    _LEVEL_PREFIX_PATTERN = re.compile(r"^\[(DEBUG|INFO|OK|WARN|ERROR|TRADING|TRADE)\]\s*", re.IGNORECASE)
+    _LEVEL_PREFIX_PATTERN = re.compile(
+        r"^\[(DEBUG|INFO|OK|WARN|ERROR|TRADING|TRADE)\]\s*",
+        re.IGNORECASE,
+    )
     _TIMESTAMP_PREFIX_PATTERN = re.compile(r"^\[(\d{2}:\d{2}:\d{2})\]\s*")
 
     _INPUT_FIELDS = [
@@ -92,9 +95,27 @@ class DecisionInspectorWidget(QWidget):
 
         _ = title
 
-        layout.addWidget(self._build_stage_card("Decision Input", self._INPUT_FIELDS, self._input_labels))
-        layout.addWidget(self._build_stage_card("Decision Normalized", self._NORMALIZED_FIELDS, self._normalized_labels))
-        layout.addWidget(self._build_stage_card("Strategy State", self._STATE_FIELDS, self._state_labels))
+        layout.addWidget(
+            self._build_stage_card(
+                "Decision Input",
+                self._INPUT_FIELDS,
+                self._input_labels,
+            )
+        )
+        layout.addWidget(
+            self._build_stage_card(
+                "Decision Normalized",
+                self._NORMALIZED_FIELDS,
+                self._normalized_labels,
+            )
+        )
+        layout.addWidget(
+            self._build_stage_card(
+                "Strategy State",
+                self._STATE_FIELDS,
+                self._state_labels,
+            )
+        )
 
     def _build_stage_card(
         self,
@@ -174,7 +195,11 @@ class DecisionInspectorWidget(QWidget):
             timestamp = input_ts
         level, body = self._split_level(no_ts)
         event, fields = self._parse_body(body)
-        raw = format_timestamped_message(f"[{level}] {body}", timestamp) if timestamp else f"[{level}] {body}"
+        raw = (
+            format_timestamped_message(f"[{level}] {body}", timestamp)
+            if timestamp
+            else f"[{level}] {body}"
+        )
 
         self._recent_raw.append(raw)
         if len(self._recent_raw) > self._max_entries:

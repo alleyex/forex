@@ -90,7 +90,18 @@ class LivePanelFactory:
         table = QTableWidget(0, 10)
         table.setObjectName("positionsTable")
         table.setHorizontalHeaderLabels(
-            ["Symbol", "Side", "Volume", "Entry", "Current", "P/L", "SL", "TP", "Open Time", "Pos ID"]
+            [
+                "Symbol",
+                "Side",
+                "Volume",
+                "Entry",
+                "Current",
+                "P/L",
+                "SL",
+                "TP",
+                "Open Time",
+                "Pos ID",
+            ]
         )
         table.verticalHeader().setVisible(False)
         table.setEditTriggers(QTableWidget.NoEditTriggers)
