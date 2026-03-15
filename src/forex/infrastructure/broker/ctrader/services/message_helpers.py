@@ -1,7 +1,8 @@
 """
 Shared message helpers for cTrader services.
 """
-from typing import Any, Callable, Mapping
+from collections.abc import Callable, Mapping
+from typing import Any
 
 from forex.infrastructure.broker.ctrader.auth.errors import describe_error_code
 
