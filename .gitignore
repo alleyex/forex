@@ -1,4 +1,5 @@
 .venv/
+.env
 .DS_Store
 
 __pycache__/
@@ -6,6 +7,10 @@ __pycache__/
 .mypy_cache/
 .pytest_cache/
 .ruff_cache/
+.coverage
+.coverage.*
+.hypothesis/
+.tox/
 *.egg-info/
 
 *.csv
@@ -30,3 +35,7 @@ data/raw_history/
 
 # Local notes
 docs/operation_outline.md
+
+# IDE
+.idea/
+.vscode/settings.json

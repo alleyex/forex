@@ -1,25 +1,47 @@
-CONDA_ENV ?= pyside6-env-310
-CONDA_RUN = conda run -n $(CONDA_ENV)
+PYTHON ?= python3
+PIP ?= $(PYTHON) -m pip
+BLACK ?= $(PYTHON) -m black
+RUFF ?= $(PYTHON) -m ruff
+PYTEST ?= $(PYTHON) -m pytest
 
-.PHONY: help check-all check-architecture check-unused check-deadcode
+.PHONY: help install-dev format format-check lint test check check-architecture check-deadcode check-unused
 
 help:
 	@echo "Targets:"
-	@echo "  make check-all           # run all static architecture/dead-code checks"
+	@echo "  make install-dev         # install editable package with dev dependencies"
+	@echo "  make format              # run code formatter"
+	@echo "  make format-check        # verify formatting"
+	@echo "  make lint                # run Ruff"
+	@echo "  make test                # run pytest"
 	@echo "  make check-architecture  # import-linter contracts"
-	@echo "  make check-unused        # ruff unused imports/variables"
-	@echo "  make check-deadcode      # vulture with whitelist"
-	@echo ""
-	@echo "Optional:"
-	@echo "  make check-all CONDA_ENV=pyside6-env-310"
+	@echo "  make check-unused        # unused imports and variables"
+	@echo "  make check-deadcode      # vulture dead code scan"
+	@echo "  make check               # run all quality gates"
+
+install-dev:
+	$(PIP) install -U pip
+	$(PIP) install -e '.[dev,ui,ml,ctrader]'
+
+format:
+	$(BLACK) src tests
+	$(RUFF) check src tests --fix
+
+format-check:
+	$(BLACK) --check src tests
+
+lint:
+	$(RUFF) check src tests
+
+test:
+	$(PYTEST)
 
 check-architecture:
-	$(CONDA_RUN) bash -lc 'PYTHONPATH=src lint-imports --config pyproject.toml'
+	PYTHONPATH=src lint-imports --config pyproject.toml
 
 check-unused:
-	$(CONDA_RUN) python -m ruff check src tests --select F401,F841 --output-format concise
+	$(RUFF) check src tests --select F401,F841
 
 check-deadcode:
-	$(CONDA_RUN) python -m vulture src tests vulture_whitelist.py --min-confidence 60
+	$(PYTHON) -m vulture src tests vulture_whitelist.py --min-confidence 60
 
-check-all: check-architecture check-unused check-deadcode
+check: format-check lint test check-architecture check-unused check-deadcode
