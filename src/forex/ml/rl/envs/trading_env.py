@@ -147,7 +147,7 @@ def simulate_step_transition(
     idx: int,
     equity: float,
     peak_equity: float,
-    config: "TradingConfig",
+    config: TradingConfig,
 ) -> dict[str, float]:
     cost_rate = (float(config.transaction_cost_bps) + float(config.slippage_bps)) / 10000.0
     holding_cost_rate = float(config.holding_cost_bps) / 10000.0
@@ -155,13 +155,15 @@ def simulate_step_transition(
     cost = abs(delta) * cost_rate
     holding_cost = abs(float(current_position)) * holding_cost_rate
     horizon = int(getattr(config, "reward_horizon", 1))
-    price_return = compute_horizon_return(closes, idx, horizon)
+    price_return = compute_one_bar_return(closes, idx)
+    horizon_return = compute_horizon_return(closes, idx, horizon)
     path_returns = compute_horizon_path_returns(closes, idx, horizon)
     position = float(current_position)
     signed_path_returns = position * path_returns
-    terminal_step_pnl = position * float(price_return)
+    step_pnl = position * float(price_return)
+    reward_step_pnl = position * float(horizon_return)
     mae = max(0.0, -float(np.min(signed_path_returns))) if signed_path_returns.size else 0.0
-    path_mean = float(np.mean(signed_path_returns)) if signed_path_returns.size else terminal_step_pnl
+    path_mean = float(np.mean(signed_path_returns)) if signed_path_returns.size else reward_step_pnl
     path_std = float(np.std(signed_path_returns)) if signed_path_returns.size else 0.0
     downside_semivar = (
         float(np.mean(np.square(np.minimum(signed_path_returns, 0.0))))
@@ -177,7 +179,7 @@ def simulate_step_transition(
         )
     take_profit = max(0.0025, 1.5 * vol_anchor)
     stop_loss = max(0.0015, 1.0 * vol_anchor)
-    proxy_outcome = terminal_step_pnl
+    proxy_outcome = reward_step_pnl
     if signed_path_returns.size:
         tp_hits = np.flatnonzero(signed_path_returns >= take_profit)
         sl_hits = np.flatnonzero(signed_path_returns <= -stop_loss)
@@ -189,11 +191,9 @@ def simulate_step_transition(
             proxy_outcome = -stop_loss
 
     reward_mode = str(getattr(config, "reward_mode", "linear") or "linear").strip().lower()
-    reward_return = price_return
-    step_pnl = terminal_step_pnl
-    reward_step_pnl = step_pnl
+    reward_return = horizon_return
     if reward_mode == "terminal_horizon":
-        reward_step_pnl = terminal_step_pnl - (0.75 * mae)
+        reward_step_pnl = reward_step_pnl - (0.75 * mae)
     elif reward_mode == "path_penalty":
         reward_step_pnl = (
             path_mean
@@ -220,7 +220,7 @@ def simulate_step_transition(
         reward = float(np.log(max(1e-12, 1.0 + reward_net_return)))
     elif reward_mode == "risk_adjusted":
         reward = float(np.log(max(1e-12, 1.0 + reward_net_return)))
-    if float(config.risk_aversion) > 0.0:
+    if reward_mode == "risk_adjusted" and float(config.risk_aversion) > 0.0:
         reward -= float(config.risk_aversion) * (reward_step_pnl ** 2)
 
     downside_penalty = 0.0
@@ -229,15 +229,15 @@ def simulate_step_transition(
         reward -= downside_penalty
 
     drawdown_penalty = 0.0
-    if float(config.drawdown_penalty) > 0.0:
+    if reward_mode == "risk_adjusted" and float(config.drawdown_penalty) > 0.0:
         drawdown_penalty = float(config.drawdown_penalty) * drawdown_delta
         reward -= drawdown_penalty
     turnover_penalty = 0.0
-    if float(getattr(config, "turnover_penalty", 0.0)) > 0.0:
+    if reward_mode == "risk_adjusted" and float(getattr(config, "turnover_penalty", 0.0)) > 0.0:
         turnover_penalty = float(config.turnover_penalty) * abs(delta)
         reward -= turnover_penalty
     exposure_penalty = 0.0
-    if float(getattr(config, "exposure_penalty", 0.0)) > 0.0:
+    if reward_mode == "risk_adjusted" and float(getattr(config, "exposure_penalty", 0.0)) > 0.0:
         exposure_penalty = float(config.exposure_penalty) * abs(float(target_position))
         reward -= exposure_penalty
     if float(config.reward_scale) != 1.0:
@@ -276,7 +276,7 @@ def apply_risk_engine(
     target: float,
     *,
     current_position: float,
-    config: "TradingConfig",
+    config: TradingConfig,
     closes: np.ndarray,
     idx: int,
     equity: float,
@@ -320,7 +320,7 @@ def apply_risk_engine(
     }
 
 
-def uses_native_discrete_actions(config: "TradingConfig") -> bool:
+def uses_native_discrete_actions(config: TradingConfig) -> bool:
     return bool(
         getattr(config, "native_discrete_actions", False)
         and getattr(config, "discretize_actions", False)
@@ -328,9 +328,12 @@ def uses_native_discrete_actions(config: "TradingConfig") -> bool:
     )
 
 
-def decode_policy_action(action: Any, *, config: "TradingConfig") -> float:
+def decode_policy_action(action: Any, *, config: TradingConfig) -> float:
     if uses_native_discrete_actions(config):
-        positions = tuple(float(value) for value in getattr(config, "discrete_positions", ()) or (0.0,))
+        positions = tuple(
+            float(value)
+            for value in getattr(config, "discrete_positions", ()) or (0.0,)
+        )
         action_array = np.asarray(action)
         if action_array.size == 0:
             index = 0
@@ -399,20 +402,32 @@ class TradingEnv(gym.Env if gym else object):
         self._features = features
         self._closes = closes
         self._config = config or TradingConfig()
-        self._cost_rate = (self._config.transaction_cost_bps + self._config.slippage_bps) / 10000.0
+        self._cost_rate = (
+            self._config.transaction_cost_bps + self._config.slippage_bps
+        ) / 10000.0
         self._holding_cost_rate = self._config.holding_cost_bps / 10000.0
         self._timestamps = timestamps or []
         self._start_candidates: list[int] | None = None
         self._window_size = max(1, int(self._config.window_size))
 
         obs_dim = features.shape[1] * self._window_size + 1
-        self.observation_space = spaces.Box(low=-np.inf, high=np.inf, shape=(obs_dim,), dtype=np.float32)
+        self.observation_space = spaces.Box(
+            low=-np.inf,
+            high=np.inf,
+            shape=(obs_dim,),
+            dtype=np.float32,
+        )
         if uses_native_discrete_actions(self._config):
             self.action_space = spaces.Discrete(len(self._config.discrete_positions))
         else:
             # Keep action space consistent with max_position so the policy can reach it.
             max_position = max(1.0, float(self._config.max_position))
-            self.action_space = spaces.Box(low=-max_position, high=max_position, shape=(1,), dtype=np.float32)
+            self.action_space = spaces.Box(
+                low=-max_position,
+                high=max_position,
+                shape=(1,),
+                dtype=np.float32,
+            )
 
         self._idx = 0
         self._max_idx = len(self._closes) - 1
@@ -457,15 +472,26 @@ class TradingEnv(gym.Env if gym else object):
         reward = float(transition["reward"])
         flat_position_penalty = 0.0
         flat_streak_penalty = 0.0
-        flat_threshold = max(0.0, float(getattr(self._config, "flat_position_threshold", 1e-6)))
-        is_flat_hold = abs(float(self._position)) <= flat_threshold and abs(float(target_position)) <= flat_threshold
+        flat_threshold = max(
+            0.0,
+            float(getattr(self._config, "flat_position_threshold", 1e-6)),
+        )
+        is_flat_hold = (
+            abs(float(self._position)) <= flat_threshold
+            and abs(float(target_position)) <= flat_threshold
+        )
         if is_flat_hold:
             self._flat_steps += 1
             if float(getattr(self._config, "flat_position_penalty", 0.0)) > 0.0:
                 flat_position_penalty = float(self._config.flat_position_penalty)
                 reward -= flat_position_penalty
-            if float(getattr(self._config, "flat_streak_penalty", 0.0)) > 0.0 and self._flat_steps > 1:
-                flat_streak_penalty = float(self._config.flat_streak_penalty) * float(self._flat_steps - 1)
+            if (
+                float(getattr(self._config, "flat_streak_penalty", 0.0)) > 0.0
+                and self._flat_steps > 1
+            ):
+                flat_streak_penalty = float(self._config.flat_streak_penalty) * float(
+                    self._flat_steps - 1
+                )
                 reward -= flat_streak_penalty
         else:
             self._flat_steps = 0
@@ -477,13 +503,25 @@ class TradingEnv(gym.Env if gym else object):
         self._position_bias_ema = ((1.0 - bias_alpha) * self._position_bias_ema) + (
             bias_alpha * normalized_position
         )
-        bias_threshold = max(0.0, float(getattr(self._config, "position_bias_threshold", 0.2)))
+        bias_threshold = max(
+            0.0,
+            float(getattr(self._config, "position_bias_threshold", 0.2)),
+        )
         bias_excess = max(0.0, abs(self._position_bias_ema) - bias_threshold)
-        if float(getattr(self._config, "position_bias_penalty", 0.0)) > 0.0 and bias_excess > 0.0:
+        if (
+            float(getattr(self._config, "position_bias_penalty", 0.0)) > 0.0
+            and bias_excess > 0.0
+        ):
             position_bias_penalty = float(self._config.position_bias_penalty) * bias_excess
             reward -= position_bias_penalty
         if float(self._config.reward_clip) > 0.0:
-            reward = float(np.clip(reward, -float(self._config.reward_clip), float(self._config.reward_clip)))
+            reward = float(
+                np.clip(
+                    reward,
+                    -float(self._config.reward_clip),
+                    float(self._config.reward_clip),
+                )
+            )
         self._equity = transition["equity"]
         self._peak_equity = transition["peak_equity"]
         self._position = target_position
@@ -549,7 +587,11 @@ class TradingEnv(gym.Env if gym else object):
         if mode == "first" or max_start <= min_start:
             return int(min_start)
         if mode == "weekly_open":
-            candidates = [idx for idx in self._weekly_open_indices() if min_start <= idx <= max_start]
+            candidates = [
+                idx
+                for idx in self._weekly_open_indices()
+                if min_start <= idx <= max_start
+            ]
             if candidates:
                 return int(candidates[int(self.np_random.integers(0, len(candidates)))])
             return int(min_start)
@@ -570,7 +612,7 @@ class TradingEnv(gym.Env if gym else object):
             if np.isnat(stamp):
                 prev_stamp = None
                 continue
-            weekday = int(((stamp.astype("datetime64[D]").astype(int) + 3) % 7))
+            weekday = int((stamp.astype("datetime64[D]").astype(int) + 3) % 7)
             if weekday != 0:
                 prev_stamp = stamp
                 continue
