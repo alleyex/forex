@@ -23,7 +23,9 @@ Additional project guidance:
 - Repository structure: [`docs/project_structure.md`](docs/project_structure.md)
 - Operations runbook: [`docs/operations.md`](docs/operations.md)
 - Data governance: [`docs/data_governance.md`](docs/data_governance.md)
+- Versioning and releases: [`docs/versioning.md`](docs/versioning.md)
 - Security policy: [`SECURITY.md`](SECURITY.md)
+- Changelog: [`CHANGELOG.md`](CHANGELOG.md)
 
 ## Quick Start
 
@@ -80,7 +82,6 @@ Use `make help` to list the available workflows.
 
 ```bash
 make install-dev
-make format
 make lint
 make test
 make check-core
