@@ -2646,7 +2646,8 @@ class TrainingParamsPanel(QWidget):
             self._view_features_button.setToolTip("Select raw features used by training.")
         else:
             self._view_features_button.setToolTip(
-                "Feature profile controls the active features. Raw feature selection is disabled for this mode."
+                "Feature profile controls the active features. "
+                "Raw feature selection is disabled for this mode."
             )
         self._refresh_view_features_button()
 
@@ -2822,7 +2823,7 @@ class TrainingPanel(QWidget):
                 "#59A14F",
                 "#EDC948",
             ]
-            for index, (label, key) in enumerate(self._metrics):
+            for index, (_label, key) in enumerate(self._metrics):
                 color = colors[index % len(colors)]
                 curve = plot.plot(pen=pg.mkPen(color, width=2))
                 self._curves[key] = curve
@@ -2890,7 +2891,9 @@ class TrainingPanel(QWidget):
             self._optuna_best_summary_cells: list[tuple[QLabel, QLabel]] = []
             for index in range(12):
                 label_widget = QLabel("", self._optuna_best_summary_panel)
-                label_widget.setStyleSheet("color: #90a0b6; font-size: 12px; font-weight: 600;")
+                label_widget.setStyleSheet(
+                    "color: #90a0b6; font-size: 12px; font-weight: 600;"
+                )
                 value_widget = QLabel("", self._optuna_best_summary_panel)
                 value_widget.setStyleSheet(
                     "color: #e7edf7; font-size: 13px; font-weight: 600;"
@@ -2931,7 +2934,9 @@ class TrainingPanel(QWidget):
                 checkbox = QRadioButton(label)
                 checked = label == "eval/mean_reward"
                 checkbox.setChecked(checked)
-                checkbox.toggled.connect(lambda checked_state, k=key: self._toggle_curve(k, checked_state))
+                checkbox.toggled.connect(
+                    lambda checked_state, k=key: self._toggle_curve(k, checked_state)
+                )
                 self._checkboxes[key] = checkbox
                 row = idx // 4
                 col = idx % 4
@@ -2990,30 +2995,37 @@ class TrainingPanel(QWidget):
             summary_grid.setColumnStretch(1, 1)
             summary_grid.setColumnStretch(3, 1)
 
-            def add_summary_row(row_index: int, left_label: str, left_value: QLabel, right_label: str, right_value: QLabel) -> None:
+            title_style = (
+                "color: #90a0b6; font-size: 12px; "
+                "font-weight: 600; padding-bottom: 2px;"
+            )
+            value_style = (
+                "color: #e7edf7; font-size: 13px; "
+                "font-weight: 600; padding-bottom: 2px;"
+            )
+
+            def add_summary_row(
+                row_index: int,
+                left_label: str,
+                left_value: QLabel,
+                right_label: str,
+                right_value: QLabel,
+            ) -> None:
                 left_title = QLabel(left_label, reward_group)
-                left_title.setStyleSheet(
-                    "color: #90a0b6; font-size: 12px; font-weight: 600; padding-bottom: 2px;"
-                )
+                left_title.setStyleSheet(title_style)
                 left_value.setParent(reward_group)
                 left_value.setWordWrap(True)
                 left_value.setTextInteractionFlags(Qt.TextSelectableByMouse)
                 left_value.setMinimumHeight(left_value.sizeHint().height() + 4)
-                left_value.setStyleSheet(
-                    "color: #e7edf7; font-size: 13px; font-weight: 600; padding-bottom: 2px;"
-                )
+                left_value.setStyleSheet(value_style)
 
                 right_title = QLabel(right_label, reward_group)
-                right_title.setStyleSheet(
-                    "color: #90a0b6; font-size: 12px; font-weight: 600; padding-bottom: 2px;"
-                )
+                right_title.setStyleSheet(title_style)
                 right_value.setParent(reward_group)
                 right_value.setWordWrap(True)
                 right_value.setTextInteractionFlags(Qt.TextSelectableByMouse)
                 right_value.setMinimumHeight(right_value.sizeHint().height() + 4)
-                right_value.setStyleSheet(
-                    "color: #e7edf7; font-size: 13px; font-weight: 600; padding-bottom: 2px;"
-                )
+                right_value.setStyleSheet(value_style)
 
                 summary_grid.addWidget(left_title, row_index, 0, Qt.AlignLeft | Qt.AlignTop)
                 summary_grid.addWidget(left_value, row_index, 1, Qt.AlignLeft | Qt.AlignTop)
@@ -3022,42 +3034,93 @@ class TrainingPanel(QWidget):
 
             def add_summary_full_row(row_index: int, label_text: str, value_label: QLabel) -> None:
                 title = QLabel(label_text, reward_group)
-                title.setStyleSheet(
-                    "color: #90a0b6; font-size: 12px; font-weight: 600; padding-bottom: 2px;"
-                )
+                title.setStyleSheet(title_style)
                 value_label.setParent(reward_group)
                 value_label.setTextInteractionFlags(Qt.TextSelectableByMouse)
                 value_label.setMinimumHeight(value_label.sizeHint().height() + 4)
-                value_label.setStyleSheet(
-                    "color: #e7edf7; font-size: 13px; font-weight: 600; padding-bottom: 2px;"
-                )
+                value_label.setStyleSheet(value_style)
                 summary_grid.addWidget(title, row_index, 0, Qt.AlignLeft | Qt.AlignTop)
-                summary_grid.addWidget(value_label, row_index, 1, 1, 3, Qt.AlignLeft | Qt.AlignTop)
-
-            def add_summary_single_row(row_index: int, label_text: str, value_label: QLabel) -> None:
-                title = QLabel(label_text, reward_group)
-                title.setStyleSheet(
-                    "color: #90a0b6; font-size: 12px; font-weight: 600; padding-bottom: 2px;"
+                summary_grid.addWidget(
+                    value_label,
+                    row_index,
+                    1,
+                    1,
+                    3,
+                    Qt.AlignLeft | Qt.AlignTop,
                 )
+
+            def add_summary_single_row(
+                row_index: int,
+                label_text: str,
+                value_label: QLabel,
+            ) -> None:
+                title = QLabel(label_text, reward_group)
+                title.setStyleSheet(title_style)
                 value_label.setParent(reward_group)
                 value_label.setWordWrap(True)
                 value_label.setTextInteractionFlags(Qt.TextSelectableByMouse)
                 value_label.setMinimumHeight(value_label.sizeHint().height() + 4)
-                value_label.setStyleSheet(
-                    "color: #e7edf7; font-size: 13px; font-weight: 600; padding-bottom: 2px;"
-                )
+                value_label.setStyleSheet(value_style)
                 summary_grid.addWidget(title, row_index, 0, Qt.AlignLeft | Qt.AlignTop)
                 summary_grid.addWidget(value_label, row_index, 1, Qt.AlignLeft | Qt.AlignTop)
 
-            add_summary_row(0, "samples", self._reward_count_value, "reward mean", self._reward_mean_value)
-            add_summary_row(1, "reward std", self._reward_std_value, "reward SNR", self._reward_snr_value)
+            add_summary_row(
+                0,
+                "samples",
+                self._reward_count_value,
+                "reward mean",
+                self._reward_mean_value,
+            )
+            add_summary_row(
+                1,
+                "reward std",
+                self._reward_std_value,
+                "reward SNR",
+                self._reward_snr_value,
+            )
             add_summary_full_row(2, "quantiles", self._reward_quantiles_value)
-            add_summary_row(3, "eval mean reward", self._reward_eval_value, "best eval", self._reward_best_eval_value)
-            add_summary_row(4, "train-eval gap", self._reward_train_eval_gap_value, "eval trend", self._reward_eval_trend_value)
-            add_summary_row(5, "rolling sharpe", self._reward_rolling_sharpe_value, "cost drag ratio", self._reward_cost_drag_ratio_value)
-            add_summary_row(6, "action/move ratio", self._reward_action_to_move_ratio_value, "explained variance", self._reward_explained_variance_value)
-            add_summary_row(7, "eval trade/1k", self._reward_eval_trade_rate_value, "checkpoint gate", self._reward_checkpoint_gate_value)
-            add_summary_row(8, "eval flat ratio", self._reward_eval_flat_ratio_value, "eval max dd", self._reward_eval_max_drawdown_value)
+            add_summary_row(
+                3,
+                "eval mean reward",
+                self._reward_eval_value,
+                "best eval",
+                self._reward_best_eval_value,
+            )
+            add_summary_row(
+                4,
+                "train-eval gap",
+                self._reward_train_eval_gap_value,
+                "eval trend",
+                self._reward_eval_trend_value,
+            )
+            add_summary_row(
+                5,
+                "rolling sharpe",
+                self._reward_rolling_sharpe_value,
+                "cost drag ratio",
+                self._reward_cost_drag_ratio_value,
+            )
+            add_summary_row(
+                6,
+                "action/move ratio",
+                self._reward_action_to_move_ratio_value,
+                "explained variance",
+                self._reward_explained_variance_value,
+            )
+            add_summary_row(
+                7,
+                "eval trade/1k",
+                self._reward_eval_trade_rate_value,
+                "checkpoint gate",
+                self._reward_checkpoint_gate_value,
+            )
+            add_summary_row(
+                8,
+                "eval flat ratio",
+                self._reward_eval_flat_ratio_value,
+                "eval max dd",
+                self._reward_eval_max_drawdown_value,
+            )
             add_summary_single_row(9, "eval ls imbalance", self._reward_eval_ls_imbalance_value)
             summary_grid.setRowStretch(10, 1)
             reward_group_layout.addLayout(summary_grid)
@@ -3080,52 +3143,56 @@ class TrainingPanel(QWidget):
             heuristic_grid.setColumnStretch(1, 1)
             heuristic_grid.setColumnStretch(3, 1)
 
-            def add_heuristic_row(row_index: int, left_label: str, left_value: QLabel, right_label: str, right_value: QLabel) -> None:
+            def add_heuristic_row(
+                row_index: int,
+                left_label: str,
+                left_value: QLabel,
+                right_label: str,
+                right_value: QLabel,
+            ) -> None:
                 left_title = QLabel(left_label, heuristic_group)
-                left_title.setStyleSheet(
-                    "color: #90a0b6; font-size: 12px; font-weight: 600; padding-bottom: 2px;"
-                )
+                left_title.setStyleSheet(title_style)
                 left_value.setParent(heuristic_group)
                 left_value.setWordWrap(True)
                 left_value.setTextInteractionFlags(Qt.TextSelectableByMouse)
                 left_value.setMinimumHeight(left_value.sizeHint().height() + 4)
-                left_value.setStyleSheet(
-                    "color: #e7edf7; font-size: 13px; font-weight: 600; padding-bottom: 2px;"
-                )
+                left_value.setStyleSheet(value_style)
 
                 right_title = QLabel(right_label, heuristic_group)
-                right_title.setStyleSheet(
-                    "color: #90a0b6; font-size: 12px; font-weight: 600; padding-bottom: 2px;"
-                )
+                right_title.setStyleSheet(title_style)
                 right_value.setParent(heuristic_group)
                 right_value.setWordWrap(True)
                 right_value.setTextInteractionFlags(Qt.TextSelectableByMouse)
                 right_value.setMinimumHeight(right_value.sizeHint().height() + 4)
-                right_value.setStyleSheet(
-                    "color: #e7edf7; font-size: 13px; font-weight: 600; padding-bottom: 2px;"
-                )
+                right_value.setStyleSheet(value_style)
 
                 heuristic_grid.addWidget(left_title, row_index, 0, Qt.AlignLeft | Qt.AlignTop)
                 heuristic_grid.addWidget(left_value, row_index, 1, Qt.AlignLeft | Qt.AlignTop)
                 heuristic_grid.addWidget(right_title, row_index, 2, Qt.AlignLeft | Qt.AlignTop)
                 heuristic_grid.addWidget(right_value, row_index, 3, Qt.AlignLeft | Qt.AlignTop)
 
-            def add_heuristic_single_row(row_index: int, label_text: str, value_label: QLabel) -> None:
+            def add_heuristic_single_row(
+                row_index: int,
+                label_text: str,
+                value_label: QLabel,
+            ) -> None:
                 title = QLabel(label_text, heuristic_group)
-                title.setStyleSheet(
-                    "color: #90a0b6; font-size: 12px; font-weight: 600; padding-bottom: 2px;"
-                )
+                title.setStyleSheet(title_style)
                 value_label.setParent(heuristic_group)
                 value_label.setWordWrap(True)
                 value_label.setTextInteractionFlags(Qt.TextSelectableByMouse)
                 value_label.setMinimumHeight(value_label.sizeHint().height() + 4)
-                value_label.setStyleSheet(
-                    "color: #e7edf7; font-size: 13px; font-weight: 600; padding-bottom: 2px;"
-                )
+                value_label.setStyleSheet(value_style)
                 heuristic_grid.addWidget(title, row_index, 0, Qt.AlignLeft | Qt.AlignTop)
                 heuristic_grid.addWidget(value_label, row_index, 1, Qt.AlignLeft | Qt.AlignTop)
 
-            add_heuristic_row(0, "signal band", self._reward_signal_band_value, "update regime", self._reward_update_regime_value)
+            add_heuristic_row(
+                0,
+                "signal band",
+                self._reward_signal_band_value,
+                "update regime",
+                self._reward_update_regime_value,
+            )
             add_heuristic_single_row(1, "critic regime", self._reward_critic_regime_value)
             heuristic_group_layout.addLayout(heuristic_grid)
 
@@ -3144,21 +3211,21 @@ class TrainingPanel(QWidget):
             self._reward_quality_flags_value.setWordWrap(False)
             self._reward_hint_value.setWordWrap(False)
             self._reward_missing_eval_fields_value.setWordWrap(False)
-            self._reward_quality_flags_value.setMinimumHeight(self._reward_quality_flags_value.sizeHint().height() + 4)
-            self._reward_hint_value.setMinimumHeight(self._reward_hint_value.sizeHint().height() + 4)
-            self._reward_missing_eval_fields_value.setMinimumHeight(self._reward_missing_eval_fields_value.sizeHint().height() + 4)
+            self._reward_quality_flags_value.setMinimumHeight(
+                self._reward_quality_flags_value.sizeHint().height() + 4
+            )
+            self._reward_hint_value.setMinimumHeight(
+                self._reward_hint_value.sizeHint().height() + 4
+            )
+            self._reward_missing_eval_fields_value.setMinimumHeight(
+                self._reward_missing_eval_fields_value.sizeHint().height() + 4
+            )
             quality_title = QLabel("quality flags", heuristic_group)
-            quality_title.setStyleSheet(
-                "color: #90a0b6; font-size: 12px; font-weight: 600; padding-bottom: 2px;"
-            )
+            quality_title.setStyleSheet(title_style)
             missing_eval_title = QLabel("missing eval fields", heuristic_group)
-            missing_eval_title.setStyleSheet(
-                "color: #90a0b6; font-size: 12px; font-weight: 600; padding-bottom: 2px;"
-            )
+            missing_eval_title.setStyleSheet(title_style)
             interpretation_title = QLabel("interpretation", heuristic_group)
-            interpretation_title.setStyleSheet(
-                "color: #90a0b6; font-size: 12px; font-weight: 600; padding-bottom: 2px;"
-            )
+            interpretation_title.setStyleSheet(title_style)
             self._reward_quality_flags_value.setStyleSheet(
                 "color: #dbe4f2; font-size: 13px; padding-bottom: 2px;"
             )
@@ -3168,12 +3235,42 @@ class TrainingPanel(QWidget):
             self._reward_hint_value.setStyleSheet(
                 "color: #dbe4f2; font-size: 13px; padding-bottom: 2px;"
             )
-            heuristic_narrative_layout.addWidget(quality_title, 0, 0, Qt.AlignLeft | Qt.AlignTop)
-            heuristic_narrative_layout.addWidget(self._reward_quality_flags_value, 0, 1, Qt.AlignLeft | Qt.AlignTop)
-            heuristic_narrative_layout.addWidget(missing_eval_title, 1, 0, Qt.AlignLeft | Qt.AlignTop)
-            heuristic_narrative_layout.addWidget(self._reward_missing_eval_fields_value, 1, 1, Qt.AlignLeft | Qt.AlignTop)
-            heuristic_narrative_layout.addWidget(interpretation_title, 2, 0, Qt.AlignLeft | Qt.AlignTop)
-            heuristic_narrative_layout.addWidget(self._reward_hint_value, 2, 1, Qt.AlignLeft | Qt.AlignTop)
+            heuristic_narrative_layout.addWidget(
+                quality_title,
+                0,
+                0,
+                Qt.AlignLeft | Qt.AlignTop,
+            )
+            heuristic_narrative_layout.addWidget(
+                self._reward_quality_flags_value,
+                0,
+                1,
+                Qt.AlignLeft | Qt.AlignTop,
+            )
+            heuristic_narrative_layout.addWidget(
+                missing_eval_title,
+                1,
+                0,
+                Qt.AlignLeft | Qt.AlignTop,
+            )
+            heuristic_narrative_layout.addWidget(
+                self._reward_missing_eval_fields_value,
+                1,
+                1,
+                Qt.AlignLeft | Qt.AlignTop,
+            )
+            heuristic_narrative_layout.addWidget(
+                interpretation_title,
+                2,
+                0,
+                Qt.AlignLeft | Qt.AlignTop,
+            )
+            heuristic_narrative_layout.addWidget(
+                self._reward_hint_value,
+                2,
+                1,
+                Qt.AlignLeft | Qt.AlignTop,
+            )
             heuristic_narrative_layout.setRowStretch(3, 1)
             heuristic_group_layout.addLayout(heuristic_narrative_layout)
             heuristic_group_layout.addStretch(1)
@@ -3748,7 +3845,9 @@ class TrainingPanel(QWidget):
         self._reward_std_value.setText(self._format_stat(std))
         self._reward_snr_value.setText(snr_text)
         self._reward_quantiles_value.setText(
-            f"p10={self._format_stat(p10)}  p50={self._format_stat(p50)}  p90={self._format_stat(p90)}"
+            f"p10={self._format_stat(p10)}  "
+            f"p50={self._format_stat(p50)}  "
+            f"p90={self._format_stat(p90)}"
         )
         self._reward_eval_value.setText(
             "-" if eval_mean_reward is None else self._format_stat(float(eval_mean_reward))
@@ -3799,7 +3898,10 @@ class TrainingPanel(QWidget):
         else:
             hint = "Reward signal is stronger than its recent volatility."
         if abs(p90 - p10) > max(std * 2.5, 1e-9):
-            hint += " Wide percentile spread suggests a heavy-tailed or unstable reward distribution."
+            hint += (
+                " Wide percentile spread suggests a heavy-tailed "
+                "or unstable reward distribution."
+            )
         self._reward_hint_value.setText(hint)
         self._append_reward_diagnostics_row(
             samples=count,
@@ -4142,7 +4244,15 @@ class TrainingPanel(QWidget):
         eval_ls_imbalance: float | None,
         eval_max_drawdown: float | None,
     ) -> str:
-        if any(value is None for value in (eval_trade_rate_1k, eval_flat_ratio, eval_ls_imbalance, eval_max_drawdown)):
+        if any(
+            value is None
+            for value in (
+                eval_trade_rate_1k,
+                eval_flat_ratio,
+                eval_ls_imbalance,
+                eval_max_drawdown,
+            )
+        ):
             return "waiting"
         reasons: list[str] = []
         if float(eval_trade_rate_1k) < 5.0:
