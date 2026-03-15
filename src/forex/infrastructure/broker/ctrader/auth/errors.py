@@ -4,7 +4,6 @@ cTrader Open API error code mapping.
 from __future__ import annotations
 
 from enum import IntEnum
-from typing import Optional
 
 
 class CTraderErrorCode(IntEnum):
@@ -26,9 +25,8 @@ _ERROR_CODE_NAMES = {
 }
 
 
-def describe_error_code(code: object) -> Optional[str]:
+def describe_error_code(code: object) -> str | None:
     try:
         return _ERROR_CODE_NAMES.get(int(code))
     except (TypeError, ValueError):
         return None
-

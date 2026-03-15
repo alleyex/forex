@@ -1,29 +1,30 @@
 """
 OAuth 回調伺服器
 """
+
 import time
 import webbrowser
+from collections.abc import Callable
 from http.server import BaseHTTPRequestHandler, HTTPServer
-from typing import Optional, Tuple, Callable
 from urllib import parse
 
 
 class OAuthCallbackHandler(BaseHTTPRequestHandler):
     """OAuth 回調的 HTTP 處理器"""
-    
-    def do_GET(self):
+
+    def do_GET(self) -> None:
         """處理 GET 請求"""
         parsed = parse.urlparse(self.path)
         params = parse.parse_qs(parsed.query)
         self.server.code = params.get("code", [None])[0]
         self.server.request_path = parsed.path
-        
+
         self.send_response(200)
         self.send_header("Content-Type", "text/html; charset=utf-8")
         self.end_headers()
-        self.wfile.write("授權完成，您可以關閉此視窗。".encode("utf-8"))
+        self.wfile.write("授權完成，您可以關閉此視窗。".encode())
 
-    def log_message(self, format, *args):
+    def log_message(self, format: str, *args) -> None:
         """抑制日誌輸出"""
         pass
 
@@ -39,12 +40,12 @@ class CallbackServer:
     """
     
     DEFAULT_TIMEOUT = 300  # 5 分鐘
-    
+
     def __init__(self, redirect_uri: str):
         self._host, self._port, self._path = self._parse_uri(redirect_uri)
-    
+
     @staticmethod
-    def _parse_uri(redirect_uri: str) -> Tuple[str, int, str]:
+    def _parse_uri(redirect_uri: str) -> tuple[str, int, str]:
         """
         解析重導向 URI
         
@@ -61,17 +62,17 @@ class CallbackServer:
         host = parsed.hostname
         port = parsed.port
         path = parsed.path or "/"
-        
+
         if not host or not port:
             raise ValueError("無效的重導向 URI，需要主機和埠號")
         return host, port, path
-    
+
     def wait_for_code(
-        self, 
-        auth_url: str, 
+        self,
+        auth_url: str,
         timeout_seconds: int = DEFAULT_TIMEOUT,
-        on_log: Optional[Callable[[str], None]] = None
-    ) -> Optional[str]:
+        on_log: Callable[[str], None] | None = None,
+    ) -> str | None:
         """
         等待 OAuth 授權碼
         
@@ -90,13 +91,13 @@ class CallbackServer:
                 on_log(f"⚠️ 無法啟動回調伺服器，可能是埠被占用: {exc}")
                 on_log("ℹ️ 可改用手動貼上授權碼流程")
             return None
-        
+
         if on_log:
             on_log("🌐 正在開啟瀏覽器進行 OAuth 授權...")
         webbrowser.open(auth_url)
-        
+
         return self._wait_for_callback(server, timeout_seconds)
-    
+
     def _create_server(self) -> HTTPServer:
         """建立並設定 HTTP 伺服器"""
         server = HTTPServer((self._host, self._port), OAuthCallbackHandler)
@@ -105,14 +106,10 @@ class CallbackServer:
         server.timeout = 1
         return server
     
-    def _wait_for_callback(
-        self, 
-        server: HTTPServer, 
-        timeout_seconds: int
-    ) -> Optional[str]:
+    def _wait_for_callback(self, server: HTTPServer, timeout_seconds: int) -> str | None:
         """等待回調並回傳授權碼"""
         start_time = time.time()
-        
+
         while time.time() - start_time < timeout_seconds:
             server.handle_request()
             if server.code:
@@ -121,5 +118,5 @@ class CallbackServer:
                     if server.request_path != self._path:
                         continue
                 return server.code
-        
+
         return None

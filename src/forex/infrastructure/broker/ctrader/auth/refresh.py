@@ -3,8 +3,6 @@ Shared OAuth token refresh helpers.
 """
 from __future__ import annotations
 
-from typing import Optional
-
 from forex.config.settings import AppCredentials, OAuthTokens
 from forex.infrastructure.broker.oauth.tokens import TokenExchanger
 
@@ -13,7 +11,7 @@ def refresh_tokens(
     *,
     token_file: str,
     refresh_token: str,
-    existing_account_id: Optional[int] = None,
+    existing_account_id: int | None = None,
 ) -> OAuthTokens:
     credentials = AppCredentials.from_file(token_file)
     if credentials is None:
@@ -23,4 +21,3 @@ def refresh_tokens(
         refresh_token,
         existing_account_id=existing_account_id,
     )
-

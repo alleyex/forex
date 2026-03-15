@@ -3,20 +3,13 @@ V2: 共用基礎類別與協定定義（Protocol + Generic + 型別安全）
 """
 from __future__ import annotations
 
-from dataclasses import dataclass
 import logging
-from typing import (
-    Callable,
-    Generic,
-    Optional,
-    TypeVar,
-    cast,
-)
-
 from abc import ABC
+from collections.abc import Callable
+from dataclasses import dataclass
+from typing import Generic, TypeVar, cast
 
 from forex.config.constants import ConnectionStatus
-
 
 # --- Type variables ---
 TClient = TypeVar("TClient")
@@ -30,9 +23,10 @@ logger = logging.getLogger(__name__)
 # --- Callback dataclass ---
 @dataclass
 class BaseCallbacks:
-    on_error: Optional[Callable[[str], None]] = None
-    on_log: Optional[Callable[[str], None]] = None
-    on_status_changed: Optional[Callable[[ConnectionStatus], None]] = None
+    on_error: Callable[[str], None] | None = None
+    on_log: Callable[[str], None] | None = None
+    on_status_changed: Callable[[ConnectionStatus], None] | None = None
+
 
 def build_callbacks(callback_cls: type[TCallbacks], **kwargs) -> TCallbacks:
     return callback_cls(**kwargs)
@@ -124,7 +118,7 @@ class BaseService(LogHistoryMixin[TCb], StatusMixin[TCb], OperationStateMixin, A
     _callbacks: TCb
     _status: ConnectionStatus
 
-    def __init__(self, callbacks: Optional[TCb] = None):
+    def __init__(self, callbacks: TCb | None = None):
         if callbacks is None:
             callbacks = cast(TCb, BaseCallbacks())
         self._log_history = []
@@ -146,7 +140,7 @@ class BaseAuthService(BaseService[TCb], Generic[TCb, TClient, TMsg]):
     認證服務基礎類別：提供訊息處理器註冊功能（型別安全）
     """
 
-    def __init__(self, callbacks: Optional[TCb] = None):
+    def __init__(self, callbacks: TCb | None = None):
         super().__init__(callbacks=callbacks)
         self._message_handlers: list[MessageHandler[TClient, TMsg]] = []
 
@@ -168,7 +162,13 @@ class BaseAuthService(BaseService[TCb], Generic[TCb, TClient, TMsg]):
     def message_handler_count(self) -> int:
         return len(self._message_handlers)
 
-    def _dispatch_to_handlers(self, client: TClient, msg: TMsg, *, stop_on_handled: bool = True) -> bool:
+    def _dispatch_to_handlers(
+        self,
+        client: TClient,
+        msg: TMsg,
+        *,
+        stop_on_handled: bool = True,
+    ) -> bool:
         """
         將訊息分發給已註冊的處理器
 
