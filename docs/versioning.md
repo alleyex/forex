@@ -55,5 +55,6 @@ It validates that:
 - the release preflight passes
 - the package builds successfully
 - release artifacts include a `SHA256SUMS.txt` checksum manifest
+- the checksum manifest matches the built wheel and source distribution
 
 It then uploads build artifacts to the GitHub release for that tag.

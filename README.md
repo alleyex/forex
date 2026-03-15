@@ -91,6 +91,7 @@ make check-hygiene
 make release-check
 make check-release-metadata
 make release-checksums
+make verify-release-checksums
 make bump-version VERSION=0.1.1
 ```
 

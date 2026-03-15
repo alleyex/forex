@@ -34,6 +34,9 @@ echo "[release-check] Building distribution artifacts"
 echo "[release-check] Generating artifact checksums"
 "$PYTHON_BIN" ./scripts/generate_release_checksums.py --dist-dir dist
 
+echo "[release-check] Verifying artifact checksums"
+"$PYTHON_BIN" ./scripts/verify_release_checksums.py --dist-dir dist
+
 echo "[release-check] Validating distribution metadata"
 "$PYTHON_BIN" -m twine check dist/*.whl dist/*.tar.gz
 
