@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import time
 
+
 class LiveMarketDataController:
     def __init__(self, window) -> None:
         self._window = window
@@ -69,15 +70,23 @@ class LiveMarketDataController:
         account_id = None if not w._app_state else w._app_state.selected_account_id
         if not account_id:
             w._pending_history = True
-            w.logRequested.emit("⏳ Waiting for account selection to fetch candle history")
+            w.logRequested.emit(
+                "⏳ Waiting for account selection to fetch candle history"
+            )
             return
-        w.logRequested.emit(f"➡️ Request history (account_id={account_id}, symbol_id={w._symbol_id})")
+        w.logRequested.emit(
+            f"➡️ Request history (account_id={account_id}, symbol_id={w._symbol_id})"
+        )
         w._pending_history = False
         now = time.time()
         symbol_id = int(w._symbol_id)
         history_count = self.history_lookback_count()
         key = (int(account_id), symbol_id, w._timeframe, history_count)
-        if not force and w._last_history_request_key == key and now - w._last_history_request_ts < 10.0:
+        if (
+            not force
+            and w._last_history_request_key == key
+            and now - w._last_history_request_ts < 10.0
+        ):
             return
         timeframe_seconds = max(60, self.timeframe_minutes() * 60)
         success_cooldown = max(30.0, min(300.0, timeframe_seconds / 2.0))
@@ -153,7 +162,15 @@ class LiveMarketDataController:
             high_price = round(float(high_price), digits)
             low_price = round(float(low_price), digits)
             close_price = round(float(close_price), digits)
-            candles.append((ts, float(open_price), float(high_price), float(low_price), float(close_price)))
+            candles.append(
+                (
+                    ts,
+                    float(open_price),
+                    float(high_price),
+                    float(low_price),
+                    float(close_price),
+                )
+            )
         previous_last_ts = w._candles[-1][0] if w._candles else None
         if preview_current_candle is not None:
             candles.append(preview_current_candle)

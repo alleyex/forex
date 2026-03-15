@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import time
 from datetime import datetime
-from typing import Optional
 
 from forex.config.constants import ConnectionStatus
 from forex.config.paths import TOKEN_FILE
@@ -16,9 +15,17 @@ class LiveAccountController:
         w = self._window
         if getattr(w, "_account_authorization_blocked", False):
             return
-        if not w._service or int(getattr(w._service, "status", 0) or 0) < int(ConnectionStatus.APP_AUTHENTICATED):
+        if (
+            not w._service
+            or int(getattr(w._service, "status", 0) or 0)
+            < int(ConnectionStatus.APP_AUTHENTICATED)
+        ):
             return
-        if not w._oauth_service or int(getattr(w._oauth_service, "status", 0) or 0) < int(ConnectionStatus.ACCOUNT_AUTHENTICATED):
+        if (
+            not w._oauth_service
+            or int(getattr(w._oauth_service, "status", 0) or 0)
+            < int(ConnectionStatus.ACCOUNT_AUTHENTICATED)
+        ):
             return
         if w._account_switch_in_progress:
             return
@@ -210,7 +217,7 @@ class LiveAccountController:
             w.logRequested.emit("🔁 Account switched; reconnecting to complete authorization")
             w._schedule_full_reconnect()
 
-    def resolve_account_scope(self, account_id: int) -> Optional[int]:
+    def resolve_account_scope(self, account_id: int) -> int | None:
         w = self._window
         for account in w._accounts:
             if isinstance(account, dict):
@@ -225,7 +232,7 @@ class LiveAccountController:
                 return None if scope is None else int(scope)
         return None
 
-    def sync_account_combo(self, account_id: Optional[int]) -> None:
+    def sync_account_combo(self, account_id: int | None) -> None:
         w = self._window
         if not w._account_combo or account_id is None:
             return

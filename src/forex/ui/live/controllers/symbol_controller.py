@@ -73,7 +73,9 @@ class LiveSymbolController:
             return
 
         account_id = int(w._app_state.selected_account_id)
-        w.logRequested.emit(f"➡️ Request symbol details (account_id={account_id}, symbol_id={symbol_id})")
+        w.logRequested.emit(
+            f"➡️ Request symbol details (account_id={account_id}, symbol_id={symbol_id})"
+        )
 
         def _on_symbols(symbols: list) -> None:
             if not symbols:
@@ -176,7 +178,11 @@ class LiveSymbolController:
                 if isinstance(digits, int) and digits > 0:
                     w._symbol_digits_by_name[name] = digits
                     w._quote_digits[name] = digits
-                    current_symbol = w._trade_symbol.currentText() if hasattr(w, "_trade_symbol") else ""
+                    current_symbol = (
+                        w._trade_symbol.currentText()
+                        if hasattr(w, "_trade_symbol")
+                        else ""
+                    )
                     if not current_symbol:
                         current_symbol = w._symbol_name
                     if name == current_symbol:
@@ -311,4 +317,7 @@ class LiveSymbolController:
             symbol_id = w._quote_symbol_ids.get(symbol)
             if symbol_id is not None:
                 w._quote_rows[symbol_id] = row
-                w._quote_row_digits[symbol_id] = w._quote_digits.get(symbol, self.infer_quote_digits(symbol))
+                w._quote_row_digits[symbol_id] = w._quote_digits.get(
+                    symbol,
+                    self.infer_quote_digits(symbol),
+                )
