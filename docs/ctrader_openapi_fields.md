@@ -1,4 +1,4 @@
-# cTrader Open API Full field list
+# cTrader Open API Full Field List
 
 This document is generated from the official Protobuf definitions. The inferred descriptions are direct name-based translations/guesses and are provided for comprehension only.
 
@@ -7,56 +7,56 @@ This document is generated from the official Protobuf definitions. The inferred 
 ### Messages
 
 ### ProtoOAAccountAuthReq
-Inferred description (name-based): ProtoOAaccount authenticationrequest
+Inferred description (name-based): Account authentication request
 | Field | Type | Label | Inferred description (name-based) |
 |---|---|---|---|
-| payloadType | ProtoOAPayloadType | optional | type |
-| ctidTraderAccountId | int64 | optional | trading account account ID |
-| accessToken | string | optional | Token |
+| payloadType | ProtoOAPayloadType | optional | payload type |
+| ctidTraderAccountId | int64 | optional | trading account ID |
+| accessToken | string | optional | access token |
 
 ### ProtoOAAccountAuthRes
-Inferred description (name-based): ProtoOAaccount authenticationresponse
+Inferred description (name-based): Account authentication response
 | Field | Type | Label | Inferred description (name-based) |
 |---|---|---|---|
-| payloadType | ProtoOAPayloadType | optional | type |
-| ctidTraderAccountId | int64 | optional | trading account account ID |
+| payloadType | ProtoOAPayloadType | optional | payload type |
+| ctidTraderAccountId | int64 | optional | trading account ID |
 
 ### ProtoOAAccountDisconnectEvent
-Inferred description (name-based): ProtoOAaccount disconnectevent
+Inferred description (name-based): Account disconnect event
 | Field | Type | Label | Inferred description (name-based) |
 |---|---|---|---|
-| payloadType | ProtoOAPayloadType | optional | type |
-| ctidTraderAccountId | int64 | optional | trading account account ID |
+| payloadType | ProtoOAPayloadType | optional | payload type |
+| ctidTraderAccountId | int64 | optional | trading account ID |
 
 ### ProtoOAAccountLogoutReq
-Inferred description (name-based): ProtoOAaccount logoutrequest
+Inferred description (name-based): Account logout request
 | Field | Type | Label | Inferred description (name-based) |
 |---|---|---|---|
-| payloadType | ProtoOAPayloadType | optional | type |
-| ctidTraderAccountId | int64 | optional | trading account account ID |
+| payloadType | ProtoOAPayloadType | optional | payload type |
+| ctidTraderAccountId | int64 | optional | trading account ID |
 
 ### ProtoOAAccountLogoutRes
-Inferred description (name-based): ProtoOAaccount logoutresponse
+Inferred description (name-based): Account logout response
 | Field | Type | Label | Inferred description (name-based) |
 |---|---|---|---|
-| payloadType | ProtoOAPayloadType | optional | type |
-| ctidTraderAccountId | int64 | optional | trading account account ID |
+| payloadType | ProtoOAPayloadType | optional | payload type |
+| ctidTraderAccountId | int64 | optional | trading account ID |
 
 ### ProtoOAAccountsTokenInvalidatedEvent
-Inferred description (name-based): ProtoOAAccountsTokenInvalidatedevent
+Inferred description (name-based): Accounts token invalidated event
 | Field | Type | Label | Inferred description (name-based) |
 |---|---|---|---|
-| payloadType | ProtoOAPayloadType | optional | type |
-| ctidTraderAccountIds | int64 | repeated | trading account account IDs |
+| payloadType | ProtoOAPayloadType | optional | payload type |
+| ctidTraderAccountIds | int64 | repeated | trading account IDs |
 | reason | string | optional | reason |
 
 ### ProtoOAAmendOrderReq
-Inferred description (name-based): ProtoOAAmendorderrequest
+Inferred description (name-based): Amend order request
 | Field | Type | Label | Inferred description (name-based) |
 |---|---|---|---|
-| payloadType | ProtoOAPayloadType | optional | type |
-| ctidTraderAccountId | int64 | optional | trading account account ID |
-| orderId | int64 | optional | ID |
+| payloadType | ProtoOAPayloadType | optional | payload type |
+| ctidTraderAccountId | int64 | optional | trading account ID |
+| orderId | int64 | optional | order ID |
 | volume | int64 | optional | volume |
 | limitPrice | double | optional | price |
 | stopPrice | double | optional | price |
@@ -71,12 +71,12 @@ Inferred description (name-based): ProtoOAAmendorderrequest
 | stopTriggerMethod | ProtoOAOrderTriggerMethod | optional | TriggerMethod |
 
 ### ProtoOAAmendPositionSLTPReq
-Inferred description (name-based): ProtoOAAmendpositionSLTPrequest
+Inferred description (name-based): Amend position SL/TP request
 | Field | Type | Label | Inferred description (name-based) |
 |---|---|---|---|
-| payloadType | ProtoOAPayloadType | optional | type |
-| ctidTraderAccountId | int64 | optional | trading account account ID |
-| positionId | int64 | optional | ID |
+| payloadType | ProtoOAPayloadType | optional | payload type |
+| ctidTraderAccountId | int64 | optional | trading account ID |
+| positionId | int64 | optional | position ID |
 | stopLoss | double | optional | loss |
 | takeProfit | double | optional | profit |
 | guaranteedStopLoss | bool | optional | stop loss |
@@ -84,171 +84,171 @@ Inferred description (name-based): ProtoOAAmendpositionSLTPrequest
 | stopLossTriggerMethod | ProtoOAOrderTriggerMethod | optional | lossTriggerMethod |
 
 ### ProtoOAApplicationAuthReq
-Inferred description (name-based): ProtoOAapplication authenticationrequest
+Inferred description (name-based): Application authentication request
 | Field | Type | Label | Inferred description (name-based) |
 |---|---|---|---|
-| payloadType | ProtoOAPayloadType | optional | type |
+| payloadType | ProtoOAPayloadType | optional | payload type |
 | clientId | string | optional | ID |
 | clientSecret | string | optional | Secret |
 
 ### ProtoOAApplicationAuthRes
-Inferred description (name-based): ProtoOAapplication authenticationresponse
+Inferred description (name-based): Application authentication response
 | Field | Type | Label | Inferred description (name-based) |
 |---|---|---|---|
-| payloadType | ProtoOAPayloadType | optional | type |
+| payloadType | ProtoOAPayloadType | optional | payload type |
 
 ### ProtoOAAssetClassListReq
-Inferred description (name-based): ProtoOAasset classlistrequest
+Inferred description (name-based): Asset class list request
 | Field | Type | Label | Inferred description (name-based) |
 |---|---|---|---|
-| payloadType | ProtoOAPayloadType | optional | type |
-| ctidTraderAccountId | int64 | optional | trading account account ID |
+| payloadType | ProtoOAPayloadType | optional | payload type |
+| ctidTraderAccountId | int64 | optional | trading account ID |
 
 ### ProtoOAAssetClassListRes
-Inferred description (name-based): ProtoOAasset classlistresponse
+Inferred description (name-based): Asset class list response
 | Field | Type | Label | Inferred description (name-based) |
 |---|---|---|---|
-| payloadType | ProtoOAPayloadType | optional | type |
-| ctidTraderAccountId | int64 | optional | trading account account ID |
+| payloadType | ProtoOAPayloadType | optional | payload type |
+| ctidTraderAccountId | int64 | optional | trading account ID |
 | assetClass | ProtoOAAssetClass | repeated | Class |
 
 ### ProtoOAAssetListReq
-Inferred description (name-based): ProtoOAassetlistrequest
+Inferred description (name-based): Asset list request
 | Field | Type | Label | Inferred description (name-based) |
 |---|---|---|---|
-| payloadType | ProtoOAPayloadType | optional | type |
-| ctidTraderAccountId | int64 | optional | trading account account ID |
+| payloadType | ProtoOAPayloadType | optional | payload type |
+| ctidTraderAccountId | int64 | optional | trading account ID |
 
 ### ProtoOAAssetListRes
-Inferred description (name-based): ProtoOAassetlistresponse
+Inferred description (name-based): Asset list response
 | Field | Type | Label | Inferred description (name-based) |
 |---|---|---|---|
-| payloadType | ProtoOAPayloadType | optional | type |
-| ctidTraderAccountId | int64 | optional | trading account account ID |
+| payloadType | ProtoOAPayloadType | optional | payload type |
+| ctidTraderAccountId | int64 | optional | trading account ID |
 | asset | ProtoOAAsset | repeated | asset |
 
 ### ProtoOACancelOrderReq
-Inferred description (name-based): ProtoOACancelorderrequest
+Inferred description (name-based): Cancel order request
 | Field | Type | Label | Inferred description (name-based) |
 |---|---|---|---|
-| payloadType | ProtoOAPayloadType | optional | type |
-| ctidTraderAccountId | int64 | optional | trading account account ID |
-| orderId | int64 | optional | ID |
+| payloadType | ProtoOAPayloadType | optional | payload type |
+| ctidTraderAccountId | int64 | optional | trading account ID |
+| orderId | int64 | optional | order ID |
 
 ### ProtoOACashFlowHistoryListReq
-Inferred description (name-based): ProtoOACashFlowhistorylistrequest
+Inferred description (name-based): Cash flow history list request
 | Field | Type | Label | Inferred description (name-based) |
 |---|---|---|---|
-| payloadType | ProtoOAPayloadType | optional | type |
-| ctidTraderAccountId | int64 | optional | trading account account ID |
+| payloadType | ProtoOAPayloadType | optional | payload type |
+| ctidTraderAccountId | int64 | optional | trading account ID |
 | fromTimestamp | int64 | optional | timestamp |
 | toTimestamp | int64 | optional | timestamp |
 
 ### ProtoOACashFlowHistoryListRes
-Inferred description (name-based): ProtoOACashFlowhistorylistresponse
+Inferred description (name-based): Cash flow history list response
 | Field | Type | Label | Inferred description (name-based) |
 |---|---|---|---|
-| payloadType | ProtoOAPayloadType | optional | type |
-| ctidTraderAccountId | int64 | optional | trading account account ID |
+| payloadType | ProtoOAPayloadType | optional | payload type |
+| ctidTraderAccountId | int64 | optional | trading account ID |
 | depositWithdraw | ProtoOADepositWithdraw | repeated | Withdraw |
 
 ### ProtoOAClientDisconnectEvent
-Inferred description (name-based): ProtoOAClientdisconnectevent
+Inferred description (name-based): Client disconnect event
 | Field | Type | Label | Inferred description (name-based) |
 |---|---|---|---|
-| payloadType | ProtoOAPayloadType | optional | type |
+| payloadType | ProtoOAPayloadType | optional | payload type |
 | reason | string | optional | reason |
 
 ### ProtoOAClosePositionReq
-Inferred description (name-based): ProtoOAclosepositionrequest
+Inferred description (name-based): Close position request
 | Field | Type | Label | Inferred description (name-based) |
 |---|---|---|---|
-| payloadType | ProtoOAPayloadType | optional | type |
-| ctidTraderAccountId | int64 | optional | trading account account ID |
-| positionId | int64 | optional | ID |
+| payloadType | ProtoOAPayloadType | optional | payload type |
+| ctidTraderAccountId | int64 | optional | trading account ID |
+| positionId | int64 | optional | position ID |
 | volume | int64 | optional | volume |
 
 ### ProtoOADealListByPositionIdReq
-Inferred description (name-based): ProtoOAdeal listbypositionIDrequest
+Inferred description (name-based): Deal list by position ID request
 | Field | Type | Label | Inferred description (name-based) |
 |---|---|---|---|
-| payloadType | ProtoOAPayloadType | optional | type |
-| ctidTraderAccountId | int64 | optional | trading account account ID |
-| positionId | int64 | optional | ID |
+| payloadType | ProtoOAPayloadType | optional | payload type |
+| ctidTraderAccountId | int64 | optional | trading account ID |
+| positionId | int64 | optional | position ID |
 | fromTimestamp | int64 | optional | timestamp |
 | toTimestamp | int64 | optional | timestamp |
 
 ### ProtoOADealListByPositionIdRes
-Inferred description (name-based): ProtoOAdeal listbypositionIDresponse
+Inferred description (name-based): Deal list by position ID response
 | Field | Type | Label | Inferred description (name-based) |
 |---|---|---|---|
-| payloadType | ProtoOAPayloadType | optional | type |
-| ctidTraderAccountId | int64 | optional | trading account account ID |
+| payloadType | ProtoOAPayloadType | optional | payload type |
+| ctidTraderAccountId | int64 | optional | trading account ID |
 | deal | ProtoOADeal | repeated | deal |
 | hasMore | int64 | optional | More |
 
 ### ProtoOADealListReq
-Inferred description (name-based): ProtoOAdeal listrequest
+Inferred description (name-based): Deal list request
 | Field | Type | Label | Inferred description (name-based) |
 |---|---|---|---|
-| payloadType | ProtoOAPayloadType | optional | type |
-| ctidTraderAccountId | int64 | optional | trading account account ID |
+| payloadType | ProtoOAPayloadType | optional | payload type |
+| ctidTraderAccountId | int64 | optional | trading account ID |
 | fromTimestamp | int64 | optional | timestamp |
 | toTimestamp | int64 | optional | timestamp |
 | maxRows | int32 | optional | Rows |
 
 ### ProtoOADealListRes
-Inferred description (name-based): ProtoOAdeal listresponse
+Inferred description (name-based): Deal list response
 | Field | Type | Label | Inferred description (name-based) |
 |---|---|---|---|
-| payloadType | ProtoOAPayloadType | optional | type |
-| ctidTraderAccountId | int64 | optional | trading account account ID |
+| payloadType | ProtoOAPayloadType | optional | payload type |
+| ctidTraderAccountId | int64 | optional | trading account ID |
 | deal | ProtoOADeal | repeated | deal |
 | hasMore | bool | optional | More |
 
 ### ProtoOADealOffsetListReq
-Inferred description (name-based): ProtoOAdeal offsetlistrequest
+Inferred description (name-based): Deal offset list request
 | Field | Type | Label | Inferred description (name-based) |
 |---|---|---|---|
-| payloadType | ProtoOAPayloadType | optional | type |
-| ctidTraderAccountId | int64 | optional | trading account account ID |
+| payloadType | ProtoOAPayloadType | optional | payload type |
+| ctidTraderAccountId | int64 | optional | trading account ID |
 | dealId | int64 | optional | ID |
 
 ### ProtoOADealOffsetListRes
-Inferred description (name-based): ProtoOAdeal offsetlistresponse
+Inferred description (name-based): Deal offset list response
 | Field | Type | Label | Inferred description (name-based) |
 |---|---|---|---|
-| payloadType | ProtoOAPayloadType | optional | type |
-| ctidTraderAccountId | int64 | optional | trading account account ID |
+| payloadType | ProtoOAPayloadType | optional | payload type |
+| ctidTraderAccountId | int64 | optional | trading account ID |
 | offsetBy | ProtoOADealOffset | repeated | by |
 | offsetting | ProtoOADealOffset | repeated | offsetting |
 
 ### ProtoOADepthEvent
-Inferred description (name-based): ProtoOAdepth event
+Inferred description (name-based): Depth event
 | Field | Type | Label | Inferred description (name-based) |
 |---|---|---|---|
-| payloadType | ProtoOAPayloadType | optional | type |
-| ctidTraderAccountId | int64 | optional | trading account account ID |
+| payloadType | ProtoOAPayloadType | optional | payload type |
+| ctidTraderAccountId | int64 | optional | trading account ID |
 | symbolId | uint64 | optional | ID |
 | newQuotes | ProtoOADepthQuote | repeated | Quotes |
 | deletedQuotes | uint64 | repeated | Quotes |
 
 ### ProtoOAErrorRes
-Inferred description (name-based): ProtoOAerrorresponse
+Inferred description (name-based): Error response
 | Field | Type | Label | Inferred description (name-based) |
 |---|---|---|---|
-| payloadType | ProtoOAPayloadType | optional | type |
-| ctidTraderAccountId | int64 | optional | trading account account ID |
+| payloadType | ProtoOAPayloadType | optional | payload type |
+| ctidTraderAccountId | int64 | optional | trading account ID |
 | errorCode | string | optional | Code |
 | description | string | optional | description |
 | maintenanceEndTimestamp | int64 | optional | end timestamp |
 
 ### ProtoOAExecutionEvent
-Inferred description (name-based): ProtoOAExecutionevent
+Inferred description (name-based): Execution event
 | Field | Type | Label | Inferred description (name-based) |
 |---|---|---|---|
-| payloadType | ProtoOAPayloadType | optional | type |
-| ctidTraderAccountId | int64 | optional | trading account account ID |
+| payloadType | ProtoOAPayloadType | optional | payload type |
+| ctidTraderAccountId | int64 | optional | trading account ID |
 | executionType | ProtoOAExecutionType | optional | type |
 | position | ProtoOAPosition | optional | position |
 | order | ProtoOAOrder | optional | order |
@@ -259,111 +259,111 @@ Inferred description (name-based): ProtoOAExecutionevent
 | isServerEvent | bool | optional | Serverevent |
 
 ### ProtoOAExpectedMarginReq
-Inferred description (name-based): ProtoOAestimatedmarginrequest
+Inferred description (name-based): Expected margin request
 | Field | Type | Label | Inferred description (name-based) |
 |---|---|---|---|
-| payloadType | ProtoOAPayloadType | optional | type |
-| ctidTraderAccountId | int64 | optional | trading account account ID |
+| payloadType | ProtoOAPayloadType | optional | payload type |
+| ctidTraderAccountId | int64 | optional | trading account ID |
 | symbolId | int64 | optional | ID |
 | volume | int64 | repeated | volume |
 
 ### ProtoOAExpectedMarginRes
-Inferred description (name-based): ProtoOAestimatedmarginresponse
+Inferred description (name-based): Expected margin response
 | Field | Type | Label | Inferred description (name-based) |
 |---|---|---|---|
-| payloadType | ProtoOAPayloadType | optional | type |
-| ctidTraderAccountId | int64 | optional | trading account account ID |
+| payloadType | ProtoOAPayloadType | optional | payload type |
+| ctidTraderAccountId | int64 | optional | trading account ID |
 | margin | ProtoOAExpectedMargin | repeated | margin |
 | moneyDigits | uint32 | optional | Digits |
 
-### ProtoOAGetAccountListByaccess tokenReq
-Inferred description (name-based): ProtoOAgetaccountlistbyaccess tokenrequest
+### ProtoOAGetAccountListByAccessTokenReq
+Inferred description (name-based): Get account list by access token request
 | Field | Type | Label | Inferred description (name-based) |
 |---|---|---|---|
-| payloadType | ProtoOAPayloadType | optional | type |
-| accessToken | string | optional | Token |
+| payloadType | ProtoOAPayloadType | optional | payload type |
+| accessToken | string | optional | access token |
 
-### ProtoOAGetAccountListByaccess tokenRes
-Inferred description (name-based): ProtoOAgetaccountlistbyaccess tokenresponse
+### ProtoOAGetAccountListByAccessTokenRes
+Inferred description (name-based): Get account list by access token response
 | Field | Type | Label | Inferred description (name-based) |
 |---|---|---|---|
-| payloadType | ProtoOAPayloadType | optional | type |
-| accessToken | string | optional | Token |
-| permissionScope | ProtoOAclient permission scope | optional | Scope |
-| ctidTraderAccount | ProtoOACtidTraderAccount | repeated | trading account account |
+| payloadType | ProtoOAPayloadType | optional | payload type |
+| accessToken | string | optional | access token |
+| permissionScope | ProtoOAClientPermissionScope | optional | Scope |
+| ctidTraderAccount | ProtoOACtidTraderAccount | repeated | trading account |
 
 ### ProtoOAGetCtidProfileByTokenReq
-Inferred description (name-based): ProtoOAgetCtidProfilebyTokenrequest
+Inferred description (name-based): Get CTID profile by token request
 | Field | Type | Label | Inferred description (name-based) |
 |---|---|---|---|
-| payloadType | ProtoOAPayloadType | optional | type |
-| accessToken | string | optional | Token |
+| payloadType | ProtoOAPayloadType | optional | payload type |
+| accessToken | string | optional | access token |
 
 ### ProtoOAGetCtidProfileByTokenRes
-Inferred description (name-based): ProtoOAgetCtidProfilebyTokenresponse
+Inferred description (name-based): Get CTID profile by token response
 | Field | Type | Label | Inferred description (name-based) |
 |---|---|---|---|
-| payloadType | ProtoOAPayloadType | optional | type |
+| payloadType | ProtoOAPayloadType | optional | payload type |
 | profile | ProtoOACtidProfile | optional | profile |
 
 ### ProtoOAGetDynamicLeverageByIDReq
-Inferred description (name-based): ProtoOAgetdynamic leveragebyIDrequest
+Inferred description (name-based): Get dynamic leverage by ID request
 | Field | Type | Label | Inferred description (name-based) |
 |---|---|---|---|
-| payloadType | ProtoOAPayloadType | optional | type |
-| ctidTraderAccountId | int64 | optional | trading account account ID |
+| payloadType | ProtoOAPayloadType | optional | payload type |
+| ctidTraderAccountId | int64 | optional | trading account ID |
 | leverageId | int64 | optional | ID |
 
 ### ProtoOAGetDynamicLeverageByIDRes
-Inferred description (name-based): ProtoOAgetdynamic leveragebyIDresponse
+Inferred description (name-based): Get dynamic leverage by ID response
 | Field | Type | Label | Inferred description (name-based) |
 |---|---|---|---|
-| payloadType | ProtoOAPayloadType | optional | type |
-| ctidTraderAccountId | int64 | optional | trading account account ID |
+| payloadType | ProtoOAPayloadType | optional | payload type |
+| ctidTraderAccountId | int64 | optional | trading account ID |
 | leverage | ProtoOADynamicLeverage | optional | leverage |
 
 ### ProtoOAGetPositionUnrealizedPnLReq
-Inferred description (name-based): ProtoOAgetposition unrealized PnLrequest
+Inferred description (name-based): Get position unrealized pn l request
 | Field | Type | Label | Inferred description (name-based) |
 |---|---|---|---|
-| payloadType | ProtoOAPayloadType | optional | type |
-| ctidTraderAccountId | int64 | optional | trading account account ID |
+| payloadType | ProtoOAPayloadType | optional | payload type |
+| ctidTraderAccountId | int64 | optional | trading account ID |
 
 ### ProtoOAGetPositionUnrealizedPnLRes
-Inferred description (name-based): ProtoOAgetposition unrealized PnLresponse
+Inferred description (name-based): Get position unrealized pn l response
 | Field | Type | Label | Inferred description (name-based) |
 |---|---|---|---|
-| payloadType | ProtoOAPayloadType | optional | type |
-| ctidTraderAccountId | int64 | optional | trading account account ID |
+| payloadType | ProtoOAPayloadType | optional | payload type |
+| ctidTraderAccountId | int64 | optional | trading account ID |
 | positionUnrealizedPnL | ProtoOAPositionUnrealizedPnL | repeated | UnrealizedPnL |
 | moneyDigits | uint32 | optional | Digits |
 
 ### ProtoOAGetTickDataReq
-Inferred description (name-based): ProtoOAgetTickDatarequest
+Inferred description (name-based): Get tick data request
 | Field | Type | Label | Inferred description (name-based) |
 |---|---|---|---|
-| payloadType | ProtoOAPayloadType | optional | type |
-| ctidTraderAccountId | int64 | optional | trading account account ID |
+| payloadType | ProtoOAPayloadType | optional | payload type |
+| ctidTraderAccountId | int64 | optional | trading account ID |
 | symbolId | int64 | optional | ID |
 | type | ProtoOAQuoteType | optional | type |
 | fromTimestamp | int64 | optional | timestamp |
 | toTimestamp | int64 | optional | timestamp |
 
 ### ProtoOAGetTickDataRes
-Inferred description (name-based): ProtoOAgetTickDataresponse
+Inferred description (name-based): Get tick data response
 | Field | Type | Label | Inferred description (name-based) |
 |---|---|---|---|
-| payloadType | ProtoOAPayloadType | optional | type |
-| ctidTraderAccountId | int64 | optional | trading account account ID |
+| payloadType | ProtoOAPayloadType | optional | payload type |
+| ctidTraderAccountId | int64 | optional | trading account ID |
 | tickData | ProtoOATickData | repeated | Data |
 | hasMore | bool | optional | More |
 
 ### ProtoOAGetTrendbarsReq
-Inferred description (name-based): ProtoOAgetTrendbarsrequest
+Inferred description (name-based): Get trendbars request
 | Field | Type | Label | Inferred description (name-based) |
 |---|---|---|---|
-| payloadType | ProtoOAPayloadType | optional | type |
-| ctidTraderAccountId | int64 | optional | trading account account ID |
+| payloadType | ProtoOAPayloadType | optional | payload type |
+| ctidTraderAccountId | int64 | optional | trading account ID |
 | fromTimestamp | int64 | optional | timestamp |
 | toTimestamp | int64 | optional | timestamp |
 | period | ProtoOATrendbarPeriod | optional | period |
@@ -371,76 +371,76 @@ Inferred description (name-based): ProtoOAgetTrendbarsrequest
 | count | uint32 | optional | count |
 
 ### ProtoOAGetTrendbarsRes
-Inferred description (name-based): ProtoOAgetTrendbarsresponse
+Inferred description (name-based): Get trendbars response
 | Field | Type | Label | Inferred description (name-based) |
 |---|---|---|---|
-| payloadType | ProtoOAPayloadType | optional | type |
-| ctidTraderAccountId | int64 | optional | trading account account ID |
+| payloadType | ProtoOAPayloadType | optional | payload type |
+| ctidTraderAccountId | int64 | optional | trading account ID |
 | period | ProtoOATrendbarPeriod | optional | period |
 | timestamp | int64 | optional | timestamp |
 | trendbar | ProtoOATrendbar | repeated | trendbar |
 | symbolId | int64 | optional | ID |
 
 ### ProtoOAMarginCallListReq
-Inferred description (name-based): ProtoOAmarginCalllistrequest
+Inferred description (name-based): Margin call list request
 | Field | Type | Label | Inferred description (name-based) |
 |---|---|---|---|
-| payloadType | ProtoOAPayloadType | optional | type |
-| ctidTraderAccountId | int64 | optional | trading account account ID |
+| payloadType | ProtoOAPayloadType | optional | payload type |
+| ctidTraderAccountId | int64 | optional | trading account ID |
 
 ### ProtoOAMarginCallListRes
-Inferred description (name-based): ProtoOAmarginCalllistresponse
+Inferred description (name-based): Margin call list response
 | Field | Type | Label | Inferred description (name-based) |
 |---|---|---|---|
-| payloadType | ProtoOAPayloadType | optional | type |
+| payloadType | ProtoOAPayloadType | optional | payload type |
 | marginCall | ProtoOAMarginCall | repeated | Call |
 
 ### ProtoOAMarginCallTriggerEvent
-Inferred description (name-based): ProtoOAmarginCallTriggerevent
+Inferred description (name-based): Margin call trigger event
 | Field | Type | Label | Inferred description (name-based) |
 |---|---|---|---|
-| payloadType | ProtoOAPayloadType | optional | type |
-| ctidTraderAccountId | int64 | optional | trading account account ID |
+| payloadType | ProtoOAPayloadType | optional | payload type |
+| ctidTraderAccountId | int64 | optional | trading account ID |
 | marginCall | ProtoOAMarginCall | optional | Call |
 
 ### ProtoOAMarginCallUpdateEvent
-Inferred description (name-based): ProtoOAmarginCallUpdateevent
+Inferred description (name-based): Margin call update event
 | Field | Type | Label | Inferred description (name-based) |
 |---|---|---|---|
-| payloadType | ProtoOAPayloadType | optional | type |
-| ctidTraderAccountId | int64 | optional | trading account account ID |
+| payloadType | ProtoOAPayloadType | optional | payload type |
+| ctidTraderAccountId | int64 | optional | trading account ID |
 | marginCall | ProtoOAMarginCall | optional | Call |
 
 ### ProtoOAMarginCallUpdateReq
-Inferred description (name-based): ProtoOAmarginCallUpdaterequest
+Inferred description (name-based): Margin call update request
 | Field | Type | Label | Inferred description (name-based) |
 |---|---|---|---|
-| payloadType | ProtoOAPayloadType | optional | type |
-| ctidTraderAccountId | int64 | optional | trading account account ID |
+| payloadType | ProtoOAPayloadType | optional | payload type |
+| ctidTraderAccountId | int64 | optional | trading account ID |
 | marginCall | ProtoOAMarginCall | optional | Call |
 
 ### ProtoOAMarginCallUpdateRes
-Inferred description (name-based): ProtoOAmarginCallUpdateresponse
+Inferred description (name-based): Margin call update response
 | Field | Type | Label | Inferred description (name-based) |
 |---|---|---|---|
-| payloadType | ProtoOAPayloadType | optional | type |
+| payloadType | ProtoOAPayloadType | optional | payload type |
 
 ### ProtoOAMarginChangedEvent
-Inferred description (name-based): ProtoOAmarginChangedevent
+Inferred description (name-based): Margin changed event
 | Field | Type | Label | Inferred description (name-based) |
 |---|---|---|---|
-| payloadType | ProtoOAPayloadType | optional | type |
-| ctidTraderAccountId | int64 | optional | trading account account ID |
+| payloadType | ProtoOAPayloadType | optional | payload type |
+| ctidTraderAccountId | int64 | optional | trading account ID |
 | positionId | uint64 | optional | ID |
 | usedMargin | uint64 | optional | margin |
 | moneyDigits | uint32 | optional | Digits |
 
 ### ProtoOANewOrderReq
-Inferred description (name-based): ProtoOANeworderrequest
+Inferred description (name-based): New order request
 | Field | Type | Label | Inferred description (name-based) |
 |---|---|---|---|
-| payloadType | ProtoOAPayloadType | optional | type |
-| ctidTraderAccountId | int64 | optional | trading account account ID |
+| payloadType | ProtoOAPayloadType | optional | payload type |
+| ctidTraderAccountId | int64 | optional | trading account ID |
 | symbolId | int64 | optional | ID |
 | orderType | ProtoOAOrderType | optional | type |
 | tradeSide | ProtoOATradeSide | optional | side |
@@ -455,7 +455,7 @@ Inferred description (name-based): ProtoOANeworderrequest
 | baseSlippagePrice | double | optional | slippage price |
 | slippageInPoints | int32 | optional | InPoints |
 | label | string | optional | label |
-| positionId | int64 | optional | ID |
+| positionId | int64 | optional | position ID |
 | clientOrderId | string | optional | orderID |
 | relativeStopLoss | int64 | optional | stop loss |
 | relativeTakeProfit | int64 | optional | take profit |
@@ -464,109 +464,109 @@ Inferred description (name-based): ProtoOANeworderrequest
 | stopTriggerMethod | ProtoOAOrderTriggerMethod | optional | TriggerMethod |
 
 ### ProtoOAOrderDetailsReq
-Inferred description (name-based): ProtoOAorder detailsrequest
+Inferred description (name-based): Order details request
 | Field | Type | Label | Inferred description (name-based) |
 |---|---|---|---|
-| payloadType | ProtoOAPayloadType | optional | type |
-| ctidTraderAccountId | int64 | optional | trading account account ID |
-| orderId | int64 | optional | ID |
+| payloadType | ProtoOAPayloadType | optional | payload type |
+| ctidTraderAccountId | int64 | optional | trading account ID |
+| orderId | int64 | optional | order ID |
 
 ### ProtoOAOrderDetailsRes
-Inferred description (name-based): ProtoOAorder detailsresponse
+Inferred description (name-based): Order details response
 | Field | Type | Label | Inferred description (name-based) |
 |---|---|---|---|
-| payloadType | ProtoOAPayloadType | optional | type |
-| ctidTraderAccountId | int64 | optional | trading account account ID |
+| payloadType | ProtoOAPayloadType | optional | payload type |
+| ctidTraderAccountId | int64 | optional | trading account ID |
 | order | ProtoOAOrder | optional | order |
 | deal | ProtoOADeal | repeated | deal |
 
 ### ProtoOAOrderErrorEvent
-Inferred description (name-based): ProtoOAordererrorevent
+Inferred description (name-based): Order error event
 | Field | Type | Label | Inferred description (name-based) |
 |---|---|---|---|
-| payloadType | ProtoOAPayloadType | optional | type |
-| ctidTraderAccountId | int64 | optional | trading account account ID |
+| payloadType | ProtoOAPayloadType | optional | payload type |
+| ctidTraderAccountId | int64 | optional | trading account ID |
 | errorCode | string | optional | Code |
-| orderId | int64 | optional | ID |
-| positionId | int64 | optional | ID |
+| orderId | int64 | optional | order ID |
+| positionId | int64 | optional | position ID |
 | description | string | optional | description |
 
 ### ProtoOAOrderListByPositionIdReq
-Inferred description (name-based): ProtoOAorderlistbypositionIDrequest
+Inferred description (name-based): Order list by position ID request
 | Field | Type | Label | Inferred description (name-based) |
 |---|---|---|---|
-| payloadType | ProtoOAPayloadType | optional | type |
-| ctidTraderAccountId | int64 | optional | trading account account ID |
-| positionId | int64 | optional | ID |
+| payloadType | ProtoOAPayloadType | optional | payload type |
+| ctidTraderAccountId | int64 | optional | trading account ID |
+| positionId | int64 | optional | position ID |
 | fromTimestamp | int64 | optional | timestamp |
 | toTimestamp | int64 | optional | timestamp |
 
 ### ProtoOAOrderListByPositionIdRes
-Inferred description (name-based): ProtoOAorderlistbypositionIDresponse
+Inferred description (name-based): Order list by position ID response
 | Field | Type | Label | Inferred description (name-based) |
 |---|---|---|---|
-| payloadType | ProtoOAPayloadType | optional | type |
-| ctidTraderAccountId | int64 | optional | trading account account ID |
+| payloadType | ProtoOAPayloadType | optional | payload type |
+| ctidTraderAccountId | int64 | optional | trading account ID |
 | order | ProtoOAOrder | repeated | order |
 | hasMore | bool | optional | More |
 
 ### ProtoOAOrderListReq
-Inferred description (name-based): ProtoOAorderlistrequest
+Inferred description (name-based): Order list request
 | Field | Type | Label | Inferred description (name-based) |
 |---|---|---|---|
-| payloadType | ProtoOAPayloadType | optional | type |
-| ctidTraderAccountId | int64 | optional | trading account account ID |
+| payloadType | ProtoOAPayloadType | optional | payload type |
+| ctidTraderAccountId | int64 | optional | trading account ID |
 | fromTimestamp | int64 | optional | timestamp |
 | toTimestamp | int64 | optional | timestamp |
 
 ### ProtoOAOrderListRes
-Inferred description (name-based): ProtoOAorderlistresponse
+Inferred description (name-based): Order list response
 | Field | Type | Label | Inferred description (name-based) |
 |---|---|---|---|
-| payloadType | ProtoOAPayloadType | optional | type |
-| ctidTraderAccountId | int64 | optional | trading account account ID |
+| payloadType | ProtoOAPayloadType | optional | payload type |
+| ctidTraderAccountId | int64 | optional | trading account ID |
 | order | ProtoOAOrder | repeated | order |
 | hasMore | bool | optional | More |
 
 ### ProtoOAReconcileReq
-Inferred description (name-based): ProtoOAReconcilerequest
+Inferred description (name-based): Reconcile request
 | Field | Type | Label | Inferred description (name-based) |
 |---|---|---|---|
-| payloadType | ProtoOAPayloadType | optional | type |
-| ctidTraderAccountId | int64 | optional | trading account account ID |
+| payloadType | ProtoOAPayloadType | optional | payload type |
+| ctidTraderAccountId | int64 | optional | trading account ID |
 
 ### ProtoOAReconcileRes
-Inferred description (name-based): ProtoOAReconcileresponse
+Inferred description (name-based): Reconcile response
 | Field | Type | Label | Inferred description (name-based) |
 |---|---|---|---|
-| payloadType | ProtoOAPayloadType | optional | type |
-| ctidTraderAccountId | int64 | optional | trading account account ID |
+| payloadType | ProtoOAPayloadType | optional | payload type |
+| ctidTraderAccountId | int64 | optional | trading account ID |
 | position | ProtoOAPosition | repeated | position |
 | order | ProtoOAOrder | repeated | order |
 
-### ProtoOArefresh tokenReq
-Inferred description (name-based): ProtoOArefreshTokenrequest
+### ProtoOARefreshTokenReq
+Inferred description (name-based): Refresh token request
 | Field | Type | Label | Inferred description (name-based) |
 |---|---|---|---|
-| payloadType | ProtoOAPayloadType | optional | type |
+| payloadType | ProtoOAPayloadType | optional | payload type |
 | refreshToken | string | optional | Token |
 
-### ProtoOArefresh tokenRes
-Inferred description (name-based): ProtoOArefreshTokenresponse
+### ProtoOARefreshTokenRes
+Inferred description (name-based): Refresh token response
 | Field | Type | Label | Inferred description (name-based) |
 |---|---|---|---|
-| payloadType | ProtoOAPayloadType | optional | type |
-| accessToken | string | optional | Token |
+| payloadType | ProtoOAPayloadType | optional | payload type |
+| accessToken | string | optional | access token |
 | tokenType | string | optional | type |
 | expiresIn | int64 | optional | In |
 | refreshToken | string | optional | Token |
 
 ### ProtoOASpotEvent
-Inferred description (name-based): ProtoOAspot quoteevent
+Inferred description (name-based): Spot event
 | Field | Type | Label | Inferred description (name-based) |
 |---|---|---|---|
-| payloadType | ProtoOAPayloadType | optional | type |
-| ctidTraderAccountId | int64 | optional | trading account account ID |
+| payloadType | ProtoOAPayloadType | optional | payload type |
+| ctidTraderAccountId | int64 | optional | trading account ID |
 | symbolId | int64 | optional | ID |
 | bid | uint64 | optional | bid |
 | ask | uint64 | optional | ask |
@@ -575,217 +575,217 @@ Inferred description (name-based): ProtoOAspot quoteevent
 | timestamp | int64 | optional | timestamp |
 
 ### ProtoOASubscribeDepthQuotesReq
-Inferred description (name-based): ProtoOAsubscribe depth quotesrequest
+Inferred description (name-based): Subscribe depth quotes request
 | Field | Type | Label | Inferred description (name-based) |
 |---|---|---|---|
-| payloadType | ProtoOAPayloadType | optional | type |
-| ctidTraderAccountId | int64 | optional | trading account account ID |
+| payloadType | ProtoOAPayloadType | optional | payload type |
+| ctidTraderAccountId | int64 | optional | trading account ID |
 | symbolId | int64 | repeated | ID |
 
 ### ProtoOASubscribeDepthQuotesRes
-Inferred description (name-based): ProtoOAsubscribe depth quotesresponse
+Inferred description (name-based): Subscribe depth quotes response
 | Field | Type | Label | Inferred description (name-based) |
 |---|---|---|---|
-| payloadType | ProtoOAPayloadType | optional | type |
-| ctidTraderAccountId | int64 | optional | trading account account ID |
+| payloadType | ProtoOAPayloadType | optional | payload type |
+| ctidTraderAccountId | int64 | optional | trading account ID |
 
 ### ProtoOASubscribeLiveTrendbarReq
-Inferred description (name-based): ProtoOAsubscribe live trendbarsrequest
+Inferred description (name-based): Subscribe live trendbar request
 | Field | Type | Label | Inferred description (name-based) |
 |---|---|---|---|
-| payloadType | ProtoOAPayloadType | optional | type |
-| ctidTraderAccountId | int64 | optional | trading account account ID |
+| payloadType | ProtoOAPayloadType | optional | payload type |
+| ctidTraderAccountId | int64 | optional | trading account ID |
 | period | ProtoOATrendbarPeriod | optional | period |
 | symbolId | int64 | optional | ID |
 
 ### ProtoOASubscribeLiveTrendbarRes
-Inferred description (name-based): ProtoOAsubscribe live trendbarsresponse
+Inferred description (name-based): Subscribe live trendbar response
 | Field | Type | Label | Inferred description (name-based) |
 |---|---|---|---|
-| payloadType | ProtoOAPayloadType | optional | type |
-| ctidTraderAccountId | int64 | optional | trading account account ID |
+| payloadType | ProtoOAPayloadType | optional | payload type |
+| ctidTraderAccountId | int64 | optional | trading account ID |
 
 ### ProtoOASubscribeSpotsReq
-Inferred description (name-based): ProtoOAsubscribeSpotsrequest
+Inferred description (name-based): Subscribe spots request
 | Field | Type | Label | Inferred description (name-based) |
 |---|---|---|---|
-| payloadType | ProtoOAPayloadType | optional | type |
-| ctidTraderAccountId | int64 | optional | trading account account ID |
+| payloadType | ProtoOAPayloadType | optional | payload type |
+| ctidTraderAccountId | int64 | optional | trading account ID |
 | symbolId | int64 | repeated | ID |
 | subscribeToSpotTimestamp | bool | optional | Tospot quotetimestamp |
 
 ### ProtoOASubscribeSpotsRes
-Inferred description (name-based): ProtoOAsubscribeSpotsresponse
+Inferred description (name-based): Subscribe spots response
 | Field | Type | Label | Inferred description (name-based) |
 |---|---|---|---|
-| payloadType | ProtoOAPayloadType | optional | type |
-| ctidTraderAccountId | int64 | optional | trading account account ID |
+| payloadType | ProtoOAPayloadType | optional | payload type |
+| ctidTraderAccountId | int64 | optional | trading account ID |
 
 ### ProtoOASymbolByIdReq
-Inferred description (name-based): ProtoOAsymbolbyIDrequest
+Inferred description (name-based): Symbol by ID request
 | Field | Type | Label | Inferred description (name-based) |
 |---|---|---|---|
-| payloadType | ProtoOAPayloadType | optional | type |
-| ctidTraderAccountId | int64 | optional | trading account account ID |
+| payloadType | ProtoOAPayloadType | optional | payload type |
+| ctidTraderAccountId | int64 | optional | trading account ID |
 | symbolId | int64 | repeated | ID |
 
 ### ProtoOASymbolByIdRes
-Inferred description (name-based): ProtoOAsymbolbyIDresponse
+Inferred description (name-based): Symbol by ID response
 | Field | Type | Label | Inferred description (name-based) |
 |---|---|---|---|
-| payloadType | ProtoOAPayloadType | optional | type |
-| ctidTraderAccountId | int64 | optional | trading account account ID |
+| payloadType | ProtoOAPayloadType | optional | payload type |
+| ctidTraderAccountId | int64 | optional | trading account ID |
 | symbol | ProtoOASymbol | repeated | symbol |
 | archivedSymbol | ProtoOAArchivedSymbol | repeated | symbol |
 
 ### ProtoOASymbolCategoryListReq
-Inferred description (name-based): ProtoOAsymbol categorylistrequest
+Inferred description (name-based): Symbol category list request
 | Field | Type | Label | Inferred description (name-based) |
 |---|---|---|---|
-| payloadType | ProtoOAPayloadType | optional | type |
-| ctidTraderAccountId | int64 | optional | trading account account ID |
+| payloadType | ProtoOAPayloadType | optional | payload type |
+| ctidTraderAccountId | int64 | optional | trading account ID |
 
 ### ProtoOASymbolCategoryListRes
-Inferred description (name-based): ProtoOAsymbol categorylistresponse
+Inferred description (name-based): Symbol category list response
 | Field | Type | Label | Inferred description (name-based) |
 |---|---|---|---|
-| payloadType | ProtoOAPayloadType | optional | type |
-| ctidTraderAccountId | int64 | optional | trading account account ID |
+| payloadType | ProtoOAPayloadType | optional | payload type |
+| ctidTraderAccountId | int64 | optional | trading account ID |
 | symbolCategory | ProtoOASymbolCategory | repeated | Category |
 
 ### ProtoOASymbolChangedEvent
-Inferred description (name-based): ProtoOAsymbolChangedevent
+Inferred description (name-based): Symbol changed event
 | Field | Type | Label | Inferred description (name-based) |
 |---|---|---|---|
-| payloadType | ProtoOAPayloadType | optional | type |
-| ctidTraderAccountId | int64 | optional | trading account account ID |
+| payloadType | ProtoOAPayloadType | optional | payload type |
+| ctidTraderAccountId | int64 | optional | trading account ID |
 | symbolId | int64 | repeated | ID |
 
 ### ProtoOASymbolsForConversionReq
-Inferred description (name-based): ProtoOAsymbol for conversionrequest
+Inferred description (name-based): Symbols for conversion request
 | Field | Type | Label | Inferred description (name-based) |
 |---|---|---|---|
-| payloadType | ProtoOAPayloadType | optional | type |
-| ctidTraderAccountId | int64 | optional | trading account account ID |
+| payloadType | ProtoOAPayloadType | optional | payload type |
+| ctidTraderAccountId | int64 | optional | trading account ID |
 | firstAssetId | int64 | optional | asset ID |
 | lastAssetId | int64 | optional | asset ID |
 
 ### ProtoOASymbolsForConversionRes
-Inferred description (name-based): ProtoOAsymbol for conversionresponse
+Inferred description (name-based): Symbols for conversion response
 | Field | Type | Label | Inferred description (name-based) |
 |---|---|---|---|
-| payloadType | ProtoOAPayloadType | optional | type |
-| ctidTraderAccountId | int64 | optional | trading account account ID |
+| payloadType | ProtoOAPayloadType | optional | payload type |
+| ctidTraderAccountId | int64 | optional | trading account ID |
 | symbol | ProtoOALightSymbol | repeated | symbol |
 
 ### ProtoOASymbolsListReq
-Inferred description (name-based): ProtoOAsymbollistrequest
+Inferred description (name-based): Symbols list request
 | Field | Type | Label | Inferred description (name-based) |
 |---|---|---|---|
-| payloadType | ProtoOAPayloadType | optional | type |
-| ctidTraderAccountId | int64 | optional | trading account account ID |
+| payloadType | ProtoOAPayloadType | optional | payload type |
+| ctidTraderAccountId | int64 | optional | trading account ID |
 | includeArchivedSymbols | bool | optional | Archivedsymbol |
 
 ### ProtoOASymbolsListRes
-Inferred description (name-based): ProtoOAsymbollistresponse
+Inferred description (name-based): Symbols list response
 | Field | Type | Label | Inferred description (name-based) |
 |---|---|---|---|
-| payloadType | ProtoOAPayloadType | optional | type |
-| ctidTraderAccountId | int64 | optional | trading account account ID |
+| payloadType | ProtoOAPayloadType | optional | payload type |
+| ctidTraderAccountId | int64 | optional | trading account ID |
 | symbol | ProtoOALightSymbol | repeated | symbol |
 | archivedSymbol | ProtoOAArchivedSymbol | repeated | symbol |
 
 ### ProtoOATraderReq
-Inferred description (name-based): ProtoOAtrading accountrequest
+Inferred description (name-based): Trader request
 | Field | Type | Label | Inferred description (name-based) |
 |---|---|---|---|
-| payloadType | ProtoOAPayloadType | optional | type |
-| ctidTraderAccountId | int64 | optional | trading account account ID |
+| payloadType | ProtoOAPayloadType | optional | payload type |
+| ctidTraderAccountId | int64 | optional | trading account ID |
 
 ### ProtoOATraderRes
-Inferred description (name-based): ProtoOAtrading accountresponse
+Inferred description (name-based): Trader response
 | Field | Type | Label | Inferred description (name-based) |
 |---|---|---|---|
-| payloadType | ProtoOAPayloadType | optional | type |
-| ctidTraderAccountId | int64 | optional | trading account account ID |
+| payloadType | ProtoOAPayloadType | optional | payload type |
+| ctidTraderAccountId | int64 | optional | trading account ID |
 | trader | ProtoOATrader | optional | trader |
 
 ### ProtoOATraderUpdatedEvent
-Inferred description (name-based): ProtoOAtrading accountUpdatedevent
+Inferred description (name-based): Trader updated event
 | Field | Type | Label | Inferred description (name-based) |
 |---|---|---|---|
-| payloadType | ProtoOAPayloadType | optional | type |
-| ctidTraderAccountId | int64 | optional | trading account account ID |
+| payloadType | ProtoOAPayloadType | optional | payload type |
+| ctidTraderAccountId | int64 | optional | trading account ID |
 | trader | ProtoOATrader | optional | trader |
 
 ### ProtoOATrailingSLChangedEvent
-Inferred description (name-based): ProtoOATrailingSLChangedevent
+Inferred description (name-based): Trailing sl changed event
 | Field | Type | Label | Inferred description (name-based) |
 |---|---|---|---|
-| payloadType | ProtoOAPayloadType | optional | type |
-| ctidTraderAccountId | int64 | optional | trading account account ID |
-| positionId | int64 | optional | ID |
-| orderId | int64 | optional | ID |
+| payloadType | ProtoOAPayloadType | optional | payload type |
+| ctidTraderAccountId | int64 | optional | trading account ID |
+| positionId | int64 | optional | position ID |
+| orderId | int64 | optional | order ID |
 | stopPrice | double | optional | price |
 | utcLastUpdateTimestamp | int64 | optional | last update timestamp |
 
 ### ProtoOAUnsubscribeDepthQuotesReq
-Inferred description (name-based): ProtoOAunsubscribe depth quotesrequest
+Inferred description (name-based): Unsubscribe depth quotes request
 | Field | Type | Label | Inferred description (name-based) |
 |---|---|---|---|
-| payloadType | ProtoOAPayloadType | optional | type |
-| ctidTraderAccountId | int64 | optional | trading account account ID |
+| payloadType | ProtoOAPayloadType | optional | payload type |
+| ctidTraderAccountId | int64 | optional | trading account ID |
 | symbolId | int64 | repeated | ID |
 
 ### ProtoOAUnsubscribeDepthQuotesRes
-Inferred description (name-based): ProtoOAunsubscribe depth quotesresponse
+Inferred description (name-based): Unsubscribe depth quotes response
 | Field | Type | Label | Inferred description (name-based) |
 |---|---|---|---|
-| payloadType | ProtoOAPayloadType | optional | type |
-| ctidTraderAccountId | int64 | optional | trading account account ID |
+| payloadType | ProtoOAPayloadType | optional | payload type |
+| ctidTraderAccountId | int64 | optional | trading account ID |
 
 ### ProtoOAUnsubscribeLiveTrendbarReq
-Inferred description (name-based): ProtoOAunsubscribe live trendbarsrequest
+Inferred description (name-based): Unsubscribe live trendbar request
 | Field | Type | Label | Inferred description (name-based) |
 |---|---|---|---|
-| payloadType | ProtoOAPayloadType | optional | type |
-| ctidTraderAccountId | int64 | optional | trading account account ID |
+| payloadType | ProtoOAPayloadType | optional | payload type |
+| ctidTraderAccountId | int64 | optional | trading account ID |
 | period | ProtoOATrendbarPeriod | optional | period |
 | symbolId | int64 | optional | ID |
 
 ### ProtoOAUnsubscribeLiveTrendbarRes
-Inferred description (name-based): ProtoOAunsubscribe live trendbarsresponse
+Inferred description (name-based): Unsubscribe live trendbar response
 | Field | Type | Label | Inferred description (name-based) |
 |---|---|---|---|
-| payloadType | ProtoOAPayloadType | optional | type |
-| ctidTraderAccountId | int64 | optional | trading account account ID |
+| payloadType | ProtoOAPayloadType | optional | payload type |
+| ctidTraderAccountId | int64 | optional | trading account ID |
 
 ### ProtoOAUnsubscribeSpotsReq
-Inferred description (name-based): ProtoOAcancelsubscribeSpotsrequest
+Inferred description (name-based): Unsubscribe spots request
 | Field | Type | Label | Inferred description (name-based) |
 |---|---|---|---|
-| payloadType | ProtoOAPayloadType | optional | type |
-| ctidTraderAccountId | int64 | optional | trading account account ID |
+| payloadType | ProtoOAPayloadType | optional | payload type |
+| ctidTraderAccountId | int64 | optional | trading account ID |
 | symbolId | int64 | repeated | ID |
 
 ### ProtoOAUnsubscribeSpotsRes
-Inferred description (name-based): ProtoOAcancelsubscribeSpotsresponse
+Inferred description (name-based): Unsubscribe spots response
 | Field | Type | Label | Inferred description (name-based) |
 |---|---|---|---|
-| payloadType | ProtoOAPayloadType | optional | type |
-| ctidTraderAccountId | int64 | optional | trading account account ID |
+| payloadType | ProtoOAPayloadType | optional | payload type |
+| ctidTraderAccountId | int64 | optional | trading account ID |
 
 ### ProtoOAVersionReq
-Inferred description (name-based): ProtoOAVersionrequest
+Inferred description (name-based): Version request
 | Field | Type | Label | Inferred description (name-based) |
 |---|---|---|---|
-| payloadType | ProtoOAPayloadType | optional | type |
+| payloadType | ProtoOAPayloadType | optional | payload type |
 
 ### ProtoOAVersionRes
-Inferred description (name-based): ProtoOAVersionresponse
+Inferred description (name-based): Version response
 | Field | Type | Label | Inferred description (name-based) |
 |---|---|---|---|
-| payloadType | ProtoOAPayloadType | optional | type |
+| payloadType | ProtoOAPayloadType | optional | payload type |
 | version | string | optional | version |
 
 ## Open API Model Messages
@@ -793,7 +793,7 @@ Inferred description (name-based): ProtoOAVersionresponse
 ### Messages
 
 ### ProtoOAArchivedSymbol
-Inferred description (name-based): ProtoOAArchivedsymbol
+Inferred description (name-based): Archived symbol
 | Field | Type | Label | Inferred description (name-based) |
 |---|---|---|---|
 | symbolId | int64 | optional | ID |
@@ -802,7 +802,7 @@ Inferred description (name-based): ProtoOAArchivedsymbol
 | description | string | optional | description |
 
 ### ProtoOAAsset
-Inferred description (name-based): ProtoOAasset
+Inferred description (name-based): Asset
 | Field | Type | Label | Inferred description (name-based) |
 |---|---|---|---|
 | assetId | int64 | optional | ID |
@@ -811,14 +811,14 @@ Inferred description (name-based): ProtoOAasset
 | digits | int32 | optional | digits |
 
 ### ProtoOAAssetClass
-Inferred description (name-based): ProtoOAasset class
+Inferred description (name-based): Asset class
 | Field | Type | Label | Inferred description (name-based) |
 |---|---|---|---|
 | id | int64 | optional | id |
 | name | string | optional | name |
 
 ### ProtoOABonusDepositWithdraw
-Inferred description (name-based): ProtoOABonusDepositWithdraw
+Inferred description (name-based): Bonus deposit withdraw
 | Field | Type | Label | Inferred description (name-based) |
 |---|---|---|---|
 | operationType | ProtoOAChangeBonusType | optional | type |
@@ -833,7 +833,7 @@ Inferred description (name-based): ProtoOABonusDepositWithdraw
 | moneyDigits | uint32 | optional | Digits |
 
 ### ProtoOAClosePositionDetail
-Inferred description (name-based): ProtoOAcloseposition detail
+Inferred description (name-based): Close position detail
 | Field | Type | Label | Inferred description (name-based) |
 |---|---|---|---|
 | entryPrice | double | optional | price |
@@ -848,28 +848,28 @@ Inferred description (name-based): ProtoOAcloseposition detail
 | pnlConversionFee | int64 | optional | conversion fee |
 
 ### ProtoOACtidProfile
-Inferred description (name-based): ProtoOACtidProfile
+Inferred description (name-based): CTID profile
 | Field | Type | Label | Inferred description (name-based) |
 |---|---|---|---|
 | userId | int64 | optional | ID |
 
 ### ProtoOACtidTraderAccount
-Inferred description (name-based): ProtoOACtidtrading account account
+Inferred description (name-based): CTID trader account
 | Field | Type | Label | Inferred description (name-based) |
 |---|---|---|---|
-| ctidTraderAccountId | uint64 | optional | trading account account ID |
+| ctidTraderAccountId | uint64 | optional | trading account ID |
 | isLive | bool | optional | Live |
 | traderLogin | int64 | optional | Login |
 | lastClosingDealTimestamp | int64 | optional | closing deal timestamp |
 | lastBalanceUpdateTimestamp | int64 | optional | balance update timestamp |
 
 ### ProtoOADeal
-Inferred description (name-based): ProtoOAdeal
+Inferred description (name-based): Deal
 | Field | Type | Label | Inferred description (name-based) |
 |---|---|---|---|
 | dealId | int64 | optional | ID |
-| orderId | int64 | optional | ID |
-| positionId | int64 | optional | ID |
+| orderId | int64 | optional | order ID |
+| positionId | int64 | optional | position ID |
 | volume | int64 | optional | volume |
 | filledVolume | int64 | optional | volume |
 | symbolId | int64 | optional | ID |
@@ -886,7 +886,7 @@ Inferred description (name-based): ProtoOAdeal
 | moneyDigits | uint32 | optional | Digits |
 
 ### ProtoOADealOffset
-Inferred description (name-based): ProtoOAdeal offset
+Inferred description (name-based): Deal offset
 | Field | Type | Label | Inferred description (name-based) |
 |---|---|---|---|
 | dealId | int64 | optional | ID |
@@ -895,7 +895,7 @@ Inferred description (name-based): ProtoOAdeal offset
 | executionPrice | double | optional | price |
 
 ### ProtoOADepositWithdraw
-Inferred description (name-based): ProtoOADepositWithdraw
+Inferred description (name-based): Deposit withdraw
 | Field | Type | Label | Inferred description (name-based) |
 |---|---|---|---|
 | operationType | ProtoOAChangeBalanceType | optional | type |
@@ -909,7 +909,7 @@ Inferred description (name-based): ProtoOADepositWithdraw
 | moneyDigits | uint32 | optional | Digits |
 
 ### ProtoOADepthQuote
-Inferred description (name-based): ProtoOAdepth quote
+Inferred description (name-based): Depth quote
 | Field | Type | Label | Inferred description (name-based) |
 |---|---|---|---|
 | id | uint64 | optional | id |
@@ -918,21 +918,21 @@ Inferred description (name-based): ProtoOAdepth quote
 | ask | uint64 | optional | ask |
 
 ### ProtoOADynamicLeverage
-Inferred description (name-based): ProtoOAdynamic leverage
+Inferred description (name-based): Dynamic leverage
 | Field | Type | Label | Inferred description (name-based) |
 |---|---|---|---|
 | leverageId | int64 | optional | ID |
 | tiers | ProtoOADynamicLeverageTier | repeated | tiers |
 
 ### ProtoOADynamicLeverageTier
-Inferred description (name-based): ProtoOAdynamic leverage tier
+Inferred description (name-based): Dynamic leverage tier
 | Field | Type | Label | Inferred description (name-based) |
 |---|---|---|---|
 | volume | int64 | optional | volume |
 | leverage | int64 | optional | leverage |
 
 ### ProtoOAExpectedMargin
-Inferred description (name-based): ProtoOAestimatedmargin
+Inferred description (name-based): Expected margin
 | Field | Type | Label | Inferred description (name-based) |
 |---|---|---|---|
 | volume | int64 | optional | volume |
@@ -940,7 +940,7 @@ Inferred description (name-based): ProtoOAestimatedmargin
 | sellMargin | int64 | optional | margin |
 
 ### ProtoOAHoliday
-Inferred description (name-based): ProtoOAHoliday
+Inferred description (name-based): Holiday
 | Field | Type | Label | Inferred description (name-based) |
 |---|---|---|---|
 | holidayId | int64 | optional | ID |
@@ -953,14 +953,14 @@ Inferred description (name-based): ProtoOAHoliday
 | endSecond | int32 | optional | Second |
 
 ### ProtoOAInterval
-Inferred description (name-based): ProtoOAinterval
+Inferred description (name-based): Interval
 | Field | Type | Label | Inferred description (name-based) |
 |---|---|---|---|
 | startSecond | uint32 | optional | Second |
 | endSecond | uint32 | optional | Second |
 
 ### ProtoOALightSymbol
-Inferred description (name-based): ProtoOALightsymbol
+Inferred description (name-based): Light symbol
 | Field | Type | Label | Inferred description (name-based) |
 |---|---|---|---|
 | symbolId | int64 | optional | ID |
@@ -972,7 +972,7 @@ Inferred description (name-based): ProtoOALightsymbol
 | description | string | optional | description |
 
 ### ProtoOAMarginCall
-Inferred description (name-based): ProtoOAmarginCall
+Inferred description (name-based): Margin call
 | Field | Type | Label | Inferred description (name-based) |
 |---|---|---|---|
 | marginCallType | ProtoOANotificationType | optional | Calltype |
@@ -980,10 +980,10 @@ Inferred description (name-based): ProtoOAmarginCall
 | utcLastUpdateTimestamp | int64 | optional | last update timestamp |
 
 ### ProtoOAOrder
-Inferred description (name-based): ProtoOAorder
+Inferred description (name-based): Order
 | Field | Type | Label | Inferred description (name-based) |
 |---|---|---|---|
-| orderId | int64 | optional | ID |
+| orderId | int64 | optional | order ID |
 | tradeData | ProtoOATradeData | optional | Data |
 | orderType | ProtoOAOrderType | optional | type |
 | orderStatus | ProtoOAOrderStatus | optional | status |
@@ -1000,7 +1000,7 @@ Inferred description (name-based): ProtoOAorder
 | takeProfit | double | optional | profit |
 | clientOrderId | string | optional | orderID |
 | timeInForce | ProtoOATimeInForce | optional | InForce |
-| positionId | int64 | optional | ID |
+| positionId | int64 | optional | position ID |
 | relativeStopLoss | int64 | optional | stop loss |
 | relativeTakeProfit | int64 | optional | take profit |
 | isStopOut | bool | optional | stop-out |
@@ -1008,10 +1008,10 @@ Inferred description (name-based): ProtoOAorder
 | stopTriggerMethod | ProtoOAOrderTriggerMethod | optional | TriggerMethod |
 
 ### ProtoOAPosition
-Inferred description (name-based): ProtoOAposition
+Inferred description (name-based): Position
 | Field | Type | Label | Inferred description (name-based) |
 |---|---|---|---|
-| positionId | int64 | optional | ID |
+| positionId | int64 | optional | position ID |
 | tradeData | ProtoOATradeData | optional | Data |
 | positionStatus | ProtoOAPositionStatus | optional | status |
 | swap | int64 | optional | swap |
@@ -1029,15 +1029,15 @@ Inferred description (name-based): ProtoOAposition
 | trailingStopLoss | bool | optional | stop loss |
 
 ### ProtoOAPositionUnrealizedPnL
-Inferred description (name-based): ProtoOAposition unrealized PnL
+Inferred description (name-based): Position unrealized pn l
 | Field | Type | Label | Inferred description (name-based) |
 |---|---|---|---|
-| positionId | int64 | optional | ID |
+| positionId | int64 | optional | position ID |
 | grossUnrealizedPnL | int64 | optional | UnrealizedPnL |
 | netUnrealizedPnL | int32 | optional | UnrealizedPnL |
 
 ### ProtoOASymbol
-Inferred description (name-based): ProtoOAsymbol
+Inferred description (name-based): Symbol
 | Field | Type | Label | Inferred description (name-based) |
 |---|---|---|---|
 | symbolId | int64 | optional | ID |
@@ -1081,7 +1081,7 @@ Inferred description (name-based): ProtoOAsymbol
 | chargeSwapAtWeekends | bool | optional | SwapAtWeekends |
 
 ### ProtoOASymbolCategory
-Inferred description (name-based): ProtoOAsymbol category
+Inferred description (name-based): Symbol category
 | Field | Type | Label | Inferred description (name-based) |
 |---|---|---|---|
 | id | int64 | optional | id |
@@ -1089,14 +1089,14 @@ Inferred description (name-based): ProtoOAsymbol category
 | name | string | optional | name |
 
 ### ProtoOATickData
-Inferred description (name-based): ProtoOATickData
+Inferred description (name-based): Tick data
 | Field | Type | Label | Inferred description (name-based) |
 |---|---|---|---|
 | timestamp | int64 | optional | timestamp |
 | tick | int64 | optional | tick |
 
 ### ProtoOATradeData
-Inferred description (name-based): ProtoOAtradeData
+Inferred description (name-based): Trade data
 | Field | Type | Label | Inferred description (name-based) |
 |---|---|---|---|
 | symbolId | int64 | optional | ID |
@@ -1108,10 +1108,10 @@ Inferred description (name-based): ProtoOAtradeData
 | comment | string | optional | comment |
 
 ### ProtoOATrader
-Inferred description (name-based): ProtoOAtrading account
+Inferred description (name-based): Trader
 | Field | Type | Label | Inferred description (name-based) |
 |---|---|---|---|
-| ctidTraderAccountId | int64 | optional | trading account account ID |
+| ctidTraderAccountId | int64 | optional | trading account ID |
 | balance | int64 | optional | balance |
 | balanceVersion | int64 | optional | Version |
 | managerBonus | int64 | optional | Bonus |
@@ -1133,7 +1133,7 @@ Inferred description (name-based): ProtoOAtrading account
 | moneyDigits | uint32 | optional | Digits |
 
 ### ProtoOATrendbar
-Inferred description (name-based): ProtoOAtrendbar
+Inferred description (name-based): Trendbar
 | Field | Type | Label | Inferred description (name-based) |
 |---|---|---|---|
 | volume | int64 | optional | volume |
@@ -1147,7 +1147,7 @@ Inferred description (name-based): ProtoOAtrendbar
 ### Enums
 
 ### ProtoOAAccessRights
-Inferred description (name-based): ProtoOAAccessRights
+Inferred description (name-based): Access rights
 | Name | Value | Inferred description (name-based) |
 |---|---|---|
 | FULL_ACCESS | 0 | FULLACCESS |
@@ -1156,7 +1156,7 @@ Inferred description (name-based): ProtoOAAccessRights
 | NO_LOGIN | 3 | NOLOGIN |
 
 ### ProtoOAAccountType
-Inferred description (name-based): ProtoOAaccount type
+Inferred description (name-based): Account type
 | Name | Value | Inferred description (name-based) |
 |---|---|---|
 | HEDGED | 0 | HEDGED |
@@ -1164,7 +1164,7 @@ Inferred description (name-based): ProtoOAaccount type
 | SPREAD_BETTING | 2 | SPREADBETTING |
 
 ### ProtoOAChangeBalanceType
-Inferred description (name-based): ProtoOAChangeBalancetype
+Inferred description (name-based): Change balance type
 | Name | Value | Inferred description (name-based) |
 |---|---|---|
 | BALANCE_DEPOSIT | 0 | BALANCEDEPOSIT |
@@ -1204,21 +1204,21 @@ Inferred description (name-based): ProtoOAChangeBalancetype
 | BALANCE_DEPOSIT_NEGATIVE_BALANCE_PROTECTION | 39 | BALANCEDEPOSITNEGATIVEBALANCEPROTECTION |
 
 ### ProtoOAChangeBonusType
-Inferred description (name-based): ProtoOAChangeBonustype
+Inferred description (name-based): Change bonus type
 | Name | Value | Inferred description (name-based) |
 |---|---|---|
 | BONUS_DEPOSIT | 0 | BONUSDEPOSIT |
 | BONUS_WITHDRAW | 1 | BONUSWITHDRAW |
 
-### ProtoOAclient permission scope
-Inferred description (name-based): ProtoOAclient permission scope
+### ProtoOAClientPermissionScope
+Inferred description (name-based): Client permission scope
 | Name | Value | Inferred description (name-based) |
 |---|---|---|
 | SCOPE_VIEW | 0 | SCOPEVIEW |
 | SCOPE_TRADE | 1 | SCOPETRADE |
 
 ### ProtoOACommissionType
-Inferred description (name-based): ProtoOAcommission type
+Inferred description (name-based): Commission type
 | Name | Value | Inferred description (name-based) |
 |---|---|---|
 | USD_PER_MILLION_USD | 1 | USDPERMILLIONUSD |
@@ -1227,7 +1227,7 @@ Inferred description (name-based): ProtoOAcommission type
 | QUOTE_CCY_PER_LOT | 4 | QUOTECCYPERLOT |
 
 ### ProtoOADayOfWeek
-Inferred description (name-based): ProtoOADayOfWeek
+Inferred description (name-based): Day of week
 | Name | Value | Inferred description (name-based) |
 |---|---|---|
 | NONE | 0 | NONE |
@@ -1240,7 +1240,7 @@ Inferred description (name-based): ProtoOADayOfWeek
 | SUNDAY | 7 | SUNDAY |
 
 ### ProtoOADealStatus
-Inferred description (name-based): ProtoOAdeal status
+Inferred description (name-based): Deal status
 | Name | Value | Inferred description (name-based) |
 |---|---|---|
 | FILLED | 2 | FILLED |
@@ -1251,7 +1251,7 @@ Inferred description (name-based): ProtoOAdeal status
 | MISSED | 7 | MISSED |
 
 ### ProtoOAErrorCode
-Inferred description (name-based): ProtoOAerrorCode
+Inferred description (name-based): Error code
 | Name | Value | Inferred description (name-based) |
 |---|---|---|
 | OA_AUTH_TOKEN_EXPIRED | 1 | OAAUTHTOKENEXPIRED |
@@ -1297,7 +1297,7 @@ Inferred description (name-based): ProtoOAerrorCode
 | SHORT_SELLING_NOT_ALLOWED | 136 | SHORTSELLINGNOTALLOWED |
 
 ### ProtoOAExecutionType
-Inferred description (name-based): ProtoOAExecutiontype
+Inferred description (name-based): Execution type
 | Name | Value | Inferred description (name-based) |
 |---|---|---|
 | ORDER_ACCEPTED | 2 | ORDERACCEPTED |
@@ -1313,7 +1313,7 @@ Inferred description (name-based): ProtoOAExecutiontype
 | BONUS_DEPOSIT_WITHDRAW | 12 | BONUSDEPOSITWITHDRAW |
 
 ### ProtoOALimitedRiskMarginCalculationStrategy
-Inferred description (name-based): ProtoOALimitedrisk margin calculation strategy
+Inferred description (name-based): Limited risk margin calculation strategy
 | Name | Value | Inferred description (name-based) |
 |---|---|---|
 | ACCORDING_TO_LEVERAGE | 0 | ACCORDINGTOLEVERAGE |
@@ -1321,14 +1321,14 @@ Inferred description (name-based): ProtoOALimitedrisk margin calculation strateg
 | ACCORDING_TO_GSL_AND_LEVERAGE | 2 | ACCORDINGTOGSLANDLEVERAGE |
 
 ### ProtoOAMinCommissionType
-Inferred description (name-based): ProtoOAminimum commissiontype
+Inferred description (name-based): Min commission type
 | Name | Value | Inferred description (name-based) |
 |---|---|---|
 | CURRENCY | 1 | CURRENCY |
 | QUOTE_CURRENCY | 2 | QUOTECURRENCY |
 
 ### ProtoOANotificationType
-Inferred description (name-based): ProtoOANotificationtype
+Inferred description (name-based): Notification type
 | Name | Value | Inferred description (name-based) |
 |---|---|---|
 | MARGIN_LEVEL_THRESHOLD_1 | 61 | MARGINLEVELTHRESHOLD |
@@ -1336,7 +1336,7 @@ Inferred description (name-based): ProtoOANotificationtype
 | MARGIN_LEVEL_THRESHOLD_3 | 63 | MARGINLEVELTHRESHOLD |
 
 ### ProtoOAOrderStatus
-Inferred description (name-based): ProtoOAorder status
+Inferred description (name-based): Order status
 | Name | Value | Inferred description (name-based) |
 |---|---|---|
 | ORDER_STATUS_ACCEPTED | 1 | ORDERSTATUSACCEPTED |
@@ -1346,7 +1346,7 @@ Inferred description (name-based): ProtoOAorder status
 | ORDER_STATUS_CANCELLED | 5 | ORDERSTATUSCANCELLED |
 
 ### ProtoOAOrderTriggerMethod
-Inferred description (name-based): ProtoOAorder trigger method
+Inferred description (name-based): Order trigger method
 | Name | Value | Inferred description (name-based) |
 |---|---|---|
 | TRADE | 1 | TRADE |
@@ -1355,7 +1355,7 @@ Inferred description (name-based): ProtoOAorder trigger method
 | DOUBLE_OPPOSITE | 4 | DOUBLEOPPOSITE |
 
 ### ProtoOAOrderType
-Inferred description (name-based): ProtoOAorder type
+Inferred description (name-based): Order type
 | Name | Value | Inferred description (name-based) |
 |---|---|---|
 | MARKET | 1 | MARKET |
@@ -1366,7 +1366,7 @@ Inferred description (name-based): ProtoOAorder type
 | STOP_LIMIT | 6 | STOPLIMIT |
 
 ### ProtoOAPayloadType
-Inferred description (name-based): ProtoOAPayloadtype
+Inferred description (name-based): Payload type
 | Name | Value | Inferred description (name-based) |
 |---|---|---|
 | PROTO_OA_APPLICATION_AUTH_REQ | 2100 | PROTOOAAPPLICATIONAUTHREQ |
@@ -1460,7 +1460,7 @@ Inferred description (name-based): ProtoOAPayloadtype
 | PROTO_OA_GET_POSITION_UNREALIZED_PNL_RES | 2188 | PROTOOAGETPOSITIONUNREALIZEDPNLRES |
 
 ### ProtoOAPositionStatus
-Inferred description (name-based): ProtoOAposition status
+Inferred description (name-based): Position status
 | Name | Value | Inferred description (name-based) |
 |---|---|---|
 | POSITION_STATUS_OPEN | 1 | POSITIONSTATUSOPEN |
@@ -1469,28 +1469,28 @@ Inferred description (name-based): ProtoOAposition status
 | POSITION_STATUS_ERROR | 4 | POSITIONSTATUSERROR |
 
 ### ProtoOAQuoteType
-Inferred description (name-based): ProtoOAQuotetype
+Inferred description (name-based): Quote type
 | Name | Value | Inferred description (name-based) |
 |---|---|---|
 | BID | 1 | BID |
 | ASK | 2 | ASK |
 
 ### ProtoOASwapCalculationType
-Inferred description (name-based): ProtoOASwapcalculation type
+Inferred description (name-based): Swap calculation type
 | Name | Value | Inferred description (name-based) |
 |---|---|---|
 | PIPS | 0 | PIPS |
 | PERCENTAGE | 1 | PERCENTAGE |
 
 ### ProtoOASymbolDistanceType
-Inferred description (name-based): ProtoOAsymbol distancetype
+Inferred description (name-based): Symbol distance type
 | Name | Value | Inferred description (name-based) |
 |---|---|---|
 | SYMBOL_DISTANCE_IN_POINTS | 1 | SYMBOLDISTANCEINPOINTS |
 | SYMBOL_DISTANCE_IN_PERCENTAGE | 2 | SYMBOLDISTANCEINPERCENTAGE |
 
 ### ProtoOATimeInForce
-Inferred description (name-based): ProtoOAtime in force
+Inferred description (name-based): Time in force
 | Name | Value | Inferred description (name-based) |
 |---|---|---|
 | GOOD_TILL_DATE | 1 | GOODTILLDATE |
@@ -1500,7 +1500,7 @@ Inferred description (name-based): ProtoOAtime in force
 | MARKET_ON_OPEN | 5 | MARKETONOPEN |
 
 ### ProtoOATotalMarginCalculationType
-Inferred description (name-based): ProtoOATotalmargin calculation type
+Inferred description (name-based): Total margin calculation type
 | Name | Value | Inferred description (name-based) |
 |---|---|---|
 | MAX | 0 | MAX |
@@ -1508,14 +1508,14 @@ Inferred description (name-based): ProtoOATotalmargin calculation type
 | NET | 2 | NET |
 
 ### ProtoOATradeSide
-Inferred description (name-based): ProtoOAtradeside
+Inferred description (name-based): Trade side
 | Name | Value | Inferred description (name-based) |
 |---|---|---|
 | BUY | 1 | BUY |
 | SELL | 2 | SELL |
 
 ### ProtoOATradingMode
-Inferred description (name-based): ProtoOATradingMode
+Inferred description (name-based): Trading mode
 | Name | Value | Inferred description (name-based) |
 |---|---|---|
 | ENABLED | 0 | ENABLED |
@@ -1524,7 +1524,7 @@ Inferred description (name-based): ProtoOATradingMode
 | CLOSE_ONLY_MODE | 3 | CLOSEONLYMODE |
 
 ### ProtoOATrendbarPeriod
-Inferred description (name-based): ProtoOAtrendbar period
+Inferred description (name-based): Trendbar period
 | Name | Value | Inferred description (name-based) |
 |---|---|---|
 | M1 | 1 | M1 |
@@ -1547,25 +1547,25 @@ Inferred description (name-based): ProtoOAtrendbar period
 ### Messages
 
 ### ProtoErrorRes
-Inferred description (name-based): Protoerrorresponse
+Inferred description (name-based): Error response
 | Field | Type | Label | Inferred description (name-based) |
 |---|---|---|---|
-| payloadType | ProtoPayloadType | optional | type |
+| payloadType | ProtoPayloadType | optional | payload type |
 | errorCode | string | optional | Code |
 | description | string | optional | description |
 | maintenanceEndTimestamp | uint64 | optional | end timestamp |
 
 ### ProtoHeartbeatEvent
-Inferred description (name-based): ProtoHeartbeatevent
+Inferred description (name-based): Heartbeat event
 | Field | Type | Label | Inferred description (name-based) |
 |---|---|---|---|
-| payloadType | ProtoPayloadType | optional | type |
+| payloadType | ProtoPayloadType | optional | payload type |
 
 ### ProtoMessage
-Inferred description (name-based): ProtoMessage
+Inferred description (name-based): Message
 | Field | Type | Label | Inferred description (name-based) |
 |---|---|---|---|
-| payloadType | uint32 | optional | type |
+| payloadType | uint32 | optional | payload type |
 | payload | bytes | optional | payload |
 | clientMsgId | string | optional | MsgID |
 
@@ -1574,7 +1574,7 @@ Inferred description (name-based): ProtoMessage
 ### Enums
 
 ### ProtoErrorCode
-Inferred description (name-based): ProtoerrorCode
+Inferred description (name-based): Error code
 | Name | Value | Inferred description (name-based) |
 |---|---|---|
 | UNKNOWN_ERROR | 1 | UNKNOWNERROR |
@@ -1589,7 +1589,7 @@ Inferred description (name-based): ProtoerrorCode
 | BLOCKED_PAYLOAD_TYPE | 11 | BLOCKEDPAYLOADTYPE |
 
 ### ProtoPayloadType
-Inferred description (name-based): ProtoPayloadtype
+Inferred description (name-based): Payload type
 | Name | Value | Inferred description (name-based) |
 |---|---|---|
 | PROTO_MESSAGE | 5 | PROTOMESSAGE |

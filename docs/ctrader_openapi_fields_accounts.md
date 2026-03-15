@@ -1,8 +1,8 @@
-# cTrader Open API(Account topics) field list
+# cTrader Open API Account Topics Field List
 
 This file is compiled from the official Open API documentation. Descriptions are English paraphrases derived from the official text.
 
-## Messages (Accounts/Auth/Token)
+## Messages (Accounts, Authentication, and Tokens)
 
 ### ProtoOAApplicationAuthReq
 
@@ -78,7 +78,7 @@ Purpose: Event emitted when one specific account session is terminated while oth
 | ctidTraderAccountIds | RepeatedField<int64> | Repeated | List of affected account IDs. |
 | reason | string | Optional | Disconnect reason, for example token expiration or revocation. |
 
-### ProtoOAGetAccountListByaccess tokenReq
+### ProtoOAGetAccountListByAccessTokenReq
 
 Purpose: Get the list of authorized accounts using an access token.  
 
@@ -87,7 +87,7 @@ Purpose: Get the list of authorized accounts using an access token.
 | payloadType | ProtoOAPayloadType | Optional | Payload type. |
 | accessToken | string | Required | Access token used for account access. |
 
-### ProtoOAGetAccountListByaccess tokenRes
+### ProtoOAGetAccountListByAccessTokenRes
 
 Purpose: Response to `ProtoOAGetAccountListByAccessTokenReq`.  
 
@@ -95,8 +95,8 @@ Purpose: Response to `ProtoOAGetAccountListByAccessTokenReq`.
 |---|---|---|---|
 | payloadType | ProtoOAPayloadType | Optional | Payload type. |
 | accessToken | string | Required | Access token used for account access. |
-| permissionScope | ProtoOAclient permission scope | Optional | Token permission scope (`SCOPE_VIEW` / `SCOPE_TRADE`). |
-| ctidTraderAccount | RepeatedField<ProtoOACtidTraderAccount> | Repeated | account list。 |
+| permissionScope | ProtoOAClientPermissionScope | Optional | Token permission scope (`SCOPE_VIEW` / `SCOPE_TRADE`). |
+| ctidTraderAccount | RepeatedField<ProtoOACtidTraderAccount> | Repeated | Authorized account list. |
 
 ### ProtoOAGetCtidProfileByTokenReq
 
@@ -114,9 +114,9 @@ Purpose: Response to `ProtoOAGetCtidProfileByTokenReq`.
 | Field | Type | Label | Official description (paraphrased) |
 |---|---|---|---|
 | payloadType | ProtoOAPayloadType | Optional | Payload type. |
-| profile | ProtoOACtidProfile | Required | Trader Profile。 |
+| profile | ProtoOACtidProfile | Required | Trader profile. |
 
-### ProtoOArefresh tokenReq
+### ProtoOARefreshTokenReq
 
 Purpose: Get a new access token using a refresh token.  
 
@@ -125,7 +125,7 @@ Purpose: Get a new access token using a refresh token.
 | payloadType | ProtoOAPayloadType | Optional | Payload type. |
 | refreshToken | string | Required | Refresh token used to renew the access token. |
 
-### ProtoOArefresh tokenRes
+### ProtoOARefreshTokenRes
 
 Purpose: Response to `ProtoOARefreshTokenReq` containing a new token set.  
 
@@ -133,18 +133,18 @@ Purpose: Response to `ProtoOARefreshTokenReq` containing a new token set.
 |---|---|---|---|
 | payloadType | ProtoOAPayloadType | Optional | Payload type. |
 | accessToken | string | Required | New access token. |
-| tokenType | string | Required | Token type（bearer）。 |
+| tokenType | string | Required | Token type (`bearer`). |
 | expiresIn | int64 | Required | Access token lifetime in seconds. |
 | refreshToken | string | Required | New refresh token. |
 
 ### ProtoOATraderReq
 
-Purpose: get Trader account data。  
+Purpose: Get trader account data.  
 
 | Field | Type | Label | Official description (paraphrased) |
 |---|---|---|---|
 | payloadType | ProtoOAPayloadType | Optional | Payload type. |
-| ctidTraderAccountId | int64 | Required | trading account ID。 |
+| ctidTraderAccountId | int64 | Required | trading account ID. |
 
 ### ProtoOATraderRes
 
@@ -153,8 +153,8 @@ Purpose: Response to `ProtoOATraderReq`.
 | Field | Type | Label | Official description (paraphrased) |
 |---|---|---|---|
 | payloadType | ProtoOAPayloadType | Optional | Payload type. |
-| ctidTraderAccountId | int64 | Required | trading account ID。 |
-| trader | ProtoOATrader | Required | Trader account information。 |
+| ctidTraderAccountId | int64 | Required | trading account ID. |
+| trader | ProtoOATrader | Required | Trader account information. |
 
 ### ProtoOATraderUpdatedEvent
 
@@ -163,12 +163,12 @@ Purpose: Event emitted when the trader account is updated on the server side.
 | Field | Type | Label | Official description (paraphrased) |
 |---|---|---|---|
 | payloadType | ProtoOAPayloadType | Optional | Payload type. |
-| ctidTraderAccountId | int64 | Required | trading account ID。 |
-| trader | ProtoOATrader | Required | Trader account information。 |
+| ctidTraderAccountId | int64 | Required | trading account ID. |
+| trader | ProtoOATrader | Required | Trader account information. |
 
-## Model Messages (Account-related)
+## Model Messages (Account Related)
 
-### ProtoOAclient permission scope (ENUM)
+### ProtoOAClientPermissionScope (ENUM)
 
 | Name | Value | Official description (paraphrased) |
 |---|---|---|
@@ -181,16 +181,16 @@ Purpose: Event emitted when the trader account is updated on the server side.
 |---|---|---|
 | FULL_ACCESS | 0 | All trading is allowed. |
 | CLOSE_ONLY | 1 | Only closing positions is allowed. |
-| NO_TRADING | 2 | view-only。 |
-| NO_LOGIN | 3 | no access rights。 |
+| NO_TRADING | 2 | view-only. |
+| NO_LOGIN | 3 | no access rights. |
 
 ### ProtoOAAccountType (ENUM)
 
 | Name | Value | Official description (paraphrased) |
 |---|---|---|
-| HEDGED | 0 | Multiple positions are allowed for the same symbol.。 |
-| NETTED | 1 | Only one position is allowed for the same symbol.。 |
-| SPREAD_BETTING | 2 | Spread Betting account type。 |
+| HEDGED | 0 | Multiple positions are allowed for the same symbol. |
+| NETTED | 1 | Only one position is allowed for the same symbol. |
+| SPREAD_BETTING | 2 | Spread betting account type. |
 
 ### ProtoOACtidProfile
 
@@ -228,9 +228,9 @@ Purpose: Event emitted when the trader account is updated on the server side.
 
 | Name | Value | Official description (paraphrased) |
 |---|---|---|
-| MAX | 0 | MAX。 |
-| SUM | 1 | SUM。 |
-| NET | 2 | NET。 |
+| MAX | 0 | MAX. |
+| SUM | 1 | SUM. |
+| NET | 2 | NET. |
 
 ### ProtoOATrader
 
