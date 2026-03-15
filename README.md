@@ -28,6 +28,7 @@ Additional project guidance:
 - Changelog: [`CHANGELOG.md`](CHANGELOG.md)
 
 Published package metadata includes project URLs, classifiers, and release governance links so release artifacts are self-describing in package indexes and build outputs.
+Dependency and GitHub Actions maintenance are also scheduled through Dependabot for regular update visibility.
 
 ## Quick Start
 
