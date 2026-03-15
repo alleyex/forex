@@ -3425,9 +3425,15 @@ def main() -> None:
                 window_size=int(params.get("window_size", 1)),
                 risk_aversion=float(params["risk_aversion"]),
                 drawdown_penalty=float(params.get("drawdown_penalty", 0.0)),
-                downside_penalty=float(params.get("downside_penalty", eval_config.downside_penalty)),
-                turnover_penalty=float(params.get("turnover_penalty", eval_config.turnover_penalty)),
-                exposure_penalty=float(params.get("exposure_penalty", eval_config.exposure_penalty)),
+                downside_penalty=float(
+                    params.get("downside_penalty", eval_config.downside_penalty)
+                ),
+                turnover_penalty=float(
+                    params.get("turnover_penalty", eval_config.turnover_penalty)
+                ),
+                exposure_penalty=float(
+                    params.get("exposure_penalty", eval_config.exposure_penalty)
+                ),
                 target_vol=float(params.get("target_vol", 0.0)),
                 vol_target_lookback=int(params.get("vol_target_lookback", 72)),
                 vol_scale_floor=float(params.get("vol_scale_floor", 0.5)),
@@ -3715,10 +3721,22 @@ def main() -> None:
                         "avg_flat_ratio": float(np.mean(seed_flat)) if seed_flat else 1.0,
                         "avg_long_ratio": float(np.mean(seed_long)) if seed_long else 0.0,
                         "avg_short_ratio": float(np.mean(seed_short)) if seed_short else 0.0,
-                        "avg_trade_rate_1k": float(np.mean(seed_trade_rates)) if seed_trade_rates else 0.0,
-                        "min_trade_rate_1k": float(np.min(seed_trade_rates)) if seed_trade_rates else 0.0,
+                        "avg_trade_rate_1k": (
+                            float(np.mean(seed_trade_rates))
+                            if seed_trade_rates
+                            else 0.0
+                        ),
+                        "min_trade_rate_1k": (
+                            float(np.min(seed_trade_rates))
+                            if seed_trade_rates
+                            else 0.0
+                        ),
                         "max_flat_ratio": float(np.max(seed_flat)) if seed_flat else 1.0,
-                        "max_ls_imbalance": float(np.max(seed_ls_imbalances)) if seed_ls_imbalances else 0.0,
+                        "max_ls_imbalance": (
+                            float(np.max(seed_ls_imbalances))
+                            if seed_ls_imbalances
+                            else 0.0
+                        ),
                         "low_trade_seed_count": (
                             int(sum(1 for rate in seed_trade_rates if rate < replay_min_trade_rate))
                             if seed_trade_rates
@@ -3730,19 +3748,45 @@ def main() -> None:
                             else 0
                         ),
                         "high_ls_imbalance_seed_count": (
-                            int(sum(1 for imbalance in seed_ls_imbalances if imbalance > replay_max_ls_imbalance))
+                            int(
+                                sum(
+                                    1
+                                    for imbalance in seed_ls_imbalances
+                                    if imbalance > replay_max_ls_imbalance
+                                )
+                            )
                             if seed_ls_imbalances
                             else 0
                         ),
-                        "wf_segments": float(np.mean(seed_wf_segments)) if seed_wf_segments else 0.0,
-                        "wf_pass_rate": float(np.mean(seed_wf_pass_rates)) if seed_wf_pass_rates else 0.0,
-                        "wf_avg_return": float(np.mean(seed_wf_returns)) if seed_wf_returns else 0.0,
-                        "wf_avg_sharpe": float(np.mean(seed_wf_sharpes)) if seed_wf_sharpes else 0.0,
+                        "wf_segments": (
+                            float(np.mean(seed_wf_segments))
+                            if seed_wf_segments
+                            else 0.0
+                        ),
+                        "wf_pass_rate": (
+                            float(np.mean(seed_wf_pass_rates))
+                            if seed_wf_pass_rates
+                            else 0.0
+                        ),
+                        "wf_avg_return": (
+                            float(np.mean(seed_wf_returns))
+                            if seed_wf_returns
+                            else 0.0
+                        ),
+                        "wf_avg_sharpe": (
+                            float(np.mean(seed_wf_sharpes))
+                            if seed_wf_sharpes
+                            else 0.0
+                        ),
                         "wf_avg_max_drawdown": (
-                            float(np.mean(seed_wf_avg_drawdowns)) if seed_wf_avg_drawdowns else 0.0
+                            float(np.mean(seed_wf_avg_drawdowns))
+                            if seed_wf_avg_drawdowns
+                            else 0.0
                         ),
                         "wf_worst_max_drawdown": (
-                            float(np.mean(seed_wf_worst_drawdowns)) if seed_wf_worst_drawdowns else 0.0
+                            float(np.mean(seed_wf_worst_drawdowns))
+                            if seed_wf_worst_drawdowns
+                            else 0.0
                         ),
                         "wf_avg_trade_rate_1k": (
                             float(np.mean(seed_wf_trade_rates)) if seed_wf_trade_rates else 0.0
@@ -3788,7 +3832,8 @@ def main() -> None:
                         )
                     if min_trade_rate_1k < replay_min_trade_rate:
                         reject_reason += (
-                            f" any_seed_low_trade({min_trade_rate_1k:.3f}<{replay_min_trade_rate:.3f};"
+                            " any_seed_low_trade("
+                            f"{min_trade_rate_1k:.3f}<{replay_min_trade_rate:.3f};"
                             f" count={low_trade_seed_count})"
                         )
                     if avg_flat_ratio > replay_max_flat_ratio:
@@ -3797,16 +3842,19 @@ def main() -> None:
                         )
                     if max_flat_ratio > replay_max_flat_ratio:
                         reject_reason += (
-                            f" any_seed_high_flat({max_flat_ratio:.3f}>{replay_max_flat_ratio:.3f};"
+                            " any_seed_high_flat("
+                            f"{max_flat_ratio:.3f}>{replay_max_flat_ratio:.3f};"
                             f" count={high_flat_seed_count})"
                         )
                     if avg_ls_imbalance > replay_max_ls_imbalance:
                         reject_reason += (
-                            f" high_ls_imbalance({avg_ls_imbalance:.3f}>{replay_max_ls_imbalance:.3f})"
+                            " high_ls_imbalance("
+                            f"{avg_ls_imbalance:.3f}>{replay_max_ls_imbalance:.3f})"
                         )
                     if max_ls_imbalance > replay_max_ls_imbalance:
                         reject_reason += (
-                            f" any_seed_high_ls_imbalance({max_ls_imbalance:.3f}>{replay_max_ls_imbalance:.3f};"
+                            " any_seed_high_ls_imbalance("
+                            f"{max_ls_imbalance:.3f}>{replay_max_ls_imbalance:.3f};"
                             f" count={high_ls_imbalance_seed_count})"
                         )
                 if replay_score_mode == "walk_forward" and wf_segments <= 0:
@@ -3862,7 +3910,10 @@ def main() -> None:
                     encoding="utf-8",
                 )
             if replay_rows:
-                best_replay = next((row for row in replay_rows if not row["rejected_activity"]), None)
+                best_replay = next(
+                    (row for row in replay_rows if not row["rejected_activity"]),
+                    None,
+                )
                 if best_replay is None:
                     print(
                         "Replay best:",
@@ -3871,6 +3922,9 @@ def main() -> None:
                         f"valid_candidates={valid_count}/{len(replay_rows)}",
                     )
                 else:
+                    best_replay_ls_imbalance = abs(
+                        best_replay["avg_long_ratio"] - best_replay["avg_short_ratio"]
+                    )
                     print(
                         "Replay best:",
                         f"trial={best_replay['trial']}",
@@ -3879,8 +3933,14 @@ def main() -> None:
                         f"mean_reward={best_replay['mean_reward']:.6g}",
                         f"std={best_replay['std_reward']:.6g}",
                         f"avg_trades={best_replay['avg_trades']:.1f}",
-                        f"avg_trade_rate_1k={best_replay['avg_trade_rate_1k']:.3f}",
-                        f"avg_ls_imbalance={abs(best_replay['avg_long_ratio'] - best_replay['avg_short_ratio']):.3f}",
+                        (
+                            "avg_trade_rate_1k="
+                            f"{best_replay['avg_trade_rate_1k']:.3f}"
+                        ),
+                        (
+                            "avg_ls_imbalance="
+                            f"{best_replay_ls_imbalance:.3f}"
+                        ),
                         f"avg_flat={best_replay['avg_flat_ratio']:.3f}",
                     )
                     if replay_score_mode == "walk_forward":
@@ -4045,8 +4105,16 @@ def main() -> None:
         else:
             print("Best eval checkpoint not found; falling back to final model state.")
     if args.save_best_checkpoint and playback_candidate_tmp_dir is not None:
-        final_stage_callbacks = [callback for callback in eval_callbacks if callback.get_playback_candidates()]
-        playback_candidates = final_stage_callbacks[-1].get_playback_candidates() if final_stage_callbacks else []
+        final_stage_callbacks = [
+            callback
+            for callback in eval_callbacks
+            if callback.get_playback_candidates()
+        ]
+        playback_candidates = (
+            final_stage_callbacks[-1].get_playback_candidates()
+            if final_stage_callbacks
+            else []
+        )
         playback_summary = _evaluate_playback_candidates(
             playback_candidates,
             features=eval_features,
@@ -4069,7 +4137,11 @@ def main() -> None:
             selected_path = str(selected.get("path") or "").strip()
             selected_step = selected.get("step")
             selected_playback = selected.get("playback")
-            if selected_path and Path(selected_path).exists() and isinstance(selected_playback, dict):
+            if (
+                selected_path
+                and Path(selected_path).exists()
+                and isinstance(selected_playback, dict)
+            ):
                 model_to_save = PPO.load(selected_path)
                 checkpoint_selection_payload.update(
                     {
@@ -4078,7 +4150,11 @@ def main() -> None:
                         "selected_step": selected_step,
                         "selected_eval_mean_reward": selected.get("eval_mean_reward"),
                         "selected_checkpoint_gate": selected.get("checkpoint_gate"),
-                        "selected_playback": selected_playback if isinstance(selected_playback, dict) else {},
+                        "selected_playback": (
+                            selected_playback
+                            if isinstance(selected_playback, dict)
+                            else {}
+                        ),
                     }
                 )
                 print(
