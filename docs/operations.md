@@ -6,6 +6,18 @@
 ./scripts/run-train.sh
 ```
 
+To rerun the best recorded playback configuration:
+
+```bash
+./scripts/run-train-best-playback.sh
+```
+
+The corresponding frozen preset reference is stored at:
+
+```text
+config/training_presets/best_playback_s12.json
+```
+
 For live trading UI:
 
 ```bash

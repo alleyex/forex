@@ -64,6 +64,8 @@ from forex.ui.shared.widgets.layout_helpers import (
 from forex.ui.shared.widgets.log_widget import LogWidget
 from forex.ui.train.services import UIParamsStore
 
+BEST_PLAYBACK_PRESET_PATH = Path("config/training_presets/best_playback_s12.json")
+
 
 def _apply_card_tabs_style(tabs: QTabWidget) -> None:
     tabs.setStyleSheet(
@@ -1345,6 +1347,8 @@ class TrainingParamsPanel(QWidget):
         self._start_button = QPushButton("Start Training")
         self._start_button.setProperty("class", PRIMARY)
         self._start_button.clicked.connect(self._emit_start)
+        self._load_best_preset_button = QPushButton("Load Best Playback Preset")
+        self._load_best_preset_button.clicked.connect(self._emit_load_best_playback_preset)
 
         tabs = QTabWidget()
         self._tabs = tabs
@@ -1379,6 +1383,7 @@ class TrainingParamsPanel(QWidget):
         run_layout.setSpacing(8)
         run_layout.addWidget(file_group)
         run_layout.addWidget(runtime_card)
+        run_layout.addWidget(self._load_best_preset_button)
         run_layout.addWidget(self._start_button)
         run_layout.addStretch(1)
 
@@ -1496,6 +1501,15 @@ class TrainingParamsPanel(QWidget):
         self._start_button.setText("Stop Training" if running else "Start Training")
 
     def apply_optuna_params(self, params: dict) -> None:
+        self._apply_training_params(params)
+
+    def _apply_training_params(self, params: dict) -> None:
+        if "data_path" in params:
+            self._data_path.setText(str(params["data_path"]))
+        elif "data" in params:
+            self._data_path.setText(str(params["data"]))
+        if "total_steps" in params:
+            self._total_steps.setValue(int(params["total_steps"]))
         if "learning_rate" in params:
             self._learning_rate.setValue(float(params["learning_rate"]))
         if "gamma" in params:
@@ -1514,22 +1528,84 @@ class TrainingParamsPanel(QWidget):
             self._target_kl.setValue(float(params["target_kl"]))
         if "device" in params:
             self._set_device(str(params["device"]))
+        if "seed" in params:
+            self._seed.setValue(int(params["seed"]))
+        if "curriculum_enabled" in params:
+            self._curriculum_enabled.setChecked(bool(params["curriculum_enabled"]))
+        if "curriculum_steps" in params:
+            self._curriculum_steps.setValue(int(params["curriculum_steps"]))
+        if "curriculum_max_position" in params:
+            self._curriculum_max_position.setValue(float(params["curriculum_max_position"]))
+        if "curriculum_position_step" in params:
+            self._curriculum_position_step.setValue(float(params["curriculum_position_step"]))
+        if "curriculum_min_position_change" in params:
+            self._curriculum_min_position_change.setValue(
+                float(params["curriculum_min_position_change"])
+            )
         if "vf_coef" in params:
             self._vf_coef.setValue(float(params["vf_coef"]))
         if "n_epochs" in params:
             self._n_epochs.setValue(int(params["n_epochs"]))
         if "episode_length" in params:
             self._episode_length.setValue(int(params["episode_length"]))
+        if "eval_split" in params:
+            self._eval_split.setValue(float(params["eval_split"]))
+        if "save_best_checkpoint" in params:
+            self._save_best_checkpoint.setChecked(bool(params["save_best_checkpoint"]))
+        if "checkpoint_max_trade_rate" in params:
+            self._checkpoint_max_trade_rate.setValue(float(params["checkpoint_max_trade_rate"]))
+        if "checkpoint_max_drawdown" in params:
+            self._checkpoint_max_drawdown.setValue(float(params["checkpoint_max_drawdown"]))
+        if "eval_profile_steps" in params:
+            self._eval_profile_steps.setValue(int(params["eval_profile_steps"]))
+        elif "anti_flat_profile_steps" in params:
+            self._eval_profile_steps.setValue(int(params["anti_flat_profile_steps"]))
+        if "eval_profile_min_trade_rate" in params:
+            self._eval_profile_min_trade_rate.setValue(float(params["eval_profile_min_trade_rate"]))
+        elif "checkpoint_min_trade_rate" in params:
+            self._eval_profile_min_trade_rate.setValue(float(params["checkpoint_min_trade_rate"]))
+        elif "anti_flat_min_trade_rate" in params:
+            self._eval_profile_min_trade_rate.setValue(float(params["anti_flat_min_trade_rate"]))
+        if "eval_profile_max_flat_ratio" in params:
+            self._eval_profile_max_flat_ratio.setValue(float(params["eval_profile_max_flat_ratio"]))
+        elif "checkpoint_max_flat_ratio" in params:
+            self._eval_profile_max_flat_ratio.setValue(float(params["checkpoint_max_flat_ratio"]))
+        elif "anti_flat_max_flat_ratio" in params:
+            self._eval_profile_max_flat_ratio.setValue(float(params["anti_flat_max_flat_ratio"]))
+        if "eval_profile_max_ls_imbalance" in params:
+            self._eval_profile_max_ls_imbalance.setValue(
+                float(params["eval_profile_max_ls_imbalance"])
+            )
+        elif "checkpoint_max_ls_imbalance" in params:
+            self._eval_profile_max_ls_imbalance.setValue(
+                float(params["checkpoint_max_ls_imbalance"])
+            )
+        elif "anti_flat_max_ls_imbalance" in params:
+            self._eval_profile_max_ls_imbalance.setValue(
+                float(params["anti_flat_max_ls_imbalance"])
+            )
         if "reward_horizon" in params:
             self._reward_horizon.setValue(int(params["reward_horizon"]))
         if "window_size" in params:
             self._window_size.setValue(int(params["window_size"]))
+        if "reward_scale" in params:
+            self._reward_scale.setValue(float(params["reward_scale"]))
         if "reward_clip" in params:
             self._reward_clip.setValue(float(params["reward_clip"]))
         if "reward_mode" in params:
             self._set_reward_mode(str(params["reward_mode"]))
         if "feature_profile" in params:
             self._set_feature_profile(str(params["feature_profile"]))
+        if "transaction_cost_bps" in params:
+            self._transaction_cost_bps.setValue(float(params["transaction_cost_bps"]))
+        if "slippage_bps" in params:
+            self._slippage_bps.setValue(float(params["slippage_bps"]))
+        if "holding_cost_bps" in params:
+            self._holding_cost_bps.setValue(float(params["holding_cost_bps"]))
+        if "start_mode" in params:
+            self._set_start_mode(str(params["start_mode"]))
+        elif "random_start" in params:
+            self._set_start_mode("random" if bool(params["random_start"]) else "first")
         if "min_position_change" in params:
             self._min_position_change.setValue(float(params["min_position_change"]))
         if "position_step" in params:
@@ -1562,6 +1638,73 @@ class TrainingParamsPanel(QWidget):
             self._path_downside_penalty.setValue(float(params["path_downside_penalty"]))
         if "max_position" in params:
             self._max_position.setValue(float(params["max_position"]))
+        if "early_stop_enabled" in params:
+            self._early_stop_enabled.setChecked(bool(params["early_stop_enabled"]))
+        if "early_stop_warmup_steps" in params:
+            self._early_stop_warmup_steps.setValue(int(params["early_stop_warmup_steps"]))
+        if "early_stop_patience_evals" in params:
+            self._early_stop_patience_evals.setValue(int(params["early_stop_patience_evals"]))
+        if "early_stop_min_delta" in params:
+            self._early_stop_min_delta.setValue(float(params["early_stop_min_delta"]))
+        if "anti_flat_enabled" in params:
+            self._anti_flat_enabled.setChecked(bool(params["anti_flat_enabled"]))
+        if "anti_flat_warmup_steps" in params:
+            self._anti_flat_warmup_steps.setValue(int(params["anti_flat_warmup_steps"]))
+        if "anti_flat_patience_evals" in params:
+            self._anti_flat_patience_evals.setValue(int(params["anti_flat_patience_evals"]))
+        if "optuna_trials" in params:
+            self._optuna_trials.setValue(int(params["optuna_trials"]))
+        if "optuna_steps" in params:
+            self._optuna_steps.setValue(int(params["optuna_steps"]))
+        if "optuna_auto_select" in params:
+            self._optuna_auto_select.setChecked(bool(params["optuna_auto_select"]))
+        if "optuna_select_mode" in params:
+            mode = str(params["optuna_select_mode"]).strip().lower()
+            self._optuna_select_mode.setCurrentIndex(1 if mode == "top_percent" else 0)
+        if "optuna_top_k" in params:
+            self._optuna_top_k.setValue(int(params["optuna_top_k"]))
+        if "optuna_top_percent" in params:
+            self._optuna_top_percent.setValue(float(params["optuna_top_percent"]))
+        if "optuna_min_candidates" in params:
+            self._optuna_min_candidates.setValue(int(params["optuna_min_candidates"]))
+        if "optuna_replay_enabled" in params:
+            self._optuna_replay_enabled.setChecked(bool(params["optuna_replay_enabled"]))
+        if "optuna_replay_steps" in params:
+            self._optuna_replay_steps.setValue(int(params["optuna_replay_steps"]))
+        if "optuna_replay_seeds" in params:
+            self._optuna_replay_seeds.setValue(int(params["optuna_replay_seeds"]))
+        if "optuna_replay_score_mode" in params:
+            self._set_replay_score_mode(str(params["optuna_replay_score_mode"]))
+        if "optuna_replay_walk_forward_segments" in params:
+            self._optuna_replay_walk_forward_segments.setValue(
+                int(params["optuna_replay_walk_forward_segments"])
+            )
+        if "optuna_replay_walk_forward_steps" in params:
+            self._optuna_replay_walk_forward_steps.setValue(
+                int(params["optuna_replay_walk_forward_steps"])
+            )
+        if "optuna_replay_walk_forward_stride" in params:
+            self._optuna_replay_walk_forward_stride.setValue(
+                int(params["optuna_replay_walk_forward_stride"])
+            )
+        if "optuna_replay_min_trade_rate" in params:
+            self._optuna_replay_min_trade_rate.setValue(float(params["optuna_replay_min_trade_rate"]))
+        if "optuna_replay_max_flat_ratio" in params:
+            self._optuna_replay_max_flat_ratio.setValue(float(params["optuna_replay_max_flat_ratio"]))
+        if "optuna_replay_max_ls_imbalance" in params:
+            self._optuna_replay_max_ls_imbalance.setValue(
+                float(params["optuna_replay_max_ls_imbalance"])
+            )
+        self._sync_batch_size_limit()
+        self._sync_execution_constraints()
+        self._sync_feature_selection_controls()
+        self._refresh_view_features_button()
+        self._refresh_optuna_select_controls()
+        self._refresh_optuna_replay_controls()
+        self._sync_early_stop_controls()
+        self._sync_curriculum_controls()
+        self._sync_anti_flat_controls()
+        self._refresh_optuna_plan_hint()
 
     @staticmethod
     def _set_label_text_safe(label: QLabel | None, text: str) -> None:
@@ -2092,14 +2235,40 @@ class TrainingParamsPanel(QWidget):
         self.apply_optuna_params(params)
         self.update_optuna_best_params(params)
         self.update_optuna_trial_summary(
-            
-                f"Replay selected: trial={selected.get('trial', '?')} "
-                f"score={float(selected.get('score', 0.0)):.6g} "
-                f"mean_reward={float(selected.get('mean_reward', 0.0)):.6g} "
-                f"std={float(selected.get('std_reward', 0.0)):.6g}"
-            
+            f"Replay selected: trial={selected.get('trial', '?')} "
+            f"score={float(selected.get('score', 0.0)):.6g} "
+            f"mean_reward={float(selected.get('mean_reward', 0.0)):.6g} "
+            f"std={float(selected.get('std_reward', 0.0)):.6g}"
         )
         self._auto_save_params()
+
+    @staticmethod
+    def _load_json_payload(path: Path) -> dict | None:
+        try:
+            payload = json.loads(path.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError):
+            return None
+        return payload if isinstance(payload, dict) else None
+
+    def _emit_load_best_playback_preset(self) -> None:
+        payload = self._load_json_payload(BEST_PLAYBACK_PRESET_PATH)
+        if payload is None:
+            QMessageBox.warning(
+                self,
+                "Preset Load Error",
+                f"Failed to load preset from {BEST_PLAYBACK_PRESET_PATH}.",
+            )
+            return
+        self.apply_optuna_params(payload)
+        self._auto_save_params()
+        source_run = str(payload.get("source_run", "")).strip()
+        summary = str(payload.get("summary", "")).strip()
+        message = "Applied the best historical playback preset to the training form."
+        if source_run:
+            message += f"\n\nSource run: {source_run}"
+        if summary:
+            message += f"\n{summary}"
+        QMessageBox.information(self, "Preset Loaded", message)
 
     def _on_tab_changed(self, index: int) -> None:
         if hasattr(self, "_tab_bar") and hasattr(self, "_optuna_tab_index"):
