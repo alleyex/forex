@@ -4,6 +4,8 @@ This file is parsed by vulture to mark known false positives as "used".
 It is not imported by application runtime code.
 """
 
+# ruff: noqa: B018, F821
+
 # Qt / PyQtGraph framework override hooks.
 tickStrings
 paint

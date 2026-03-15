@@ -1,7 +1,5 @@
 from __future__ import annotations
 
-from typing import Optional
-
 from PySide6.QtCore import QObject
 
 from forex.ui.train.presenters.base import PresenterBase
@@ -80,7 +78,7 @@ class SimulationPresenter(PresenterBase):
             self.handle_equity_point(step, equity)
 
     @staticmethod
-    def _parse_done_summary(line: str) -> Optional[dict]:
+    def _parse_done_summary(line: str) -> dict | None:
         tokens = line.replace("Done.", "").split()
         data = {}
         for token in tokens:
@@ -100,7 +98,7 @@ class SimulationPresenter(PresenterBase):
         }
 
     @staticmethod
-    def _parse_float_line(line: str) -> Optional[float]:
+    def _parse_float_line(line: str) -> float | None:
         try:
             return float(line.split(":", 1)[1].strip())
         except (ValueError, IndexError):
