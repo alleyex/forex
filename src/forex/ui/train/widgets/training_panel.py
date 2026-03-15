@@ -882,7 +882,8 @@ class TrainingParamsPanel(QWidget):
         self._feature_profile.setFixedWidth(max(spin_width, 280))
         self._feature_profile.setToolTip(
             "Choose which feature profile to feed into PPO. "
-            "Residual uses alpha plus a small execution context. Core 20 profiles use a compact raw feature set."
+            "Residual uses alpha plus a small execution context. "
+            "Core 20 profiles use a compact raw feature set."
         )
         episode_layout.add_row(
             "Feature profile",
@@ -971,10 +972,13 @@ class TrainingParamsPanel(QWidget):
         self._reward_mode.setCurrentIndex(5)
         self._reward_mode.setFixedWidth(spin_width)
         self._reward_mode.setToolTip(
-            "Linear PnL is a pure net return baseline. Log return is a pure log(1 + net return) baseline. "
-            "Risk-adjusted log return adds risk, downside, drawdown, turnover, and exposure penalties. "
+            "Linear PnL is a pure net return baseline. "
+            "Log return is a pure log(1 + net return) baseline. "
+            "Risk-adjusted log return adds risk, downside, drawdown, "
+            "turnover, and exposure penalties. "
             "Fixed horizon terminal penalizes terminal reward by max adverse excursion. "
-            "Path penalty scores the whole forward path. TP/SL proxy approximates an early take-profit/stop-loss outcome."
+            "Path penalty scores the whole forward path. "
+            "TP/SL proxy approximates an early take-profit/stop-loss outcome."
         )
         reward_core_fields.add_row(
             "Reward mode",
@@ -999,7 +1003,8 @@ class TrainingParamsPanel(QWidget):
         self._drawdown_penalty.setValue(2.0)
         self._drawdown_penalty.setFixedWidth(spin_width)
         self._drawdown_penalty.setToolTip(
-            "Penalty applied only when drawdown worsens: drawdown_penalty * max(0, drawdown_t - drawdown_t-1)."
+            "Penalty applied only when drawdown worsens: "
+            "drawdown_penalty * max(0, drawdown_t - drawdown_t-1)."
         )
         penalty_fields.add_row(
             "Drawdown penalty",
@@ -1042,7 +1047,8 @@ class TrainingParamsPanel(QWidget):
         self._exposure_penalty.setValue(1e-4)
         self._exposure_penalty.setFixedWidth(spin_width)
         self._exposure_penalty.setToolTip(
-            "Penalty applied to absolute target exposure to discourage oversized persistent positions."
+            "Penalty applied to absolute target exposure "
+            "to discourage oversized persistent positions."
         )
         penalty_fields.add_row(
             "Exposure penalty",
@@ -1098,7 +1104,8 @@ class TrainingParamsPanel(QWidget):
         self._target_vol.setValue(0.005)
         self._target_vol.setFixedWidth(spin_width)
         self._target_vol.setToolTip(
-            "Target realized volatility used to scale raw positions. 0 disables volatility targeting."
+            "Target realized volatility used to scale raw positions. "
+            "0 disables volatility targeting."
         )
         control_fields.add_row(
             "Target vol",
@@ -1743,7 +1750,11 @@ class TrainingParamsPanel(QWidget):
             if not self._selected_feature_names:
                 self._selected_feature_names = list(self._data_feature_names)
             else:
-                selected = [name for name in self._selected_feature_names if name in self._data_feature_names]
+                selected = [
+                    name
+                    for name in self._selected_feature_names
+                    if name in self._data_feature_names
+                ]
                 self._selected_feature_names = selected or list(self._data_feature_names)
             self._sync_feature_selection_controls()
             self._refresh_view_features_button()
@@ -1827,12 +1838,15 @@ class TrainingParamsPanel(QWidget):
             "is_ny_session",
             "is_london_ny_overlap",
         }
+        trend_prefixes = ("sma_", "momentum_", "price_z_")
+        volatility_prefixes = ("atr_", "vol_", "bollinger_")
+        regime_prefixes = ("rsi_", "adx_", "trend_flag_", "range_strength_")
         for name in feature_names:
             if name.startswith("returns_"):
                 group_map["Returns"].append(name)
-            elif name.startswith("sma_") or name.startswith("momentum_") or name.startswith("price_z_"):
+            elif name.startswith(trend_prefixes):
                 group_map["Trend & Momentum"].append(name)
-            elif name.startswith("atr_") or name.startswith("vol_") or name.startswith("bollinger_"):
+            elif name.startswith(volatility_prefixes):
                 group_map["Volatility"].append(name)
             elif name.startswith("breakout_") or name in (
                 "distance_to_rolling_high_20",
@@ -1841,9 +1855,7 @@ class TrainingParamsPanel(QWidget):
                 group_map["Breakout & Range"].append(name)
             elif name in ("body_size_ratio", "close_location_in_bar"):
                 group_map["Candlestick"].append(name)
-            elif name.startswith("rsi_") or name.startswith("adx_") or name.startswith("trend_flag_") or name.startswith(
-                "range_strength_"
-            ):
+            elif name.startswith(regime_prefixes):
                 group_map["Regime & Oscillator"].append(name)
             elif name in session_context_names:
                 group_map["Session Context"].append(name)
@@ -1862,15 +1874,29 @@ class TrainingParamsPanel(QWidget):
             )
             return
         if not self._data_feature_names:
-            QMessageBox.information(self, "Features", "No feature list available for the selected data.")
+            QMessageBox.information(
+                self,
+                "Features",
+                "No feature list available for the selected data.",
+            )
             return
         dialog = QDialog(self)
         dialog.setWindowTitle("Select Features")
         dialog.resize(640, 620)
         layout = QVBoxLayout(dialog)
+        regime_names = (
+            "vol_pct_72_252",
+            "trend_flag_25",
+            "range_strength_10_50_atr14",
+        )
+        regime_text = (
+            ", ".join(name for name in regime_names if name in self._data_feature_names)
+            or "-"
+        )
         summary = QLabel(
-            f"{len(self._selected_feature_names) or len(self._data_feature_names)} / {len(self._data_feature_names)} selected\n"
-            f"regime: {', '.join(name for name in ('vol_pct_72_252', 'trend_flag_25', 'range_strength_10_50_atr14') if name in self._data_feature_names) or '-'}"
+            f"{len(self._selected_feature_names) or len(self._data_feature_names)} / "
+            f"{len(self._data_feature_names)} selected\n"
+            f"regime: {regime_text}"
         )
         summary.setTextInteractionFlags(Qt.TextSelectableByMouse)
         layout.addWidget(summary)
@@ -1902,7 +1928,7 @@ class TrainingParamsPanel(QWidget):
             count = sum(1 for cb in checkboxes.values() if cb.isChecked())
             summary.setText(
                 f"{count} / {len(self._data_feature_names)} selected\n"
-                f"regime: {', '.join(name for name in ('vol_pct_72_252', 'trend_flag_25', 'range_strength_10_50_atr14') if name in self._data_feature_names) or '-'}"
+                f"regime: {regime_text}"
             )
 
         for checkbox in checkboxes.values():
@@ -1914,12 +1940,20 @@ class TrainingParamsPanel(QWidget):
         apply_button = QPushButton("Apply", dialog)
         apply_button.setProperty("class", PRIMARY)
 
-        select_all_button.clicked.connect(lambda: [cb.setChecked(True) for cb in checkboxes.values()])
-        clear_button.clicked.connect(lambda: [cb.setChecked(False) for cb in checkboxes.values()])
+        select_all_button.clicked.connect(
+            lambda: [cb.setChecked(True) for cb in checkboxes.values()]
+        )
+        clear_button.clicked.connect(
+            lambda: [cb.setChecked(False) for cb in checkboxes.values()]
+        )
         cancel_button.clicked.connect(dialog.reject)
 
         def apply_selection() -> None:
-            selected_names = [name for name in self._data_feature_names if checkboxes[name].isChecked()]
+            selected_names = [
+                name
+                for name in self._data_feature_names
+                if checkboxes[name].isChecked()
+            ]
             if not selected_names:
                 QMessageBox.information(dialog, "Features", "Select at least one feature.")
                 return
@@ -1944,7 +1978,10 @@ class TrainingParamsPanel(QWidget):
         if profile != "raw53":
             labels = {
                 "alpha4": f"Features: Alpha4 ({len(ALPHA_FEATURE_COLUMNS)})",
-                "residual": f"Features: Alpha4 + context ({len(ALPHA_FEATURE_COLUMNS) + len(RESIDUAL_CONTEXT_COLUMNS)})",
+                "residual": (
+                    "Features: Alpha4 + context "
+                    f"({len(ALPHA_FEATURE_COLUMNS) + len(RESIDUAL_CONTEXT_COLUMNS)})"
+                ),
                 "alpha8": "Features: Alpha8 (8)",
                 "alpha8_residual": "Features: Alpha8 + context (16)",
                 "alpha12": "Features: Alpha12 (12)",
@@ -1988,14 +2025,22 @@ class TrainingParamsPanel(QWidget):
         try:
             payload = json.loads(replay_path.read_text(encoding="utf-8"))
         except (OSError, json.JSONDecodeError) as exc:
-            QMessageBox.warning(self, "Replay Parse Error", f"Failed to parse replay results: {exc}")
+            QMessageBox.warning(
+                self,
+                "Replay Parse Error",
+                f"Failed to parse replay results: {exc}",
+            )
             return
         if not isinstance(payload, dict):
             QMessageBox.warning(self, "Replay Parse Error", "Invalid replay results format.")
             return
         raw_results = payload.get("results", [])
         if not isinstance(raw_results, list) or not raw_results:
-            QMessageBox.information(self, "No Replay Results", "Replay results are empty.")
+            QMessageBox.information(
+                self,
+                "No Replay Results",
+                "Replay results are empty.",
+            )
             return
 
         candidates: list[dict] = []
@@ -2018,7 +2063,11 @@ class TrainingParamsPanel(QWidget):
             labels.append(label)
 
         if not candidates:
-            QMessageBox.information(self, "No Replay Results", "No valid replay parameter rows found.")
+            QMessageBox.information(
+                self,
+                "No Replay Results",
+                "No valid replay parameter rows found.",
+            )
             return
 
         selected_label, ok = QInputDialog.getItem(
