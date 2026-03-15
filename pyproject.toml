@@ -72,6 +72,7 @@ package-dir = {"" = "src"}
 where = ["src"]
 
 [tool.setuptools.package-data]
+"forex" = ["py.typed"]
 "forex.ui.shared.styles" = ["app.qss"]
 
 [tool.black]

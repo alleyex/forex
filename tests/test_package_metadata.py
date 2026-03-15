@@ -41,3 +41,11 @@ def test_project_urls_cover_repository_governance() -> None:
         "Issues": "https://github.com/alleyex/forex/issues",
         "Changelog": "https://github.com/alleyex/forex/blob/main/CHANGELOG.md",
     }
+
+
+def test_typed_package_marker_is_tracked_for_distribution() -> None:
+    pyproject = tomllib.loads(Path("pyproject.toml").read_text(encoding="utf-8"))
+    package_data = pyproject["tool"]["setuptools"]["package-data"]
+
+    assert Path("src/forex/py.typed").is_file()
+    assert package_data["forex"] == ["py.typed"]
