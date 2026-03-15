@@ -1,10 +1,9 @@
 from __future__ import annotations
 
-from dataclasses import replace
-from datetime import datetime
 import json
 import time
-from typing import Optional
+from dataclasses import replace
+from datetime import datetime
 
 import numpy as np
 import pandas as pd
@@ -74,18 +73,29 @@ class LiveAutoTradeCoordinator:
             return
         w._auto_last_decision_ts = time.time()
         now_ts = datetime.utcnow().timestamp()
-        min_interval = int(w._min_signal_interval.value()) if hasattr(w, "_min_signal_interval") else 0
+        min_interval = (
+            int(w._min_signal_interval.value())
+            if hasattr(w, "_min_signal_interval")
+            else 0
+        )
         if w._auto_last_action_ts and now_ts - w._auto_last_action_ts < min_interval:
             remain = max(0.0, min_interval - (now_ts - w._auto_last_action_ts))
             w._auto_debug_fields("signal_throttled", wait_s=f"{remain:.1f}")
             return
         if len(w._candles) < 30:
-            w._auto_debug_fields("insufficient_candles", have=len(w._candles), need=30)
+            w._auto_debug_fields(
+                "insufficient_candles",
+                have=len(w._candles),
+                need=30,
+            )
             return
 
         df = pd.DataFrame(
             {
-                "timestamp": [datetime.utcfromtimestamp(c[0]).strftime("%H:%M") for c in w._candles],
+                "timestamp": [
+                    datetime.utcfromtimestamp(c[0]).strftime("%H:%M")
+                    for c in w._candles
+                ],
                 "open": [c[1] for c in w._candles],
                 "high": [c[2] for c in w._candles],
                 "low": [c[3] for c in w._candles],
@@ -147,7 +157,8 @@ class LiveAutoTradeCoordinator:
         )
         if confidence_threshold > 0 and abs(target_position) < confidence_threshold:
             w._auto_log(
-                f"ℹ️ Signal skipped by confidence: |{target_position:.3f}| < {confidence_threshold:.3f}"
+                "ℹ️ Signal skipped by confidence: "
+                f"|{target_position:.3f}| < {confidence_threshold:.3f}"
             )
         did_execute = self.execute_target_position(target_position, feature_set=feature_set)
         if did_execute:
@@ -209,11 +220,11 @@ class LiveAutoTradeCoordinator:
         self,
         position_id: int,
         *,
-        desired_position: Optional[float] = None,
-        current_position: Optional[float] = None,
+        desired_position: float | None = None,
+        current_position: float | None = None,
     ) -> int:
         w = self._window
-        position_volume: Optional[int] = None
+        position_volume: int | None = None
         for position in w._open_positions:
             try:
                 current_id = getattr(position, "positionId", None)
@@ -246,10 +257,16 @@ class LiveAutoTradeCoordinator:
             and desired_position * current_position > 0.0
             and abs(desired_position) < abs(current_position)
         ):
-            keep_ratio = max(0.0, min(1.0, abs(desired_position) / abs(current_position)))
+            keep_ratio = max(
+                0.0,
+                min(1.0, abs(desired_position) / abs(current_position)),
+            )
             reduce_ratio = 1.0 - keep_ratio
             requested = int(round(position_volume * reduce_ratio))
-            close_volume = self._normalize_close_volume(requested=requested, available=position_volume)
+            close_volume = self._normalize_close_volume(
+                requested=requested,
+                available=position_volume,
+            )
             if close_volume <= 0:
                 return 0
             w._auto_debug_fields(
@@ -265,7 +282,11 @@ class LiveAutoTradeCoordinator:
 
     def _normalize_close_volume(self, *, requested: int, available: int) -> int:
         w = self._window
-        symbol_name = w._trade_symbol.currentText() if hasattr(w, "_trade_symbol") else w._symbol_name
+        symbol_name = (
+            w._trade_symbol.currentText()
+            if hasattr(w, "_trade_symbol")
+            else w._symbol_name
+        )
         min_volume, volume_step = self.get_volume_constraints(symbol_name)
         volume = max(0, int(requested))
         available = max(0, int(available))
@@ -325,8 +346,14 @@ class LiveAutoTradeCoordinator:
         side = str(desired_side or "").strip().lower()
         if side not in {"buy", "sell"}:
             return 0
-        expected_side = ProtoOATradeSide.BUY if side == "buy" else ProtoOATradeSide.SELL
-        symbol_name = w._trade_symbol.currentText() if hasattr(w, "_trade_symbol") else w._symbol_name
+        expected_side = (
+            ProtoOATradeSide.BUY if side == "buy" else ProtoOATradeSide.SELL
+        )
+        symbol_name = (
+            w._trade_symbol.currentText()
+            if hasattr(w, "_trade_symbol")
+            else w._symbol_name
+        )
         count = 0
         for position in w._open_positions:
             trade_data = getattr(position, "tradeData", None)
@@ -345,7 +372,11 @@ class LiveAutoTradeCoordinator:
 
     def count_open_positions_for_symbol(self, *, symbol_id: int) -> int:
         w = self._window
-        symbol_name = w._trade_symbol.currentText() if hasattr(w, "_trade_symbol") else w._symbol_name
+        symbol_name = (
+            w._trade_symbol.currentText()
+            if hasattr(w, "_trade_symbol")
+            else w._symbol_name
+        )
         count = 0
         for position in w._open_positions:
             if not self._position_matches_symbol(
@@ -362,7 +393,11 @@ class LiveAutoTradeCoordinator:
         if not w._app_state or not w._app_state.selected_account_id:
             return False
         account_id = int(w._app_state.selected_account_id)
-        symbol_name = w._trade_symbol.currentText() if hasattr(w, "_trade_symbol") else w._symbol_name
+        symbol_name = (
+            w._trade_symbol.currentText()
+            if hasattr(w, "_trade_symbol")
+            else w._symbol_name
+        )
         symbol_id = int(w._resolve_symbol_id(symbol_name))
         if w._open_positions:
             self.sync_auto_position_from_positions(w._open_positions)
@@ -375,7 +410,13 @@ class LiveAutoTradeCoordinator:
         confidence_threshold = float(w._confidence.value()) if hasattr(w, "_confidence") else 0.0
         threshold = max(0.05, min(1.0, confidence_threshold))
         desired_raw = 0.0 if abs(target) < threshold else target
-        desired = float(np.clip(desired_raw, -self._effective_max_position(), self._effective_max_position()))
+        desired = float(
+            np.clip(
+                desired_raw,
+                -self._effective_max_position(),
+                self._effective_max_position(),
+            )
+        )
         desired_side = "buy" if desired > 0 else "sell"
         w._auto_debug_fields(
             "decision_normalized",
@@ -415,7 +456,10 @@ class LiveAutoTradeCoordinator:
         )
 
         if one_position_mode and symbol_count > 1:
-            primary = self._select_symbol_primary_position(symbol_id=symbol_id, symbol_name=symbol_name)
+            primary = self._select_symbol_primary_position(
+                symbol_id=symbol_id,
+                symbol_name=symbol_name,
+            )
             primary_id = getattr(primary, "positionId", None) if primary is not None else None
             for position in list(w._open_positions):
                 if not self._position_matches_symbol(
@@ -641,7 +685,7 @@ class LiveAutoTradeCoordinator:
         w._auto_position = desired
         return True
 
-    def calc_volume(self, *, signal_strength: Optional[float] = None) -> int:
+    def calc_volume(self, *, signal_strength: float | None = None) -> int:
         w = self._window
         lot = float(w._lot_value.value())
         if w._lot_risk.isChecked():
@@ -800,7 +844,7 @@ class LiveAutoTradeCoordinator:
                 w._symbol_digits_by_name[name] = digits_int
                 w._quote_digits[name] = digits_int
 
-    def calc_sl_tp_pips(self) -> tuple[Optional[int], Optional[int]]:
+    def calc_sl_tp_pips(self) -> tuple[int | None, int | None]:
         w = self._window
         sl_points = float(w._stop_loss.value())
         tp_points = float(w._take_profit.value())
@@ -824,7 +868,11 @@ class LiveAutoTradeCoordinator:
         symbol_id = w._resolve_symbol_id(symbol_name) if symbol_name else None
         matched = []
         for position in positions:
-            if self._position_matches_symbol(position=position, symbol_id=symbol_id, symbol_name=symbol_name):
+            if self._position_matches_symbol(
+                position=position,
+                symbol_id=symbol_id,
+                symbol_name=symbol_name,
+            ):
                 matched.append(position)
         if not matched:
             w._auto_position_id = None
@@ -849,7 +897,7 @@ class LiveAutoTradeCoordinator:
         # This prevents stale +/-1.0 direction flags from forcing perpetual "reduce" logic.
         magnitude = max_position
         trade_volume = getattr(trade_data, "volume", None) if trade_data else None
-        lot_value: Optional[float] = None
+        lot_value: float | None = None
         try:
             if trade_volume is not None:
                 lot_value = float(trade_volume) / 10000000.0
@@ -868,13 +916,22 @@ class LiveAutoTradeCoordinator:
                 if getattr(w, "_scale_lot_by_signal", None) and w._scale_lot_by_signal.isChecked():
                     magnitude = min(max_position, max(0.0, lot_value / base_lot))
                 else:
-                    magnitude = max_position * min(1.0, max(0.0, lot_value / base_lot))
+                    magnitude = max_position * min(
+                        1.0,
+                        max(0.0, lot_value / base_lot),
+                    )
             else:
                 magnitude = max_position
 
         w._auto_position = side_sign * float(magnitude)
 
-    def _position_matches_symbol(self, *, position: object, symbol_id: int | None, symbol_name: str) -> bool:
+    def _position_matches_symbol(
+        self,
+        *,
+        position: object,
+        symbol_id: int | None,
+        symbol_name: str,
+    ) -> bool:
         w = self._window
         trade_data = getattr(position, "tradeData", None)
         if not trade_data:
@@ -903,7 +960,11 @@ class LiveAutoTradeCoordinator:
         matched = [
             p
             for p in w._open_positions
-            if self._position_matches_symbol(position=p, symbol_id=symbol_id, symbol_name=symbol_name)
+            if self._position_matches_symbol(
+                position=p,
+                symbol_id=symbol_id,
+                symbol_name=symbol_name,
+            )
         ]
         if not matched:
             return None
