@@ -1,17 +1,20 @@
 """
 cTrader app auth dialog
 """
-from typing import Optional
 
-from PySide6.QtWidgets import (
-    QVBoxLayout, QLabel, QLineEdit,
-    QPushButton, QFormLayout, QWidget, QHBoxLayout,
-    QRadioButton, QButtonGroup,
-)
 from PySide6.QtCore import Signal, Slot
+from PySide6.QtWidgets import (
+    QButtonGroup,
+    QFormLayout,
+    QHBoxLayout,
+    QLabel,
+    QLineEdit,
+    QPushButton,
+    QRadioButton,
+    QVBoxLayout,
+    QWidget,
+)
 
-from forex.ui.shared.dialogs.base_auth_dialog import BaseAuthDialog
-from forex.ui.shared.widgets.layout_helpers import configure_form_layout
 from forex.application.broker.protocols import AppAuthServiceLike
 from forex.application.broker.use_cases import BrokerUseCases
 from forex.application.events import EventBus
@@ -19,8 +22,10 @@ from forex.application.state import AppState
 from forex.config.constants import ConnectionStatus
 from forex.config.paths import TOKEN_FILE
 from forex.config.settings import AppCredentials
-from forex.utils.reactor_manager import reactor_manager
+from forex.ui.shared.dialogs.base_auth_dialog import BaseAuthDialog
 from forex.ui.shared.utils.formatters import format_connection_message
+from forex.ui.shared.widgets.layout_helpers import configure_form_layout
+from forex.utils.reactor_manager import reactor_manager
 
 
 class CredentialsFormWidget(QWidget):
@@ -98,7 +103,7 @@ class CredentialsFormWidget(QWidget):
         self.client_id.setText(client_id)
         self.client_secret.setText(client_secret)
     
-    def validate(self) -> Optional[str]:
+    def validate(self) -> str | None:
         """驗證表單，回傳error訊息或 None"""
         data = self.get_data()
         if not data["client_id"]:
@@ -122,14 +127,14 @@ class AppAuthDialog(BaseAuthDialog):
         token_file: str = TOKEN_FILE, 
         parent=None, 
         auto_connect: bool = False,
-        app_auth_service: Optional[AppAuthServiceLike] = None,
-        use_cases: Optional[BrokerUseCases] = None,
-        event_bus: Optional[EventBus] = None,
-        app_state: Optional[AppState] = None,
+        app_auth_service: AppAuthServiceLike | None = None,
+        use_cases: BrokerUseCases | None = None,
+        event_bus: EventBus | None = None,
+        app_state: AppState | None = None,
     ):
         super().__init__(token_file, parent, auto_connect, event_bus)
-        self._service: Optional[AppAuthServiceLike] = app_auth_service
-        self._use_cases: Optional[BrokerUseCases] = use_cases
+        self._service: AppAuthServiceLike | None = app_auth_service
+        self._use_cases: BrokerUseCases | None = use_cases
         self._event_bus = event_bus
         self._app_state = app_state
         
@@ -320,6 +325,6 @@ class AppAuthDialog(BaseAuthDialog):
     # 公開 API
     # ─────────────────────────────────────────────────────────────
 
-    def get_service(self) -> Optional[AppAuthServiceLike]:
+    def get_service(self) -> AppAuthServiceLike | None:
         """取得認證後的服務實例"""
         return self._service

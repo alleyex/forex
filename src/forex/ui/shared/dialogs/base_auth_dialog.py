@@ -1,24 +1,22 @@
 """
 基礎認證對話框
 """
-from dataclasses import dataclass
 import json
 import os
-from typing import Optional
+from dataclasses import dataclass
+
+from PySide6.QtCore import Slot
+from PySide6.QtWidgets import QDialog
 
 from forex.application.events import EventBus
-
-from PySide6.QtWidgets import QDialog
-from PySide6.QtCore import Slot
-
-from forex.ui.shared.widgets.log_widget import LogWidget
-from forex.ui.shared.widgets.status_widget import StatusWidget
 from forex.ui.shared.utils.formatters import (
     format_log_error,
     format_log_info,
     format_log_ok,
     format_log_warn,
 )
+from forex.ui.shared.widgets.log_widget import LogWidget
+from forex.ui.shared.widgets.status_widget import StatusWidget
 
 
 @dataclass
@@ -35,7 +33,7 @@ class BaseAuthDialog(QDialog):
         token_file: str,
         parent=None,
         auto_connect: bool = False,
-        event_bus: Optional[EventBus] = None,
+        event_bus: EventBus | None = None,
     ):
         super().__init__(parent)
         self._token_file = token_file
@@ -43,8 +41,8 @@ class BaseAuthDialog(QDialog):
         self._state = DialogState()
         self._event_bus = event_bus
 
-        self._log_widget: Optional[LogWidget] = None
-        self._status_widget: Optional[StatusWidget] = None
+        self._log_widget: LogWidget | None = None
+        self._status_widget: StatusWidget | None = None
 
         self._connect_common_signals()
 
@@ -97,11 +95,11 @@ class BaseAuthDialog(QDialog):
     # 資料處理
     # ─────────────────────────────────────────────────────────────
 
-    def _read_json_file(self) -> Optional[dict]:
+    def _read_json_file(self) -> dict | None:
         if not os.path.exists(self._token_file):
             return None
         try:
-            with open(self._token_file, "r", encoding="utf-8") as file:
+            with open(self._token_file, encoding="utf-8") as file:
                 return json.load(file)
         except json.JSONDecodeError as exc:
             self._log_error(f"Invalid token file format: {exc}")

@@ -2,27 +2,37 @@
 OAuth authentication dialog
 """
 from dataclasses import dataclass
-from typing import Optional
 
-from PySide6.QtWidgets import (
-    QVBoxLayout, QHBoxLayout, QLabel, QLineEdit,
-    QPushButton, QFormLayout, QWidget, QSizePolicy, QDialog,
-)
 from PySide6.QtCore import Signal, Slot
+from PySide6.QtWidgets import (
+    QDialog,
+    QFormLayout,
+    QHBoxLayout,
+    QLabel,
+    QLineEdit,
+    QPushButton,
+    QSizePolicy,
+    QVBoxLayout,
+    QWidget,
+)
 
-from forex.ui.shared.dialogs.base_auth_dialog import BaseAuthDialog, DialogState
-from forex.ui.shared.widgets.layout_helpers import configure_form_layout
-from forex.domain.accounts import Account
-from forex.application.broker.protocols import AppAuthServiceLike, OAuthLoginServiceLike, OAuthServiceLike
+from forex.application.broker.protocols import (
+    AppAuthServiceLike,
+    OAuthLoginServiceLike,
+    OAuthServiceLike,
+)
 from forex.application.broker.use_cases import BrokerUseCases
 from forex.application.events import EventBus
 from forex.application.state import AppState
 from forex.config.constants import ConnectionStatus
 from forex.config.paths import TOKEN_FILE
 from forex.config.settings import OAuthTokens
-from forex.ui.shared.dialogs.account_dialog import AccountDialog
-from forex.ui.shared.utils.formatters import format_connection_message
+from forex.domain.accounts import Account
 from forex.infrastructure.broker.ctrader.auth.refresh import refresh_tokens
+from forex.ui.shared.dialogs.account_dialog import AccountDialog
+from forex.ui.shared.dialogs.base_auth_dialog import BaseAuthDialog, DialogState
+from forex.ui.shared.utils.formatters import format_connection_message
+from forex.ui.shared.widgets.layout_helpers import configure_form_layout
 from forex.utils.reactor_manager import reactor_manager
 
 
@@ -95,7 +105,7 @@ class TokenFormWidget(QWidget):
             "auth_code": self.auth_code.text().strip(),
         }
     
-    def validate_for_auth(self) -> Optional[str]:
+    def validate_for_auth(self) -> str | None:
         """驗證認證所需欄位"""
         data = self.get_data()
         if not data["access_token"]:
@@ -110,7 +120,7 @@ class TokenFormWidget(QWidget):
             return "Account ID must be numeric"
         return None
     
-    def validate_for_login(self) -> Optional[str]:
+    def validate_for_login(self) -> str | None:
         """驗證登入所需欄位"""
         data = self.get_data()
         if not data["redirect_uri"]:
@@ -140,23 +150,23 @@ class OAuthDialog(BaseAuthDialog):
         token_file: str = TOKEN_FILE,
         parent=None,
         auto_connect: bool = False,
-        app_auth_service: Optional[AppAuthServiceLike] = None,
-        oauth_service: Optional[OAuthServiceLike] = None,
-        use_cases: Optional[BrokerUseCases] = None,
-        event_bus: Optional[EventBus] = None,
-        app_state: Optional[AppState] = None,
+        app_auth_service: AppAuthServiceLike | None = None,
+        oauth_service: OAuthServiceLike | None = None,
+        use_cases: BrokerUseCases | None = None,
+        event_bus: EventBus | None = None,
+        app_state: AppState | None = None,
     ):
         super().__init__(token_file, parent, auto_connect, event_bus)
         self._app_auth_service = app_auth_service
-        self._use_cases: Optional[BrokerUseCases] = use_cases
+        self._use_cases: BrokerUseCases | None = use_cases
         self._event_bus = event_bus
         self._app_state = app_state
         self._state = OAuthDialogState()
         self._auto_auth_after_accounts = False
 
-        self._service: Optional[OAuthServiceLike] = oauth_service
-        self._login_service: Optional[OAuthLoginServiceLike] = None
-        self._selected_account: Optional[Account] = None
+        self._service: OAuthServiceLike | None = oauth_service
+        self._login_service: OAuthLoginServiceLike | None = None
+        self._selected_account: Account | None = None
 
         self._setup_ui()
         self._connect_signals()
@@ -545,7 +555,9 @@ class OAuthDialog(BaseAuthDialog):
                 }
                 if account_ids and int(tokens.account_id) not in account_ids:
                     self._log_warning(
-                        f"Account mismatch：token={tokens.account_id}，available accounts={sorted(account_ids)}"
+                        "Account mismatch："
+                        f"token={tokens.account_id}，"
+                        f"available accounts={sorted(account_ids)}"
                     )
         except Exception:
             pass
@@ -564,7 +576,10 @@ class OAuthDialog(BaseAuthDialog):
         if self._selected_account:
             self._log_info(f"✅ Selected account: {self._selected_account.account_id}")
             if self._selected_account.permission_scope == 0:
-                self._log_warning("⚠️ This account is view-only (SCOPE_VIEW), not tradable")
+                self._log_warning(
+                    "⚠️ This account is view-only "
+                    "(SCOPE_VIEW), not tradable"
+                )
             try:
                 tokens = OAuthTokens.from_file(self._token_file)
                 if tokens:
@@ -584,8 +599,16 @@ class OAuthDialog(BaseAuthDialog):
             self._start_auth()
         self._set_accounts_busy(False)
         if self._app_state:
-            account_id = None if self._selected_account is None else self._selected_account.account_id
-            scope = None if self._selected_account is None else self._selected_account.permission_scope
+            account_id = (
+                None
+                if self._selected_account is None
+                else self._selected_account.account_id
+            )
+            scope = (
+                None
+                if self._selected_account is None
+                else self._selected_account.permission_scope
+            )
             self._app_state.set_selected_account(account_id, scope)
 
     @Slot(str)
@@ -692,10 +715,10 @@ class OAuthDialog(BaseAuthDialog):
     # 公開 API
     # ─────────────────────────────────────────────────────────────
 
-    def get_service(self) -> Optional[OAuthServiceLike]:
+    def get_service(self) -> OAuthServiceLike | None:
         """取得認證後的服務實例"""
         return self._service
 
-    def get_selected_account(self) -> Optional[Account]:
+    def get_selected_account(self) -> Account | None:
         """取得已選擇的帳戶資訊"""
         return self._selected_account
