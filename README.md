@@ -90,7 +90,9 @@ make check-core
 make check-hygiene
 make release-check
 make check-release-metadata
+make clean-release-artifacts
 make release-checksums
+make verify-release-artifacts
 make verify-release-checksums
 make bump-version VERSION=0.1.1
 ```

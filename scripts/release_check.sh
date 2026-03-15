@@ -28,11 +28,17 @@ make check-core
 echo "[release-check] Running hygiene checks"
 make check-hygiene
 
+echo "[release-check] Cleaning previous build artifacts"
+rm -rf build dist
+
 echo "[release-check] Building distribution artifacts"
 "$PYTHON_BIN" -m build
 
 echo "[release-check] Generating artifact checksums"
 "$PYTHON_BIN" ./scripts/generate_release_checksums.py --dist-dir dist
+
+echo "[release-check] Verifying artifact inventory"
+"$PYTHON_BIN" ./scripts/verify_release_artifacts.py --dist-dir dist
 
 echo "[release-check] Verifying artifact checksums"
 "$PYTHON_BIN" ./scripts/verify_release_checksums.py --dist-dir dist

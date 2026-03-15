@@ -54,6 +54,8 @@ It validates that:
 - the changelog includes both `[Unreleased]` and a release entry for the tagged version
 - the release preflight passes
 - the package builds successfully
+- stale local build outputs are cleared before packaging
+- release artifacts contain exactly one wheel, one source distribution, and one checksum manifest
 - release artifacts include a `SHA256SUMS.txt` checksum manifest
 - the checksum manifest matches the built wheel and source distribution
 
