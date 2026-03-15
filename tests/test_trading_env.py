@@ -124,7 +124,10 @@ def test_window_size_expands_observation_with_edge_padding() -> None:
     )
     obs, _ = env.reset()
     assert obs.shape[0] == 7
-    np.testing.assert_allclose(obs[:-1], np.array([1.0, 10.0, 1.0, 10.0, 1.0, 10.0], dtype=np.float32))
+    np.testing.assert_allclose(
+        obs[:-1],
+        np.array([1.0, 10.0, 1.0, 10.0, 1.0, 10.0], dtype=np.float32),
+    )
 
 
 def test_window_size_rolls_forward_across_steps() -> None:
@@ -238,7 +241,12 @@ def test_drawdown_governor_scales_effective_max_position() -> None:
     env.reset()
     env._equity = 0.8
     env._peak_equity = 1.0
-    assert compute_drawdown_governor_scale(equity=env._equity, peak_equity=env._peak_equity, slope=2.0, floor=0.3) == pytest.approx(0.6)
+    assert compute_drawdown_governor_scale(
+        equity=env._equity,
+        peak_equity=env._peak_equity,
+        slope=2.0,
+        floor=0.3,
+    ) == pytest.approx(0.6)
     target, info = env._apply_action(np.array([1.0], dtype=np.float32))
     assert target == pytest.approx(0.6)
     assert info["risk_scale"] == pytest.approx(0.6)
@@ -257,7 +265,12 @@ def test_drawdown_governor_respects_floor() -> None:
     env.reset()
     env._equity = 0.4
     env._peak_equity = 1.0
-    assert compute_drawdown_governor_scale(equity=env._equity, peak_equity=env._peak_equity, slope=2.0, floor=0.3) == pytest.approx(0.3)
+    assert compute_drawdown_governor_scale(
+        equity=env._equity,
+        peak_equity=env._peak_equity,
+        slope=2.0,
+        floor=0.3,
+    ) == pytest.approx(0.3)
     target, info = env._apply_action(np.array([1.0], dtype=np.float32))
     assert target == pytest.approx(0.3)
     assert info["risk_scale"] == pytest.approx(0.3)

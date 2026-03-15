@@ -2,15 +2,14 @@ from __future__ import annotations
 
 import numpy as np
 import pandas as pd
-
 import pytest
 
 from forex.ml.rl.features.feature_builder import (
-    ALPHA_FEATURE_COLUMNS,
     ALPHA8_FEATURE_COLUMNS,
     ALPHA12_FEATURE_COLUMNS,
     ALPHA16_FEATURE_COLUMNS,
     ALPHA20_FEATURE_COLUMNS,
+    ALPHA_FEATURE_COLUMNS,
     ALPHA_SOURCE_COLUMNS,
     CORE20_ALPHA4_FEATURE_COLUMNS,
     CORE20_ALPHA8_FEATURE_COLUMNS,
@@ -19,8 +18,8 @@ from forex.ml.rl.features.feature_builder import (
     apply_feature_profile,
     build_feature_frame,
     build_features,
-    fit_scaler,
     filter_feature_rows_by_session,
+    fit_scaler,
     infer_feature_profile_from_names,
     required_raw_columns_for_profile,
     select_feature_columns,
@@ -148,7 +147,12 @@ def test_session_context_features_have_expected_signs() -> None:
     close = base + wave
     df = pd.DataFrame(
         {
-            "timestamp": pd.date_range("2024-01-01", periods=rows, freq="15min", tz="UTC").astype(str),
+            "timestamp": pd.date_range(
+                "2024-01-01",
+                periods=rows,
+                freq="15min",
+                tz="UTC",
+            ).astype(str),
             "open": close - 0.1,
             "close": close,
             "high": close + 0.4,
@@ -170,13 +174,21 @@ def test_session_context_features_have_expected_signs() -> None:
     assert np.all(np.isfinite(features["ny_open_gap_prev_close"].to_numpy()))
     assert np.all(np.isfinite(features["london_to_ny_open_return"].to_numpy()))
     assert np.all(np.isfinite(features["ny_reversal_pressure"].to_numpy()))
-    assert set(np.unique(features["is_london_pre_ny_session"].to_numpy())).issubset({0.0, 1.0})
-    assert np.all(features["is_london_pre_ny_session"].to_numpy() <= features["is_london_session"].to_numpy())
+    assert set(
+        np.unique(features["is_london_pre_ny_session"].to_numpy())
+    ).issubset({0.0, 1.0})
+    assert np.all(
+        features["is_london_pre_ny_session"].to_numpy()
+        <= features["is_london_session"].to_numpy()
+    )
     assert np.all(np.isfinite(features["asia_range_width_atr"].to_numpy()))
     assert np.all(np.isfinite(features["distance_to_asia_high"].to_numpy()))
     assert np.all(np.isfinite(features["distance_to_asia_low"].to_numpy()))
     assert np.all(np.isfinite(features["london_breakout_of_asia"].to_numpy()))
-    assert np.all((features["pre_london_compression"].to_numpy() >= 0.0) & (features["pre_london_compression"].to_numpy() <= 1.0))
+    assert np.all(
+        (features["pre_london_compression"].to_numpy() >= 0.0)
+        & (features["pre_london_compression"].to_numpy() <= 1.0)
+    )
 
 
 def test_build_feature_frame_keeps_uptrend_rows_and_sets_rsi_to_100() -> None:
@@ -373,8 +385,10 @@ def test_session_context_features_do_not_leak_future_open_information() -> None:
         ],
     )
     feature_times = timestamps[-len(features) :]
-    london_hours = feature_times.tz_convert("Europe/London").hour + feature_times.tz_convert("Europe/London").minute / 60.0
-    ny_hours = feature_times.tz_convert("America/New_York").hour + feature_times.tz_convert("America/New_York").minute / 60.0
+    london_times = feature_times.tz_convert("Europe/London")
+    ny_times = feature_times.tz_convert("America/New_York")
+    london_hours = london_times.hour + london_times.minute / 60.0
+    ny_hours = ny_times.hour + ny_times.minute / 60.0
 
     before_london = london_hours < 8.0
     before_ny = ny_hours < 8.0
@@ -436,7 +450,12 @@ def test_filter_feature_rows_by_session_keeps_only_requested_session_rows() -> N
     close = np.linspace(100.0, 110.0, num=rows, dtype=np.float64)
     df = pd.DataFrame(
         {
-            "timestamp": pd.date_range("2024-01-01", periods=rows, freq="15min", tz="UTC").astype(str),
+            "timestamp": pd.date_range(
+                "2024-01-01",
+                periods=rows,
+                freq="15min",
+                tz="UTC",
+            ).astype(str),
             "open": close - 0.1,
             "close": close,
             "high": close + 0.4,
@@ -493,7 +512,10 @@ def test_apply_feature_profile_alpha_and_residual_shapes() -> None:
     assert not alpha.isna().any().any()
 
     residual = apply_feature_profile(raw_features, "residual")
-    expected_residual = [*ALPHA_FEATURE_COLUMNS, *[name for name in RESIDUAL_CONTEXT_COLUMNS if name in raw_features.columns]]
+    expected_residual = [
+        *ALPHA_FEATURE_COLUMNS,
+        *[name for name in RESIDUAL_CONTEXT_COLUMNS if name in raw_features.columns],
+    ]
     assert list(residual.columns) == expected_residual
     assert not residual.isna().any().any()
     assert infer_feature_profile_from_names(alpha.columns) == "alpha4"
@@ -512,13 +534,21 @@ def test_apply_feature_profile_alpha_and_residual_shapes() -> None:
     core20_alpha8 = apply_feature_profile(raw_features, "alpha8_from_core20")
 
     assert list(alpha8.columns) == list(ALPHA8_FEATURE_COLUMNS)
-    assert list(alpha8_residual.columns[: len(ALPHA8_FEATURE_COLUMNS)]) == list(ALPHA8_FEATURE_COLUMNS)
+    assert list(alpha8_residual.columns[: len(ALPHA8_FEATURE_COLUMNS)]) == list(
+        ALPHA8_FEATURE_COLUMNS
+    )
     assert list(alpha12.columns) == list(ALPHA12_FEATURE_COLUMNS)
     assert list(alpha16.columns) == list(ALPHA16_FEATURE_COLUMNS)
     assert list(alpha20.columns) == list(ALPHA20_FEATURE_COLUMNS)
-    assert list(alpha12_residual.columns[: len(ALPHA12_FEATURE_COLUMNS)]) == list(ALPHA12_FEATURE_COLUMNS)
-    assert list(alpha16_residual.columns[: len(ALPHA16_FEATURE_COLUMNS)]) == list(ALPHA16_FEATURE_COLUMNS)
-    assert list(alpha20_residual.columns[: len(ALPHA20_FEATURE_COLUMNS)]) == list(ALPHA20_FEATURE_COLUMNS)
+    assert list(alpha12_residual.columns[: len(ALPHA12_FEATURE_COLUMNS)]) == list(
+        ALPHA12_FEATURE_COLUMNS
+    )
+    assert list(alpha16_residual.columns[: len(ALPHA16_FEATURE_COLUMNS)]) == list(
+        ALPHA16_FEATURE_COLUMNS
+    )
+    assert list(alpha20_residual.columns[: len(ALPHA20_FEATURE_COLUMNS)]) == list(
+        ALPHA20_FEATURE_COLUMNS
+    )
     assert list(core20.columns) == list(CORE20_FEATURE_COLUMNS)
     assert list(core20_alpha4.columns) == list(CORE20_ALPHA4_FEATURE_COLUMNS)
     assert list(core20_alpha8.columns) == list(CORE20_ALPHA8_FEATURE_COLUMNS)

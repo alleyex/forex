@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import types
+
 import numpy as np
 import pytest
 import torch
@@ -366,7 +367,9 @@ def test_profile_policy_activity_reports_raw_deterministic_action_stats() -> Non
         },
     )
 
-    assert profile["raw_action_abs_mean"] == pytest.approx(np.mean(np.abs([0.0, 0.30, -0.40, 0.10])))
+    assert profile["raw_action_abs_mean"] == pytest.approx(
+        np.mean(np.abs([0.0, 0.30, -0.40, 0.10]))
+    )
     assert profile["raw_action_flatish_ratio"] == pytest.approx(0.25)
     assert profile["raw_action_over_005_ratio"] == pytest.approx(0.75)
     assert profile["raw_action_over_010_ratio"] == pytest.approx(0.75)
@@ -376,11 +379,22 @@ def test_profile_policy_activity_reports_raw_deterministic_action_stats() -> Non
     assert profile["raw_short_entry_hit_ratio"] == pytest.approx(0.25)
 
 
-def test_imitation_rollout_callback_applies_supervised_update_while_active(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_imitation_rollout_callback_applies_supervised_update_while_active(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     calls: list[tuple[int, int]] = []
     metrics: list[tuple[int, str, float]] = []
 
-    def _fake_warm_start_policy(model, observations, actions, sample_weights, *, epochs: int, batch_size: int, loss_scale: float) -> float:
+    def _fake_warm_start_policy(
+        model,
+        observations,
+        actions,
+        sample_weights,
+        *,
+        epochs: int,
+        batch_size: int,
+        loss_scale: float,
+    ) -> float:
         calls.append((epochs, batch_size, loss_scale))
         assert observations.shape == (3, 4)
         assert actions.shape == (3, 1)

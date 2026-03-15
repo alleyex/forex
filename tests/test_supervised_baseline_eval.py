@@ -8,12 +8,12 @@ from forex.tools.rl.supervised_baseline_eval import (
     _apply_action_gate,
     _apply_feature_gates,
     _build_gate_mask,
-    _build_threshold_bump_array,
     _build_targets,
-    _score_to_raw_target,
+    _build_threshold_bump_array,
     _parse_action_gate_specs,
     _parse_feature_gate_specs,
     _parse_threshold_bump_specs,
+    _score_to_raw_target,
 )
 
 
@@ -28,7 +28,9 @@ def test_build_targets_forward_return_mode_matches_threshold_signs() -> None:
     )
 
     assert labels.tolist()[:3] == [1, 1, 1]
-    assert future_returns.tolist()[:3] == pytest.approx([0.01, 102.0 / 101.0 - 1.0, 103.0 / 102.0 - 1.0])
+    assert future_returns.tolist()[:3] == pytest.approx(
+        [0.01, 102.0 / 101.0 - 1.0, 103.0 / 102.0 - 1.0]
+    )
 
 
 def test_build_targets_breakout_follow_through_requires_directional_dominance() -> None:
