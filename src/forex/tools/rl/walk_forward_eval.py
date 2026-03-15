@@ -62,7 +62,10 @@ def _aggregate_results(results: list[PlaybackResult]) -> dict[str, object]:
     }
 
 
-def _compare_results(primary_results: list[PlaybackResult], compare_results: list[PlaybackResult]) -> dict[str, object]:
+def _compare_results(
+    primary_results: list[PlaybackResult],
+    compare_results: list[PlaybackResult],
+) -> dict[str, object]:
     paired_count = min(len(primary_results), len(compare_results))
     if paired_count <= 0:
         return {
@@ -99,45 +102,99 @@ def _compare_results(primary_results: list[PlaybackResult], compare_results: lis
 
 
 def _print_segment(label: str, result: PlaybackResult) -> None:
-    gate_text = "PASS" if not result.gate_reasons else f"FAIL ({'; '.join(result.gate_reasons)})"
+    gate_text = (
+        "PASS"
+        if not result.gate_reasons
+        else f"FAIL ({'; '.join(result.gate_reasons)})"
+    )
     print(
         f"{label}: range={result.start_ts} -> {result.end_ts} "
         f"return={result.total_return:.6f} sharpe={result.sharpe:.6f} "
-        f"max_dd={result.max_drawdown:.6f} trade_rate/1k={result.trade_rate_1k:.2f} gate={gate_text}"
+        f"max_dd={result.max_drawdown:.6f} "
+        f"trade_rate/1k={result.trade_rate_1k:.2f} gate={gate_text}"
     )
 
 
 def _print_aggregate(label: str, aggregate: dict[str, object]) -> None:
     print(
         f"{label} aggregate: segments={aggregate['segments']} pass={aggregate['pass_count']} "
-        f"avg_return={aggregate['avg_return']:.6f} avg_sharpe={aggregate['avg_sharpe']:.6f} "
-        f"avg_max_dd={aggregate['avg_max_drawdown']:.6f} worst_max_dd={aggregate['worst_max_drawdown']:.6f} "
+        f"avg_return={aggregate['avg_return']:.6f} "
+        f"avg_sharpe={aggregate['avg_sharpe']:.6f} "
+        f"avg_max_dd={aggregate['avg_max_drawdown']:.6f} "
+        f"worst_max_dd={aggregate['worst_max_drawdown']:.6f} "
         f"avg_trade_rate/1k={aggregate['avg_trade_rate_1k']:.2f}"
     )
 
 
 def build_argument_parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(description="Run segmented walk-forward playback for one or two PPO models.")
+    parser = argparse.ArgumentParser(
+        description=(
+            "Run segmented walk-forward playback "
+            "for one or two PPO models."
+        )
+    )
     parser.add_argument("--data", required=True, help="Path to raw history CSV.")
     parser.add_argument("--model", required=True, help="Primary PPO model path.")
     parser.add_argument("--feature-scaler", default="", help="Optional primary scaler JSON.")
     parser.add_argument("--env-config", default="", help="Optional primary env config JSON.")
-    parser.add_argument("--compare-model", default="", help="Optional secondary PPO model path.")
-    parser.add_argument("--compare-feature-scaler", default="", help="Optional secondary scaler JSON.")
-    parser.add_argument("--compare-env-config", default="", help="Optional secondary env config JSON.")
-    parser.add_argument("--start-index", type=int, default=0, help="Zero-based bar index for the first segment.")
-    parser.add_argument("--segment-steps", type=int, default=5000, help="Playback steps per segment.")
-    parser.add_argument("--segments", type=int, default=3, help="Maximum number of segments to run.")
-    parser.add_argument("--stride", type=int, default=10000, help="Index stride between segment starts.")
+    parser.add_argument(
+        "--compare-model",
+        default="",
+        help="Optional secondary PPO model path.",
+    )
+    parser.add_argument(
+        "--compare-feature-scaler",
+        default="",
+        help="Optional secondary scaler JSON.",
+    )
+    parser.add_argument(
+        "--compare-env-config",
+        default="",
+        help="Optional secondary env config JSON.",
+    )
+    parser.add_argument(
+        "--start-index",
+        type=int,
+        default=0,
+        help="Zero-based bar index for the first segment.",
+    )
+    parser.add_argument(
+        "--segment-steps",
+        type=int,
+        default=5000,
+        help="Playback steps per segment.",
+    )
+    parser.add_argument(
+        "--segments",
+        type=int,
+        default=3,
+        help="Maximum number of segments to run.",
+    )
+    parser.add_argument(
+        "--stride",
+        type=int,
+        default=10000,
+        help="Index stride between segment starts.",
+    )
     parser.add_argument(
         "--session-filter",
         choices=("all", "monday_open", "london", "london_pre_ny", "ny", "overlap"),
         default="all",
         help="Optional session filter applied before playback.",
     )
-    parser.add_argument("--transaction-cost-bps", type=float, default=1.0, help="Transaction cost in bps.")
+    parser.add_argument(
+        "--transaction-cost-bps",
+        type=float,
+        default=1.0,
+        help="Transaction cost in bps.",
+    )
     parser.add_argument("--slippage-bps", type=float, default=0.5, help="Slippage in bps.")
-    parser.add_argument("--action-gate", action="append", default=[], help="Optional execution gate feature:min:max.")
+    parser.add_argument(
+        "--action-gate",
+        action="append",
+        default=[],
+        help="Optional execution gate feature:min:max.",
+    )
     parser.add_argument(
         "--action-gate-mode",
         choices=("force_flat", "entry_only"),
@@ -156,11 +213,35 @@ def build_argument_parser() -> argparse.ArgumentParser:
         default=[],
         help="Optional regime threshold bump feature:min:max:bump.",
     )
-    parser.add_argument("--long-threshold", type=float, default=None, help="Optional long entry threshold for policy envelope.")
-    parser.add_argument("--short-threshold", type=float, default=None, help="Optional short entry threshold for policy envelope.")
-    parser.add_argument("--long-exit-threshold", type=float, default=None, help="Optional long exit threshold.")
-    parser.add_argument("--short-exit-threshold", type=float, default=None, help="Optional short exit threshold.")
-    parser.add_argument("--stochastic", action="store_true", help="Use stochastic actions for diagnostics.")
+    parser.add_argument(
+        "--long-threshold",
+        type=float,
+        default=None,
+        help="Optional long entry threshold for policy envelope.",
+    )
+    parser.add_argument(
+        "--short-threshold",
+        type=float,
+        default=None,
+        help="Optional short entry threshold for policy envelope.",
+    )
+    parser.add_argument(
+        "--long-exit-threshold",
+        type=float,
+        default=None,
+        help="Optional long exit threshold.",
+    )
+    parser.add_argument(
+        "--short-exit-threshold",
+        type=float,
+        default=None,
+        help="Optional short exit threshold.",
+    )
+    parser.add_argument(
+        "--stochastic",
+        action="store_true",
+        help="Use stochastic actions for diagnostics.",
+    )
     parser.add_argument("--json-out", default="", help="Optional JSON output path.")
     return parser
 
@@ -183,14 +264,21 @@ def main() -> None:
     )
     if policy_enabled:
         if args.long_threshold is None or args.short_threshold is None:
-            parser.error("--long-threshold and --short-threshold are required when policy envelope options are used")
+            parser.error(
+                "--long-threshold and --short-threshold are required "
+                "when policy envelope options are used"
+            )
         if float(args.short_threshold) >= float(args.long_threshold):
             parser.error("--short-threshold must be < --long-threshold")
         long_exit_threshold = (
-            float(args.long_threshold) if args.long_exit_threshold is None else float(args.long_exit_threshold)
+            float(args.long_threshold)
+            if args.long_exit_threshold is None
+            else float(args.long_exit_threshold)
         )
         short_exit_threshold = (
-            float(args.short_threshold) if args.short_exit_threshold is None else float(args.short_exit_threshold)
+            float(args.short_threshold)
+            if args.short_exit_threshold is None
+            else float(args.short_exit_threshold)
         )
         if long_exit_threshold > float(args.long_threshold):
             parser.error("--long-exit-threshold must be <= --long-threshold")
@@ -318,7 +406,11 @@ def main() -> None:
                 {
                     "segment": idx + 1,
                     "primary": _result_to_dict(primary_results[idx]),
-                    "compare": _result_to_dict(compare_results[idx]) if idx < len(compare_results) else None,
+                    "compare": (
+                        _result_to_dict(compare_results[idx])
+                        if idx < len(compare_results)
+                        else None
+                    ),
                 }
                 for idx in range(len(primary_results))
             ],
