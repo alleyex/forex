@@ -207,7 +207,7 @@ class LiveMainWindow(QMainWindow):
         content = QWidget()
         content_layout = QVBoxLayout(content)
         content_layout.setContentsMargins(0, 0, 0, 0)
-        content_layout.setSpacing(12)
+        content_layout.setSpacing(10)
 
         chart_panel = self._build_chart_panel()
         autotrade_panel = self._build_autotrade_panel()
@@ -241,7 +241,8 @@ class LiveMainWindow(QMainWindow):
 
         central = QWidget()
         central_layout = QVBoxLayout(central)
-        central_layout.setContentsMargins(12, 12, 12, 12)
+        central_layout.setContentsMargins(10, 10, 10, 10)
+        central_layout.setSpacing(10)
         central_layout.addWidget(splitter)
         self.setCentralWidget(central)
 

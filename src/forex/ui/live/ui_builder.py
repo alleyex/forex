@@ -34,8 +34,8 @@ class LiveUIBuilder:
     def build_autotrade_panel(self) -> QWidget:
         panel = QGroupBox("Auto Trading")
         layout = QVBoxLayout(panel)
-        layout.setContentsMargins(12, 12, 12, 12)
-        layout.setSpacing(10)
+        layout.setContentsMargins(10, 10, 10, 10)
+        layout.setSpacing(8)
 
         tabs = self._create_tabs(layout)
         _model_tab, model_tab_layout, form_model = self._create_tab_form(
