@@ -4,6 +4,7 @@ from types import SimpleNamespace
 
 from forex.config.constants import ConnectionStatus
 from forex.infrastructure.broker.ctrader.services.account_funds_service import AccountFundsService
+from forex.infrastructure.broker.ctrader.services.timeout_tracker import TimeoutTracker
 
 
 def test_on_timeout_cleans_up_silently_when_app_auth_not_ready(monkeypatch) -> None:
@@ -48,3 +49,16 @@ def test_retry_request_cleans_up_when_app_auth_not_ready(monkeypatch) -> None:
 
     assert calls["cleanup"] == 1
     assert calls["send"] == 0
+
+
+def test_timeout_tracker_ignores_stale_timeout_callbacks() -> None:
+    calls = {"timeout": 0}
+    tracker = TimeoutTracker(lambda: calls.__setitem__("timeout", calls["timeout"] + 1))
+
+    tracker.start(5.0)
+    stale_generation = tracker._generation
+    tracker.start(5.0)
+
+    tracker._handle_timeout(stale_generation)
+
+    assert calls["timeout"] == 0
