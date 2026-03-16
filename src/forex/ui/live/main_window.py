@@ -21,6 +21,7 @@ from PySide6.QtWidgets import (
     QLabel,
     QMainWindow,
     QSplitter,
+    QStyle,
     QToolBar,
     QVBoxLayout,
     QWidget,
@@ -714,17 +715,25 @@ class LiveMainWindow(QMainWindow):
     # Connection / Account Orchestration
     def _setup_toolbar(self) -> None:
         toolbar = QToolBar("Live toolbar", self)
+        toolbar.setObjectName("liveToolbar")
         toolbar.setMovable(False)
+        toolbar.setFloatable(False)
+        toolbar.setToolButtonStyle(Qt.ToolButtonTextBesideIcon)
         self.addToolBar(toolbar)
 
-        self._action_toggle_connection = QAction("Connect/Disconnect", self)
+        connect_icon = self.style().standardIcon(QStyle.SP_BrowserReload)
+        self._action_toggle_connection = QAction(connect_icon, "Connection", self)
+        self._action_toggle_connection.setToolTip("Connect or disconnect from cTrader")
         toolbar.addAction(self._action_toggle_connection)
         self._action_toggle_connection.triggered.connect(self._toggle_connection)
 
     def _setup_status_bar(self) -> None:
         status_bar = self.statusBar()
+        status_bar.setObjectName("liveStatusBar")
         self._app_auth_label = QLabel(format_app_auth_status(None))
+        self._app_auth_label.setObjectName("statusChip")
         self._oauth_label = QLabel(format_oauth_status(None))
+        self._oauth_label.setObjectName("statusChip")
         status_bar.addWidget(self._app_auth_label)
         status_bar.addWidget(self._oauth_label)
 

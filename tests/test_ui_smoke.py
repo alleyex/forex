@@ -9,7 +9,7 @@ os.environ.setdefault("QT_OPENGL", "software")
 os.environ.setdefault("QT_QUICK_BACKEND", "software")
 
 from PySide6.QtGui import QFont
-from PySide6.QtWidgets import QApplication
+from PySide6.QtWidgets import QApplication, QToolBar
 
 from forex.application.broker.use_cases import BrokerUseCases
 from forex.application.events import EventBus
@@ -115,6 +115,22 @@ class UISmokeTest(unittest.TestCase):
         self.assertIn("QTableWidget#quotesTable::item", style_sheet)
         self.assertEqual(window._quotes_table.verticalHeader().defaultSectionSize(), 30)
         self.assertEqual(window._quotes_table.horizontalHeader().height(), 34)
+        window.close()
+        window.deleteLater()
+        self._app.processEvents()
+
+    def test_live_toolbar_and_status_bar_use_named_shell_styles(self) -> None:
+        window = LiveMainWindow(
+            use_cases=BrokerUseCases(FakeProvider()),
+            event_bus=EventBus(),
+            app_state=AppState(),
+        )
+        window._auto_connect_timer.stop()
+        toolbar = window.findChild(QToolBar, "liveToolbar")
+        self.assertIsNotNone(toolbar)
+        self.assertEqual(window.statusBar().objectName(), "liveStatusBar")
+        self.assertEqual(window._app_auth_label.objectName(), "statusChip")
+        self.assertEqual(window._oauth_label.objectName(), "statusChip")
         window.close()
         window.deleteLater()
         self._app.processEvents()
