@@ -243,8 +243,9 @@ class LiveUIBuilder:
             QWidget#tradeTab QGroupBox#card::title,
             QWidget#advancedTab QGroupBox#card::title {
                 color: #cdd6e1;
-                font-weight: 500;
-                letter-spacing: 0.2px;
+                font-weight: 600;
+                font-size: 12px;
+                letter-spacing: 0.3px;
                 padding: 0px 8px;
                 background: #262d36;
                 subcontrol-origin: margin;
@@ -253,8 +254,9 @@ class LiveUIBuilder:
             }
             QWidget#modelTab QGroupBox#card::title {
                 color: #cdd6e1;
-                font-weight: 500;
-                letter-spacing: 0.2px;
+                font-weight: 600;
+                font-size: 12px;
+                letter-spacing: 0.3px;
                 padding: 0px 8px;
                 background: #262d36;
                 subcontrol-origin: margin;

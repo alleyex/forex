@@ -119,6 +119,15 @@ class UISmokeTest(unittest.TestCase):
         window.deleteLater()
         self._app.processEvents()
 
+    def test_log_widget_title_uses_dense_live_typography(self) -> None:
+        widget = LogWidget(title="Runtime Log")
+        style_sheet = widget._title_label.styleSheet()
+        self.assertIn("font-size:12px", style_sheet)
+        self.assertIn("font-weight:600", style_sheet)
+        widget.close()
+        widget.deleteLater()
+        self._app.processEvents()
+
 
 if __name__ == "__main__":
     unittest.main()

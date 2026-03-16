@@ -97,11 +97,15 @@ class LivePanelFactory:
             }
             QLabel#summaryTitle {
                 color: #9aa6b2;
-                font-size: 11px;
+                font-size: 10px;
+                font-weight: 500;
+                letter-spacing: 0.3px;
+                text-transform: uppercase;
             }
             QLabel#summaryValue {
                 color: #e3e9ef;
                 font-weight: 600;
+                font-size: 13px;
             }
             """
         )

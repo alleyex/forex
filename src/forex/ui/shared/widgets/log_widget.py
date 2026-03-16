@@ -166,7 +166,9 @@ class LogWidget(QWidget):
 
         if title:
             self._title_label = QLabel(title)
-            self._title_label.setStyleSheet("color:#cfd6df; font-weight:600;")
+            self._title_label.setStyleSheet(
+                "color:#cfd6df; font-weight:600; font-size:12px; letter-spacing:0.2px;"
+            )
             header.addWidget(self._title_label)
 
         header.addStretch(1)
