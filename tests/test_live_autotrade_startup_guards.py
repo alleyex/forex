@@ -62,6 +62,7 @@ def _make_window() -> SimpleNamespace:
         _auto_balance=10000.0,
         _auto_first_trade_done=False,
         _auto_first_trade_max_abs_position=0.5,
+        _account_summary_labels={"currency": SimpleNamespace(text=lambda: "USD")},
         _symbol_volume_loaded=True,
         _symbol_volume_constraints={"EURUSD": (100000, 100000)},
         _symbol_overrides_loaded=True,
@@ -70,6 +71,12 @@ def _make_window() -> SimpleNamespace:
         _symbol_id_map={"EURUSD": 1},
         _symbol_id_to_name={1: "EURUSD"},
         _symbol_name="EURUSD",
+        _quote_digits={"EURUSD": 5},
+        _price_digits=5,
+        _quote_last_mid={1: 1.1450},
+        _quote_last_bid={1: 1.1449},
+        _quote_last_ask={1: 1.1451},
+        _candles=[],
         _fetch_symbol_details=lambda _symbol_name: None,
     )
 
@@ -89,3 +96,13 @@ def test_execute_target_position_caps_first_trade_to_half_exposure() -> None:
     assert window._auto_first_trade_done is True
     assert len(window._order_service.place_calls) == 1
 
+
+def test_risk_percent_sizing_uses_balance_and_stop_loss_distance() -> None:
+    window = _make_window()
+    window._lot_risk = _CheckBoxStub(True)
+    window._lot_value = _SpinBoxStub(1.0)
+    coordinator = LiveAutoTradeCoordinator(window)
+
+    volume = coordinator.calc_volume()
+
+    assert volume == 5000000

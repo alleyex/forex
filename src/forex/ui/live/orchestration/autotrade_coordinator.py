@@ -724,13 +724,7 @@ class LiveAutoTradeCoordinator:
 
     def calc_volume(self, *, signal_strength: float | None = None) -> int:
         w = self._window
-        lot = float(w._lot_value.value())
-        if w._lot_risk.isChecked():
-            balance = w._auto_balance
-            if balance:
-                lot = max(0.01, (balance * (lot / 100.0)) / 100000.0)
-            else:
-                w._auto_log("⚠️ Balance unavailable; using fixed lot.")
+        lot = self._calculate_base_lot()
         if (
             signal_strength is not None
             and hasattr(w, "_scale_lot_by_signal")
@@ -764,6 +758,136 @@ class LiveAutoTradeCoordinator:
                 f"⚠️ Volume adjusted {raw_volume} → {volume} (min {min_volume}, step {volume_step})."
             )
         return volume
+
+    def _calculate_base_lot(self) -> float:
+        w = self._window
+        configured_value = float(w._lot_value.value())
+        if not w._lot_risk.isChecked():
+            return configured_value
+
+        balance = getattr(w, "_auto_balance", None)
+        if not balance or float(balance) <= 0.0:
+            w._auto_log("⚠️ Balance unavailable; using fixed lot.")
+            return configured_value
+
+        stop_loss_points, _ = self.calc_sl_tp_pips()
+        if not stop_loss_points or stop_loss_points <= 0:
+            fallback_lot = max(0.01, (float(balance) * (configured_value / 100.0)) / 100000.0)
+            w._auto_log("⚠️ Stop loss unavailable for risk sizing; using balance-percent fallback.")
+            return fallback_lot
+
+        point_value_per_lot = self._estimate_point_value_per_lot()
+        if point_value_per_lot <= 0.0:
+            fallback_lot = max(0.01, (float(balance) * (configured_value / 100.0)) / 100000.0)
+            w._auto_log(
+                "⚠️ Point value unavailable for risk sizing; "
+                "using balance-percent fallback."
+            )
+            return fallback_lot
+
+        risk_amount = float(balance) * (configured_value / 100.0)
+        stop_loss_cost_per_lot = float(stop_loss_points) * point_value_per_lot
+        if stop_loss_cost_per_lot <= 0.0:
+            fallback_lot = max(0.01, (float(balance) * (configured_value / 100.0)) / 100000.0)
+            w._auto_log("⚠️ Invalid stop-loss cost for risk sizing; using balance-percent fallback.")
+            return fallback_lot
+
+        lot = max(0.01, risk_amount / stop_loss_cost_per_lot)
+        w._auto_debug_fields(
+            "risk_sizing",
+            balance=f"{float(balance):.2f}",
+            risk_pct=f"{configured_value:.2f}",
+            risk_amount=f"{risk_amount:.2f}",
+            stop_loss_points=stop_loss_points,
+            point_value_per_lot=f"{point_value_per_lot:.4f}",
+            base_lot=f"{lot:.4f}",
+        )
+        return lot
+
+    def _estimate_point_value_per_lot(self) -> float:
+        w = self._window
+        symbol_name = ""
+        try:
+            symbol_name = w._trade_symbol.currentText()
+        except Exception:
+            symbol_name = w._symbol_name
+        symbol_name = str(symbol_name or "").strip().upper()
+        if len(symbol_name) != 6:
+            return 0.0
+
+        price = self._current_symbol_price(symbol_name)
+        digits = int(w._quote_digits.get(symbol_name, w._price_digits or 5))
+        point_size = 10 ** (-digits)
+        contract_size = 100000.0
+        quote_currency = symbol_name[3:]
+        account_currency = self._account_currency()
+        point_value_in_quote = contract_size * point_size
+
+        if quote_currency == account_currency:
+            return point_value_in_quote
+        if price <= 0.0:
+            return 0.0
+        if symbol_name[:3] == account_currency:
+            return point_value_in_quote / price
+
+        conversion_rate = self._estimate_fx_conversion_rate(
+            from_currency=quote_currency,
+            to_currency=account_currency,
+        )
+        if conversion_rate > 0.0:
+            return point_value_in_quote * conversion_rate
+        return 0.0
+
+    def _current_symbol_price(self, symbol_name: str) -> float:
+        w = self._window
+        symbol_id = w._symbol_id_map.get(symbol_name)
+        if symbol_id is not None:
+            mid = w._quote_last_mid.get(int(symbol_id))
+            if mid and float(mid) > 0.0:
+                return float(mid)
+            bid = w._quote_last_bid.get(int(symbol_id))
+            ask = w._quote_last_ask.get(int(symbol_id))
+            if bid and ask:
+                return (float(bid) + float(ask)) / 2.0
+            if bid and float(bid) > 0.0:
+                return float(bid)
+            if ask and float(ask) > 0.0:
+                return float(ask)
+        if w._candles:
+            try:
+                return float(w._candles[-1][4])
+            except Exception:
+                return 0.0
+        return 0.0
+
+    def _account_currency(self) -> str:
+        w = self._window
+        label = getattr(w, "_account_summary_labels", {}).get("currency")
+        if label is not None:
+            try:
+                text = str(label.text()).strip().upper()
+            except Exception:
+                text = ""
+            if len(text) == 3:
+                return text
+        return "USD"
+
+    def _estimate_fx_conversion_rate(self, *, from_currency: str, to_currency: str) -> float:
+        w = self._window
+        if from_currency == to_currency:
+            return 1.0
+        direct = f"{from_currency}{to_currency}"
+        inverse = f"{to_currency}{from_currency}"
+        for symbol_name, invert in ((direct, False), (inverse, True)):
+            price = self._current_symbol_price(symbol_name)
+            if price > 0.0:
+                return (1.0 / price) if invert else price
+            symbol_id = w._symbol_id_map.get(symbol_name)
+            if symbol_id is not None:
+                mid = w._quote_last_mid.get(int(symbol_id))
+                if mid and float(mid) > 0.0:
+                    return (1.0 / float(mid)) if invert else float(mid)
+        return 0.0
 
     def get_volume_constraints(self, symbol_name: str) -> tuple[int, int]:
         w = self._window
@@ -941,14 +1065,7 @@ class LiveAutoTradeCoordinator:
         except (TypeError, ValueError):
             lot_value = None
         if lot_value is not None and lot_value > 0.0:
-            base_lot = float(w._lot_value.value()) if hasattr(w, "_lot_value") else 0.0
-            if getattr(w, "_lot_risk", None) and w._lot_risk.isChecked():
-                balance = getattr(w, "_auto_balance", None)
-                if balance:
-                    try:
-                        base_lot = max(0.01, (float(balance) * (base_lot / 100.0)) / 100000.0)
-                    except (TypeError, ValueError):
-                        pass
+            base_lot = self._calculate_base_lot() if hasattr(w, "_lot_value") else 0.0
             if base_lot > 0.0:
                 if getattr(w, "_scale_lot_by_signal", None) and w._scale_lot_by_signal.isChecked():
                     magnitude = min(max_position, max(0.0, lot_value / base_lot))

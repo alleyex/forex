@@ -62,6 +62,9 @@ class AutoTradeSettingsValidator:
             if w._lot_risk.isChecked():
                 if lot_value <= 0.0:
                     errors.append("Risk % must be > 0.")
+                stop_loss = float(w._stop_loss.value())
+                if stop_loss <= 0.0:
+                    errors.append("Stop loss must be > 0 when Risk % sizing is enabled.")
             else:
                 if lot_value <= 0.0:
                     errors.append("Fixed lot must be > 0.")
