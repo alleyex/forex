@@ -1103,7 +1103,7 @@ class LiveMainWindow(QMainWindow):
             if auto_button is not None and hasattr(auto_button, "clicked"):
                 # Override pyqtgraph default auto-range behavior: it can include
                 # non-candle items and flatten the chart. We fully handle "A"
-                # with our own 50-candle normalization.
+                # with our own candle-range normalization.
                 try:
                     auto_button.clicked.disconnect(plot_item.autoBtnClicked)
                 except Exception:
