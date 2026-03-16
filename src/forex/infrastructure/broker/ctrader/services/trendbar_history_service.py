@@ -169,7 +169,7 @@ class TrendbarHistoryService(
         else:
             self._prepare_request(
                 count,
-                use_seconds=False,
+                use_seconds=from_ts is None,
                 window_minutes=count * self._period_minutes(),
                 from_ts=from_ts,
                 to_ts=to_ts,
@@ -185,7 +185,6 @@ class TrendbarHistoryService(
         from_ts: int | None = None,
         to_ts: int | None = None,
     ) -> None:
-        _ = use_seconds
         request = ProtoOAGetTrendbarsReq()
         request.ctidTraderAccountId = self._account_id
         request.symbolId = self._symbol_id
@@ -200,21 +199,25 @@ class TrendbarHistoryService(
                 max(int(to_ts), self._MIN_TIMESTAMP_MS),
                 self._MAX_TIMESTAMP_MS,
             )
-        if from_ts is None:
+        if use_seconds and from_ts is None:
+            request.fromTimestamp = self._MIN_TIMESTAMP_MS
+            self._last_request_mode = "count_backfill"
+        elif from_ts is None:
             request.fromTimestamp = max(
                 self._MIN_TIMESTAMP_MS,
                 request.toTimestamp - (window_minutes * 60 * 1000),
             )
+            self._last_request_mode = "milliseconds"
         else:
             request.fromTimestamp = min(
                 max(int(from_ts), self._MIN_TIMESTAMP_MS),
                 self._MAX_TIMESTAMP_MS,
             )
+            self._last_request_mode = "milliseconds"
         if request.fromTimestamp > request.toTimestamp:
             request.fromTimestamp = max(
                 self._MIN_TIMESTAMP_MS, request.toTimestamp - (window_minutes * 60 * 1000)
             )
-        self._last_request_mode = "milliseconds"
         request.count = int(count)
         self._last_request_count = int(count)
         self._last_request_window = int(window_minutes)

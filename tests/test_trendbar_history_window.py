@@ -27,13 +27,31 @@ class _DummyAppAuthService:
 def test_default_window_respects_h1_timeframe() -> None:
     service = TrendbarHistoryService(_DummyAppAuthService())
     service.fetch(account_id=1, symbol_id=1, count=50, timeframe="H1")
-    assert service._last_request_window == 3000
+    assert service._last_request_mode == "count_backfill"
+    assert service._pending_request.fromTimestamp == service._MIN_TIMESTAMP_MS
+    assert service._pending_request.count == 50
 
 
 def test_default_window_respects_m5_timeframe() -> None:
     service = TrendbarHistoryService(_DummyAppAuthService())
     service.fetch(account_id=1, symbol_id=1, count=50, timeframe="M5")
-    assert service._last_request_window == 250
+    assert service._last_request_mode == "count_backfill"
+    assert service._pending_request.fromTimestamp == service._MIN_TIMESTAMP_MS
+    assert service._pending_request.count == 50
+
+
+def test_explicit_time_range_keeps_window_mode() -> None:
+    service = TrendbarHistoryService(_DummyAppAuthService())
+    service.fetch(
+        account_id=1,
+        symbol_id=1,
+        count=50,
+        timeframe="M10",
+        from_ts=1_700_000_000_000,
+        to_ts=1_700_030_000_000,
+    )
+    assert service._last_request_mode == "milliseconds"
+    assert service._pending_request.fromTimestamp == 1_700_000_000_000
 
 
 def test_minimum_useful_bar_count_has_live_feature_floor() -> None:
