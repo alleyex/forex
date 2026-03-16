@@ -63,6 +63,7 @@ class UISmokeTest(unittest.TestCase):
         self.assertEqual(window._log_panel.current_filter, "INFO")
         self.assertEqual(window._lot_fixed.text(), "Fixed lot size")
         self.assertEqual(window._lot_risk.text(), "Risk % of balance")
+        self.assertIsNotNone(window._risk_sizing_preview)
         window.close()
         window.deleteLater()
         self._app.processEvents()

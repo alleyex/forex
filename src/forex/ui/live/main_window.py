@@ -642,6 +642,34 @@ class LiveMainWindow(QMainWindow):
 
     def _sync_lot_value_style(self) -> None:
         self._auto_settings_persistence.sync_lot_value_style()
+        self._refresh_risk_sizing_preview()
+
+    def _refresh_risk_sizing_preview(self) -> None:
+        label = getattr(self, "_risk_sizing_preview", None)
+        if label is None:
+            return
+        try:
+            estimated_lot = float(self._autotrade_coordinator.estimate_base_lot())
+        except Exception:
+            estimated_lot = 0.0
+        if getattr(self, "_lot_risk", None) and self._lot_risk.isChecked():
+            balance = getattr(self, "_auto_balance", None)
+            stop_loss = float(self._stop_loss.value()) if hasattr(self, "_stop_loss") else 0.0
+            balance_text = (
+                f"balance {float(balance):.2f}, " if balance and float(balance) > 0.0 else ""
+            )
+            if stop_loss > 0:
+                label.setText(
+                    "Approx. "
+                    f"{estimated_lot:.3f} lot using "
+                    f"{balance_text}SL {stop_loss:.0f} points."
+                )
+            else:
+                label.setText(
+                    f"Approx. {estimated_lot:.3f} lot. Add a stop loss for full risk sizing."
+                )
+            return
+        label.setText(f"Fixed order size: {estimated_lot:.3f} lot.")
 
     def _setup_autotrade_persistence(self) -> None:
         self._auto_settings_persistence.setup()
@@ -954,6 +982,7 @@ class LiveMainWindow(QMainWindow):
     def _handle_account_summary_updated(self, summary) -> None:
         self._session_orchestrator.mark_data_activity()
         self._positions_controller.apply_account_summary_update(summary)
+        self._refresh_risk_sizing_preview()
 
     def _handle_history_received(self, rows: list[dict]) -> None:
         self._ui_diag_history_total += 1

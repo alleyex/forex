@@ -455,6 +455,15 @@ class LiveUIBuilder:
         w._lot_fixed.toggled.connect(w._sync_lot_value_style)
         w._lot_risk.toggled.connect(w._sync_lot_value_style)
         w._sync_lot_value_style()
+        w._lot_fixed.toggled.connect(w._refresh_risk_sizing_preview)
+        w._lot_risk.toggled.connect(w._refresh_risk_sizing_preview)
+        w._lot_value.valueChanged.connect(w._refresh_risk_sizing_preview)
+
+        w._risk_sizing_preview = QLabel("-")
+        w._risk_sizing_preview.setWordWrap(True)
+        w._risk_sizing_preview.setObjectName("riskSizingPreview")
+        w._risk_sizing_preview.setStyleSheet("color:#9aa6b2; font-size:11px;")
+        trade_card_form.addRow("Estimated lot size", w._risk_sizing_preview)
 
         w._max_positions = QSpinBox()
         w._max_positions.setRange(1, 20)
@@ -470,6 +479,7 @@ class LiveUIBuilder:
         w._stop_loss.setValue(500.0)
         w._stop_loss.setSuffix(" pt")
         risk_card_form.addRow("Stop loss (points)", w._stop_loss)
+        w._stop_loss.valueChanged.connect(w._refresh_risk_sizing_preview)
 
         w._take_profit = QDoubleSpinBox()
         w._take_profit.setDecimals(0)

@@ -804,6 +804,9 @@ class LiveAutoTradeCoordinator:
         )
         return lot
 
+    def estimate_base_lot(self) -> float:
+        return float(self._calculate_base_lot())
+
     def _estimate_point_value_per_lot(self) -> float:
         w = self._window
         symbol_name = ""

@@ -19,6 +19,9 @@ class LiveAutoSettingsPersistence:
             w._lot_value.setSuffix(" lots")
             w._lot_value.setSingleStep(0.01)
             w._lot_value.setRange(0.01, 100.0)
+        refresh = getattr(w, "_refresh_risk_sizing_preview", None)
+        if callable(refresh):
+            refresh()
 
     def setup(self) -> None:
         w = self._window
