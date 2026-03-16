@@ -22,7 +22,8 @@ config/local/*
 !config/local/.gitkeep
 
 # Generated data/models
-src/forex/ml/rl/models/
+src/forex/ml/rl/models/*.zip
+src/forex/ml/rl/models/*.json
 data/*
 !data/.gitkeep
 !data/README.md
