@@ -92,8 +92,9 @@ class LiveAutoTradeCoordinator:
 
         df = pd.DataFrame(
             {
+                "utc_timestamp_minutes": [int(c[0] // 60) for c in w._candles],
                 "timestamp": [
-                    datetime.utcfromtimestamp(c[0]).strftime("%H:%M")
+                    datetime.utcfromtimestamp(c[0]).strftime("%Y-%m-%d %H:%M:%S")
                     for c in w._candles
                 ],
                 "open": [c[1] for c in w._candles],
