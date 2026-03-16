@@ -12,6 +12,7 @@ from PySide6.QtWidgets import (
     QHBoxLayout,
     QLabel,
     QLineEdit,
+    QPushButton,
     QRadioButton,
     QSpinBox,
     QStyle,
@@ -372,6 +373,9 @@ class LiveUIBuilder:
         model_field_layout.addWidget(w._model_path, 1)
         model_field_layout.addWidget(w._browse_model_dir_button)
         model_layout.addWidget(model_field_row)
+        w._load_best_model_button = QPushButton("Use Best Playback Model")
+        w._load_best_model_button.clicked.connect(w._apply_best_playback_model_preset)
+        model_layout.addWidget(w._load_best_model_button, 0, Qt.AlignLeft)
 
         w._auto_trade_toggle = QCheckBox("Enable")
         w._auto_trade_toggle.toggled.connect(w._toggle_auto_trade)

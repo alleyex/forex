@@ -46,6 +46,7 @@ class UISmokeTest(unittest.TestCase):
         # Keep smoke test deterministic: avoid deferred auto-connect side effects.
         window._auto_connect_timer.stop()
         self.assertIn("Live", window.windowTitle())
+        self.assertEqual(window._load_best_model_button.text(), "Use Best Playback Model")
         timeframes = [
             window._trade_timeframe.itemText(index)
             for index in range(window._trade_timeframe.count())

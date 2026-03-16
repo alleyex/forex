@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import time
 from pathlib import Path
 
@@ -88,6 +89,7 @@ class LiveMainWindow(QMainWindow):
     _CARD_LINE_TITLE_COLOR = "#3a4452"
     _CARD_LINE_TITLE_FONT_SIZE_PX = 10
     _CARD_LINE_TITLE_OFFSET_PX = -20
+    _BEST_PLAYBACK_PRESET_PATH = Path("config/training_presets/best_playback_s12.json")
 
     # Initialization
     def __init__(
@@ -378,6 +380,96 @@ class LiveMainWindow(QMainWindow):
 
     def _handle_trade_timeframe_changed(self, timeframe: str) -> None:
         self._market_data_controller.set_trade_timeframe(timeframe)
+
+    def _apply_best_playback_model_preset(self) -> None:
+        payload = self._load_best_playback_preset()
+        if payload is None:
+            self._auto_log("❌ Best playback preset could not be loaded")
+            return
+        source_run = str(payload.get("source_run", "")).strip()
+        if not source_run:
+            self._auto_log("❌ Best playback preset is missing source_run")
+            return
+        run_dir = self._project_root / "data" / "training" / "runs" / source_run
+        model_path = run_dir / "model.zip"
+        if not model_path.exists():
+            self._auto_log(f"❌ Best playback model not found: {model_path}")
+            return
+        training_args = self._load_json_file(run_dir / "training_args.json")
+        env_config = self._load_json_file(run_dir / "model.env.json")
+        metadata = self._load_training_data_metadata(training_args)
+        self._autotrade_loading = True
+        try:
+            self._model_path.setText(self._normalize_model_path_text(str(model_path)))
+            self._apply_live_symbol(metadata)
+            self._apply_live_timeframe(metadata)
+            if isinstance(env_config, dict):
+                if "position_step" in env_config:
+                    self._position_step.setValue(float(env_config["position_step"]))
+                if "slippage_bps" in env_config:
+                    self._slippage_bps.setValue(float(env_config["slippage_bps"]))
+        finally:
+            self._autotrade_loading = False
+        self._auto_settings_persistence.save()
+        timeframe = self._trade_timeframe.currentText().strip()
+        symbol = self._trade_symbol.currentText().strip()
+        self._auto_log(
+            "✅ Applied best playback model preset: "
+            f"{model_path.name} | symbol={symbol or '-'} | timeframe={timeframe or '-'}"
+        )
+
+    def _apply_live_symbol(self, metadata: dict | None) -> None:
+        if not isinstance(metadata, dict):
+            return
+        details = metadata.get("details", {})
+        if not isinstance(details, dict):
+            return
+        symbol_id = details.get("symbol_id")
+        try:
+            symbol_id_int = int(symbol_id)
+        except (TypeError, ValueError):
+            return
+        symbol_name = self._symbol_id_to_name.get(symbol_id_int, "").strip()
+        if not symbol_name:
+            return
+        index = self._trade_symbol.findText(symbol_name)
+        if index >= 0:
+            self._trade_symbol.setCurrentIndex(index)
+
+    def _apply_live_timeframe(self, metadata: dict | None) -> None:
+        timeframe = ""
+        if isinstance(metadata, dict):
+            details = metadata.get("details", {})
+            if isinstance(details, dict):
+                timeframe = str(details.get("timeframe", "")).strip().upper()
+        if not timeframe:
+            return
+        index = self._trade_timeframe.findText(timeframe)
+        if index >= 0:
+            self._trade_timeframe.setCurrentIndex(index)
+
+    def _load_training_data_metadata(self, training_args: dict | None) -> dict | None:
+        if not isinstance(training_args, dict):
+            return None
+        data_path_value = training_args.get("data") or training_args.get("data_path")
+        data_path_text = str(data_path_value or "").strip()
+        if not data_path_text:
+            return None
+        data_path = Path(data_path_text).expanduser()
+        meta_path = Path(f"{data_path}.meta.json")
+        return self._load_json_file(meta_path)
+
+    @classmethod
+    def _load_best_playback_preset(cls) -> dict | None:
+        return cls._load_json_file(cls._BEST_PLAYBACK_PRESET_PATH)
+
+    @staticmethod
+    def _load_json_file(path: Path) -> dict | None:
+        try:
+            payload = json.loads(path.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError):
+            return None
+        return payload if isinstance(payload, dict) else None
 
     # Auto Trade UI State / Persistence
     def _trading_widgets(self) -> list[QWidget]:
