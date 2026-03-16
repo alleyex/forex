@@ -94,6 +94,15 @@ def _save_training_status(
     path.write_text(json.dumps(payload, ensure_ascii=True, indent=2), encoding="utf-8")
 
 
+def _save_checkpoint_selection(out_path: str, payload: dict) -> None:
+    target = str(out_path).strip()
+    if not target:
+        return
+    path = Path(target).expanduser()
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(payload, ensure_ascii=True, indent=2), encoding="utf-8")
+
+
 def _handle_termination_signal(signum, _frame) -> None:
     signal_name = signal.Signals(signum).name if signum in signal.Signals._value2member_map_ else str(signum)
     print(f"Received {signal_name}; saving current checkpoint before exit.")
@@ -430,6 +439,9 @@ class PlateauEvalCallback(EvalCallback):
         checkpoint_max_flat_ratio: float,
         checkpoint_max_ls_imbalance: float,
         checkpoint_max_drawdown: float,
+        playback_candidate_dir: str = "",
+        playback_top_n: int = 0,
+        collect_playback_candidates: bool = False,
         **kwargs,
     ) -> None:
         super().__init__(*args, **kwargs)
@@ -453,8 +465,67 @@ class PlateauEvalCallback(EvalCallback):
         self._checkpoint_max_ls_imbalance = float(checkpoint_max_ls_imbalance)
         self._checkpoint_max_drawdown = float(checkpoint_max_drawdown)
         self._anti_flat_violation_evals = 0
+        self._playback_candidate_dir = Path(playback_candidate_dir).expanduser() if str(playback_candidate_dir).strip() else None
+        self._playback_top_n = max(0, int(playback_top_n))
+        self._collect_playback_candidates = bool(collect_playback_candidates)
+        self._playback_candidates: list[dict[str, object]] = []
         self.stopped_early = False
         self.stop_reason = ""
+
+    def _maybe_record_playback_candidate(
+        self,
+        *,
+        step: int,
+        mean_reward: float,
+        checkpoint_gate: str,
+        trade_rate_1k: float | None,
+        flat_ratio: float | None,
+        ls_imbalance: float | None,
+        max_drawdown: float | None,
+    ) -> None:
+        if not self._collect_playback_candidates or self._playback_candidate_dir is None or self._playback_top_n <= 0:
+            return
+        current = {
+            "step": int(step),
+            "eval_mean_reward": float(mean_reward),
+            "checkpoint_gate": str(checkpoint_gate),
+            "eval_trade_rate_1k": None if trade_rate_1k is None else float(trade_rate_1k),
+            "eval_flat_ratio": None if flat_ratio is None else float(flat_ratio),
+            "eval_ls_imbalance": None if ls_imbalance is None else float(ls_imbalance),
+            "eval_max_drawdown": None if max_drawdown is None else float(max_drawdown),
+        }
+        existing = next((row for row in self._playback_candidates if int(row.get("step", -1)) == int(step)), None)
+        if existing is not None:
+            existing.update(current)
+            return
+        should_add = len(self._playback_candidates) < self._playback_top_n
+        if not should_add:
+            worst = min(self._playback_candidates, key=lambda row: float(row.get("eval_mean_reward", float("-inf"))))
+            should_add = float(mean_reward) > float(worst.get("eval_mean_reward", float("-inf")))
+            if should_add:
+                old_path = str(worst.get("path") or "").strip()
+                if old_path:
+                    Path(old_path).unlink(missing_ok=True)
+                self._playback_candidates.remove(worst)
+        if not should_add:
+            return
+        self._playback_candidate_dir.mkdir(parents=True, exist_ok=True)
+        candidate_path = self._playback_candidate_dir / f"candidate_step_{int(step):08d}.zip"
+        self.model.save(str(candidate_path))
+        current["path"] = str(candidate_path)
+        self._playback_candidates.append(current)
+        self._playback_candidates.sort(
+            key=lambda row: (float(row.get("eval_mean_reward", float("-inf"))), -int(row.get("step", 0))),
+            reverse=True,
+        )
+        while len(self._playback_candidates) > self._playback_top_n:
+            dropped = self._playback_candidates.pop()
+            dropped_path = str(dropped.get("path") or "").strip()
+            if dropped_path:
+                Path(dropped_path).unlink(missing_ok=True)
+
+    def get_playback_candidates(self) -> list[dict[str, object]]:
+        return [dict(row) for row in self._playback_candidates]
 
     def _on_step(self) -> bool:
         continue_training = True
@@ -585,6 +656,17 @@ class PlateauEvalCallback(EvalCallback):
         allow_checkpoint_updates = not checkpoint_reasons
         if not allow_checkpoint_updates and self.verbose >= 1:
             print("Best checkpoint skipped:", f"step={step}", " ".join(checkpoint_reasons))
+        checkpoint_gate = "pass" if allow_checkpoint_updates else f"fail: {', '.join(checkpoint_reasons)}"
+        if allow_checkpoint_updates and not anti_flat_violation:
+            self._maybe_record_playback_candidate(
+                step=step,
+                mean_reward=mean_reward,
+                checkpoint_gate=checkpoint_gate,
+                trade_rate_1k=trade_rate_1k if self._activity_profiler is not None else None,
+                flat_ratio=flat_ratio if self._activity_profiler is not None else None,
+                ls_imbalance=ls_imbalance if self._activity_profiler is not None else None,
+                max_drawdown=max_drawdown if self._activity_profiler is not None else None,
+            )
         if allow_checkpoint_updates and (not anti_flat_violation) and mean_reward > self.best_mean_reward:
             if self.verbose >= 1:
                 print("New best mean reward!")
@@ -758,6 +840,77 @@ def _aggregate_playback_results(results: list[PlaybackResult]) -> dict[str, floa
         "avg_max_drawdown": float(np.mean(drawdowns)),
         "worst_max_drawdown": float(np.max(drawdowns)),
         "avg_trade_rate_1k": float(np.mean(trade_rates)),
+    }
+
+
+def _playback_result_to_dict(result: PlaybackResult) -> dict[str, object]:
+    return {
+        "processed_steps": int(result.processed_steps),
+        "trades": int(result.trades),
+        "total_return": float(result.total_return),
+        "sharpe": float(result.sharpe),
+        "max_drawdown": float(result.max_drawdown),
+        "trade_rate_1k": float(result.trade_rate_1k),
+        "flat_ratio": float(result.flat_ratio),
+        "ls_imbalance": float(result.ls_imbalance),
+        "gate_pass": not bool(result.gate_reasons),
+        "gate_reasons": list(result.gate_reasons),
+    }
+
+
+def _rank_playback_candidate(entry: dict[str, object]) -> tuple:
+    playback = entry.get("playback", {})
+    if not isinstance(playback, dict):
+        playback = {}
+    gate_pass = bool(playback.get("gate_pass", False))
+    total_return = float(playback.get("total_return", float("-inf")))
+    sharpe = float(playback.get("sharpe", float("-inf")))
+    max_drawdown = float(playback.get("max_drawdown", float("inf")))
+    eval_mean_reward = float(entry.get("eval_mean_reward", float("-inf")))
+    return (1 if gate_pass else 0, total_return, sharpe, -max_drawdown, eval_mean_reward)
+
+
+def _evaluate_playback_candidates(
+    candidates: list[dict[str, object]],
+    *,
+    features: np.ndarray,
+    closes: np.ndarray,
+    timestamps,
+    config: TradingConfig,
+    device: str,
+) -> dict[str, object]:
+    evaluated: list[dict[str, object]] = []
+    for candidate in candidates:
+        model_path = str(candidate.get("path") or "").strip()
+        if not model_path:
+            continue
+        try:
+            model = PPO.load(model_path, device=device)
+            bundle = PlaybackBundle(
+                features=features,
+                closes=closes,
+                timestamps=list(timestamps),
+                config=config,
+                model=model,
+            )
+            playback = run_playback(
+                bundle,
+                start_index=0,
+                max_steps=0,
+                quiet=True,
+            )
+            row = dict(candidate)
+            row["playback"] = _playback_result_to_dict(playback)
+            evaluated.append(row)
+        except Exception as exc:
+            row = dict(candidate)
+            row["playback_error"] = str(exc)
+            evaluated.append(row)
+    selected = max(evaluated, key=_rank_playback_candidate) if evaluated else None
+    return {
+        "candidate_count": int(len(evaluated)),
+        "candidates": evaluated,
+        "selected": selected,
     }
 
 
@@ -1049,6 +1202,18 @@ def main() -> None:
         type=float,
         default=1e-6,
         help="Absolute position threshold treated as flat for anti-flat reward shaping.",
+    )
+    parser.add_argument(
+        "--path-vol-penalty",
+        type=float,
+        default=0.25,
+        help="Path-penalty mode only: weight applied to path standard deviation.",
+    )
+    parser.add_argument(
+        "--path-downside-penalty",
+        type=float,
+        default=0.25,
+        help="Path-penalty mode only: weight applied to path downside semivariance.",
     )
     parser.add_argument(
         "--position-bias-penalty",
@@ -1427,6 +1592,10 @@ def main() -> None:
         raise ValueError("--flat-streak-penalty must be >= 0.")
     if args.flat_position_threshold < 0.0:
         raise ValueError("--flat-position-threshold must be >= 0.")
+    if args.path_vol_penalty < 0.0:
+        raise ValueError("--path-vol-penalty must be >= 0.")
+    if args.path_downside_penalty < 0.0:
+        raise ValueError("--path-downside-penalty must be >= 0.")
     if args.target_vol < 0.0:
         raise ValueError("--target-vol must be >= 0.")
     if args.vol_target_lookback < 2:
@@ -1547,6 +1716,8 @@ def main() -> None:
         flat_position_penalty=args.flat_position_penalty,
         flat_streak_penalty=args.flat_streak_penalty,
         flat_position_threshold=args.flat_position_threshold,
+        path_vol_penalty=args.path_vol_penalty,
+        path_downside_penalty=args.path_downside_penalty,
         position_bias_penalty=args.position_bias_penalty,
         position_bias_threshold=args.position_bias_threshold,
         position_bias_ema_alpha=args.position_bias_ema_alpha,
@@ -1584,6 +1755,8 @@ def main() -> None:
         flat_position_penalty=args.flat_position_penalty,
         flat_streak_penalty=args.flat_streak_penalty,
         flat_position_threshold=args.flat_position_threshold,
+        path_vol_penalty=args.path_vol_penalty,
+        path_downside_penalty=args.path_downside_penalty,
         position_bias_penalty=args.position_bias_penalty,
         position_bias_threshold=args.position_bias_threshold,
         position_bias_ema_alpha=args.position_bias_ema_alpha,
@@ -1643,6 +1816,7 @@ def main() -> None:
     if not training_status_path:
         training_status_path = str(Path(args.model_out).with_name("training_status.json"))
     training_status_path = str(Path(training_status_path).expanduser())
+    checkpoint_selection_path = str(Path(args.model_out).with_name("checkpoint_selection.json").expanduser())
     _save_training_args_snapshot(
         training_args_path,
         args,
@@ -1725,6 +1899,7 @@ def main() -> None:
 
     metrics_callback = MetricsLogCallback(_write_metric)
     best_model_tmp_dir: Path | None = None
+    playback_candidate_tmp_dir: Path | None = None
     activity_profile_steps = max(0, int(args.eval_profile_steps))
     eval_callbacks: list[PlateauEvalCallback] = []
 
@@ -1738,8 +1913,13 @@ def main() -> None:
             max_steps=activity_profile_steps,
         )
 
-    def _make_eval_callback(eval_env_ref: DummyVecEnv, eval_config_ref: TradingConfig) -> EvalCallback:
-        nonlocal best_model_tmp_dir
+    def _make_eval_callback(
+        eval_env_ref: DummyVecEnv,
+        eval_config_ref: TradingConfig,
+        *,
+        collect_playback_candidates: bool,
+    ) -> EvalCallback:
+        nonlocal best_model_tmp_dir, playback_candidate_tmp_dir
         kwargs = {
             "eval_freq": args.eval_freq,
             "n_eval_episodes": args.eval_episodes,
@@ -1773,10 +1953,20 @@ def main() -> None:
             checkpoint_max_flat_ratio=args.checkpoint_max_flat_ratio,
             checkpoint_max_ls_imbalance=args.checkpoint_max_ls_imbalance,
             checkpoint_max_drawdown=args.checkpoint_max_drawdown,
+            playback_candidate_dir=(
+                str(playback_candidate_tmp_dir)
+                if collect_playback_candidates
+                else ""
+            ),
+            playback_top_n=5,
+            collect_playback_candidates=collect_playback_candidates,
             **kwargs,
         )
         eval_callbacks.append(callback)
         return callback
+
+    if args.save_best_checkpoint:
+        playback_candidate_tmp_dir = Path(tempfile.mkdtemp(prefix="ppo_playback_candidates_"))
 
     def _resolve_callback_status() -> tuple[bool, str, int | None]:
         for callback in reversed(eval_callbacks):
@@ -1854,7 +2044,11 @@ def main() -> None:
                 f"positions={curriculum_train_config.discrete_positions}",
             )
             model_ref.set_env(curriculum_env)
-            curriculum_callback = _make_eval_callback(curriculum_eval_env, curriculum_eval_config)
+            curriculum_callback = _make_eval_callback(
+                curriculum_eval_env,
+                curriculum_eval_config,
+                collect_playback_candidates=False,
+            )
             model_ref.learn(
                 total_timesteps=stage_one_steps,
                 callback=CallbackList([curriculum_callback, metrics_callback]),
@@ -1875,7 +2069,11 @@ def main() -> None:
                 f"position_step={final_eval_config_ref.position_step}",
             )
             model_ref.set_env(final_env_ref)
-            final_callback = _make_eval_callback(final_eval_env_ref, final_eval_config_ref)
+            final_callback = _make_eval_callback(
+                final_eval_env_ref,
+                final_eval_config_ref,
+                collect_playback_candidates=True,
+            )
             model_ref.learn(
                 total_timesteps=remaining_steps,
                 callback=CallbackList([final_callback, metrics_callback]),
@@ -1884,7 +2082,11 @@ def main() -> None:
             return
 
         model_ref.set_env(final_env_ref)
-        final_callback = _make_eval_callback(final_eval_env_ref, final_eval_config_ref)
+        final_callback = _make_eval_callback(
+            final_eval_env_ref,
+            final_eval_config_ref,
+            collect_playback_candidates=True,
+        )
         model_ref.learn(
             total_timesteps=total_steps,
             callback=CallbackList([final_callback, metrics_callback]),
@@ -2320,6 +2522,7 @@ def main() -> None:
         if trials_csv_fh:
             trials_csv_fh.close()
         selected_trials: list = []
+        final_eval_config_used = eval_config
         if args.optuna_auto_select:
             completed_trials = [
                 trial
@@ -2696,6 +2899,7 @@ def main() -> None:
         best_env = _build_env(train_features, train_closes, best_train_config, train_timestamps)
         best_eval_env = _build_env(eval_features, eval_closes, best_eval_config, eval_timestamps)
         final_train_config = best_train_config
+        final_eval_config_used = best_eval_config
         model = _train_model(
             env=best_env,
             learning_rate=float(best_params["learning_rate"]),
@@ -2736,11 +2940,14 @@ def main() -> None:
                 metrics_fh.close()
             if best_model_tmp_dir is not None:
                 shutil.rmtree(best_model_tmp_dir, ignore_errors=True)
+            if playback_candidate_tmp_dir is not None:
+                shutil.rmtree(playback_candidate_tmp_dir, ignore_errors=True)
             raise SystemExit(130)
     elif args.resume:
         if not model_path.exists():
             raise FileNotFoundError(f"Resume requested but model not found: {model_path}")
         final_train_config = train_config
+        final_eval_config_used = eval_config
         model = PPO.load(str(model_path), env=env, device=args.device)
         print(f"Resolved device: {model.device}")
         model.verbose = args.verbose
@@ -2749,7 +2956,10 @@ def main() -> None:
         try:
             model.learn(
                 total_timesteps=args.total_steps,
-                callback=CallbackList([_make_eval_callback(eval_env, eval_config), metrics_callback]),
+                callback=CallbackList([
+                    _make_eval_callback(eval_env, eval_config, collect_playback_candidates=True),
+                    metrics_callback,
+                ]),
             )
         except KeyboardInterrupt:
             print("Training interrupted by user; saving current checkpoint.")
@@ -2759,9 +2969,12 @@ def main() -> None:
                 metrics_fh.close()
             if best_model_tmp_dir is not None:
                 shutil.rmtree(best_model_tmp_dir, ignore_errors=True)
+            if playback_candidate_tmp_dir is not None:
+                shutil.rmtree(playback_candidate_tmp_dir, ignore_errors=True)
             raise SystemExit(130)
     else:
         final_train_config = train_config
+        final_eval_config_used = eval_config
         model = _train_model(
             env=env,
             learning_rate=args.learning_rate,
@@ -2798,19 +3011,79 @@ def main() -> None:
                 metrics_fh.close()
             if best_model_tmp_dir is not None:
                 shutil.rmtree(best_model_tmp_dir, ignore_errors=True)
+            if playback_candidate_tmp_dir is not None:
+                shutil.rmtree(playback_candidate_tmp_dir, ignore_errors=True)
             raise SystemExit(130)
 
     model_to_save = model
+    checkpoint_selection_payload: dict[str, object] = {
+        "selection_mode": "best_eval_fallback",
+        "output_model_path": str(model_path),
+        "candidate_count": 0,
+        "selected_source": "final_state",
+        "candidates": [],
+    }
     if args.save_best_checkpoint and best_model_tmp_dir is not None:
         best_model_path = best_model_tmp_dir / "best_model.zip"
         if best_model_path.exists():
             model_to_save = PPO.load(str(best_model_path))
             print(f"Using best eval checkpoint: {best_model_path}")
+            checkpoint_selection_payload.update(
+                {
+                    "selected_source": "best_eval",
+                    "selected_checkpoint_path": str(best_model_path),
+                }
+            )
         else:
             print("Best eval checkpoint not found; falling back to final model state.")
+    if args.save_best_checkpoint and playback_candidate_tmp_dir is not None:
+        final_stage_callbacks = [callback for callback in eval_callbacks if callback.get_playback_candidates()]
+        playback_candidates = final_stage_callbacks[-1].get_playback_candidates() if final_stage_callbacks else []
+        playback_summary = _evaluate_playback_candidates(
+            playback_candidates,
+            features=eval_features,
+            closes=eval_closes,
+            timestamps=eval_timestamps,
+            config=final_eval_config_used,
+            device=args.device,
+        )
+        checkpoint_selection_payload.update(
+            {
+                "selection_mode": "playback_top_n",
+                "top_n": 5,
+                "candidate_count": int(playback_summary.get("candidate_count", 0)),
+                "candidates": playback_summary.get("candidates", []),
+            }
+        )
+        selected = playback_summary.get("selected")
+        if isinstance(selected, dict):
+            selected_path = str(selected.get("path") or "").strip()
+            selected_step = selected.get("step")
+            selected_playback = selected.get("playback")
+            if selected_path and Path(selected_path).exists() and isinstance(selected_playback, dict):
+                model_to_save = PPO.load(selected_path)
+                checkpoint_selection_payload.update(
+                    {
+                        "selected_source": "playback_top_n",
+                        "selected_checkpoint_path": selected_path,
+                        "selected_step": selected_step,
+                        "selected_eval_mean_reward": selected.get("eval_mean_reward"),
+                        "selected_checkpoint_gate": selected.get("checkpoint_gate"),
+                        "selected_playback": selected_playback if isinstance(selected_playback, dict) else {},
+                    }
+                )
+                print(
+                    "Using best playback checkpoint:",
+                    f"step={selected_step}",
+                    f"path={selected_path}",
+                    f"return={float((selected_playback or {}).get('total_return', 0.0)):.6g}",
+                    f"sharpe={float((selected_playback or {}).get('sharpe', 0.0)):.6g}",
+                )
 
     model_path.parent.mkdir(parents=True, exist_ok=True)
     model_to_save.save(str(model_path))
+    checkpoint_selection_payload["output_model_path"] = str(model_path)
+    _save_checkpoint_selection(checkpoint_selection_path, checkpoint_selection_payload)
     save_trading_config(
         final_train_config,
         env_config_path,
@@ -2831,6 +3104,8 @@ def main() -> None:
         metrics_fh.close()
     if best_model_tmp_dir is not None:
         shutil.rmtree(best_model_tmp_dir, ignore_errors=True)
+    if playback_candidate_tmp_dir is not None:
+        shutil.rmtree(playback_candidate_tmp_dir, ignore_errors=True)
 
 
 if __name__ == "__main__":

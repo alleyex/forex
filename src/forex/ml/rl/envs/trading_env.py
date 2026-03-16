@@ -195,7 +195,11 @@ def simulate_step_transition(
     if reward_mode == "terminal_horizon":
         reward_step_pnl = terminal_step_pnl - (0.75 * mae)
     elif reward_mode == "path_penalty":
-        reward_step_pnl = path_mean - (0.5 * path_std) - (0.5 * downside_semivar)
+        reward_step_pnl = (
+            path_mean
+            - (float(getattr(config, "path_vol_penalty", 0.25)) * path_std)
+            - (float(getattr(config, "path_downside_penalty", 0.25)) * downside_semivar)
+        )
     elif reward_mode == "tp_sl_proxy":
         reward_step_pnl = proxy_outcome
 
@@ -351,6 +355,8 @@ class TradingConfig:
     vol_scale_cap: float = 1.5
     drawdown_governor_slope: float = 0.0
     drawdown_governor_floor: float = 0.3
+    path_vol_penalty: float = 0.25
+    path_downside_penalty: float = 0.25
 
 
 class TradingEnv(gym.Env if gym else object):
