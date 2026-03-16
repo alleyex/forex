@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import warnings
 from collections.abc import Sequence
 from dataclasses import dataclass
 from pathlib import Path
@@ -1035,12 +1036,42 @@ def _adx(high: pd.Series, low: pd.Series, close: pd.Series, period: int) -> pd.S
 
 
 def _parse_datetimes(df: pd.DataFrame) -> pd.Series:
-    if "timestamp" in df.columns:
-        parsed = pd.to_datetime(df["timestamp"], errors="coerce", utc=True)
+    if "utc_timestamp_minutes" in df.columns:
+        parsed = pd.to_datetime(
+            df["utc_timestamp_minutes"],
+            unit="m",
+            errors="coerce",
+            utc=True,
+        )
         if parsed.notna().any():
             return parsed
-    if "utc_timestamp_minutes" in df.columns:
-        return pd.to_datetime(df["utc_timestamp_minutes"], unit="m", errors="coerce", utc=True)
+    if "timestamp" in df.columns:
+        timestamp_text = df["timestamp"].astype(str)
+        for fmt in (
+            "%Y-%m-%d %H:%M:%S",
+            "%Y-%m-%d %H:%M",
+            "%Y-%m-%d %H:%M:%S%z",
+            "%Y-%m-%dT%H:%M:%S%z",
+            "%Y-%m-%dT%H:%M:%S",
+            "%H:%M",
+        ):
+            parsed = pd.to_datetime(
+                timestamp_text,
+                format=fmt,
+                errors="coerce",
+                utc=True,
+            )
+            if parsed.notna().any():
+                return parsed
+        with warnings.catch_warnings():
+            warnings.filterwarnings(
+                "ignore",
+                message="Could not infer format, so each element will be parsed individually",
+                category=UserWarning,
+            )
+            parsed = pd.to_datetime(timestamp_text, errors="coerce", utc=True)
+        if parsed.notna().any():
+            return parsed
     return pd.Series(pd.NaT, index=df.index)
 
 

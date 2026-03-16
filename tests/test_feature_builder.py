@@ -15,6 +15,7 @@ from forex.ml.rl.features.feature_builder import (
     CORE20_ALPHA8_FEATURE_COLUMNS,
     CORE20_FEATURE_COLUMNS,
     RESIDUAL_CONTEXT_COLUMNS,
+    _parse_datetimes,
     apply_feature_profile,
     build_feature_frame,
     build_features,
@@ -600,6 +601,18 @@ def test_build_features_preserves_alpha8_scaler_profile() -> None:
     bundle = build_features(df, scaler=scaler)
     assert list(bundle.names) == scaler.names
     assert bundle.features.shape[1] == len(ALPHA8_FEATURE_COLUMNS)
+
+
+def test_parse_datetimes_prefers_utc_timestamp_minutes() -> None:
+    df = pd.DataFrame(
+        {
+            "timestamp": ["10:40", "10:50"],
+            "utc_timestamp_minutes": [10, 20],
+        }
+    )
+    parsed = _parse_datetimes(df)
+    assert str(parsed.iloc[0]) == "1970-01-01 00:10:00+00:00"
+    assert str(parsed.iloc[1]) == "1970-01-01 00:20:00+00:00"
 
 
 def test_required_raw_columns_for_profile() -> None:
