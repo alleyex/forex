@@ -47,17 +47,14 @@ class DecisionInspectorWidget(QWidget):
     ]
     _NORMALIZED_FIELDS = [
         ("threshold", "Threshold"),
-        ("target", "Target"),
         ("desired_raw", "Desired Raw"),
         ("desired", "Desired"),
         ("step", "Step"),
-        ("pos", "Position"),
         ("pos_id", "Pos ID"),
     ]
     _STATE_FIELDS = [
         ("symbol", "Symbol"),
         ("side", "Side"),
-        ("desired", "Desired"),
         ("open_same", "Open Same"),
         ("open_symbol", "Open Symbol"),
         ("cap", "Cap"),
