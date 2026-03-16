@@ -385,8 +385,6 @@ class LiveMarketDataController:
                     f"incoming={int(candle[0])} last={int(w._candles[-1][0])}"
                 )
             return
-        if len(w._candles) > 50:
-            w._candles = w._candles[-50:]
         # Mark only validated/accepted trendbars as "alive" feed.
         w._auto_last_trendbar_ts = time.time()
         w.set_candles(w._candles)
