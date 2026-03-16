@@ -1,19 +1,20 @@
 """
 Application bootstrap: set up logging and resolve the broker provider.
 """
-from typing import Optional, Tuple
 
+from forex.application.broker.provider import get_provider, register_provider
+from forex.application.broker.use_cases import BrokerUseCases
 from forex.application.events import EventBus
 from forex.application.state import AppState
-from forex.application.broker.use_cases import BrokerUseCases
-from forex.application.broker.provider import get_provider, register_provider
-from forex.infrastructure.broker.ctrader.provider import CTraderProvider
 from forex.config.logging import setup_logging
 from forex.config.runtime import load_config
+from forex.infrastructure.broker.ctrader.provider import CTraderProvider
 from forex.infrastructure.broker.fake.provider import FakeProvider
 
 
-def bootstrap(provider_name: Optional[str] = None) -> Tuple[BrokerUseCases, str, EventBus, AppState]:
+def bootstrap(
+    provider_name: str | None = None,
+) -> tuple[BrokerUseCases, str, EventBus, AppState]:
     """
     Initialize shared infrastructure and return broker use-cases facade.
 

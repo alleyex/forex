@@ -1,21 +1,30 @@
 from __future__ import annotations
 
-from typing import Optional
+import json
 import time
 from pathlib import Path
 
-from PySide6.QtCore import Qt, Signal, Slot, QTimer, QMetaObject, QThread, QCoreApplication
+from PySide6.QtCore import (
+    QCoreApplication,
+    QMetaObject,
+    Qt,
+    QThread,
+    QTimer,
+    Signal,
+    Slot,
+)
 from PySide6.QtGui import QAction
 from PySide6.QtWidgets import (
+    QApplication,
     QFileDialog,
     QGroupBox,
     QLabel,
     QMainWindow,
     QSplitter,
+    QStyle,
     QToolBar,
     QVBoxLayout,
     QWidget,
-    QApplication,
 )
 
 try:
@@ -36,25 +45,25 @@ from forex.config.constants import ConnectionStatus
 from forex.config.paths import MODEL_DIR, SYMBOL_LIST_FILE, TOKEN_FILE
 from forex.config.settings import OAuthTokens
 from forex.ui.live.controllers.account_controller import LiveAccountController
+from forex.ui.live.controllers.market_data_controller import LiveMarketDataController
+from forex.ui.live.controllers.positions_controller import LivePositionsController
+from forex.ui.live.controllers.quote_controller import LiveQuoteController
+from forex.ui.live.controllers.symbol_controller import LiveSymbolController
+from forex.ui.live.orchestration.autotrade_coordinator import LiveAutoTradeCoordinator
+from forex.ui.live.orchestration.chart_coordinator import LiveChartCoordinator
+from forex.ui.live.orchestration.layout_coordinator import LiveLayoutCoordinator
+from forex.ui.live.orchestration.session_orchestrator import LiveSessionOrchestrator
 from forex.ui.live.services.auto_lifecycle_service import LiveAutoLifecycleService
 from forex.ui.live.services.auto_log_service import LiveAutoLogService
 from forex.ui.live.services.auto_recovery_service import LiveAutoRecoveryService
 from forex.ui.live.services.auto_runtime_service import LiveAutoRuntimeService
 from forex.ui.live.services.auto_settings_persistence import LiveAutoSettingsPersistence
 from forex.ui.live.services.auto_settings_validator import AutoTradeSettingsValidator
-from forex.ui.live.orchestration.autotrade_coordinator import LiveAutoTradeCoordinator
+from forex.ui.live.services.value_formatter_service import LiveValueFormatterService
+from forex.ui.live.state.window_state import initialize_live_window_state
+from forex.ui.live.ui_builder import LiveUIBuilder
 from forex.ui.live.widgets.chart_items import CandlestickItem, TimeAxisItem
 from forex.ui.live.widgets.panel_factory import LivePanelFactory
-from forex.ui.live.orchestration.chart_coordinator import LiveChartCoordinator
-from forex.ui.live.controllers.market_data_controller import LiveMarketDataController
-from forex.ui.live.controllers.positions_controller import LivePositionsController
-from forex.ui.live.controllers.quote_controller import LiveQuoteController
-from forex.ui.live.services.value_formatter_service import LiveValueFormatterService
-from forex.ui.live.orchestration.layout_coordinator import LiveLayoutCoordinator
-from forex.ui.live.controllers.symbol_controller import LiveSymbolController
-from forex.ui.live.orchestration.session_orchestrator import LiveSessionOrchestrator
-from forex.ui.live.ui_builder import LiveUIBuilder
-from forex.ui.live.state.window_state import initialize_live_window_state
 from forex.ui.shared.controllers.connection_controller import ConnectionController
 from forex.ui.shared.controllers.service_binding import clear_log_history_safe, set_callbacks_safe
 from forex.ui.shared.utils.formatters import (
@@ -81,16 +90,17 @@ class LiveMainWindow(QMainWindow):
     _CARD_LINE_TITLE_COLOR = "#3a4452"
     _CARD_LINE_TITLE_FONT_SIZE_PX = 10
     _CARD_LINE_TITLE_OFFSET_PX = -20
+    _BEST_PLAYBACK_PRESET_RELATIVE_PATH = Path("config/training_presets/best_playback_s12.json")
 
     # Initialization
     def __init__(
         self,
         *,
         use_cases: BrokerUseCases,
-        event_bus: Optional[EventBus] = None,
-        app_state: Optional[AppState] = None,
-        service: Optional[AppAuthServiceLike] = None,
-        oauth_service: Optional[OAuthServiceLike] = None,
+        event_bus: EventBus | None = None,
+        app_state: AppState | None = None,
+        service: AppAuthServiceLike | None = None,
+        oauth_service: OAuthServiceLike | None = None,
         parent=None,
     ) -> None:
         super().__init__(parent)
@@ -145,7 +155,10 @@ class LiveMainWindow(QMainWindow):
             except Exception:
                 pass
         self._service = service
-        if self._connection_controller and self._connection_controller.service is not service:
+        if (
+            self._connection_controller
+            and self._connection_controller.service is not service
+        ):
             self._connection_controller.seed_services(service, self._oauth_service)
         clear_log_history_safe(self._service)
         set_callbacks_safe(
@@ -161,7 +174,10 @@ class LiveMainWindow(QMainWindow):
 
     def set_oauth_service(self, service: OAuthServiceLike) -> None:
         self._oauth_service = service
-        if self._connection_controller and self._connection_controller.oauth_service is not service:
+        if (
+            self._connection_controller
+            and self._connection_controller.oauth_service is not service
+        ):
             self._connection_controller.seed_services(self._service, service)
         clear_log_history_safe(self._oauth_service)
         set_callbacks_safe(
@@ -188,11 +204,12 @@ class LiveMainWindow(QMainWindow):
             monospace=True,
             font_point_delta=2,
         )
+        self._log_panel.set_filter_level("INFO")
 
         content = QWidget()
         content_layout = QVBoxLayout(content)
         content_layout.setContentsMargins(0, 0, 0, 0)
-        content_layout.setSpacing(12)
+        content_layout.setSpacing(10)
 
         chart_panel = self._build_chart_panel()
         autotrade_panel = self._build_autotrade_panel()
@@ -226,7 +243,8 @@ class LiveMainWindow(QMainWindow):
 
         central = QWidget()
         central_layout = QVBoxLayout(central)
-        central_layout.setContentsMargins(12, 12, 12, 12)
+        central_layout.setContentsMargins(10, 10, 10, 10)
+        central_layout.setSpacing(10)
         central_layout.addWidget(splitter)
         self.setCentralWidget(central)
 
@@ -265,7 +283,10 @@ class LiveMainWindow(QMainWindow):
         current_path = self._resolve_model_path(current_text) if current_text else Path.cwd()
         start_path = current_path if current_path.exists() else current_path.parent
         path, _ = QFileDialog.getOpenFileName(
-            self, "Select model file", str(start_path), "Model (*.zip);;All files (*)"
+            self,
+            "Select model file",
+            str(start_path),
+            "Model (*.zip);;All files (*)",
         )
         if path:
             self._model_path.setText(self._normalize_model_path_text(path))
@@ -303,7 +324,7 @@ class LiveMainWindow(QMainWindow):
         return relative.as_posix()
 
     # Auto Trade Logging / Debug
-    def _auto_log(self, message: str, *, level: Optional[str] = None) -> None:
+    def _auto_log(self, message: str, *, level: str | None = None) -> None:
         self._auto_log_service.emit(message, level=level)
 
     def _auto_debug_enabled(self) -> bool:
@@ -334,11 +355,17 @@ class LiveMainWindow(QMainWindow):
         self._auto_recovery_service.history_poll_tick()
 
     def _start_history_polling(self) -> None:
-        if getattr(self, "_history_poll_timer", None) and not self._history_poll_timer.isActive():
+        if (
+            getattr(self, "_history_poll_timer", None)
+            and not self._history_poll_timer.isActive()
+        ):
             self._history_poll_timer.start()
 
     def _stop_history_polling(self) -> None:
-        if getattr(self, "_history_poll_timer", None) and self._history_poll_timer.isActive():
+        if (
+            getattr(self, "_history_poll_timer", None)
+            and self._history_poll_timer.isActive()
+        ):
             self._history_poll_timer.stop()
 
     def _set_quote_chart_mode(self, enabled: bool) -> None:
@@ -356,6 +383,187 @@ class LiveMainWindow(QMainWindow):
 
     def _handle_trade_timeframe_changed(self, timeframe: str) -> None:
         self._market_data_controller.set_trade_timeframe(timeframe)
+
+    def _apply_best_playback_model_preset(self) -> None:
+        payload = self._load_best_playback_preset()
+        if payload is None:
+            self._auto_log("❌ Best playback preset could not be loaded")
+            return
+        source_run = str(payload.get("source_run", "")).strip()
+        if not source_run:
+            self._auto_log("❌ Best playback preset is missing source_run")
+            return
+        run_dir = self._project_root / "data" / "training" / "runs" / source_run
+        model_path = run_dir / "model.zip"
+        if not model_path.exists():
+            self._auto_log(f"❌ Best playback model not found: {model_path}")
+            return
+        training_args = self._load_json_file(run_dir / "training_args.json")
+        env_config = self._load_json_file(run_dir / "model.env.json")
+        metadata = self._load_training_data_metadata(training_args)
+        current_symbol = self._trade_symbol.currentText().strip()
+        current_timeframe = self._trade_timeframe.currentText().strip().upper()
+        current_position_step = float(self._position_step.value())
+        current_slippage_bps = float(self._slippage_bps.value())
+        self._autotrade_loading = True
+        try:
+            self._model_path.setText(self._normalize_model_path_text(str(model_path)))
+            self._apply_live_symbol(metadata)
+            self._apply_live_timeframe(metadata)
+            if isinstance(env_config, dict):
+                if "position_step" in env_config:
+                    self._position_step.setValue(float(env_config["position_step"]))
+                if "slippage_bps" in env_config:
+                    self._slippage_bps.setValue(float(env_config["slippage_bps"]))
+        finally:
+            self._autotrade_loading = False
+        self._auto_settings_persistence.save()
+        timeframe = self._trade_timeframe.currentText().strip()
+        symbol = self._trade_symbol.currentText().strip()
+        self._auto_log(
+            "✅ Applied best playback model preset: "
+            f"{model_path.name} | symbol={symbol or '-'} | timeframe={timeframe or '-'}"
+        )
+        warnings = self._build_best_playback_compatibility_warnings(
+            current_symbol=current_symbol,
+            current_timeframe=current_timeframe,
+            current_position_step=current_position_step,
+            current_slippage_bps=current_slippage_bps,
+            applied_symbol=symbol,
+            applied_timeframe=timeframe,
+            env_config=env_config,
+            training_args=training_args,
+            metadata=metadata,
+        )
+        if warnings:
+            self._auto_log("⚠️ Compatibility check:")
+            for warning in warnings:
+                self._auto_log(f"   - {warning}")
+        else:
+            self._auto_log("✅ Compatibility check passed for live preset application")
+
+    def _apply_live_symbol(self, metadata: dict | None) -> None:
+        if not isinstance(metadata, dict):
+            return
+        details = metadata.get("details", {})
+        if not isinstance(details, dict):
+            return
+        symbol_id = details.get("symbol_id")
+        try:
+            symbol_id_int = int(symbol_id)
+        except (TypeError, ValueError):
+            return
+        symbol_name = self._symbol_id_to_name.get(symbol_id_int, "").strip()
+        if not symbol_name:
+            return
+        index = self._trade_symbol.findText(symbol_name)
+        if index >= 0:
+            self._trade_symbol.setCurrentIndex(index)
+
+    def _apply_live_timeframe(self, metadata: dict | None) -> None:
+        timeframe = ""
+        if isinstance(metadata, dict):
+            details = metadata.get("details", {})
+            if isinstance(details, dict):
+                timeframe = str(details.get("timeframe", "")).strip().upper()
+        if not timeframe:
+            return
+        index = self._trade_timeframe.findText(timeframe)
+        if index >= 0:
+            self._trade_timeframe.setCurrentIndex(index)
+
+    def _load_training_data_metadata(self, training_args: dict | None) -> dict | None:
+        if not isinstance(training_args, dict):
+            return None
+        data_path_value = training_args.get("data") or training_args.get("data_path")
+        data_path_text = str(data_path_value or "").strip()
+        if not data_path_text:
+            return None
+        data_path = Path(data_path_text).expanduser()
+        meta_path = Path(f"{data_path}.meta.json")
+        return self._load_json_file(meta_path)
+
+    def _load_best_playback_preset(self) -> dict | None:
+        return self._load_json_file(
+            self._project_root / self._BEST_PLAYBACK_PRESET_RELATIVE_PATH
+        )
+
+    @staticmethod
+    def _load_json_file(path: Path) -> dict | None:
+        try:
+            payload = json.loads(path.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError):
+            return None
+        return payload if isinstance(payload, dict) else None
+
+    @staticmethod
+    def _build_best_playback_compatibility_warnings(
+        *,
+        current_symbol: str,
+        current_timeframe: str,
+        current_position_step: float,
+        current_slippage_bps: float,
+        applied_symbol: str,
+        applied_timeframe: str,
+        env_config: dict | None,
+        training_args: dict | None,
+        metadata: dict | None,
+    ) -> list[str]:
+        warnings: list[str] = []
+        details = metadata.get("details", {}) if isinstance(metadata, dict) else {}
+        trained_symbol_id = details.get("symbol_id") if isinstance(details, dict) else None
+        trained_timeframe = (
+            str(details.get("timeframe", "")).strip().upper()
+            if isinstance(details, dict)
+            else ""
+        )
+        reward_mode = (
+            str(training_args.get("reward_mode", "")).strip()
+            if isinstance(training_args, dict)
+            else ""
+        )
+
+        if current_symbol and applied_symbol and current_symbol != applied_symbol:
+            warnings.append(f"symbol changed from {current_symbol} to {applied_symbol}")
+        if current_timeframe and applied_timeframe and current_timeframe != applied_timeframe:
+            warnings.append(
+                f"timeframe changed from {current_timeframe} to {applied_timeframe}"
+            )
+        if applied_timeframe and trained_timeframe and applied_timeframe != trained_timeframe:
+            warnings.append(
+                "live timeframe "
+                f"{applied_timeframe} differs from training timeframe {trained_timeframe}"
+            )
+        if trained_symbol_id is None:
+            warnings.append("training data metadata did not include symbol_id")
+        if not trained_timeframe:
+            warnings.append("training data metadata did not include timeframe")
+        if reward_mode and reward_mode != "path_penalty":
+            warnings.append(f"reward_mode is {reward_mode}, not path_penalty")
+
+        if isinstance(env_config, dict):
+            model_position_step = env_config.get("position_step")
+            model_slippage_bps = env_config.get("slippage_bps")
+            if (
+                model_position_step is not None
+                and abs(float(model_position_step) - current_position_step) > 1e-9
+            ):
+                warnings.append(
+                    "position_step was updated from "
+                    f"{current_position_step:g} to {float(model_position_step):g}"
+                )
+            if (
+                model_slippage_bps is not None
+                and abs(float(model_slippage_bps) - current_slippage_bps) > 1e-9
+            ):
+                warnings.append(
+                    "slippage_bps was updated from "
+                    f"{current_slippage_bps:g} to {float(model_slippage_bps):g}"
+                )
+        else:
+            warnings.append("model.env.json could not be loaded")
+
+        return warnings
 
     # Auto Trade UI State / Persistence
     def _trading_widgets(self) -> list[QWidget]:
@@ -385,7 +593,7 @@ class LiveMainWindow(QMainWindow):
             self._quote_affects_chart,
         ]
 
-    def _apply_trade_permission(self, scope: Optional[int]) -> None:
+    def _apply_trade_permission(self, scope: int | None) -> None:
         trading_allowed = scope != 0
         for widget in self._trading_widgets():
             if widget:
@@ -420,13 +628,53 @@ class LiveMainWindow(QMainWindow):
         self._last_history_success_key = None
         self._stop_live_trendbar()
         if self._is_broker_runtime_ready():
-            self._session_orchestrator.try_resume_runtime_loops(reason="trade_permission_updated")
+            self._session_orchestrator.try_resume_runtime_loops(
+                reason="trade_permission_updated"
+            )
 
-    def _sync_trade_symbol_choices(self, preferred_symbol: Optional[str] = None) -> None:
-        self._symbol_controller.sync_trade_symbol_choices(preferred_symbol=preferred_symbol)
+    def _sync_trade_symbol_choices(
+        self,
+        preferred_symbol: str | None = None,
+    ) -> None:
+        self._symbol_controller.sync_trade_symbol_choices(
+            preferred_symbol=preferred_symbol
+        )
 
     def _sync_lot_value_style(self) -> None:
         self._auto_settings_persistence.sync_lot_value_style()
+        self._refresh_risk_sizing_preview()
+
+    def _refresh_risk_sizing_preview(self) -> None:
+        label = getattr(self, "_risk_sizing_preview", None)
+        if label is None:
+            return
+        try:
+            preview = self._autotrade_coordinator.estimate_lot_preview()
+        except Exception:
+            preview = {"mode": "fixed", "final_lot": 0.0, "cap_applied": False}
+        if getattr(self, "_lot_risk", None) and self._lot_risk.isChecked():
+            risk_lot = float(preview.get("risk_lot", preview.get("final_lot", 0.0)))
+            final_lot = float(preview.get("final_lot", 0.0))
+            stop_loss = float(preview.get("stop_loss_points", 0.0))
+            balance = float(preview.get("balance", 0.0))
+            used_margin = float(preview.get("used_margin", 0.0))
+            max_used_margin = float(preview.get("max_used_margin", 0.0))
+            if bool(preview.get("cap_applied", False)):
+                label.setText(
+                    f"Risk lot {risk_lot:.3f}, capped to {final_lot:.3f} "
+                    f"to keep used margin <= {max_used_margin:.2f} "
+                    f"(balance {balance:.2f}, used {used_margin:.2f}, SL {stop_loss:.0f})."
+                )
+            elif stop_loss > 0:
+                label.setText(
+                    f"Risk lot {final_lot:.3f} with balance {balance:.2f}, "
+                    f"used margin {used_margin:.2f}/{max_used_margin:.2f}, "
+                    f"SL {stop_loss:.0f}."
+                )
+            else:
+                label.setText(f"Approx. {final_lot:.3f} lot. Add a stop loss for full risk sizing.")
+            return
+        label.setText(f"Fixed order size: {float(preview.get('final_lot', 0.0)):.3f} lot.")
 
     def _setup_autotrade_persistence(self) -> None:
         self._auto_settings_persistence.setup()
@@ -467,8 +715,16 @@ class LiveMainWindow(QMainWindow):
     def _volume_to_lots(volume_value: float) -> float:
         return LivePositionsController.volume_to_lots(volume_value)
 
-    def _current_price_text(self, *, symbol_id: Optional[int], side_value: Optional[int]) -> str:
-        return self._value_formatter.current_price_text(symbol_id=symbol_id, side_value=side_value)
+    def _current_price_text(
+        self,
+        *,
+        symbol_id: int | None,
+        side_value: int | None,
+    ) -> str:
+        return self._value_formatter.current_price_text(
+            symbol_id=symbol_id,
+            side_value=side_value,
+        )
 
     def _format_spot_time(self, spot_ts) -> str:
         return self._value_formatter.format_spot_time(spot_ts)
@@ -479,26 +735,39 @@ class LiveMainWindow(QMainWindow):
     def _symbol_list_path(self) -> Path:
         return self._project_root / SYMBOL_LIST_FILE
 
-    def _normalize_price(self, value, *, digits: Optional[int] = None) -> Optional[float]:
+    def _normalize_price(
+        self,
+        value,
+        *,
+        digits: int | None = None,
+    ) -> float | None:
         return self._value_formatter.normalize_price(value, digits=digits)
 
-    def _format_price(self, value, *, digits: Optional[int] = None) -> str:
+    def _format_price(self, value, *, digits: int | None = None) -> str:
         return self._value_formatter.format_price(value, digits=digits)
 
     # Connection / Account Orchestration
     def _setup_toolbar(self) -> None:
         toolbar = QToolBar("Live toolbar", self)
+        toolbar.setObjectName("liveToolbar")
         toolbar.setMovable(False)
+        toolbar.setFloatable(False)
+        toolbar.setToolButtonStyle(Qt.ToolButtonTextBesideIcon)
         self.addToolBar(toolbar)
 
-        self._action_toggle_connection = QAction("Connect/Disconnect", self)
+        connect_icon = self.style().standardIcon(QStyle.SP_BrowserReload)
+        self._action_toggle_connection = QAction(connect_icon, "Connection", self)
+        self._action_toggle_connection.setToolTip("Connect or disconnect from cTrader")
         toolbar.addAction(self._action_toggle_connection)
         self._action_toggle_connection.triggered.connect(self._toggle_connection)
 
     def _setup_status_bar(self) -> None:
         status_bar = self.statusBar()
+        status_bar.setObjectName("liveStatusBar")
         self._app_auth_label = QLabel(format_app_auth_status(None))
+        self._app_auth_label.setObjectName("statusChip")
         self._oauth_label = QLabel(format_oauth_status(None))
+        self._oauth_label.setObjectName("statusChip")
         status_bar.addWidget(self._app_auth_label)
         status_bar.addWidget(self._oauth_label)
 
@@ -575,7 +844,9 @@ class LiveMainWindow(QMainWindow):
     @Slot(int)
     def _handle_oauth_status(self, status: int) -> None:
         self._oauth_label.setText(format_oauth_status(ConnectionStatus(status)))
-        self.logRequested.emit(f"ℹ️ OAuth status -> {ConnectionStatus(status).name}")
+        self.logRequested.emit(
+            f"ℹ️ OAuth status -> {ConnectionStatus(status).name}"
+        )
         self._session_orchestrator.handle_oauth_status(status)
         self._update_reconnect_status(reason="oauth_status_changed")
 
@@ -590,7 +861,11 @@ class LiveMainWindow(QMainWindow):
         if "Trading account is not authorized" not in message:
             self._update_reconnect_status(reason="oauth_error")
             return
-        token_account = getattr(getattr(self._oauth_service, "tokens", None), "account_id", None)
+        token_account = getattr(
+            getattr(self._oauth_service, "tokens", None),
+            "account_id",
+            None,
+        )
         if token_account:
             try:
                 self._unauthorized_accounts.add(int(token_account))
@@ -600,8 +875,15 @@ class LiveMainWindow(QMainWindow):
         self.logRequested.emit("⚠️ Selected account is not authorized for Open API.")
         self._enter_account_authorization_lockout()
         self._update_reconnect_status(reason="oauth_error_unauthorized")
-        if self._last_authorized_account_id and token_account and int(token_account) != int(self._last_authorized_account_id):
-            self.logRequested.emit("ℹ️ Account is not authorized. Switch to an available account and reconnect manually")
+        if (
+            self._last_authorized_account_id
+            and token_account
+            and int(token_account) != int(self._last_authorized_account_id)
+        ):
+            self.logRequested.emit(
+                "ℹ️ Account is not authorized. Switch to an available "
+                "account and reconnect manually"
+            )
 
     @staticmethod
     def _is_not_authorized_message(message: str) -> bool:
@@ -612,7 +894,7 @@ class LiveMainWindow(QMainWindow):
         self._session_orchestrator.enter_authorization_lockout()
         self._update_reconnect_status(reason="authorization_lockout")
 
-    def _load_tokens_for_accounts(self) -> Optional[OAuthTokens]:
+    def _load_tokens_for_accounts(self) -> OAuthTokens | None:
         try:
             return OAuthTokens.from_file(TOKEN_FILE)
         except Exception as exc:
@@ -631,14 +913,18 @@ class LiveMainWindow(QMainWindow):
     def _handle_account_combo_changed(self, index: int) -> None:
         self._account_controller.handle_account_combo_changed(index)
 
-    def _sync_account_combo(self, account_id: Optional[int]) -> None:
+    def _sync_account_combo(self, account_id: int | None) -> None:
         self._account_controller.sync_account_combo(account_id)
 
     @Slot()
     def _schedule_full_reconnect(self) -> None:
         app = QApplication.instance()
         if app is not None and QThread.currentThread() != app.thread():
-            QMetaObject.invokeMethod(self, "_schedule_full_reconnect", Qt.QueuedConnection)
+            QMetaObject.invokeMethod(
+                self,
+                "_schedule_full_reconnect",
+                Qt.QueuedConnection,
+            )
             return
         if self._pending_full_reconnect:
             return
@@ -652,7 +938,9 @@ class LiveMainWindow(QMainWindow):
             if not controller:
                 return
             if getattr(controller, "transition_in_progress", False):
-                self.logRequested.emit("⏳ Reconnect skipped: transition already in progress")
+                self.logRequested.emit(
+                    "⏳ Reconnect skipped: transition already in progress"
+                )
                 return
             self.logRequested.emit("🔁 Reconnecting to apply account switch")
             app_auth = bool(controller.is_app_authenticated())
@@ -671,7 +959,9 @@ class LiveMainWindow(QMainWindow):
         if not controller:
             return
         if getattr(controller, "transition_in_progress", False):
-            self.logRequested.emit("⏳ Reconnect connect-phase skipped: transition already in progress")
+            self.logRequested.emit(
+                "⏳ Reconnect connect-phase skipped: transition already in progress"
+            )
             return
         if controller.is_app_authenticated() or controller.is_oauth_authenticated():
             # Still authenticated; wait for next reconnect trigger rather than re-entering.
@@ -697,6 +987,7 @@ class LiveMainWindow(QMainWindow):
     def _handle_account_summary_updated(self, summary) -> None:
         self._session_orchestrator.mark_data_activity()
         self._positions_controller.apply_account_summary_update(summary)
+        self._refresh_risk_sizing_preview()
 
     def _handle_history_received(self, rows: list[dict]) -> None:
         self._ui_diag_history_total += 1
@@ -784,7 +1075,11 @@ class LiveMainWindow(QMainWindow):
         quote_pm = (quote_delta / elapsed) * 60.0 if elapsed > 0 else 0.0
 
         log_entries = len(getattr(self._log_panel, "_entries", [])) if self._log_panel else 0
-        auto_entries = len(getattr(self._auto_log_panel, "_recent_raw", [])) if self._auto_log_panel else 0
+        auto_entries = (
+            len(getattr(self._auto_log_panel, "_recent_raw", []))
+            if self._auto_log_panel
+            else 0
+        )
         handler_count = 0
         service = getattr(self, "_service", None)
         if service is not None:
@@ -823,7 +1118,9 @@ class LiveMainWindow(QMainWindow):
         layout = QVBoxLayout(panel)
 
         if pg is None:
-            notice = QLabel("PyQtGraph is not installed. Please install pyqtgraph to view the chart.")
+            notice = QLabel(
+                "PyQtGraph is not installed. Please install pyqtgraph to view the chart."
+            )
             notice.setProperty("class", "placeholder")
             layout.addWidget(notice)
             return panel
@@ -844,12 +1141,14 @@ class LiveMainWindow(QMainWindow):
         plot.getAxis("left").setTextPen(axis_text)
         try:
             plot_item = plot.getPlotItem()
-            plot.getViewBox().sigRangeChangedFinished.connect(self._handle_chart_range_changed)
+            plot.getViewBox().sigRangeChangedFinished.connect(
+                self._handle_chart_range_changed
+            )
             auto_button = getattr(plot_item, "autoBtn", None)
             if auto_button is not None and hasattr(auto_button, "clicked"):
                 # Override pyqtgraph default auto-range behavior: it can include
                 # non-candle items and flatten the chart. We fully handle "A"
-                # with our own 50-candle normalization.
+                # with our own candle-range normalization.
                 try:
                     auto_button.clicked.disconnect(plot_item.autoBtnClicked)
                 except Exception:

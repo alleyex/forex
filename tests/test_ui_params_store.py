@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import json
-from pathlib import Path
 
 from forex.ui.train.services.ui_params_store import UIParamsStore
 
@@ -78,7 +77,9 @@ def test_training_store_saves_nested_and_top_level(tmp_path, monkeypatch) -> Non
     assert payload["selected_features"] == ["returns_1", "adx_14", "since_ny_open_return"]
 
 
-def test_training_store_load_prefers_nested_but_falls_back_to_top_level(tmp_path, monkeypatch) -> None:
+def test_training_store_load_prefers_nested_but_falls_back_to_top_level(
+    tmp_path, monkeypatch
+) -> None:
     current_path = tmp_path / "training_params.json"
     monkeypatch.setitem(UIParamsStore._CURRENT_PATHS, "training", current_path)
 

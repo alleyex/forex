@@ -1,16 +1,33 @@
 # ui/train/main_window.py
 from pathlib import Path
-from typing import Optional
 
-from PySide6.QtWidgets import QMainWindow
-from PySide6.QtCore import Slot, Signal, QTimer
+from PySide6.QtCore import QTimer, Signal, Slot
 from PySide6.QtGui import QCloseEvent
-from PySide6.QtWidgets import QMessageBox
+from PySide6.QtWidgets import QMainWindow, QMessageBox
+
 try:
     import psutil
 except ImportError:  # pragma: no cover - optional dependency
     psutil = None
 
+from forex.application.broker.protocols import AppAuthServiceLike, OAuthServiceLike
+from forex.application.broker.use_cases import BrokerUseCases
+from forex.application.events import EventBus
+from forex.application.state import AppState
+from forex.config.constants import ConnectionStatus
+from forex.config.paths import TOKEN_FILE
+from forex.config.settings import OAuthTokens
+from forex.ui.shared.controllers.connection_controller import ConnectionController
+from forex.ui.shared.controllers.service_binding import clear_log_history_safe, set_callbacks_safe
+from forex.ui.shared.utils.formatters import (
+    format_app_auth_status,
+    format_connection_message,
+    format_oauth_status,
+)
+from forex.ui.train.controllers.account_info_controller import AccountInfoController
+from forex.ui.train.controllers.history_download_controller import HistoryDownloadController
+from forex.ui.train.controllers.ppo_training_controller import PPOTrainingController
+from forex.ui.train.controllers.simulation_controller import SimulationController
 from forex.ui.train.layout.dock_manager import DockManagerController
 from forex.ui.train.layout.main_window_builder import (
     PanelBundle,
@@ -25,28 +42,8 @@ from forex.ui.train.layout.main_window_builder import (
     build_toolbar,
 )
 from forex.ui.train.layout.panel_switcher import PanelSwitcher
-
-from forex.ui.shared.controllers.connection_controller import ConnectionController
-from forex.ui.shared.controllers.service_binding import clear_log_history_safe, set_callbacks_safe
-from forex.ui.train.controllers.history_download_controller import HistoryDownloadController
-from forex.ui.train.controllers.account_info_controller import AccountInfoController
-from forex.ui.train.controllers.ppo_training_controller import PPOTrainingController
-from forex.ui.train.controllers.simulation_controller import SimulationController
 from forex.ui.train.presenters.connection_presenter import ConnectionPresenter
 from forex.ui.train.presenters.history_download_presenter import HistoryDownloadPresenter
-
-from forex.application.broker.protocols import AppAuthServiceLike, OAuthServiceLike
-from forex.application.broker.use_cases import BrokerUseCases
-from forex.application.events import EventBus
-from forex.application.state import AppState
-from forex.config.constants import ConnectionStatus
-from forex.config.paths import TOKEN_FILE
-from forex.config.settings import OAuthTokens
-from forex.ui.shared.utils.formatters import (
-    format_app_auth_status,
-    format_connection_message,
-    format_oauth_status,
-)
 
 
 class MainWindow(QMainWindow):
@@ -62,35 +59,35 @@ class MainWindow(QMainWindow):
 
     def __init__(
         self,
-        service: Optional[AppAuthServiceLike] = None,
-        oauth_service: Optional[OAuthServiceLike] = None,
-        use_cases: Optional[BrokerUseCases] = None,
-        event_bus: Optional[EventBus] = None,
-        app_state: Optional[AppState] = None,
+        service: AppAuthServiceLike | None = None,
+        oauth_service: OAuthServiceLike | None = None,
+        use_cases: BrokerUseCases | None = None,
+        event_bus: EventBus | None = None,
+        app_state: AppState | None = None,
         parent=None,
     ):
         super().__init__(parent)
-        self._use_cases: Optional[BrokerUseCases] = use_cases
+        self._use_cases: BrokerUseCases | None = use_cases
         self._event_bus = event_bus
         self._app_state = app_state
         self._service = service
         self._oauth_service = oauth_service
-        self._history_download_controller: Optional[HistoryDownloadController] = None
+        self._history_download_controller: HistoryDownloadController | None = None
         self._trendbar_symbol_id = 1
-        self._ppo_controller: Optional[PPOTrainingController] = None
-        self._simulation_controller: Optional[SimulationController] = None
-        self._account_info_controller: Optional[AccountInfoController] = None
-        self._dock_controller: Optional[DockManagerController] = None
-        self._panel_switcher: Optional[PanelSwitcher] = None
-        self._connection_controller: Optional[ConnectionController] = None
-        self._connection_presenter: Optional[ConnectionPresenter] = None
+        self._ppo_controller: PPOTrainingController | None = None
+        self._simulation_controller: SimulationController | None = None
+        self._account_info_controller: AccountInfoController | None = None
+        self._dock_controller: DockManagerController | None = None
+        self._panel_switcher: PanelSwitcher | None = None
+        self._connection_controller: ConnectionController | None = None
+        self._connection_presenter: ConnectionPresenter | None = None
         self._training_state = None
         self._training_presenter = None
         self._simulation_state = None
         self._simulation_presenter = None
         self._history_download_state = None
         self._history_download_presenter = None
-        self._system_usage_timer: Optional[QTimer] = None
+        self._system_usage_timer: QTimer | None = None
         self._last_training_run_id = "-"
         self._last_training_run_dir = "-"
 
@@ -218,8 +215,12 @@ class MainWindow(QMainWindow):
         )
 
     def _setup_status_bar(self) -> None:
-        app_auth_text = format_app_auth_status(None if not self._service else self._service.status)
-        oauth_text = format_oauth_status(None if not self._oauth_service else self._oauth_service.status)
+        app_auth_text = format_app_auth_status(
+            None if not self._service else self._service.status
+        )
+        oauth_text = format_oauth_status(
+            None if not self._oauth_service else self._oauth_service.status
+        )
         status_bundle: StatusBundle = build_status_bar(
             self,
             app_auth_text=app_auth_text,
@@ -378,16 +379,22 @@ class MainWindow(QMainWindow):
         box.setWindowTitle("Training Finished")
         box.setText("Checkpoint summary")
         if selection_source == "playback_top_n":
-            box.setInformativeText("A playback-selected checkpoint was promoted to the final model.")
+            box.setInformativeText(
+                "A playback-selected checkpoint was promoted to the final model."
+            )
         elif used_best and best_checkpoint_path:
-            box.setInformativeText("Best eval checkpoint was found and promoted to the final model.")
+            box.setInformativeText(
+                "Best eval checkpoint was found and promoted to the final model."
+            )
         elif missing_best:
             box.setInformativeText(
-                "No qualifying best checkpoint was found. The run fell back to the final model state."
+                "No qualifying best checkpoint was found. "
+                "The run fell back to the final model state."
             )
         else:
             box.setInformativeText(
-                "Training finished without promoting a best checkpoint. Check the summary details below."
+                "Training finished without promoting a best checkpoint. "
+                "Check the summary details below."
             )
 
         details = [
@@ -410,10 +417,16 @@ class MainWindow(QMainWindow):
             f"Selected eval mean reward: {summary.get('selection_eval_mean_reward', '-')}",
             f"Selected playback return: {summary.get('selection_playback_return', '-')}",
             f"Selected playback sharpe: {summary.get('selection_playback_sharpe', '-')}",
-            f"Selected playback max drawdown: {summary.get('selection_playback_max_drawdown', '-')}",
+            (
+                "Selected playback max drawdown: "
+                f"{summary.get('selection_playback_max_drawdown', '-')}"
+            ),
             f"Selected playback trade/1k: {summary.get('selection_playback_trade_rate_1k', '-')}",
             f"Selected playback gate pass: {summary.get('selection_playback_gate_pass', '-')}",
-            f"Selected playback gate reasons: {summary.get('selection_playback_gate_reasons', '-')}",
+            (
+                "Selected playback gate reasons: "
+                f"{summary.get('selection_playback_gate_reasons', '-')}"
+            ),
             f"Best eval reward: {summary.get('best_eval_reward', '-')}",
             f"Best eval mean reward: {summary.get('best_eval_mean_reward', '-')}",
             f"Best checkpoint gate: {summary.get('best_checkpoint_gate', '-')}",
@@ -461,7 +474,7 @@ class MainWindow(QMainWindow):
     def _open_data_check_dialog(self) -> None:
         self._show_panel("data_check")
 
-    def _get_history_download_controller(self) -> Optional[HistoryDownloadController]:
+    def _get_history_download_controller(self) -> HistoryDownloadController | None:
         if not self._use_cases:
             self._log_panel.append(format_connection_message("missing_use_cases"))
             return None
@@ -483,7 +496,7 @@ class MainWindow(QMainWindow):
             )
         return self._history_download_controller
 
-    def _get_ppo_controller(self) -> Optional[PPOTrainingController]:
+    def _get_ppo_controller(self) -> PPOTrainingController | None:
         if self._ppo_controller is None:
             if not self._training_presenter or not self._training_state:
                 return None
@@ -533,7 +546,7 @@ class MainWindow(QMainWindow):
         self._training_params_panel.apply_optuna_params(params)
         self._training_params_panel.update_optuna_best_params(params)
 
-    def _get_simulation_controller(self) -> Optional[SimulationController]:
+    def _get_simulation_controller(self) -> SimulationController | None:
         if self._simulation_controller is None:
             self._simulation_controller = SimulationController(
                 parent=self,
@@ -574,7 +587,7 @@ class MainWindow(QMainWindow):
 
         return True
 
-    def _load_tokens_for_accounts(self) -> Optional[OAuthTokens]:
+    def _load_tokens_for_accounts(self) -> OAuthTokens | None:
         try:
             return OAuthTokens.from_file(TOKEN_FILE)
         except Exception as exc:

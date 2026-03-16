@@ -1,19 +1,26 @@
-"""
-取得 K 線歷史資料服務
-"""
+"""Trendbar history retrieval service."""
+import threading
+import time
+from collections.abc import Callable, Sequence
 from dataclasses import dataclass
 from datetime import datetime, timezone
-import time
-import threading
-from typing import Callable, Optional, Protocol, Sequence
+from typing import Protocol
 
 from ctrader_open_api import Client
 from ctrader_open_api.messages.OpenApiMessages_pb2 import (
     ProtoOAGetTrendbarsReq,
 )
-from ctrader_open_api.messages.OpenApiModelMessages_pb2 import ProtoOAPayloadType, ProtoOATrendbarPeriod
+from ctrader_open_api.messages.OpenApiModelMessages_pb2 import (
+    ProtoOAPayloadType,
+    ProtoOATrendbarPeriod,
+)
 
-from forex.infrastructure.broker.base import BaseCallbacks, LogHistoryMixin, OperationStateMixin, build_callbacks
+from forex.infrastructure.broker.base import (
+    BaseCallbacks,
+    LogHistoryMixin,
+    OperationStateMixin,
+    build_callbacks,
+)
 from forex.infrastructure.broker.ctrader.services.app_auth_service import AppAuthService
 from forex.infrastructure.broker.ctrader.services.base import CTraderRequestLifecycleMixin
 from forex.infrastructure.broker.ctrader.services.message_helpers import (
@@ -49,8 +56,8 @@ class ErrorMessage(Protocol):
 
 @dataclass
 class TrendbarHistoryCallbacks(BaseCallbacks):
-    """TrendbarHistoryService 的回調函式"""
-    on_history_received: Optional[Callable[[list], None]] = None
+    """Callbacks for TrendbarHistoryService."""
+    on_history_received: Callable[[list], None] | None = None
 
 
 class TrendbarHistoryService(
@@ -59,11 +66,12 @@ class TrendbarHistoryService(
     OperationStateMixin,
 ):
     """
-    取得指定週期的 K 線歷史資料
+    Fetch historical trendbar data for a specific timeframe.
     """
 
     _MIN_TIMESTAMP_MS = 0
     _MAX_TIMESTAMP_MS = 2147483646000
+    _WIDE_WINDOW_MINUTES = 60 * 24 * 14
     _PERIOD_LABELS = {
         ProtoOATrendbarPeriod.M1: "M1",
         ProtoOATrendbarPeriod.M2: "M2",
@@ -86,7 +94,7 @@ class TrendbarHistoryService(
         self._callbacks = TrendbarHistoryCallbacks()
         self._in_progress = False
         self._log_history = []
-        self._client: Optional[Client] = None
+        self._client: Client | None = None
         self._retried_wide = False
         self._retried_m1 = False
         self._last_request_count = 0
@@ -94,22 +102,22 @@ class TrendbarHistoryService(
         self._last_request_window = 0
         self._history_buffer: list[dict] = []
         self._request_ranges: list[tuple[int, int]] = []
-        self._current_range: Optional[tuple[int, int]] = None
+        self._current_range: tuple[int, int] | None = None
         self._total_ranges = 0
         self._completed_ranges = 0
         self._period = ProtoOATrendbarPeriod.M5
         self._last_request_ts: float = 0.0
         self._min_request_interval: float = 0.2
-        self._send_timer: Optional[threading.Timer] = None
-        self._last_pagination_to_ts: Optional[int] = None
+        self._send_timer: threading.Timer | None = None
+        self._last_pagination_to_ts: int | None = None
 
     def set_callbacks(
         self,
-        on_history_received: Optional[Callable[[list], None]] = None,
-        on_error: Optional[Callable[[str], None]] = None,
-        on_log: Optional[Callable[[str], None]] = None,
+        on_history_received: Callable[[list], None] | None = None,
+        on_error: Callable[[str], None] | None = None,
+        on_log: Callable[[str], None] | None = None,
     ) -> None:
-        """設定回調函式"""
+        """Set callbacks."""
         self._callbacks = build_callbacks(
             TrendbarHistoryCallbacks,
             on_history_received=on_history_received,
@@ -124,11 +132,11 @@ class TrendbarHistoryService(
         symbol_id: int,
         count: int = 25000,
         timeframe: str = "M5",
-        from_ts: Optional[int] = None,
-        to_ts: Optional[int] = None,
+        from_ts: int | None = None,
+        to_ts: int | None = None,
     ) -> None:
         if not self._start_operation():
-            self._log("⚠️ 歷史資料查詢進行中")
+            self._log("⚠️ Historical data request already in progress")
             return
         self._account_id = int(account_id)
         self._symbol_id = int(symbol_id)
@@ -161,7 +169,7 @@ class TrendbarHistoryService(
         else:
             self._prepare_request(
                 count,
-                use_seconds=False,
+                use_seconds=from_ts is None,
                 window_minutes=count * self._period_minutes(),
                 from_ts=from_ts,
                 to_ts=to_ts,
@@ -174,10 +182,9 @@ class TrendbarHistoryService(
         *,
         use_seconds: bool,
         window_minutes: int,
-        from_ts: Optional[int] = None,
-        to_ts: Optional[int] = None,
+        from_ts: int | None = None,
+        to_ts: int | None = None,
     ) -> None:
-        _ = use_seconds
         request = ProtoOAGetTrendbarsReq()
         request.ctidTraderAccountId = self._account_id
         request.symbolId = self._symbol_id
@@ -188,16 +195,29 @@ class TrendbarHistoryService(
             aligned_to = (now_ms // period_ms) * period_ms
             request.toTimestamp = min(aligned_to, self._MAX_TIMESTAMP_MS)
         else:
-            request.toTimestamp = min(max(int(to_ts), self._MIN_TIMESTAMP_MS), self._MAX_TIMESTAMP_MS)
-        if from_ts is None:
-            request.fromTimestamp = max(self._MIN_TIMESTAMP_MS, request.toTimestamp - (window_minutes * 60 * 1000))
+            request.toTimestamp = min(
+                max(int(to_ts), self._MIN_TIMESTAMP_MS),
+                self._MAX_TIMESTAMP_MS,
+            )
+        if use_seconds and from_ts is None:
+            request.fromTimestamp = self._MIN_TIMESTAMP_MS
+            self._last_request_mode = "count_backfill"
+        elif from_ts is None:
+            request.fromTimestamp = max(
+                self._MIN_TIMESTAMP_MS,
+                request.toTimestamp - (window_minutes * 60 * 1000),
+            )
+            self._last_request_mode = "milliseconds"
         else:
-            request.fromTimestamp = min(max(int(from_ts), self._MIN_TIMESTAMP_MS), self._MAX_TIMESTAMP_MS)
+            request.fromTimestamp = min(
+                max(int(from_ts), self._MIN_TIMESTAMP_MS),
+                self._MAX_TIMESTAMP_MS,
+            )
+            self._last_request_mode = "milliseconds"
         if request.fromTimestamp > request.toTimestamp:
             request.fromTimestamp = max(
                 self._MIN_TIMESTAMP_MS, request.toTimestamp - (window_minutes * 60 * 1000)
             )
-        self._last_request_mode = "milliseconds"
         request.count = int(count)
         self._last_request_count = int(count)
         self._last_request_window = int(window_minutes)
@@ -225,7 +245,7 @@ class TrendbarHistoryService(
         name = mapping.get(timeframe.upper(), "M5")
         return getattr(ProtoOATrendbarPeriod, name, ProtoOATrendbarPeriod.M5)
 
-    def _build_ranges(self, count: int, from_ts: Optional[int], to_ts: Optional[int]) -> None:
+    def _build_ranges(self, count: int, from_ts: int | None, to_ts: int | None) -> None:
         if from_ts is None or to_ts is None or count <= 0:
             return
         period_minutes = self._period_minutes()
@@ -293,7 +313,7 @@ class TrendbarHistoryService(
             return
         period_label = self._period_label()
         self._log(
-            f"📥 取得 {period_label} 歷史資料：{self._last_request_count} 筆 "
+            f"📥 Fetching {period_label} history: {self._last_request_count} rows "
             f"({self._last_request_mode}, window={self._last_request_window}, "
             f"from={self._pending_request.fromTimestamp}, to={self._pending_request.toTimestamp})"
         )
@@ -311,15 +331,35 @@ class TrendbarHistoryService(
 
     def _on_history(self, msg: TrendbarHistoryMessage) -> None:
         bars = list(getattr(msg, "trendbar", []))
+        has_more = bool(getattr(msg, "hasMore", False))
         if not bars and not self._retried_wide:
             self._retried_wide = True
-            wide_window = 60 * 24 * 14
-            self._log("⚠️ 歷史資料為空，改用較大時間區間重新嘗試")
+            self._log("⚠️ History response was empty; retrying with a wider time window")
             self._prepare_request(
                 self._last_request_count,
                 use_seconds=False,
-                window_minutes=wide_window,
+                window_minutes=self._WIDE_WINDOW_MINUTES,
                 from_ts=self._current_range[0] if self._current_range else None,
+                to_ts=self._current_range[1] if self._current_range else None,
+            )
+            self._maybe_send_request()
+            return
+        if (
+            bars
+            and not has_more
+            and not self._retried_wide
+            and len(bars) < self._minimum_useful_bar_count()
+        ):
+            self._retried_wide = True
+            self._log(
+                "⚠️ History returned too few bars for feature warmup; "
+                "retrying with a wider time window"
+            )
+            self._prepare_request(
+                self._last_request_count,
+                use_seconds=False,
+                window_minutes=self._WIDE_WINDOW_MINUTES,
+                from_ts=None,
                 to_ts=self._current_range[1] if self._current_range else None,
             )
             self._maybe_send_request()
@@ -328,7 +368,7 @@ class TrendbarHistoryService(
             self._retried_m1 = True
             prev_period_label = self._period_label()
             self._period = ProtoOATrendbarPeriod.M1
-            self._log(f"⚠️ {prev_period_label} 為空，改用 M1 嘗試")
+            self._log(f"⚠️ {prev_period_label} was empty; retrying with M1")
             self._prepare_request(
                 self._last_request_count,
                 use_seconds=False,
@@ -340,13 +380,12 @@ class TrendbarHistoryService(
             return
         if not bars:
             self._log(
-                f"⚠️ 歷史資料為空 (symbol={msg.symbolId}, period={msg.period}, "
+                f"⚠️ History response was empty (symbol={msg.symbolId}, period={msg.period}, "
                 f"timestamp={msg.timestamp})"
             )
         else:
             self._history_buffer.extend(self._to_dict(bar) for bar in bars)
 
-        has_more = bool(getattr(msg, "hasMore", False))
         if has_more and not self._request_ranges and bars:
             oldest_minutes = min(int(bar.utcTimestampInMinutes) for bar in bars)
             oldest_ts = oldest_minutes * 60 * 1000
@@ -358,7 +397,10 @@ class TrendbarHistoryService(
                     self._last_request_count,
                     use_seconds=False,
                     window_minutes=self._last_request_window,
-                    from_ts=max(self._MIN_TIMESTAMP_MS, oldest_ts - (self._last_request_window * 60 * 1000)),
+                    from_ts=max(
+                        self._MIN_TIMESTAMP_MS,
+                        oldest_ts - (self._last_request_window * 60 * 1000),
+                    ),
                     to_ts=oldest_ts,
                 )
                 self._maybe_send_request()
@@ -368,7 +410,7 @@ class TrendbarHistoryService(
             self._completed_ranges += 1
             range_text = self._format_range(self._current_range)
             suffix = f" ({range_text})" if range_text else ""
-            self._log(f"📦 已完成 {self._completed_ranges}/{self._total_ranges}{suffix}")
+            self._log(f"📦 Completed {self._completed_ranges}/{self._total_ranges}{suffix}")
 
         if self._request_ranges:
             next_range = self._request_ranges.pop(0)
@@ -385,6 +427,11 @@ class TrendbarHistoryService(
         if self._callbacks.on_history_received:
             self._callbacks.on_history_received(self._history_buffer)
         self._cleanup()
+
+    def _minimum_useful_bar_count(self) -> int:
+        # Live feature pipelines need at least 64 bars to satisfy the largest
+        # rolling min_periods used by the residual/alpha profiles.
+        return max(64, min(self._last_request_count, 128) // 3)
 
     def _to_dict(self, bar: TrendbarMessage) -> dict:
         low = int(bar.low)
@@ -407,7 +454,7 @@ class TrendbarHistoryService(
         }
 
     @staticmethod
-    def _format_range(range_pair: Optional[tuple[int, int]]) -> str:
+    def _format_range(range_pair: tuple[int, int] | None) -> str:
         if not range_pair:
             return ""
         start_ms, end_ms = range_pair

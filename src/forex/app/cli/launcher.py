@@ -1,13 +1,13 @@
 import sys
 import traceback
 
-from PySide6.QtWidgets import QApplication
 from PySide6.QtCore import qInstallMessageHandler
+from PySide6.QtWidgets import QApplication
 
 from forex.app.bootstrap import bootstrap
+from forex.config.runtime import load_config
 from forex.ui.shared.dialogs.app_auth_dialog import AppAuthDialog
 from forex.ui.train.main_window import MainWindow
-from forex.config.runtime import load_config
 
 
 def _qt_message_handler(mode, context, message) -> None:

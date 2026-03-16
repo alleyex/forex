@@ -1,23 +1,21 @@
 from __future__ import annotations
 
+import ast
 import json
+import re
 import sys
 import tempfile
+from collections.abc import Callable
 from datetime import datetime
 from pathlib import Path
-from typing import Callable, Optional
 from uuid import uuid4
-
-import ast
-import re
 
 from PySide6.QtCore import QObject, QProcess, QTimer, Signal
 
-from forex.config.paths import SRC_DIR, TRAIN_PPO_SCRIPT
-from forex.config.paths import DATA_DIR
+from forex.config.paths import DATA_DIR, SRC_DIR, TRAIN_PPO_SCRIPT
 from forex.ui.shared.controllers.process_runner import ProcessRunner
-from forex.ui.train.state.training_state import TrainingState
 from forex.ui.shared.utils.formatters import format_training_message
+from forex.ui.train.state.training_state import TrainingState
 
 
 class PPOTrainingController(QObject):
@@ -35,8 +33,8 @@ class PPOTrainingController(QObject):
         parent: QObject,
         state: TrainingState,
         ingest_log: Callable[[str], None],
-        ingest_optuna_log: Optional[Callable[[str], None]] = None,
-        on_finished: Optional[Callable[[int, QProcess.ExitStatus], None]] = None,
+        ingest_optuna_log: Callable[[str], None] | None = None,
+        on_finished: Callable[[int, QProcess.ExitStatus], None] | None = None,
     ) -> None:
         super().__init__(parent)
         self._state = state
@@ -49,22 +47,22 @@ class PPOTrainingController(QObject):
             on_stderr_line=self._on_stderr_line,
             on_finished=self._on_finished_internal,
         )
-        self._metrics_log_path: Optional[str] = None
+        self._metrics_log_path: str | None = None
         self._metrics_tail_timer = QTimer(self)
         self._metrics_tail_timer.setInterval(50)
         self._metrics_tail_timer.timeout.connect(self._tail_metrics_log)
         self._metrics_last_offset = 0
         self._use_metrics_log = False
-        self._optuna_log_path: Optional[str] = None
+        self._optuna_log_path: str | None = None
         self._optuna_tail_timer = QTimer(self)
         self._optuna_tail_timer.setInterval(200)
         self._optuna_tail_timer.timeout.connect(self._tail_optuna_log)
         self._optuna_last_offset = 0
-        self._feature_subset_path: Optional[str] = None
+        self._feature_subset_path: str | None = None
         self._current_run_id: str = ""
-        self._current_run_dir: Optional[Path] = None
+        self._current_run_dir: Path | None = None
         self._used_best_checkpoint = False
-        self._best_checkpoint_path: Optional[str] = None
+        self._best_checkpoint_path: str | None = None
         self._best_checkpoint_missing = False
 
     def start(self, params: dict, data_path: str) -> None:
@@ -158,7 +156,7 @@ class PPOTrainingController(QObject):
             "--reward-clip",
             str(params["reward_clip"]),
             "--reward-mode",
-            str(params.get("reward_mode", "tp_sl_proxy")),
+            str(params.get("reward_mode", "path_penalty")),
             "--risk-aversion",
             str(params["risk_aversion"]),
             "--drawdown-penalty",
@@ -219,19 +217,44 @@ class PPOTrainingController(QObject):
             ]
         )
         args.append(
-            "--early-stop-enabled" if params.get("early_stop_enabled", True) else "--no-early-stop-enabled"
+            "--early-stop-enabled"
+            if params.get("early_stop_enabled", True)
+            else "--no-early-stop-enabled"
         )
-        args.extend(["--early-stop-warmup-steps", str(params.get("early_stop_warmup_steps", 120000))])
         args.extend(
-            ["--early-stop-patience-evals", str(params.get("early_stop_patience_evals", 8))]
+            [
+                "--early-stop-warmup-steps",
+                str(params.get("early_stop_warmup_steps", 120000)),
+            ]
         )
-        args.extend(["--early-stop-min-delta", str(params.get("early_stop_min_delta", 0.001))])
+        args.extend(
+            [
+                "--early-stop-patience-evals",
+                str(params.get("early_stop_patience_evals", 8)),
+            ]
+        )
+        args.extend(
+            [
+                "--early-stop-min-delta",
+                str(params.get("early_stop_min_delta", 0.001)),
+            ]
+        )
         args.append(
-            "--anti-flat-enabled" if params.get("anti_flat_enabled", True) else "--no-anti-flat-enabled"
+            "--anti-flat-enabled"
+            if params.get("anti_flat_enabled", True)
+            else "--no-anti-flat-enabled"
         )
-        args.extend(["--anti-flat-warmup-steps", str(params.get("anti_flat_warmup_steps", 120000))])
         args.extend(
-            ["--anti-flat-patience-evals", str(params.get("anti_flat_patience_evals", 3))]
+            [
+                "--anti-flat-warmup-steps",
+                str(params.get("anti_flat_warmup_steps", 120000)),
+            ]
+        )
+        args.extend(
+            [
+                "--anti-flat-patience-evals",
+                str(params.get("anti_flat_patience_evals", 3)),
+            ]
         )
         args.extend(
             ["--eval-profile-steps", str(params.get("eval_profile_steps", 2500))]
@@ -304,7 +327,9 @@ class PPOTrainingController(QObject):
             args.extend(
                 ["--optuna-min-candidates", str(params.get("optuna_min_candidates", 3))]
             )
-            top_out = str(params.get("optuna_top_out", "")).strip() or str(run_dir / "optuna_top_params.json")
+            top_out = str(params.get("optuna_top_out", "")).strip() or str(
+                run_dir / "optuna_top_params.json"
+            )
             args.extend(["--optuna-top-out", top_out])
             if params.get("optuna_replay_enabled"):
                 args.append("--optuna-replay-enabled")
@@ -356,9 +381,13 @@ class PPOTrainingController(QObject):
                         str(params.get("optuna_replay_max_ls_imbalance", 0.2)),
                     ]
                 )
-                replay_out = str(params.get("optuna_replay_out", "")).strip() or str(run_dir / "optuna_replay_results.json")
+                replay_out = str(params.get("optuna_replay_out", "")).strip() or str(
+                    run_dir / "optuna_replay_results.json"
+                )
                 args.extend(["--optuna-replay-out", replay_out])
-            optuna_out = str(params.get("optuna_out", "")).strip() or str(run_dir / "optuna_best_params.json")
+            optuna_out = str(params.get("optuna_out", "")).strip() or str(
+                run_dir / "optuna_best_params.json"
+            )
             args.extend(["--optuna-out", optuna_out])
             if optuna_only:
                 args.extend(["--verbose", "0"])
@@ -545,7 +574,7 @@ class PPOTrainingController(QObject):
             self.optuna_best_params_logged.emit(best_params)
 
     @staticmethod
-    def _parse_optuna_trial_details(line: str) -> tuple[Optional[str], Optional[dict]]:
+    def _parse_optuna_trial_details(line: str) -> tuple[str | None, dict | None]:
         match = re.search(
             r"Trial\s+(?P<trial>\d+)\s+finished with value:\s+(?P<value>[-+0-9.eE]+)",
             line,
@@ -617,9 +646,15 @@ class PPOTrainingController(QObject):
                             "selection_candidate_count": selection_payload.get("candidate_count"),
                             "selection_source": selection_payload.get("selected_source") or "-",
                             "selection_step": selection_payload.get("selected_step"),
-                            "selection_eval_mean_reward": selection_payload.get("selected_eval_mean_reward"),
-                            "selection_checkpoint_gate": selection_payload.get("selected_checkpoint_gate") or "-",
-                            "selection_output_model_path": selection_payload.get("output_model_path") or "-",
+                            "selection_eval_mean_reward": selection_payload.get(
+                                "selected_eval_mean_reward"
+                            ),
+                            "selection_checkpoint_gate": (
+                                selection_payload.get("selected_checkpoint_gate") or "-"
+                            ),
+                            "selection_output_model_path": (
+                                selection_payload.get("output_model_path") or "-"
+                            ),
                         }
                     )
                     playback = selection_payload.get("selected_playback")
@@ -631,7 +666,9 @@ class PPOTrainingController(QObject):
                                 "selection_playback_max_drawdown": playback.get("max_drawdown"),
                                 "selection_playback_trade_rate_1k": playback.get("trade_rate_1k"),
                                 "selection_playback_gate_pass": playback.get("gate_pass"),
-                                "selection_playback_gate_reasons": playback.get("gate_reasons") or [],
+                                "selection_playback_gate_reasons": (
+                                    playback.get("gate_reasons") or []
+                                ),
                             }
                         )
             except Exception:
@@ -665,7 +702,11 @@ class PPOTrainingController(QObject):
         last_row = rows[-1]
         payload.update(
             {
-                "best_eval_reward": best_row.get("best_eval_reward") or best_row.get("eval_mean_reward") or "-",
+                "best_eval_reward": (
+                    best_row.get("best_eval_reward")
+                    or best_row.get("eval_mean_reward")
+                    or "-"
+                ),
                 "best_eval_mean_reward": best_row.get("eval_mean_reward") or "-",
                 "best_checkpoint_gate": best_row.get("checkpoint_gate") or "-",
                 "best_rolling_sharpe": best_row.get("rolling_sharpe") or "-",

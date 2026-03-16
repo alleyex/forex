@@ -3,17 +3,17 @@ from __future__ import annotations
 import sys
 import tempfile
 import uuid
+from collections.abc import Callable
 from pathlib import Path
-from typing import Callable, Optional
 
 from PySide6.QtCore import QObject, QProcess, QTimer
 from PySide6.QtWidgets import QMessageBox, QWidget
 
 from forex.config.paths import RUN_LIVE_SIM_SCRIPT, SRC_DIR
 from forex.ui.shared.controllers.process_runner import ProcessRunner
-from forex.ui.train.state.simulation_state import SimulationState
-from forex.ui.train.presenters.simulation_presenter import SimulationPresenter
 from forex.ui.shared.utils.formatters import format_simulation_message
+from forex.ui.train.presenters.simulation_presenter import SimulationPresenter
+from forex.ui.train.state.simulation_state import SimulationState
 
 
 def _normalize_path(value: str) -> str:
@@ -32,7 +32,7 @@ class SimulationController(QObject):
         parent: QObject,
         state: SimulationState,
         presenter: SimulationPresenter,
-        on_finished: Optional[Callable[[int, QProcess.ExitStatus], None]] = None,
+        on_finished: Callable[[int, QProcess.ExitStatus], None] | None = None,
     ) -> None:
         super().__init__(parent)
         self._state = state
@@ -44,7 +44,7 @@ class SimulationController(QObject):
             on_stderr_line=self._on_stderr_line,
             on_finished=self._on_finished_internal,
         )
-        self._equity_log_path: Optional[str] = None
+        self._equity_log_path: str | None = None
         self._equity_tail_timer = QTimer(self)
         self._equity_tail_timer.setInterval(300)
         self._equity_tail_timer.timeout.connect(self._tail_equity_log)

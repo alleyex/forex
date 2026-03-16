@@ -3,13 +3,25 @@
 ## Quick Start
 
 ```bash
-QT_OPENGL=software LOG_LEVEL=INFO forex-train
+./scripts/run-train.sh
+```
+
+To rerun the best recorded playback configuration:
+
+```bash
+./scripts/run-train-best-playback.sh
+```
+
+The corresponding frozen preset reference is stored at:
+
+```text
+config/training_presets/best_playback_s12.json
 ```
 
 For live trading UI:
 
 ```bash
-QT_OPENGL=software LOG_LEVEL=INFO forex-live
+./scripts/run-live.sh
 ```
 
 ## Common Environment Variables
@@ -109,7 +121,7 @@ export CTRADER_RETRY_BACKOFF_SECONDS=2
 When reconnect loops happen, export the UI log text and run:
 
 ```bash
-python -m forex.tools.diagnostics.reconnect_log_analyzer /path/to/live.log
+python3 -m forex.tools.diagnostics.reconnect_log_analyzer /path/to/live.log
 ```
 
 This prints a compact summary including:
@@ -127,7 +139,7 @@ Use it to quickly compare before/after reconnect fixes instead of reading logs l
 1. Start live UI with file logging:
 
 ```bash
-LOG_LEVEL=INFO LOG_FILE=runtime/live_soak.log QT_OPENGL=software forex-live
+LOG_LEVEL=INFO LOG_FILE=runtime/live_soak.log ./scripts/run-live.sh
 ```
 
 2. Wait until status is authenticated and data streams are active (`funds_received`, `history_loaded`).
@@ -136,13 +148,13 @@ LOG_LEVEL=INFO LOG_FILE=runtime/live_soak.log QT_OPENGL=software forex-live
 5. Analyze log:
 
 ```bash
-python -m forex.tools.diagnostics.reconnect_log_analyzer runtime/live_soak.log
+python3 -m forex.tools.diagnostics.reconnect_log_analyzer runtime/live_soak.log
 ```
 
 6. Run pass/fail assertions:
 
 ```bash
-python -m forex.tools.diagnostics.soak_assert runtime/live_soak.log
+python3 -m forex.tools.diagnostics.soak_assert runtime/live_soak.log
 ```
 
 Optional quick regression before/after soak:

@@ -2,7 +2,6 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from enum import Enum
-from typing import Optional
 
 
 class ErrorCode(str, Enum):
@@ -17,12 +16,12 @@ class ErrorCode(str, Enum):
 class BrokerError:
     code: ErrorCode
     message: str
-    detail: Optional[str] = None
+    detail: str | None = None
 
     def __str__(self) -> str:  # pragma: no cover - trivial
         detail = f" ({self.detail})" if self.detail else ""
         return f"[{self.code.value}] {self.message}{detail}"
 
 
-def error_message(code: ErrorCode, message: str, detail: Optional[str] = None) -> str:
+def error_message(code: ErrorCode, message: str, detail: str | None = None) -> str:
     return str(BrokerError(code=code, message=message, detail=detail))

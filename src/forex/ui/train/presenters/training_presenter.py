@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import re
-from typing import Optional
 
 from PySide6.QtCore import QObject
 
@@ -70,7 +69,7 @@ class TrainingPresenter(PresenterBase):
         self._state.optuna_reset.emit()
 
     @staticmethod
-    def _parse_replay_status(line: str) -> Optional[str]:
+    def _parse_replay_status(line: str) -> str | None:
         text = line.strip()
         if text.startswith("Replay progress: candidates="):
             m = re.search(r"candidates=(\d+).*seeds_per_candidate=(\d+)", text)
@@ -87,7 +86,7 @@ class TrainingPresenter(PresenterBase):
         return None
 
     @staticmethod
-    def _parse_kv_line(line: str) -> Optional[tuple[str, float]]:
+    def _parse_kv_line(line: str) -> tuple[str, float] | None:
         parts = [part.strip() for part in line.split("|") if part.strip()]
         if len(parts) < 2:
             return None
@@ -97,7 +96,7 @@ class TrainingPresenter(PresenterBase):
             return None
 
     @staticmethod
-    def _parse_csv_line(line: str) -> Optional[tuple[int, str, float]]:
+    def _parse_csv_line(line: str) -> tuple[int, str, float] | None:
         if "," not in line:
             return None
         parts = line.strip().split(",", 2)
@@ -112,7 +111,7 @@ class TrainingPresenter(PresenterBase):
         return step, metric, value
 
     @staticmethod
-    def _parse_optuna_csv_line(line: str) -> Optional[tuple[float, float, float, float]]:
+    def _parse_optuna_csv_line(line: str) -> tuple[float, float, float, float] | None:
         if "," not in line:
             return None
         parts = line.strip().split(",", 3)
@@ -130,7 +129,7 @@ class TrainingPresenter(PresenterBase):
         return trial, trial_value, best_value, duration
 
     @staticmethod
-    def _parse_optuna_replay_line(line: str) -> Optional[tuple[float, float]]:
+    def _parse_optuna_replay_line(line: str) -> tuple[float, float] | None:
         if not line.startswith("replay,"):
             return None
         parts = line.strip().split(",")
@@ -144,7 +143,7 @@ class TrainingPresenter(PresenterBase):
         return trial, replay_mean
 
     @staticmethod
-    def _parse_float(key: str, line: str) -> Optional[float]:
+    def _parse_float(key: str, line: str) -> float | None:
         parts = [part.strip() for part in line.split("|") if part.strip()]
         if len(parts) < 2:
             return None
@@ -156,7 +155,7 @@ class TrainingPresenter(PresenterBase):
             return None
 
     @staticmethod
-    def _parse_int(key: str, line: str) -> Optional[int]:
+    def _parse_int(key: str, line: str) -> int | None:
         value = TrainingPresenter._parse_float(key, line)
         if value is None:
             return None

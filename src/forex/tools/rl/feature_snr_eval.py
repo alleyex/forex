@@ -53,7 +53,11 @@ def build_argument_parser() -> argparse.ArgumentParser:
         help="Number of top-ranked features to print.",
     )
     parser.add_argument("--json-out", default="", help="Optional JSON output path.")
-    parser.add_argument("--csv-out", default="", help="Optional CSV output path for per-horizon rows.")
+    parser.add_argument(
+        "--csv-out",
+        default="",
+        help="Optional CSV output path for per-horizon rows.",
+    )
     return parser
 
 
@@ -124,7 +128,10 @@ def main() -> None:
     if json_out:
         json_path = Path(json_out).expanduser()
         json_path.parent.mkdir(parents=True, exist_ok=True)
-        json_path.write_text(json.dumps(report, ensure_ascii=True, indent=2), encoding="utf-8")
+        json_path.write_text(
+            json.dumps(report, ensure_ascii=True, indent=2),
+            encoding="utf-8",
+        )
 
     csv_out = str(args.csv_out).strip()
     if csv_out:

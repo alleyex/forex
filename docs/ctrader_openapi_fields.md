@@ -1,916 +1,925 @@
-# cTrader Open API 全量欄位清單
+# cTrader Open API Full Field List
 
-本文件依據官方 Protobuf 定義自動整理。中文功能解說為名稱直譯/推定，僅供理解用途。
+This document is generated from the official Protobuf definitions. The inferred descriptions are direct name-based translations/guesses and are provided for comprehension only.
+
+## Quick Navigation
+
+- [Open API Messages](#open-api-messages)
+- [Open API Model Messages](#open-api-model-messages)
+- [Common Messages](#common-messages)
+- [Common Model Messages](#common-model-messages)
+
+## How To Use This Document
+
+- Treat this file as a broad field inventory rather than a normative specification.
+- Prefer the official cTrader Open API definitions when behavior or semantics are ambiguous.
+- Use the account-focused companion document for cleaner auth and account descriptions: [ctrader_openapi_fields_accounts.md](/Users/alleyex/Documents/forex/docs/ctrader_openapi_fields_accounts.md#L1)
 
 ## Open API Messages
 
-### Messages
-
 ### ProtoOAAccountAuthReq
-中文功能解說（依名稱推定）：ProtoOA帳戶認證請求
-| Field | Type | Label | 中文解說(依名稱推定) |
+Inferred description (name-based): Account authentication request
+| Field | Type | Label | Inferred description (name-based) |
 |---|---|---|---|
-| payloadType | ProtoOAPayloadType | optional | 類型 |
-| ctidTraderAccountId | int64 | optional | 交易帳戶帳戶ID |
-| accessToken | string | optional | Token |
+| payloadType | ProtoOAPayloadType | optional | payload type identifier |
+| ctidTraderAccountId | int64 | optional | trading account identifier |
+| accessToken | string | optional | account access token |
 
 ### ProtoOAAccountAuthRes
-中文功能解說（依名稱推定）：ProtoOA帳戶認證回應
-| Field | Type | Label | 中文解說(依名稱推定) |
+Inferred description (name-based): Account authentication response
+| Field | Type | Label | Inferred description (name-based) |
 |---|---|---|---|
-| payloadType | ProtoOAPayloadType | optional | 類型 |
-| ctidTraderAccountId | int64 | optional | 交易帳戶帳戶ID |
+| payloadType | ProtoOAPayloadType | optional | payload type identifier |
+| ctidTraderAccountId | int64 | optional | trading account identifier |
 
 ### ProtoOAAccountDisconnectEvent
-中文功能解說（依名稱推定）：ProtoOA帳戶斷線事件
-| Field | Type | Label | 中文解說(依名稱推定) |
+Inferred description (name-based): Account disconnect event
+| Field | Type | Label | Inferred description (name-based) |
 |---|---|---|---|
-| payloadType | ProtoOAPayloadType | optional | 類型 |
-| ctidTraderAccountId | int64 | optional | 交易帳戶帳戶ID |
+| payloadType | ProtoOAPayloadType | optional | payload type identifier |
+| ctidTraderAccountId | int64 | optional | trading account identifier |
 
 ### ProtoOAAccountLogoutReq
-中文功能解說（依名稱推定）：ProtoOA帳戶登出請求
-| Field | Type | Label | 中文解說(依名稱推定) |
+Inferred description (name-based): Account logout request
+| Field | Type | Label | Inferred description (name-based) |
 |---|---|---|---|
-| payloadType | ProtoOAPayloadType | optional | 類型 |
-| ctidTraderAccountId | int64 | optional | 交易帳戶帳戶ID |
+| payloadType | ProtoOAPayloadType | optional | payload type identifier |
+| ctidTraderAccountId | int64 | optional | trading account identifier |
 
 ### ProtoOAAccountLogoutRes
-中文功能解說（依名稱推定）：ProtoOA帳戶登出回應
-| Field | Type | Label | 中文解說(依名稱推定) |
+Inferred description (name-based): Account logout response
+| Field | Type | Label | Inferred description (name-based) |
 |---|---|---|---|
-| payloadType | ProtoOAPayloadType | optional | 類型 |
-| ctidTraderAccountId | int64 | optional | 交易帳戶帳戶ID |
+| payloadType | ProtoOAPayloadType | optional | payload type identifier |
+| ctidTraderAccountId | int64 | optional | trading account identifier |
 
 ### ProtoOAAccountsTokenInvalidatedEvent
-中文功能解說（依名稱推定）：ProtoOAAccountsTokenInvalidated事件
-| Field | Type | Label | 中文解說(依名稱推定) |
+Inferred description (name-based): Accounts token invalidated event
+| Field | Type | Label | Inferred description (name-based) |
 |---|---|---|---|
-| payloadType | ProtoOAPayloadType | optional | 類型 |
-| ctidTraderAccountIds | int64 | repeated | 交易帳戶帳戶Ids |
+| payloadType | ProtoOAPayloadType | optional | payload type identifier |
+| ctidTraderAccountIds | int64 | repeated | trading account IDs |
 | reason | string | optional | reason |
 
 ### ProtoOAAmendOrderReq
-中文功能解說（依名稱推定）：ProtoOAAmend訂單請求
-| Field | Type | Label | 中文解說(依名稱推定) |
+Inferred description (name-based): Amend order request
+| Field | Type | Label | Inferred description (name-based) |
 |---|---|---|---|
-| payloadType | ProtoOAPayloadType | optional | 類型 |
-| ctidTraderAccountId | int64 | optional | 交易帳戶帳戶ID |
-| orderId | int64 | optional | ID |
+| payloadType | ProtoOAPayloadType | optional | payload type identifier |
+| ctidTraderAccountId | int64 | optional | trading account identifier |
+| orderId | int64 | optional | order identifier |
 | volume | int64 | optional | volume |
-| limitPrice | double | optional | 價格 |
-| stopPrice | double | optional | 價格 |
-| expirationTimestamp | int64 | optional | 時間戳 |
-| stopLoss | double | optional | 虧損 |
-| takeProfit | double | optional | 獲利 |
-| slippageInPoints | int32 | optional | InPoints |
-| relativeStopLoss | int64 | optional | 停損虧損 |
-| relativeTakeProfit | int64 | optional | 停利獲利 |
-| guaranteedStopLoss | bool | optional | 停損虧損 |
-| trailingStopLoss | bool | optional | 停損虧損 |
-| stopTriggerMethod | ProtoOAOrderTriggerMethod | optional | TriggerMethod |
+| limitPrice | double | optional | price |
+| stopPrice | double | optional | price |
+| expirationTimestamp | int64 | optional | timestamp |
+| stopLoss | double | optional | loss |
+| takeProfit | double | optional | profit |
+| slippageInPoints | int32 | optional | slippage in points |
+| relativeStopLoss | int64 | optional | stop loss |
+| relativeTakeProfit | int64 | optional | take profit |
+| guaranteedStopLoss | bool | optional | stop loss |
+| trailingStopLoss | bool | optional | stop loss |
+| stopTriggerMethod | ProtoOAOrderTriggerMethod | optional | stop trigger method |
 
 ### ProtoOAAmendPositionSLTPReq
-中文功能解說（依名稱推定）：ProtoOAAmend持倉SLTP請求
-| Field | Type | Label | 中文解說(依名稱推定) |
+Inferred description (name-based): Amend position SL/TP request
+| Field | Type | Label | Inferred description (name-based) |
 |---|---|---|---|
-| payloadType | ProtoOAPayloadType | optional | 類型 |
-| ctidTraderAccountId | int64 | optional | 交易帳戶帳戶ID |
-| positionId | int64 | optional | ID |
-| stopLoss | double | optional | 虧損 |
-| takeProfit | double | optional | 獲利 |
-| guaranteedStopLoss | bool | optional | 停損虧損 |
-| trailingStopLoss | bool | optional | 停損虧損 |
-| stopLossTriggerMethod | ProtoOAOrderTriggerMethod | optional | 虧損TriggerMethod |
+| payloadType | ProtoOAPayloadType | optional | payload type identifier |
+| ctidTraderAccountId | int64 | optional | trading account identifier |
+| positionId | int64 | optional | position identifier |
+| stopLoss | double | optional | loss |
+| takeProfit | double | optional | profit |
+| guaranteedStopLoss | bool | optional | stop loss |
+| trailingStopLoss | bool | optional | stop loss |
+| stopLossTriggerMethod | ProtoOAOrderTriggerMethod | optional | stop-loss trigger method |
 
 ### ProtoOAApplicationAuthReq
-中文功能解說（依名稱推定）：ProtoOA應用程式認證請求
-| Field | Type | Label | 中文解說(依名稱推定) |
+Inferred description (name-based): Application authentication request
+| Field | Type | Label | Inferred description (name-based) |
 |---|---|---|---|
-| payloadType | ProtoOAPayloadType | optional | 類型 |
-| clientId | string | optional | ID |
-| clientSecret | string | optional | Secret |
+| payloadType | ProtoOAPayloadType | optional | payload type identifier |
+| clientId | string | optional | client identifier |
+| clientSecret | string | optional | client secret |
 
 ### ProtoOAApplicationAuthRes
-中文功能解說（依名稱推定）：ProtoOA應用程式認證回應
-| Field | Type | Label | 中文解說(依名稱推定) |
+Inferred description (name-based): Application authentication response
+| Field | Type | Label | Inferred description (name-based) |
 |---|---|---|---|
-| payloadType | ProtoOAPayloadType | optional | 類型 |
+| payloadType | ProtoOAPayloadType | optional | payload type identifier |
 
 ### ProtoOAAssetClassListReq
-中文功能解說（依名稱推定）：ProtoOA資產Class清單請求
-| Field | Type | Label | 中文解說(依名稱推定) |
+Inferred description (name-based): Asset class list request
+| Field | Type | Label | Inferred description (name-based) |
 |---|---|---|---|
-| payloadType | ProtoOAPayloadType | optional | 類型 |
-| ctidTraderAccountId | int64 | optional | 交易帳戶帳戶ID |
+| payloadType | ProtoOAPayloadType | optional | payload type identifier |
+| ctidTraderAccountId | int64 | optional | trading account identifier |
 
 ### ProtoOAAssetClassListRes
-中文功能解說（依名稱推定）：ProtoOA資產Class清單回應
-| Field | Type | Label | 中文解說(依名稱推定) |
+Inferred description (name-based): Asset class list response
+| Field | Type | Label | Inferred description (name-based) |
 |---|---|---|---|
-| payloadType | ProtoOAPayloadType | optional | 類型 |
-| ctidTraderAccountId | int64 | optional | 交易帳戶帳戶ID |
-| assetClass | ProtoOAAssetClass | repeated | Class |
+| payloadType | ProtoOAPayloadType | optional | payload type identifier |
+| ctidTraderAccountId | int64 | optional | trading account identifier |
+| assetClass | ProtoOAAssetClass | repeated | asset class entries |
 
 ### ProtoOAAssetListReq
-中文功能解說（依名稱推定）：ProtoOA資產清單請求
-| Field | Type | Label | 中文解說(依名稱推定) |
+Inferred description (name-based): Asset list request
+| Field | Type | Label | Inferred description (name-based) |
 |---|---|---|---|
-| payloadType | ProtoOAPayloadType | optional | 類型 |
-| ctidTraderAccountId | int64 | optional | 交易帳戶帳戶ID |
+| payloadType | ProtoOAPayloadType | optional | payload type identifier |
+| ctidTraderAccountId | int64 | optional | trading account identifier |
 
 ### ProtoOAAssetListRes
-中文功能解說（依名稱推定）：ProtoOA資產清單回應
-| Field | Type | Label | 中文解說(依名稱推定) |
+Inferred description (name-based): Asset list response
+| Field | Type | Label | Inferred description (name-based) |
 |---|---|---|---|
-| payloadType | ProtoOAPayloadType | optional | 類型 |
-| ctidTraderAccountId | int64 | optional | 交易帳戶帳戶ID |
-| asset | ProtoOAAsset | repeated | asset |
+| payloadType | ProtoOAPayloadType | optional | payload type identifier |
+| ctidTraderAccountId | int64 | optional | trading account identifier |
+| asset | ProtoOAAsset | repeated | asset entries |
 
 ### ProtoOACancelOrderReq
-中文功能解說（依名稱推定）：ProtoOACancel訂單請求
-| Field | Type | Label | 中文解說(依名稱推定) |
+Inferred description (name-based): Cancel order request
+| Field | Type | Label | Inferred description (name-based) |
 |---|---|---|---|
-| payloadType | ProtoOAPayloadType | optional | 類型 |
-| ctidTraderAccountId | int64 | optional | 交易帳戶帳戶ID |
-| orderId | int64 | optional | ID |
+| payloadType | ProtoOAPayloadType | optional | payload type identifier |
+| ctidTraderAccountId | int64 | optional | trading account identifier |
+| orderId | int64 | optional | order identifier |
 
 ### ProtoOACashFlowHistoryListReq
-中文功能解說（依名稱推定）：ProtoOACashFlow歷史清單請求
-| Field | Type | Label | 中文解說(依名稱推定) |
+Inferred description (name-based): Cash flow history list request
+| Field | Type | Label | Inferred description (name-based) |
 |---|---|---|---|
-| payloadType | ProtoOAPayloadType | optional | 類型 |
-| ctidTraderAccountId | int64 | optional | 交易帳戶帳戶ID |
-| fromTimestamp | int64 | optional | 時間戳 |
-| toTimestamp | int64 | optional | 時間戳 |
+| payloadType | ProtoOAPayloadType | optional | payload type identifier |
+| ctidTraderAccountId | int64 | optional | trading account identifier |
+| fromTimestamp | int64 | optional | timestamp |
+| toTimestamp | int64 | optional | timestamp |
 
 ### ProtoOACashFlowHistoryListRes
-中文功能解說（依名稱推定）：ProtoOACashFlow歷史清單回應
-| Field | Type | Label | 中文解說(依名稱推定) |
+Inferred description (name-based): Cash flow history list response
+| Field | Type | Label | Inferred description (name-based) |
 |---|---|---|---|
-| payloadType | ProtoOAPayloadType | optional | 類型 |
-| ctidTraderAccountId | int64 | optional | 交易帳戶帳戶ID |
-| depositWithdraw | ProtoOADepositWithdraw | repeated | Withdraw |
+| payloadType | ProtoOAPayloadType | optional | payload type identifier |
+| ctidTraderAccountId | int64 | optional | trading account identifier |
+| depositWithdraw | ProtoOADepositWithdraw | repeated | deposit/withdraw entries |
 
 ### ProtoOAClientDisconnectEvent
-中文功能解說（依名稱推定）：ProtoOAClient斷線事件
-| Field | Type | Label | 中文解說(依名稱推定) |
+Inferred description (name-based): Client disconnect event
+| Field | Type | Label | Inferred description (name-based) |
 |---|---|---|---|
-| payloadType | ProtoOAPayloadType | optional | 類型 |
+| payloadType | ProtoOAPayloadType | optional | payload type identifier |
 | reason | string | optional | reason |
 
 ### ProtoOAClosePositionReq
-中文功能解說（依名稱推定）：ProtoOA收盤持倉請求
-| Field | Type | Label | 中文解說(依名稱推定) |
+Inferred description (name-based): Close position request
+| Field | Type | Label | Inferred description (name-based) |
 |---|---|---|---|
-| payloadType | ProtoOAPayloadType | optional | 類型 |
-| ctidTraderAccountId | int64 | optional | 交易帳戶帳戶ID |
-| positionId | int64 | optional | ID |
+| payloadType | ProtoOAPayloadType | optional | payload type identifier |
+| ctidTraderAccountId | int64 | optional | trading account identifier |
+| positionId | int64 | optional | position identifier |
 | volume | int64 | optional | volume |
 
 ### ProtoOADealListByPositionIdReq
-中文功能解說（依名稱推定）：ProtoOA成交清單依持倉ID請求
-| Field | Type | Label | 中文解說(依名稱推定) |
+Inferred description (name-based): Deal list by position ID request
+| Field | Type | Label | Inferred description (name-based) |
 |---|---|---|---|
-| payloadType | ProtoOAPayloadType | optional | 類型 |
-| ctidTraderAccountId | int64 | optional | 交易帳戶帳戶ID |
-| positionId | int64 | optional | ID |
-| fromTimestamp | int64 | optional | 時間戳 |
-| toTimestamp | int64 | optional | 時間戳 |
+| payloadType | ProtoOAPayloadType | optional | payload type identifier |
+| ctidTraderAccountId | int64 | optional | trading account identifier |
+| positionId | int64 | optional | position identifier |
+| fromTimestamp | int64 | optional | timestamp |
+| toTimestamp | int64 | optional | timestamp |
 
 ### ProtoOADealListByPositionIdRes
-中文功能解說（依名稱推定）：ProtoOA成交清單依持倉ID回應
-| Field | Type | Label | 中文解說(依名稱推定) |
+Inferred description (name-based): Deal list by position ID response
+| Field | Type | Label | Inferred description (name-based) |
 |---|---|---|---|
-| payloadType | ProtoOAPayloadType | optional | 類型 |
-| ctidTraderAccountId | int64 | optional | 交易帳戶帳戶ID |
-| deal | ProtoOADeal | repeated | deal |
-| hasMore | int64 | optional | More |
+| payloadType | ProtoOAPayloadType | optional | payload type identifier |
+| ctidTraderAccountId | int64 | optional | trading account identifier |
+| deal | ProtoOADeal | repeated | deal entries |
+| hasMore | int64 | optional | has-more flag |
 
 ### ProtoOADealListReq
-中文功能解說（依名稱推定）：ProtoOA成交清單請求
-| Field | Type | Label | 中文解說(依名稱推定) |
+Inferred description (name-based): Deal list request
+| Field | Type | Label | Inferred description (name-based) |
 |---|---|---|---|
-| payloadType | ProtoOAPayloadType | optional | 類型 |
-| ctidTraderAccountId | int64 | optional | 交易帳戶帳戶ID |
-| fromTimestamp | int64 | optional | 時間戳 |
-| toTimestamp | int64 | optional | 時間戳 |
-| maxRows | int32 | optional | Rows |
+| payloadType | ProtoOAPayloadType | optional | payload type identifier |
+| ctidTraderAccountId | int64 | optional | trading account identifier |
+| fromTimestamp | int64 | optional | timestamp |
+| toTimestamp | int64 | optional | timestamp |
+| maxRows | int32 | optional | maximum row count |
 
 ### ProtoOADealListRes
-中文功能解說（依名稱推定）：ProtoOA成交清單回應
-| Field | Type | Label | 中文解說(依名稱推定) |
+Inferred description (name-based): Deal list response
+| Field | Type | Label | Inferred description (name-based) |
 |---|---|---|---|
-| payloadType | ProtoOAPayloadType | optional | 類型 |
-| ctidTraderAccountId | int64 | optional | 交易帳戶帳戶ID |
-| deal | ProtoOADeal | repeated | deal |
-| hasMore | bool | optional | More |
+| payloadType | ProtoOAPayloadType | optional | payload type identifier |
+| ctidTraderAccountId | int64 | optional | trading account identifier |
+| deal | ProtoOADeal | repeated | deal entries |
+| hasMore | bool | optional | has-more flag |
 
 ### ProtoOADealOffsetListReq
-中文功能解說（依名稱推定）：ProtoOA成交Offset清單請求
-| Field | Type | Label | 中文解說(依名稱推定) |
+Inferred description (name-based): Deal offset list request
+| Field | Type | Label | Inferred description (name-based) |
 |---|---|---|---|
-| payloadType | ProtoOAPayloadType | optional | 類型 |
-| ctidTraderAccountId | int64 | optional | 交易帳戶帳戶ID |
-| dealId | int64 | optional | ID |
+| payloadType | ProtoOAPayloadType | optional | payload type identifier |
+| ctidTraderAccountId | int64 | optional | trading account identifier |
+| dealId | int64 | optional | deal identifier |
 
 ### ProtoOADealOffsetListRes
-中文功能解說（依名稱推定）：ProtoOA成交Offset清單回應
-| Field | Type | Label | 中文解說(依名稱推定) |
+Inferred description (name-based): Deal offset list response
+| Field | Type | Label | Inferred description (name-based) |
 |---|---|---|---|
-| payloadType | ProtoOAPayloadType | optional | 類型 |
-| ctidTraderAccountId | int64 | optional | 交易帳戶帳戶ID |
-| offsetBy | ProtoOADealOffset | repeated | 依 |
+| payloadType | ProtoOAPayloadType | optional | payload type identifier |
+| ctidTraderAccountId | int64 | optional | trading account identifier |
+| offsetBy | ProtoOADealOffset | repeated | offset-by entries |
 | offsetting | ProtoOADealOffset | repeated | offsetting |
 
 ### ProtoOADepthEvent
-中文功能解說（依名稱推定）：ProtoOA深度事件
-| Field | Type | Label | 中文解說(依名稱推定) |
+Inferred description (name-based): Depth event
+| Field | Type | Label | Inferred description (name-based) |
 |---|---|---|---|
-| payloadType | ProtoOAPayloadType | optional | 類型 |
-| ctidTraderAccountId | int64 | optional | 交易帳戶帳戶ID |
-| symbolId | uint64 | optional | ID |
-| newQuotes | ProtoOADepthQuote | repeated | Quotes |
-| deletedQuotes | uint64 | repeated | Quotes |
+| payloadType | ProtoOAPayloadType | optional | payload type identifier |
+| ctidTraderAccountId | int64 | optional | trading account identifier |
+| symbolId | uint64 | optional | symbol identifier |
+| newQuotes | ProtoOADepthQuote | repeated | new quote entries |
+| deletedQuotes | uint64 | repeated | deleted quote identifiers |
 
 ### ProtoOAErrorRes
-中文功能解說（依名稱推定）：ProtoOA錯誤回應
-| Field | Type | Label | 中文解說(依名稱推定) |
+Inferred description (name-based): Error response
+| Field | Type | Label | Inferred description (name-based) |
 |---|---|---|---|
-| payloadType | ProtoOAPayloadType | optional | 類型 |
-| ctidTraderAccountId | int64 | optional | 交易帳戶帳戶ID |
-| errorCode | string | optional | Code |
-| description | string | optional | description |
-| maintenanceEndTimestamp | int64 | optional | End時間戳 |
+| payloadType | ProtoOAPayloadType | optional | payload type identifier |
+| ctidTraderAccountId | int64 | optional | trading account identifier |
+| errorCode | string | optional | error code |
+| description | string | optional | text description |
+| maintenanceEndTimestamp | int64 | optional | end timestamp |
 
 ### ProtoOAExecutionEvent
-中文功能解說（依名稱推定）：ProtoOAExecution事件
-| Field | Type | Label | 中文解說(依名稱推定) |
+Inferred description (name-based): Execution event
+| Field | Type | Label | Inferred description (name-based) |
 |---|---|---|---|
-| payloadType | ProtoOAPayloadType | optional | 類型 |
-| ctidTraderAccountId | int64 | optional | 交易帳戶帳戶ID |
-| executionType | ProtoOAExecutionType | optional | 類型 |
+| payloadType | ProtoOAPayloadType | optional | payload type identifier |
+| ctidTraderAccountId | int64 | optional | trading account identifier |
+| executionType | ProtoOAExecutionType | optional | execution type |
 | position | ProtoOAPosition | optional | position |
 | order | ProtoOAOrder | optional | order |
 | deal | ProtoOADeal | optional | deal |
-| bonusDepositWithdraw | ProtoOABonusDepositWithdraw | optional | DepositWithdraw |
-| depositWithdraw | ProtoOADepositWithdraw | optional | Withdraw |
-| errorCode | string | optional | Code |
-| isServerEvent | bool | optional | Server事件 |
+| bonusDepositWithdraw | ProtoOABonusDepositWithdraw | optional | bonus deposit/withdraw details |
+| depositWithdraw | ProtoOADepositWithdraw | optional | deposit/withdraw details |
+| errorCode | string | optional | error code |
+| isServerEvent | bool | optional | server-event flag |
 
 ### ProtoOAExpectedMarginReq
-中文功能解說（依名稱推定）：ProtoOA預估保證金請求
-| Field | Type | Label | 中文解說(依名稱推定) |
+Inferred description (name-based): Expected margin request
+| Field | Type | Label | Inferred description (name-based) |
 |---|---|---|---|
-| payloadType | ProtoOAPayloadType | optional | 類型 |
-| ctidTraderAccountId | int64 | optional | 交易帳戶帳戶ID |
-| symbolId | int64 | optional | ID |
+| payloadType | ProtoOAPayloadType | optional | payload type identifier |
+| ctidTraderAccountId | int64 | optional | trading account identifier |
+| symbolId | int64 | optional | symbol identifier |
 | volume | int64 | repeated | volume |
 
 ### ProtoOAExpectedMarginRes
-中文功能解說（依名稱推定）：ProtoOA預估保證金回應
-| Field | Type | Label | 中文解說(依名稱推定) |
+Inferred description (name-based): Expected margin response
+| Field | Type | Label | Inferred description (name-based) |
 |---|---|---|---|
-| payloadType | ProtoOAPayloadType | optional | 類型 |
-| ctidTraderAccountId | int64 | optional | 交易帳戶帳戶ID |
+| payloadType | ProtoOAPayloadType | optional | payload type identifier |
+| ctidTraderAccountId | int64 | optional | trading account identifier |
 | margin | ProtoOAExpectedMargin | repeated | margin |
-| moneyDigits | uint32 | optional | Digits |
+| moneyDigits | uint32 | optional | money digits precision |
 
 ### ProtoOAGetAccountListByAccessTokenReq
-中文功能解說（依名稱推定）：ProtoOA取得帳戶清單依AccessToken請求
-| Field | Type | Label | 中文解說(依名稱推定) |
+Inferred description (name-based): Get account list by access token request
+| Field | Type | Label | Inferred description (name-based) |
 |---|---|---|---|
-| payloadType | ProtoOAPayloadType | optional | 類型 |
-| accessToken | string | optional | Token |
+| payloadType | ProtoOAPayloadType | optional | payload type identifier |
+| accessToken | string | optional | account access token |
 
 ### ProtoOAGetAccountListByAccessTokenRes
-中文功能解說（依名稱推定）：ProtoOA取得帳戶清單依AccessToken回應
-| Field | Type | Label | 中文解說(依名稱推定) |
+Inferred description (name-based): Get account list by access token response
+| Field | Type | Label | Inferred description (name-based) |
 |---|---|---|---|
-| payloadType | ProtoOAPayloadType | optional | 類型 |
-| accessToken | string | optional | Token |
-| permissionScope | ProtoOAClientPermissionScope | optional | Scope |
-| ctidTraderAccount | ProtoOACtidTraderAccount | repeated | 交易帳戶帳戶 |
+| payloadType | ProtoOAPayloadType | optional | payload type identifier |
+| accessToken | string | optional | account access token |
+| permissionScope | ProtoOAClientPermissionScope | optional | permission scope |
+| ctidTraderAccount | ProtoOACtidTraderAccount | repeated | trading account entries |
 
 ### ProtoOAGetCtidProfileByTokenReq
-中文功能解說（依名稱推定）：ProtoOA取得CtidProfile依Token請求
-| Field | Type | Label | 中文解說(依名稱推定) |
+Inferred description (name-based): Get CTID profile by token request
+| Field | Type | Label | Inferred description (name-based) |
 |---|---|---|---|
-| payloadType | ProtoOAPayloadType | optional | 類型 |
-| accessToken | string | optional | Token |
+| payloadType | ProtoOAPayloadType | optional | payload type identifier |
+| accessToken | string | optional | account access token |
 
 ### ProtoOAGetCtidProfileByTokenRes
-中文功能解說（依名稱推定）：ProtoOA取得CtidProfile依Token回應
-| Field | Type | Label | 中文解說(依名稱推定) |
+Inferred description (name-based): Get CTID profile by token response
+| Field | Type | Label | Inferred description (name-based) |
 |---|---|---|---|
-| payloadType | ProtoOAPayloadType | optional | 類型 |
-| profile | ProtoOACtidProfile | optional | profile |
+| payloadType | ProtoOAPayloadType | optional | payload type identifier |
+| profile | ProtoOACtidProfile | optional | CTID profile |
 
 ### ProtoOAGetDynamicLeverageByIDReq
-中文功能解說（依名稱推定）：ProtoOA取得動態槓桿依ID請求
-| Field | Type | Label | 中文解說(依名稱推定) |
+Inferred description (name-based): Get dynamic leverage by ID request
+| Field | Type | Label | Inferred description (name-based) |
 |---|---|---|---|
-| payloadType | ProtoOAPayloadType | optional | 類型 |
-| ctidTraderAccountId | int64 | optional | 交易帳戶帳戶ID |
-| leverageId | int64 | optional | ID |
+| payloadType | ProtoOAPayloadType | optional | payload type identifier |
+| ctidTraderAccountId | int64 | optional | trading account identifier |
+| leverageId | int64 | optional | leverage tier identifier |
 
 ### ProtoOAGetDynamicLeverageByIDRes
-中文功能解說（依名稱推定）：ProtoOA取得動態槓桿依ID回應
-| Field | Type | Label | 中文解說(依名稱推定) |
+Inferred description (name-based): Get dynamic leverage by ID response
+| Field | Type | Label | Inferred description (name-based) |
 |---|---|---|---|
-| payloadType | ProtoOAPayloadType | optional | 類型 |
-| ctidTraderAccountId | int64 | optional | 交易帳戶帳戶ID |
+| payloadType | ProtoOAPayloadType | optional | payload type identifier |
+| ctidTraderAccountId | int64 | optional | trading account identifier |
 | leverage | ProtoOADynamicLeverage | optional | leverage |
 
 ### ProtoOAGetPositionUnrealizedPnLReq
-中文功能解說（依名稱推定）：ProtoOA取得持倉UnrealizedPnL請求
-| Field | Type | Label | 中文解說(依名稱推定) |
+Inferred description (name-based): Get position unrealized pn l request
+| Field | Type | Label | Inferred description (name-based) |
 |---|---|---|---|
-| payloadType | ProtoOAPayloadType | optional | 類型 |
-| ctidTraderAccountId | int64 | optional | 交易帳戶帳戶ID |
+| payloadType | ProtoOAPayloadType | optional | payload type identifier |
+| ctidTraderAccountId | int64 | optional | trading account identifier |
 
 ### ProtoOAGetPositionUnrealizedPnLRes
-中文功能解說（依名稱推定）：ProtoOA取得持倉UnrealizedPnL回應
-| Field | Type | Label | 中文解說(依名稱推定) |
+Inferred description (name-based): Get position unrealized pn l response
+| Field | Type | Label | Inferred description (name-based) |
 |---|---|---|---|
-| payloadType | ProtoOAPayloadType | optional | 類型 |
-| ctidTraderAccountId | int64 | optional | 交易帳戶帳戶ID |
+| payloadType | ProtoOAPayloadType | optional | payload type identifier |
+| ctidTraderAccountId | int64 | optional | trading account identifier |
 | positionUnrealizedPnL | ProtoOAPositionUnrealizedPnL | repeated | UnrealizedPnL |
-| moneyDigits | uint32 | optional | Digits |
+| moneyDigits | uint32 | optional | money digits precision |
 
 ### ProtoOAGetTickDataReq
-中文功能解說（依名稱推定）：ProtoOA取得TickData請求
-| Field | Type | Label | 中文解說(依名稱推定) |
+Inferred description (name-based): Get tick data request
+| Field | Type | Label | Inferred description (name-based) |
 |---|---|---|---|
-| payloadType | ProtoOAPayloadType | optional | 類型 |
-| ctidTraderAccountId | int64 | optional | 交易帳戶帳戶ID |
-| symbolId | int64 | optional | ID |
-| type | ProtoOAQuoteType | optional | type |
-| fromTimestamp | int64 | optional | 時間戳 |
-| toTimestamp | int64 | optional | 時間戳 |
+| payloadType | ProtoOAPayloadType | optional | payload type identifier |
+| ctidTraderAccountId | int64 | optional | trading account identifier |
+| symbolId | int64 | optional | symbol identifier |
+| type | ProtoOAQuoteType | optional | quote type |
+| fromTimestamp | int64 | optional | timestamp |
+| toTimestamp | int64 | optional | timestamp |
 
 ### ProtoOAGetTickDataRes
-中文功能解說（依名稱推定）：ProtoOA取得TickData回應
-| Field | Type | Label | 中文解說(依名稱推定) |
+Inferred description (name-based): Get tick data response
+| Field | Type | Label | Inferred description (name-based) |
 |---|---|---|---|
-| payloadType | ProtoOAPayloadType | optional | 類型 |
-| ctidTraderAccountId | int64 | optional | 交易帳戶帳戶ID |
+| payloadType | ProtoOAPayloadType | optional | payload type identifier |
+| ctidTraderAccountId | int64 | optional | trading account identifier |
 | tickData | ProtoOATickData | repeated | Data |
-| hasMore | bool | optional | More |
+| hasMore | bool | optional | has-more flag |
 
 ### ProtoOAGetTrendbarsReq
-中文功能解說（依名稱推定）：ProtoOA取得Trendbars請求
-| Field | Type | Label | 中文解說(依名稱推定) |
+Inferred description (name-based): Get trendbars request
+| Field | Type | Label | Inferred description (name-based) |
 |---|---|---|---|
-| payloadType | ProtoOAPayloadType | optional | 類型 |
-| ctidTraderAccountId | int64 | optional | 交易帳戶帳戶ID |
-| fromTimestamp | int64 | optional | 時間戳 |
-| toTimestamp | int64 | optional | 時間戳 |
+| payloadType | ProtoOAPayloadType | optional | payload type identifier |
+| ctidTraderAccountId | int64 | optional | trading account identifier |
+| fromTimestamp | int64 | optional | timestamp |
+| toTimestamp | int64 | optional | timestamp |
 | period | ProtoOATrendbarPeriod | optional | period |
-| symbolId | int64 | optional | ID |
+| symbolId | int64 | optional | symbol identifier |
 | count | uint32 | optional | count |
 
 ### ProtoOAGetTrendbarsRes
-中文功能解說（依名稱推定）：ProtoOA取得Trendbars回應
-| Field | Type | Label | 中文解說(依名稱推定) |
+Inferred description (name-based): Get trendbars response
+| Field | Type | Label | Inferred description (name-based) |
 |---|---|---|---|
-| payloadType | ProtoOAPayloadType | optional | 類型 |
-| ctidTraderAccountId | int64 | optional | 交易帳戶帳戶ID |
+| payloadType | ProtoOAPayloadType | optional | payload type identifier |
+| ctidTraderAccountId | int64 | optional | trading account identifier |
 | period | ProtoOATrendbarPeriod | optional | period |
 | timestamp | int64 | optional | timestamp |
 | trendbar | ProtoOATrendbar | repeated | trendbar |
-| symbolId | int64 | optional | ID |
+| symbolId | int64 | optional | symbol identifier |
 
 ### ProtoOAMarginCallListReq
-中文功能解說（依名稱推定）：ProtoOA保證金Call清單請求
-| Field | Type | Label | 中文解說(依名稱推定) |
+Inferred description (name-based): Margin call list request
+| Field | Type | Label | Inferred description (name-based) |
 |---|---|---|---|
-| payloadType | ProtoOAPayloadType | optional | 類型 |
-| ctidTraderAccountId | int64 | optional | 交易帳戶帳戶ID |
+| payloadType | ProtoOAPayloadType | optional | payload type identifier |
+| ctidTraderAccountId | int64 | optional | trading account identifier |
 
 ### ProtoOAMarginCallListRes
-中文功能解說（依名稱推定）：ProtoOA保證金Call清單回應
-| Field | Type | Label | 中文解說(依名稱推定) |
+Inferred description (name-based): Margin call list response
+| Field | Type | Label | Inferred description (name-based) |
 |---|---|---|---|
-| payloadType | ProtoOAPayloadType | optional | 類型 |
+| payloadType | ProtoOAPayloadType | optional | payload type identifier |
 | marginCall | ProtoOAMarginCall | repeated | Call |
 
 ### ProtoOAMarginCallTriggerEvent
-中文功能解說（依名稱推定）：ProtoOA保證金CallTrigger事件
-| Field | Type | Label | 中文解說(依名稱推定) |
+Inferred description (name-based): Margin call trigger event
+| Field | Type | Label | Inferred description (name-based) |
 |---|---|---|---|
-| payloadType | ProtoOAPayloadType | optional | 類型 |
-| ctidTraderAccountId | int64 | optional | 交易帳戶帳戶ID |
+| payloadType | ProtoOAPayloadType | optional | payload type identifier |
+| ctidTraderAccountId | int64 | optional | trading account identifier |
 | marginCall | ProtoOAMarginCall | optional | Call |
 
 ### ProtoOAMarginCallUpdateEvent
-中文功能解說（依名稱推定）：ProtoOA保證金CallUpdate事件
-| Field | Type | Label | 中文解說(依名稱推定) |
+Inferred description (name-based): Margin call update event
+| Field | Type | Label | Inferred description (name-based) |
 |---|---|---|---|
-| payloadType | ProtoOAPayloadType | optional | 類型 |
-| ctidTraderAccountId | int64 | optional | 交易帳戶帳戶ID |
+| payloadType | ProtoOAPayloadType | optional | payload type identifier |
+| ctidTraderAccountId | int64 | optional | trading account identifier |
 | marginCall | ProtoOAMarginCall | optional | Call |
 
 ### ProtoOAMarginCallUpdateReq
-中文功能解說（依名稱推定）：ProtoOA保證金CallUpdate請求
-| Field | Type | Label | 中文解說(依名稱推定) |
+Inferred description (name-based): Margin call update request
+| Field | Type | Label | Inferred description (name-based) |
 |---|---|---|---|
-| payloadType | ProtoOAPayloadType | optional | 類型 |
-| ctidTraderAccountId | int64 | optional | 交易帳戶帳戶ID |
+| payloadType | ProtoOAPayloadType | optional | payload type identifier |
+| ctidTraderAccountId | int64 | optional | trading account identifier |
 | marginCall | ProtoOAMarginCall | optional | Call |
 
 ### ProtoOAMarginCallUpdateRes
-中文功能解說（依名稱推定）：ProtoOA保證金CallUpdate回應
-| Field | Type | Label | 中文解說(依名稱推定) |
+Inferred description (name-based): Margin call update response
+| Field | Type | Label | Inferred description (name-based) |
 |---|---|---|---|
-| payloadType | ProtoOAPayloadType | optional | 類型 |
+| payloadType | ProtoOAPayloadType | optional | payload type identifier |
 
 ### ProtoOAMarginChangedEvent
-中文功能解說（依名稱推定）：ProtoOA保證金Changed事件
-| Field | Type | Label | 中文解說(依名稱推定) |
+Inferred description (name-based): Margin changed event
+| Field | Type | Label | Inferred description (name-based) |
 |---|---|---|---|
-| payloadType | ProtoOAPayloadType | optional | 類型 |
-| ctidTraderAccountId | int64 | optional | 交易帳戶帳戶ID |
-| positionId | uint64 | optional | ID |
-| usedMargin | uint64 | optional | 保證金 |
-| moneyDigits | uint32 | optional | Digits |
+| payloadType | ProtoOAPayloadType | optional | payload type identifier |
+| ctidTraderAccountId | int64 | optional | trading account identifier |
+| positionId | uint64 | optional | position identifier |
+| usedMargin | uint64 | optional | margin |
+| moneyDigits | uint32 | optional | money digits precision |
 
 ### ProtoOANewOrderReq
-中文功能解說（依名稱推定）：ProtoOANew訂單請求
-| Field | Type | Label | 中文解說(依名稱推定) |
+Inferred description (name-based): New order request
+| Field | Type | Label | Inferred description (name-based) |
 |---|---|---|---|
-| payloadType | ProtoOAPayloadType | optional | 類型 |
-| ctidTraderAccountId | int64 | optional | 交易帳戶帳戶ID |
-| symbolId | int64 | optional | ID |
-| orderType | ProtoOAOrderType | optional | 類型 |
-| tradeSide | ProtoOATradeSide | optional | 方向 |
+| payloadType | ProtoOAPayloadType | optional | payload type identifier |
+| ctidTraderAccountId | int64 | optional | trading account identifier |
+| symbolId | int64 | optional | symbol identifier |
+| orderType | ProtoOAOrderType | optional | order type |
+| tradeSide | ProtoOATradeSide | optional | side |
 | volume | int64 | optional | volume |
-| limitPrice | double | optional | 價格 |
-| stopPrice | double | optional | 價格 |
+| limitPrice | double | optional | price |
+| stopPrice | double | optional | price |
 | timeInForce | ProtoOATimeInForce | optional | InForce |
-| expirationTimestamp | int64 | optional | 時間戳 |
-| stopLoss | double | optional | 虧損 |
-| takeProfit | double | optional | 獲利 |
+| expirationTimestamp | int64 | optional | timestamp |
+| stopLoss | double | optional | loss |
+| takeProfit | double | optional | profit |
 | comment | string | optional | comment |
-| baseSlippagePrice | double | optional | 滑點價格 |
-| slippageInPoints | int32 | optional | InPoints |
+| baseSlippagePrice | double | optional | slippage price |
+| slippageInPoints | int32 | optional | slippage in points |
 | label | string | optional | label |
-| positionId | int64 | optional | ID |
-| clientOrderId | string | optional | 訂單ID |
-| relativeStopLoss | int64 | optional | 停損虧損 |
-| relativeTakeProfit | int64 | optional | 停利獲利 |
-| guaranteedStopLoss | bool | optional | 停損虧損 |
-| trailingStopLoss | bool | optional | 停損虧損 |
-| stopTriggerMethod | ProtoOAOrderTriggerMethod | optional | TriggerMethod |
+| positionId | int64 | optional | position identifier |
+| clientOrderId | string | optional | orderID |
+| relativeStopLoss | int64 | optional | stop loss |
+| relativeTakeProfit | int64 | optional | take profit |
+| guaranteedStopLoss | bool | optional | stop loss |
+| trailingStopLoss | bool | optional | stop loss |
+| stopTriggerMethod | ProtoOAOrderTriggerMethod | optional | stop trigger method |
 
 ### ProtoOAOrderDetailsReq
-中文功能解說（依名稱推定）：ProtoOA訂單Details請求
-| Field | Type | Label | 中文解說(依名稱推定) |
+Inferred description (name-based): Order details request
+| Field | Type | Label | Inferred description (name-based) |
 |---|---|---|---|
-| payloadType | ProtoOAPayloadType | optional | 類型 |
-| ctidTraderAccountId | int64 | optional | 交易帳戶帳戶ID |
-| orderId | int64 | optional | ID |
+| payloadType | ProtoOAPayloadType | optional | payload type identifier |
+| ctidTraderAccountId | int64 | optional | trading account identifier |
+| orderId | int64 | optional | order identifier |
 
 ### ProtoOAOrderDetailsRes
-中文功能解說（依名稱推定）：ProtoOA訂單Details回應
-| Field | Type | Label | 中文解說(依名稱推定) |
+Inferred description (name-based): Order details response
+| Field | Type | Label | Inferred description (name-based) |
 |---|---|---|---|
-| payloadType | ProtoOAPayloadType | optional | 類型 |
-| ctidTraderAccountId | int64 | optional | 交易帳戶帳戶ID |
+| payloadType | ProtoOAPayloadType | optional | payload type identifier |
+| ctidTraderAccountId | int64 | optional | trading account identifier |
 | order | ProtoOAOrder | optional | order |
-| deal | ProtoOADeal | repeated | deal |
+| deal | ProtoOADeal | repeated | deal entries |
 
 ### ProtoOAOrderErrorEvent
-中文功能解說（依名稱推定）：ProtoOA訂單錯誤事件
-| Field | Type | Label | 中文解說(依名稱推定) |
+Inferred description (name-based): Order error event
+| Field | Type | Label | Inferred description (name-based) |
 |---|---|---|---|
-| payloadType | ProtoOAPayloadType | optional | 類型 |
-| ctidTraderAccountId | int64 | optional | 交易帳戶帳戶ID |
-| errorCode | string | optional | Code |
-| orderId | int64 | optional | ID |
-| positionId | int64 | optional | ID |
-| description | string | optional | description |
+| payloadType | ProtoOAPayloadType | optional | payload type identifier |
+| ctidTraderAccountId | int64 | optional | trading account identifier |
+| errorCode | string | optional | error code |
+| orderId | int64 | optional | order identifier |
+| positionId | int64 | optional | position identifier |
+| description | string | optional | text description |
 
 ### ProtoOAOrderListByPositionIdReq
-中文功能解說（依名稱推定）：ProtoOA訂單清單依持倉ID請求
-| Field | Type | Label | 中文解說(依名稱推定) |
+Inferred description (name-based): Order list by position ID request
+| Field | Type | Label | Inferred description (name-based) |
 |---|---|---|---|
-| payloadType | ProtoOAPayloadType | optional | 類型 |
-| ctidTraderAccountId | int64 | optional | 交易帳戶帳戶ID |
-| positionId | int64 | optional | ID |
-| fromTimestamp | int64 | optional | 時間戳 |
-| toTimestamp | int64 | optional | 時間戳 |
+| payloadType | ProtoOAPayloadType | optional | payload type identifier |
+| ctidTraderAccountId | int64 | optional | trading account identifier |
+| positionId | int64 | optional | position identifier |
+| fromTimestamp | int64 | optional | timestamp |
+| toTimestamp | int64 | optional | timestamp |
 
 ### ProtoOAOrderListByPositionIdRes
-中文功能解說（依名稱推定）：ProtoOA訂單清單依持倉ID回應
-| Field | Type | Label | 中文解說(依名稱推定) |
+Inferred description (name-based): Order list by position ID response
+| Field | Type | Label | Inferred description (name-based) |
 |---|---|---|---|
-| payloadType | ProtoOAPayloadType | optional | 類型 |
-| ctidTraderAccountId | int64 | optional | 交易帳戶帳戶ID |
+| payloadType | ProtoOAPayloadType | optional | payload type identifier |
+| ctidTraderAccountId | int64 | optional | trading account identifier |
 | order | ProtoOAOrder | repeated | order |
-| hasMore | bool | optional | More |
+| hasMore | bool | optional | has-more flag |
 
 ### ProtoOAOrderListReq
-中文功能解說（依名稱推定）：ProtoOA訂單清單請求
-| Field | Type | Label | 中文解說(依名稱推定) |
+Inferred description (name-based): Order list request
+| Field | Type | Label | Inferred description (name-based) |
 |---|---|---|---|
-| payloadType | ProtoOAPayloadType | optional | 類型 |
-| ctidTraderAccountId | int64 | optional | 交易帳戶帳戶ID |
-| fromTimestamp | int64 | optional | 時間戳 |
-| toTimestamp | int64 | optional | 時間戳 |
+| payloadType | ProtoOAPayloadType | optional | payload type identifier |
+| ctidTraderAccountId | int64 | optional | trading account identifier |
+| fromTimestamp | int64 | optional | timestamp |
+| toTimestamp | int64 | optional | timestamp |
 
 ### ProtoOAOrderListRes
-中文功能解說（依名稱推定）：ProtoOA訂單清單回應
-| Field | Type | Label | 中文解說(依名稱推定) |
+Inferred description (name-based): Order list response
+| Field | Type | Label | Inferred description (name-based) |
 |---|---|---|---|
-| payloadType | ProtoOAPayloadType | optional | 類型 |
-| ctidTraderAccountId | int64 | optional | 交易帳戶帳戶ID |
+| payloadType | ProtoOAPayloadType | optional | payload type identifier |
+| ctidTraderAccountId | int64 | optional | trading account identifier |
 | order | ProtoOAOrder | repeated | order |
-| hasMore | bool | optional | More |
+| hasMore | bool | optional | has-more flag |
 
 ### ProtoOAReconcileReq
-中文功能解說（依名稱推定）：ProtoOAReconcile請求
-| Field | Type | Label | 中文解說(依名稱推定) |
+Inferred description (name-based): Reconcile request
+| Field | Type | Label | Inferred description (name-based) |
 |---|---|---|---|
-| payloadType | ProtoOAPayloadType | optional | 類型 |
-| ctidTraderAccountId | int64 | optional | 交易帳戶帳戶ID |
+| payloadType | ProtoOAPayloadType | optional | payload type identifier |
+| ctidTraderAccountId | int64 | optional | trading account identifier |
 
 ### ProtoOAReconcileRes
-中文功能解說（依名稱推定）：ProtoOAReconcile回應
-| Field | Type | Label | 中文解說(依名稱推定) |
+Inferred description (name-based): Reconcile response
+| Field | Type | Label | Inferred description (name-based) |
 |---|---|---|---|
-| payloadType | ProtoOAPayloadType | optional | 類型 |
-| ctidTraderAccountId | int64 | optional | 交易帳戶帳戶ID |
+| payloadType | ProtoOAPayloadType | optional | payload type identifier |
+| ctidTraderAccountId | int64 | optional | trading account identifier |
 | position | ProtoOAPosition | repeated | position |
 | order | ProtoOAOrder | repeated | order |
 
 ### ProtoOARefreshTokenReq
-中文功能解說（依名稱推定）：ProtoOA刷新Token請求
-| Field | Type | Label | 中文解說(依名稱推定) |
+Inferred description (name-based): Refresh token request
+| Field | Type | Label | Inferred description (name-based) |
 |---|---|---|---|
-| payloadType | ProtoOAPayloadType | optional | 類型 |
-| refreshToken | string | optional | Token |
+| payloadType | ProtoOAPayloadType | optional | payload type identifier |
+| refreshToken | string | optional | refresh token |
 
 ### ProtoOARefreshTokenRes
-中文功能解說（依名稱推定）：ProtoOA刷新Token回應
-| Field | Type | Label | 中文解說(依名稱推定) |
+Inferred description (name-based): Refresh token response
+| Field | Type | Label | Inferred description (name-based) |
 |---|---|---|---|
-| payloadType | ProtoOAPayloadType | optional | 類型 |
-| accessToken | string | optional | Token |
-| tokenType | string | optional | 類型 |
+| payloadType | ProtoOAPayloadType | optional | payload type identifier |
+| accessToken | string | optional | account access token |
+| tokenType | string | optional | token type |
 | expiresIn | int64 | optional | In |
-| refreshToken | string | optional | Token |
+| refreshToken | string | optional | refresh token |
 
 ### ProtoOASpotEvent
-中文功能解說（依名稱推定）：ProtoOA即時報價事件
-| Field | Type | Label | 中文解說(依名稱推定) |
+Inferred description (name-based): Spot event
+| Field | Type | Label | Inferred description (name-based) |
 |---|---|---|---|
-| payloadType | ProtoOAPayloadType | optional | 類型 |
-| ctidTraderAccountId | int64 | optional | 交易帳戶帳戶ID |
-| symbolId | int64 | optional | ID |
+| payloadType | ProtoOAPayloadType | optional | payload type identifier |
+| ctidTraderAccountId | int64 | optional | trading account identifier |
+| symbolId | int64 | optional | symbol identifier |
 | bid | uint64 | optional | bid |
 | ask | uint64 | optional | ask |
 | trendbar | ProtoOATrendbar | repeated | trendbar |
-| sessionClose | uint64 | optional | 收盤 |
+| sessionClose | uint64 | optional | close |
 | timestamp | int64 | optional | timestamp |
 
 ### ProtoOASubscribeDepthQuotesReq
-中文功能解說（依名稱推定）：ProtoOA訂閱深度Quotes請求
-| Field | Type | Label | 中文解說(依名稱推定) |
+Inferred description (name-based): Subscribe depth quotes request
+| Field | Type | Label | Inferred description (name-based) |
 |---|---|---|---|
-| payloadType | ProtoOAPayloadType | optional | 類型 |
-| ctidTraderAccountId | int64 | optional | 交易帳戶帳戶ID |
-| symbolId | int64 | repeated | ID |
+| payloadType | ProtoOAPayloadType | optional | payload type identifier |
+| ctidTraderAccountId | int64 | optional | trading account identifier |
+| symbolId | int64 | repeated | symbol identifiers |
 
 ### ProtoOASubscribeDepthQuotesRes
-中文功能解說（依名稱推定）：ProtoOA訂閱深度Quotes回應
-| Field | Type | Label | 中文解說(依名稱推定) |
+Inferred description (name-based): Subscribe depth quotes response
+| Field | Type | Label | Inferred description (name-based) |
 |---|---|---|---|
-| payloadType | ProtoOAPayloadType | optional | 類型 |
-| ctidTraderAccountId | int64 | optional | 交易帳戶帳戶ID |
+| payloadType | ProtoOAPayloadType | optional | payload type identifier |
+| ctidTraderAccountId | int64 | optional | trading account identifier |
 
 ### ProtoOASubscribeLiveTrendbarReq
-中文功能解說（依名稱推定）：ProtoOA訂閱LiveK線請求
-| Field | Type | Label | 中文解說(依名稱推定) |
+Inferred description (name-based): Subscribe live trendbar request
+| Field | Type | Label | Inferred description (name-based) |
 |---|---|---|---|
-| payloadType | ProtoOAPayloadType | optional | 類型 |
-| ctidTraderAccountId | int64 | optional | 交易帳戶帳戶ID |
+| payloadType | ProtoOAPayloadType | optional | payload type identifier |
+| ctidTraderAccountId | int64 | optional | trading account identifier |
 | period | ProtoOATrendbarPeriod | optional | period |
-| symbolId | int64 | optional | ID |
+| symbolId | int64 | optional | symbol identifier |
 
 ### ProtoOASubscribeLiveTrendbarRes
-中文功能解說（依名稱推定）：ProtoOA訂閱LiveK線回應
-| Field | Type | Label | 中文解說(依名稱推定) |
+Inferred description (name-based): Subscribe live trendbar response
+| Field | Type | Label | Inferred description (name-based) |
 |---|---|---|---|
-| payloadType | ProtoOAPayloadType | optional | 類型 |
-| ctidTraderAccountId | int64 | optional | 交易帳戶帳戶ID |
+| payloadType | ProtoOAPayloadType | optional | payload type identifier |
+| ctidTraderAccountId | int64 | optional | trading account identifier |
 
 ### ProtoOASubscribeSpotsReq
-中文功能解說（依名稱推定）：ProtoOA訂閱Spots請求
-| Field | Type | Label | 中文解說(依名稱推定) |
+Inferred description (name-based): Subscribe spots request
+| Field | Type | Label | Inferred description (name-based) |
 |---|---|---|---|
-| payloadType | ProtoOAPayloadType | optional | 類型 |
-| ctidTraderAccountId | int64 | optional | 交易帳戶帳戶ID |
-| symbolId | int64 | repeated | ID |
-| subscribeToSpotTimestamp | bool | optional | To即時報價時間戳 |
+| payloadType | ProtoOAPayloadType | optional | payload type identifier |
+| ctidTraderAccountId | int64 | optional | trading account identifier |
+| symbolId | int64 | repeated | symbol identifiers |
+| subscribeToSpotTimestamp | bool | optional | Tospot quotetimestamp |
 
 ### ProtoOASubscribeSpotsRes
-中文功能解說（依名稱推定）：ProtoOA訂閱Spots回應
-| Field | Type | Label | 中文解說(依名稱推定) |
+Inferred description (name-based): Subscribe spots response
+| Field | Type | Label | Inferred description (name-based) |
 |---|---|---|---|
-| payloadType | ProtoOAPayloadType | optional | 類型 |
-| ctidTraderAccountId | int64 | optional | 交易帳戶帳戶ID |
+| payloadType | ProtoOAPayloadType | optional | payload type identifier |
+| ctidTraderAccountId | int64 | optional | trading account identifier |
 
 ### ProtoOASymbolByIdReq
-中文功能解說（依名稱推定）：ProtoOA交易品種依ID請求
-| Field | Type | Label | 中文解說(依名稱推定) |
+Inferred description (name-based): Symbol by ID request
+| Field | Type | Label | Inferred description (name-based) |
 |---|---|---|---|
-| payloadType | ProtoOAPayloadType | optional | 類型 |
-| ctidTraderAccountId | int64 | optional | 交易帳戶帳戶ID |
-| symbolId | int64 | repeated | ID |
+| payloadType | ProtoOAPayloadType | optional | payload type identifier |
+| ctidTraderAccountId | int64 | optional | trading account identifier |
+| symbolId | int64 | repeated | symbol identifiers |
 
 ### ProtoOASymbolByIdRes
-中文功能解說（依名稱推定）：ProtoOA交易品種依ID回應
-| Field | Type | Label | 中文解說(依名稱推定) |
+Inferred description (name-based): Symbol by ID response
+| Field | Type | Label | Inferred description (name-based) |
 |---|---|---|---|
-| payloadType | ProtoOAPayloadType | optional | 類型 |
-| ctidTraderAccountId | int64 | optional | 交易帳戶帳戶ID |
+| payloadType | ProtoOAPayloadType | optional | payload type identifier |
+| ctidTraderAccountId | int64 | optional | trading account identifier |
 | symbol | ProtoOASymbol | repeated | symbol |
-| archivedSymbol | ProtoOAArchivedSymbol | repeated | 交易品種 |
+| archivedSymbol | ProtoOAArchivedSymbol | repeated | symbol |
 
 ### ProtoOASymbolCategoryListReq
-中文功能解說（依名稱推定）：ProtoOA交易品種Category清單請求
-| Field | Type | Label | 中文解說(依名稱推定) |
+Inferred description (name-based): Symbol category list request
+| Field | Type | Label | Inferred description (name-based) |
 |---|---|---|---|
-| payloadType | ProtoOAPayloadType | optional | 類型 |
-| ctidTraderAccountId | int64 | optional | 交易帳戶帳戶ID |
+| payloadType | ProtoOAPayloadType | optional | payload type identifier |
+| ctidTraderAccountId | int64 | optional | trading account identifier |
 
 ### ProtoOASymbolCategoryListRes
-中文功能解說（依名稱推定）：ProtoOA交易品種Category清單回應
-| Field | Type | Label | 中文解說(依名稱推定) |
+Inferred description (name-based): Symbol category list response
+| Field | Type | Label | Inferred description (name-based) |
 |---|---|---|---|
-| payloadType | ProtoOAPayloadType | optional | 類型 |
-| ctidTraderAccountId | int64 | optional | 交易帳戶帳戶ID |
+| payloadType | ProtoOAPayloadType | optional | payload type identifier |
+| ctidTraderAccountId | int64 | optional | trading account identifier |
 | symbolCategory | ProtoOASymbolCategory | repeated | Category |
 
 ### ProtoOASymbolChangedEvent
-中文功能解說（依名稱推定）：ProtoOA交易品種Changed事件
-| Field | Type | Label | 中文解說(依名稱推定) |
+Inferred description (name-based): Symbol changed event
+| Field | Type | Label | Inferred description (name-based) |
 |---|---|---|---|
-| payloadType | ProtoOAPayloadType | optional | 類型 |
-| ctidTraderAccountId | int64 | optional | 交易帳戶帳戶ID |
-| symbolId | int64 | repeated | ID |
+| payloadType | ProtoOAPayloadType | optional | payload type identifier |
+| ctidTraderAccountId | int64 | optional | trading account identifier |
+| symbolId | int64 | repeated | symbol identifiers |
 
 ### ProtoOASymbolsForConversionReq
-中文功能解說（依名稱推定）：ProtoOA交易品種ForConversion請求
-| Field | Type | Label | 中文解說(依名稱推定) |
+Inferred description (name-based): Symbols for conversion request
+| Field | Type | Label | Inferred description (name-based) |
 |---|---|---|---|
-| payloadType | ProtoOAPayloadType | optional | 類型 |
-| ctidTraderAccountId | int64 | optional | 交易帳戶帳戶ID |
-| firstAssetId | int64 | optional | 資產ID |
-| lastAssetId | int64 | optional | 資產ID |
+| payloadType | ProtoOAPayloadType | optional | payload type identifier |
+| ctidTraderAccountId | int64 | optional | trading account identifier |
+| firstAssetId | int64 | optional | asset ID |
+| lastAssetId | int64 | optional | asset ID |
 
 ### ProtoOASymbolsForConversionRes
-中文功能解說（依名稱推定）：ProtoOA交易品種ForConversion回應
-| Field | Type | Label | 中文解說(依名稱推定) |
+Inferred description (name-based): Symbols for conversion response
+| Field | Type | Label | Inferred description (name-based) |
 |---|---|---|---|
-| payloadType | ProtoOAPayloadType | optional | 類型 |
-| ctidTraderAccountId | int64 | optional | 交易帳戶帳戶ID |
+| payloadType | ProtoOAPayloadType | optional | payload type identifier |
+| ctidTraderAccountId | int64 | optional | trading account identifier |
 | symbol | ProtoOALightSymbol | repeated | symbol |
 
 ### ProtoOASymbolsListReq
-中文功能解說（依名稱推定）：ProtoOA交易品種清單請求
-| Field | Type | Label | 中文解說(依名稱推定) |
+Inferred description (name-based): Symbols list request
+| Field | Type | Label | Inferred description (name-based) |
 |---|---|---|---|
-| payloadType | ProtoOAPayloadType | optional | 類型 |
-| ctidTraderAccountId | int64 | optional | 交易帳戶帳戶ID |
-| includeArchivedSymbols | bool | optional | Archived交易品種 |
+| payloadType | ProtoOAPayloadType | optional | payload type identifier |
+| ctidTraderAccountId | int64 | optional | trading account identifier |
+| includeArchivedSymbols | bool | optional | Archivedsymbol |
 
 ### ProtoOASymbolsListRes
-中文功能解說（依名稱推定）：ProtoOA交易品種清單回應
-| Field | Type | Label | 中文解說(依名稱推定) |
+Inferred description (name-based): Symbols list response
+| Field | Type | Label | Inferred description (name-based) |
 |---|---|---|---|
-| payloadType | ProtoOAPayloadType | optional | 類型 |
-| ctidTraderAccountId | int64 | optional | 交易帳戶帳戶ID |
+| payloadType | ProtoOAPayloadType | optional | payload type identifier |
+| ctidTraderAccountId | int64 | optional | trading account identifier |
 | symbol | ProtoOALightSymbol | repeated | symbol |
-| archivedSymbol | ProtoOAArchivedSymbol | repeated | 交易品種 |
+| archivedSymbol | ProtoOAArchivedSymbol | repeated | symbol |
 
 ### ProtoOATraderReq
-中文功能解說（依名稱推定）：ProtoOA交易帳戶請求
-| Field | Type | Label | 中文解說(依名稱推定) |
+Inferred description (name-based): Trader request
+| Field | Type | Label | Inferred description (name-based) |
 |---|---|---|---|
-| payloadType | ProtoOAPayloadType | optional | 類型 |
-| ctidTraderAccountId | int64 | optional | 交易帳戶帳戶ID |
+| payloadType | ProtoOAPayloadType | optional | payload type identifier |
+| ctidTraderAccountId | int64 | optional | trading account identifier |
 
 ### ProtoOATraderRes
-中文功能解說（依名稱推定）：ProtoOA交易帳戶回應
-| Field | Type | Label | 中文解說(依名稱推定) |
+Inferred description (name-based): Trader response
+| Field | Type | Label | Inferred description (name-based) |
 |---|---|---|---|
-| payloadType | ProtoOAPayloadType | optional | 類型 |
-| ctidTraderAccountId | int64 | optional | 交易帳戶帳戶ID |
+| payloadType | ProtoOAPayloadType | optional | payload type identifier |
+| ctidTraderAccountId | int64 | optional | trading account identifier |
 | trader | ProtoOATrader | optional | trader |
 
 ### ProtoOATraderUpdatedEvent
-中文功能解說（依名稱推定）：ProtoOA交易帳戶Updated事件
-| Field | Type | Label | 中文解說(依名稱推定) |
+Inferred description (name-based): Trader updated event
+| Field | Type | Label | Inferred description (name-based) |
 |---|---|---|---|
-| payloadType | ProtoOAPayloadType | optional | 類型 |
-| ctidTraderAccountId | int64 | optional | 交易帳戶帳戶ID |
+| payloadType | ProtoOAPayloadType | optional | payload type identifier |
+| ctidTraderAccountId | int64 | optional | trading account identifier |
 | trader | ProtoOATrader | optional | trader |
 
 ### ProtoOATrailingSLChangedEvent
-中文功能解說（依名稱推定）：ProtoOATrailingSLChanged事件
-| Field | Type | Label | 中文解說(依名稱推定) |
+Inferred description (name-based): Trailing sl changed event
+| Field | Type | Label | Inferred description (name-based) |
 |---|---|---|---|
-| payloadType | ProtoOAPayloadType | optional | 類型 |
-| ctidTraderAccountId | int64 | optional | 交易帳戶帳戶ID |
-| positionId | int64 | optional | ID |
-| orderId | int64 | optional | ID |
-| stopPrice | double | optional | 價格 |
-| utcLastUpdateTimestamp | int64 | optional | LastUpdate時間戳 |
+| payloadType | ProtoOAPayloadType | optional | payload type identifier |
+| ctidTraderAccountId | int64 | optional | trading account identifier |
+| positionId | int64 | optional | position identifier |
+| orderId | int64 | optional | order identifier |
+| stopPrice | double | optional | price |
+| utcLastUpdateTimestamp | int64 | optional | last update timestamp |
 
 ### ProtoOAUnsubscribeDepthQuotesReq
-中文功能解說（依名稱推定）：ProtoOA取消訂閱深度Quotes請求
-| Field | Type | Label | 中文解說(依名稱推定) |
+Inferred description (name-based): Unsubscribe depth quotes request
+| Field | Type | Label | Inferred description (name-based) |
 |---|---|---|---|
-| payloadType | ProtoOAPayloadType | optional | 類型 |
-| ctidTraderAccountId | int64 | optional | 交易帳戶帳戶ID |
-| symbolId | int64 | repeated | ID |
+| payloadType | ProtoOAPayloadType | optional | payload type identifier |
+| ctidTraderAccountId | int64 | optional | trading account identifier |
+| symbolId | int64 | repeated | symbol identifiers |
 
 ### ProtoOAUnsubscribeDepthQuotesRes
-中文功能解說（依名稱推定）：ProtoOA取消訂閱深度Quotes回應
-| Field | Type | Label | 中文解說(依名稱推定) |
+Inferred description (name-based): Unsubscribe depth quotes response
+| Field | Type | Label | Inferred description (name-based) |
 |---|---|---|---|
-| payloadType | ProtoOAPayloadType | optional | 類型 |
-| ctidTraderAccountId | int64 | optional | 交易帳戶帳戶ID |
+| payloadType | ProtoOAPayloadType | optional | payload type identifier |
+| ctidTraderAccountId | int64 | optional | trading account identifier |
 
 ### ProtoOAUnsubscribeLiveTrendbarReq
-中文功能解說（依名稱推定）：ProtoOA取消訂閱LiveK線請求
-| Field | Type | Label | 中文解說(依名稱推定) |
+Inferred description (name-based): Unsubscribe live trendbar request
+| Field | Type | Label | Inferred description (name-based) |
 |---|---|---|---|
-| payloadType | ProtoOAPayloadType | optional | 類型 |
-| ctidTraderAccountId | int64 | optional | 交易帳戶帳戶ID |
+| payloadType | ProtoOAPayloadType | optional | payload type identifier |
+| ctidTraderAccountId | int64 | optional | trading account identifier |
 | period | ProtoOATrendbarPeriod | optional | period |
-| symbolId | int64 | optional | ID |
+| symbolId | int64 | optional | symbol identifier |
 
 ### ProtoOAUnsubscribeLiveTrendbarRes
-中文功能解說（依名稱推定）：ProtoOA取消訂閱LiveK線回應
-| Field | Type | Label | 中文解說(依名稱推定) |
+Inferred description (name-based): Unsubscribe live trendbar response
+| Field | Type | Label | Inferred description (name-based) |
 |---|---|---|---|
-| payloadType | ProtoOAPayloadType | optional | 類型 |
-| ctidTraderAccountId | int64 | optional | 交易帳戶帳戶ID |
+| payloadType | ProtoOAPayloadType | optional | payload type identifier |
+| ctidTraderAccountId | int64 | optional | trading account identifier |
 
 ### ProtoOAUnsubscribeSpotsReq
-中文功能解說（依名稱推定）：ProtoOA取消訂閱Spots請求
-| Field | Type | Label | 中文解說(依名稱推定) |
+Inferred description (name-based): Unsubscribe spots request
+| Field | Type | Label | Inferred description (name-based) |
 |---|---|---|---|
-| payloadType | ProtoOAPayloadType | optional | 類型 |
-| ctidTraderAccountId | int64 | optional | 交易帳戶帳戶ID |
-| symbolId | int64 | repeated | ID |
+| payloadType | ProtoOAPayloadType | optional | payload type identifier |
+| ctidTraderAccountId | int64 | optional | trading account identifier |
+| symbolId | int64 | repeated | symbol identifiers |
 
 ### ProtoOAUnsubscribeSpotsRes
-中文功能解說（依名稱推定）：ProtoOA取消訂閱Spots回應
-| Field | Type | Label | 中文解說(依名稱推定) |
+Inferred description (name-based): Unsubscribe spots response
+| Field | Type | Label | Inferred description (name-based) |
 |---|---|---|---|
-| payloadType | ProtoOAPayloadType | optional | 類型 |
-| ctidTraderAccountId | int64 | optional | 交易帳戶帳戶ID |
+| payloadType | ProtoOAPayloadType | optional | payload type identifier |
+| ctidTraderAccountId | int64 | optional | trading account identifier |
 
 ### ProtoOAVersionReq
-中文功能解說（依名稱推定）：ProtoOAVersion請求
-| Field | Type | Label | 中文解說(依名稱推定) |
+Inferred description (name-based): Version request
+| Field | Type | Label | Inferred description (name-based) |
 |---|---|---|---|
-| payloadType | ProtoOAPayloadType | optional | 類型 |
+| payloadType | ProtoOAPayloadType | optional | payload type identifier |
 
 ### ProtoOAVersionRes
-中文功能解說（依名稱推定）：ProtoOAVersion回應
-| Field | Type | Label | 中文解說(依名稱推定) |
+Inferred description (name-based): Version response
+| Field | Type | Label | Inferred description (name-based) |
 |---|---|---|---|
-| payloadType | ProtoOAPayloadType | optional | 類型 |
-| version | string | optional | version |
+| payloadType | ProtoOAPayloadType | optional | payload type identifier |
+| version | string | optional | version string |
 
 ## Open API Model Messages
 
-### Messages
-
 ### ProtoOAArchivedSymbol
-中文功能解說（依名稱推定）：ProtoOAArchived交易品種
-| Field | Type | Label | 中文解說(依名稱推定) |
+Inferred description (name-based): Archived symbol
+| Field | Type | Label | Inferred description (name-based) |
 |---|---|---|---|
-| symbolId | int64 | optional | ID |
+| symbolId | int64 | optional | symbol identifier |
 | name | string | optional | name |
-| utcLastUpdateTimestamp | int64 | optional | LastUpdate時間戳 |
-| description | string | optional | description |
+| utcLastUpdateTimestamp | int64 | optional | last update timestamp |
+| description | string | optional | text description |
 
 ### ProtoOAAsset
-中文功能解說（依名稱推定）：ProtoOA資產
-| Field | Type | Label | 中文解說(依名稱推定) |
+Inferred description (name-based): Asset
+| Field | Type | Label | Inferred description (name-based) |
 |---|---|---|---|
-| assetId | int64 | optional | ID |
+| assetId | int64 | optional | asset identifier |
 | name | string | optional | name |
-| displayName | string | optional | Name |
+| displayName | string | optional | display name |
 | digits | int32 | optional | digits |
 
 ### ProtoOAAssetClass
-中文功能解說（依名稱推定）：ProtoOA資產Class
-| Field | Type | Label | 中文解說(依名稱推定) |
+Inferred description (name-based): Asset class
+| Field | Type | Label | Inferred description (name-based) |
 |---|---|---|---|
 | id | int64 | optional | id |
 | name | string | optional | name |
 
 ### ProtoOABonusDepositWithdraw
-中文功能解說（依名稱推定）：ProtoOABonusDepositWithdraw
-| Field | Type | Label | 中文解說(依名稱推定) |
+Inferred description (name-based): Bonus deposit withdraw
+| Field | Type | Label | Inferred description (name-based) |
 |---|---|---|---|
-| operationType | ProtoOAChangeBonusType | optional | 類型 |
-| bonusHistoryId | int64 | optional | 歷史ID |
+| operationType | ProtoOAChangeBonusType | optional | bonus operation type |
+| bonusHistoryId | int64 | optional | history ID |
 | managerBonus | int64 | optional | Bonus |
 | managerDelta | int64 | optional | Delta |
 | ibBonus | int64 | optional | Bonus |
 | ibDelta | int64 | optional | Delta |
-| changeBonusTimestamp | int64 | optional | Bonus時間戳 |
+| changeBonusTimestamp | int64 | optional | bonus timestamp |
 | externalNote | string | optional | Note |
 | introducingBrokerId | int64 | optional | BrokerID |
-| moneyDigits | uint32 | optional | Digits |
+| moneyDigits | uint32 | optional | money digits precision |
 
 ### ProtoOAClosePositionDetail
-中文功能解說（依名稱推定）：ProtoOA收盤持倉Detail
-| Field | Type | Label | 中文解說(依名稱推定) |
+Inferred description (name-based): Close position detail
+| Field | Type | Label | Inferred description (name-based) |
 |---|---|---|---|
-| entryPrice | double | optional | 價格 |
-| grossProfit | int64 | optional | 獲利 |
+| entryPrice | double | optional | price |
+| grossProfit | int64 | optional | profit |
 | swap | int64 | optional | swap |
 | commission | int64 | optional | commission |
 | balance | int64 | optional | balance |
 | quoteToDepositConversionRate | double | optional | ToDepositConversionRate |
-| closedVolume | int64 | optional | 成交量 |
+| closedVolume | int64 | optional | volume |
 | balanceVersion | int64 | optional | Version |
-| moneyDigits | uint32 | optional | Digits |
-| pnlConversionFee | int64 | optional | Conversion費用 |
+| moneyDigits | uint32 | optional | money digits precision |
+| pnlConversionFee | int64 | optional | conversion fee |
 
 ### ProtoOACtidProfile
-中文功能解說（依名稱推定）：ProtoOACtidProfile
-| Field | Type | Label | 中文解說(依名稱推定) |
+Inferred description (name-based): CTID profile
+| Field | Type | Label | Inferred description (name-based) |
 |---|---|---|---|
-| userId | int64 | optional | ID |
+| userId | int64 | optional | user identifier |
 
 ### ProtoOACtidTraderAccount
-中文功能解說（依名稱推定）：ProtoOACtid交易帳戶帳戶
-| Field | Type | Label | 中文解說(依名稱推定) |
+Inferred description (name-based): CTID trader account
+| Field | Type | Label | Inferred description (name-based) |
 |---|---|---|---|
-| ctidTraderAccountId | uint64 | optional | 交易帳戶帳戶ID |
+| ctidTraderAccountId | uint64 | optional | trading account identifier |
 | isLive | bool | optional | Live |
-| traderLogin | int64 | optional | Login |
-| lastClosingDealTimestamp | int64 | optional | Closing成交時間戳 |
-| lastBalanceUpdateTimestamp | int64 | optional | BalanceUpdate時間戳 |
+| traderLogin | int64 | optional | trader login identifier |
+| lastClosingDealTimestamp | int64 | optional | closing deal timestamp |
+| lastBalanceUpdateTimestamp | int64 | optional | balance update timestamp |
 
 ### ProtoOADeal
-中文功能解說（依名稱推定）：ProtoOA成交
-| Field | Type | Label | 中文解說(依名稱推定) |
+Inferred description (name-based): Deal
+| Field | Type | Label | Inferred description (name-based) |
 |---|---|---|---|
-| dealId | int64 | optional | ID |
-| orderId | int64 | optional | ID |
-| positionId | int64 | optional | ID |
+| dealId | int64 | optional | deal identifier |
+| orderId | int64 | optional | order identifier |
+| positionId | int64 | optional | position identifier |
 | volume | int64 | optional | volume |
-| filledVolume | int64 | optional | 成交量 |
-| symbolId | int64 | optional | ID |
-| createTimestamp | int64 | optional | 時間戳 |
-| executionTimestamp | int64 | optional | 時間戳 |
-| utcLastUpdateTimestamp | int64 | optional | LastUpdate時間戳 |
-| executionPrice | double | optional | 價格 |
-| tradeSide | ProtoOATradeSide | optional | 方向 |
-| dealStatus | ProtoOADealStatus | optional | 狀態 |
+| filledVolume | int64 | optional | volume |
+| symbolId | int64 | optional | symbol identifier |
+| createTimestamp | int64 | optional | timestamp |
+| executionTimestamp | int64 | optional | timestamp |
+| utcLastUpdateTimestamp | int64 | optional | last update timestamp |
+| executionPrice | double | optional | price |
+| tradeSide | ProtoOATradeSide | optional | side |
+| dealStatus | ProtoOADealStatus | optional | status |
 | marginRate | double | optional | Rate |
 | commission | int64 | optional | commission |
 | baseToUsdConversionRate | double | optional | ToUsdConversionRate |
-| closePositionDetail | ProtoOAClosePositionDetail | optional | 持倉Detail |
-| moneyDigits | uint32 | optional | Digits |
+| closePositionDetail | ProtoOAClosePositionDetail | optional | position detail |
+| moneyDigits | uint32 | optional | money digits precision |
 
 ### ProtoOADealOffset
-中文功能解說（依名稱推定）：ProtoOA成交Offset
-| Field | Type | Label | 中文解說(依名稱推定) |
+Inferred description (name-based): Deal offset
+| Field | Type | Label | Inferred description (name-based) |
 |---|---|---|---|
-| dealId | int64 | optional | ID |
+| dealId | int64 | optional | deal identifier |
 | volume | int64 | optional | volume |
-| executionTimestamp | int64 | optional | 時間戳 |
-| executionPrice | double | optional | 價格 |
+| executionTimestamp | int64 | optional | timestamp |
+| executionPrice | double | optional | price |
 
 ### ProtoOADepositWithdraw
-中文功能解說（依名稱推定）：ProtoOADepositWithdraw
-| Field | Type | Label | 中文解說(依名稱推定) |
+Inferred description (name-based): Deposit withdraw
+| Field | Type | Label | Inferred description (name-based) |
 |---|---|---|---|
-| operationType | ProtoOAChangeBalanceType | optional | 類型 |
-| balanceHistoryId | int64 | optional | 歷史ID |
+| operationType | ProtoOAChangeBalanceType | optional | balance operation type |
+| balanceHistoryId | int64 | optional | history ID |
 | balance | int64 | optional | balance |
 | delta | int64 | optional | delta |
-| changeBalanceTimestamp | int64 | optional | Balance時間戳 |
+| changeBalanceTimestamp | int64 | optional | balance timestamp |
 | externalNote | string | optional | Note |
 | balanceVersion | int64 | optional | Version |
 | equity | int64 | optional | equity |
-| moneyDigits | uint32 | optional | Digits |
+| moneyDigits | uint32 | optional | money digits precision |
 
 ### ProtoOADepthQuote
-中文功能解說（依名稱推定）：ProtoOA深度Quote
-| Field | Type | Label | 中文解說(依名稱推定) |
+Inferred description (name-based): Depth quote
+| Field | Type | Label | Inferred description (name-based) |
 |---|---|---|---|
 | id | uint64 | optional | id |
 | size | uint64 | optional | size |
@@ -918,681 +927,674 @@
 | ask | uint64 | optional | ask |
 
 ### ProtoOADynamicLeverage
-中文功能解說（依名稱推定）：ProtoOA動態槓桿
-| Field | Type | Label | 中文解說(依名稱推定) |
+Inferred description (name-based): Dynamic leverage
+| Field | Type | Label | Inferred description (name-based) |
 |---|---|---|---|
-| leverageId | int64 | optional | ID |
+| leverageId | int64 | optional | leverage tier identifier |
 | tiers | ProtoOADynamicLeverageTier | repeated | tiers |
 
 ### ProtoOADynamicLeverageTier
-中文功能解說（依名稱推定）：ProtoOA動態槓桿Tier
-| Field | Type | Label | 中文解說(依名稱推定) |
+Inferred description (name-based): Dynamic leverage tier
+| Field | Type | Label | Inferred description (name-based) |
 |---|---|---|---|
 | volume | int64 | optional | volume |
 | leverage | int64 | optional | leverage |
 
 ### ProtoOAExpectedMargin
-中文功能解說（依名稱推定）：ProtoOA預估保證金
-| Field | Type | Label | 中文解說(依名稱推定) |
+Inferred description (name-based): Expected margin
+| Field | Type | Label | Inferred description (name-based) |
 |---|---|---|---|
 | volume | int64 | optional | volume |
-| buyMargin | int64 | optional | 保證金 |
-| sellMargin | int64 | optional | 保證金 |
+| buyMargin | int64 | optional | margin |
+| sellMargin | int64 | optional | margin |
 
 ### ProtoOAHoliday
-中文功能解說（依名稱推定）：ProtoOAHoliday
-| Field | Type | Label | 中文解說(依名稱推定) |
+Inferred description (name-based): Holiday
+| Field | Type | Label | Inferred description (name-based) |
 |---|---|---|---|
-| holidayId | int64 | optional | ID |
+| holidayId | int64 | optional | holiday identifier |
 | name | string | optional | name |
-| description | string | optional | description |
-| scheduleTimeZone | string | optional | 時間Zone |
+| description | string | optional | text description |
+| scheduleTimeZone | string | optional | time zone |
 | holidayDate | int64 | optional | Date |
 | isRecurring | bool | optional | Recurring |
 | startSecond | int32 | optional | Second |
 | endSecond | int32 | optional | Second |
 
 ### ProtoOAInterval
-中文功能解說（依名稱推定）：ProtoOA間隔
-| Field | Type | Label | 中文解說(依名稱推定) |
+Inferred description (name-based): Interval
+| Field | Type | Label | Inferred description (name-based) |
 |---|---|---|---|
 | startSecond | uint32 | optional | Second |
 | endSecond | uint32 | optional | Second |
 
 ### ProtoOALightSymbol
-中文功能解說（依名稱推定）：ProtoOALight交易品種
-| Field | Type | Label | 中文解說(依名稱推定) |
+Inferred description (name-based): Light symbol
+| Field | Type | Label | Inferred description (name-based) |
 |---|---|---|---|
-| symbolId | int64 | optional | ID |
-| symbolName | string | optional | Name |
+| symbolId | int64 | optional | symbol identifier |
+| symbolName | string | optional | symbol name |
 | enabled | bool | optional | enabled |
-| baseAssetId | int64 | optional | 資產ID |
-| quoteAssetId | int64 | optional | 資產ID |
+| baseAssetId | int64 | optional | asset ID |
+| quoteAssetId | int64 | optional | asset ID |
 | symbolCategoryId | int64 | optional | CategoryID |
-| description | string | optional | description |
+| description | string | optional | text description |
 
 ### ProtoOAMarginCall
-中文功能解說（依名稱推定）：ProtoOA保證金Call
-| Field | Type | Label | 中文解說(依名稱推定) |
+Inferred description (name-based): Margin call
+| Field | Type | Label | Inferred description (name-based) |
 |---|---|---|---|
-| marginCallType | ProtoOANotificationType | optional | Call類型 |
+| marginCallType | ProtoOANotificationType | optional | Calltype |
 | marginLevelThreshold | double | optional | LevelThreshold |
-| utcLastUpdateTimestamp | int64 | optional | LastUpdate時間戳 |
+| utcLastUpdateTimestamp | int64 | optional | last update timestamp |
 
 ### ProtoOAOrder
-中文功能解說（依名稱推定）：ProtoOA訂單
-| Field | Type | Label | 中文解說(依名稱推定) |
+Inferred description (name-based): Order
+| Field | Type | Label | Inferred description (name-based) |
 |---|---|---|---|
-| orderId | int64 | optional | ID |
+| orderId | int64 | optional | order identifier |
 | tradeData | ProtoOATradeData | optional | Data |
-| orderType | ProtoOAOrderType | optional | 類型 |
-| orderStatus | ProtoOAOrderStatus | optional | 狀態 |
-| expirationTimestamp | int64 | optional | 時間戳 |
-| executionPrice | double | optional | 價格 |
-| executedVolume | int64 | optional | 成交量 |
-| utcLastUpdateTimestamp | int64 | optional | LastUpdate時間戳 |
-| baseSlippagePrice | double | optional | 滑點價格 |
+| orderType | ProtoOAOrderType | optional | order type |
+| orderStatus | ProtoOAOrderStatus | optional | status |
+| expirationTimestamp | int64 | optional | timestamp |
+| executionPrice | double | optional | price |
+| executedVolume | int64 | optional | volume |
+| utcLastUpdateTimestamp | int64 | optional | last update timestamp |
+| baseSlippagePrice | double | optional | slippage price |
 | slippageInPoints | int64 | optional | InPoints |
-| closingOrder | bool | optional | 訂單 |
-| limitPrice | double | optional | 價格 |
-| stopPrice | double | optional | 價格 |
-| stopLoss | double | optional | 虧損 |
-| takeProfit | double | optional | 獲利 |
-| clientOrderId | string | optional | 訂單ID |
+| closingOrder | bool | optional | order |
+| limitPrice | double | optional | price |
+| stopPrice | double | optional | price |
+| stopLoss | double | optional | loss |
+| takeProfit | double | optional | profit |
+| clientOrderId | string | optional | orderID |
 | timeInForce | ProtoOATimeInForce | optional | InForce |
-| positionId | int64 | optional | ID |
-| relativeStopLoss | int64 | optional | 停損虧損 |
-| relativeTakeProfit | int64 | optional | 停利獲利 |
-| isStopOut | bool | optional | 停損Out |
-| trailingStopLoss | bool | optional | 停損虧損 |
-| stopTriggerMethod | ProtoOAOrderTriggerMethod | optional | TriggerMethod |
+| positionId | int64 | optional | position identifier |
+| relativeStopLoss | int64 | optional | stop loss |
+| relativeTakeProfit | int64 | optional | take profit |
+| isStopOut | bool | optional | stop-out |
+| trailingStopLoss | bool | optional | stop loss |
+| stopTriggerMethod | ProtoOAOrderTriggerMethod | optional | stop trigger method |
 
 ### ProtoOAPosition
-中文功能解說（依名稱推定）：ProtoOA持倉
-| Field | Type | Label | 中文解說(依名稱推定) |
+Inferred description (name-based): Position
+| Field | Type | Label | Inferred description (name-based) |
 |---|---|---|---|
-| positionId | int64 | optional | ID |
+| positionId | int64 | optional | position identifier |
 | tradeData | ProtoOATradeData | optional | Data |
-| positionStatus | ProtoOAPositionStatus | optional | 狀態 |
+| positionStatus | ProtoOAPositionStatus | optional | status |
 | swap | int64 | optional | swap |
 | price | double | optional | price |
-| stopLoss | double | optional | 虧損 |
-| takeProfit | double | optional | 獲利 |
-| utcLastUpdateTimestamp | int64 | optional | LastUpdate時間戳 |
+| stopLoss | double | optional | loss |
+| takeProfit | double | optional | profit |
+| utcLastUpdateTimestamp | int64 | optional | last update timestamp |
 | commission | int64 | optional | commission |
 | marginRate | double | optional | Rate |
 | mirroringCommission | int64 | optional | Commission |
-| guaranteedStopLoss | bool | optional | 停損虧損 |
-| usedMargin | uint64 | optional | 保證金 |
-| stopLossTriggerMethod | ProtoOAOrderTriggerMethod | optional | 虧損TriggerMethod |
-| moneyDigits | uint32 | optional | Digits |
-| trailingStopLoss | bool | optional | 停損虧損 |
+| guaranteedStopLoss | bool | optional | stop loss |
+| usedMargin | uint64 | optional | margin |
+| stopLossTriggerMethod | ProtoOAOrderTriggerMethod | optional | stop-loss trigger method |
+| moneyDigits | uint32 | optional | money digits precision |
+| trailingStopLoss | bool | optional | stop loss |
 
 ### ProtoOAPositionUnrealizedPnL
-中文功能解說（依名稱推定）：ProtoOA持倉UnrealizedPnL
-| Field | Type | Label | 中文解說(依名稱推定) |
+Inferred description (name-based): Position unrealized pn l
+| Field | Type | Label | Inferred description (name-based) |
 |---|---|---|---|
-| positionId | int64 | optional | ID |
+| positionId | int64 | optional | position identifier |
 | grossUnrealizedPnL | int64 | optional | UnrealizedPnL |
 | netUnrealizedPnL | int32 | optional | UnrealizedPnL |
 
 ### ProtoOASymbol
-中文功能解說（依名稱推定）：ProtoOA交易品種
-| Field | Type | Label | 中文解說(依名稱推定) |
+Inferred description (name-based): Symbol
+| Field | Type | Label | Inferred description (name-based) |
 |---|---|---|---|
-| symbolId | int64 | optional | ID |
+| symbolId | int64 | optional | symbol identifier |
 | digits | int32 | optional | digits |
-| pipPosition | int32 | optional | 持倉 |
+| pipPosition | int32 | optional | position |
 | enableShortSelling | bool | optional | ShortSelling |
-| guaranteedStopLoss | bool | optional | 停損虧損 |
+| guaranteedStopLoss | bool | optional | stop loss |
 | swapRollover3Days | ProtoOADayOfWeek | optional | Rollover3Days |
 | swapLong | double | optional | Long |
 | swapShort | double | optional | Short |
-| maxVolume | int64 | optional | 成交量 |
-| minVolume | int64 | optional | 成交量 |
-| stepVolume | int64 | optional | 成交量 |
+| maxVolume | int64 | optional | volume |
+| minVolume | int64 | optional | volume |
+| stepVolume | int64 | optional | volume |
 | maxExposure | uint64 | optional | Exposure |
 | schedule | ProtoOAInterval | repeated | schedule |
 | commission | int64 | optional | commission |
-| commissionType | ProtoOACommissionType | optional | 類型 |
+| commissionType | ProtoOACommissionType | optional | commission type |
 | slDistance | uint32 | optional | Distance |
 | tpDistance | uint32 | optional | Distance |
 | gslDistance | uint32 | optional | Distance |
 | gslCharge | int64 | optional | Charge |
 | distanceSetIn | ProtoOASymbolDistanceType | optional | SetIn |
 | minCommission | int64 | optional | Commission |
-| minCommissionType | ProtoOAMinCommissionType | optional | Commission類型 |
-| minCommissionAsset | string | optional | Commission資產 |
+| minCommissionType | ProtoOAMinCommissionType | optional | commission type |
+| minCommissionAsset | string | optional | commission asset |
 | rolloverCommission | int64 | optional | Commission |
 | skipRolloverDays | int32 | optional | RolloverDays |
-| scheduleTimeZone | string | optional | 時間Zone |
+| scheduleTimeZone | string | optional | time zone |
 | tradingMode | ProtoOATradingMode | optional | Mode |
 | rolloverCommission3Days | ProtoOADayOfWeek | optional | Commission3Days |
-| swapCalculationType | ProtoOASwapCalculationType | optional | Calculation類型 |
+| swapCalculationType | ProtoOASwapCalculationType | optional | calculation type |
 | lotSize | int64 | optional | Size |
 | preciseTradingCommissionRate | int64 | optional | TradingCommissionRate |
-| preciseMinCommission | int64 | optional | 最小Commission |
+| preciseMinCommission | int64 | optional | minimum commission |
 | holiday | ProtoOAHoliday | repeated | holiday |
-| pnlConversionFeeRate | int32 | optional | Conversion費用Rate |
-| leverageId | int64 | optional | ID |
-| swapPeriod | int32 | optional | 週期 |
-| swapTime | int32 | optional | 時間 |
+| pnlConversionFeeRate | int32 | optional | conversion fee rate |
+| leverageId | int64 | optional | leverage tier identifier |
+| swapPeriod | int32 | optional | period |
+| swapTime | int32 | optional | time |
 | skipSWAPPeriods | int32 | optional | SWAPPeriods |
 | chargeSwapAtWeekends | bool | optional | SwapAtWeekends |
 
 ### ProtoOASymbolCategory
-中文功能解說（依名稱推定）：ProtoOA交易品種Category
-| Field | Type | Label | 中文解說(依名稱推定) |
+Inferred description (name-based): Symbol category
+| Field | Type | Label | Inferred description (name-based) |
 |---|---|---|---|
 | id | int64 | optional | id |
 | assetClassId | int64 | optional | ClassID |
 | name | string | optional | name |
 
 ### ProtoOATickData
-中文功能解說（依名稱推定）：ProtoOATickData
-| Field | Type | Label | 中文解說(依名稱推定) |
+Inferred description (name-based): Tick data
+| Field | Type | Label | Inferred description (name-based) |
 |---|---|---|---|
 | timestamp | int64 | optional | timestamp |
 | tick | int64 | optional | tick |
 
 ### ProtoOATradeData
-中文功能解說（依名稱推定）：ProtoOA交易Data
-| Field | Type | Label | 中文解說(依名稱推定) |
+Inferred description (name-based): Trade data
+| Field | Type | Label | Inferred description (name-based) |
 |---|---|---|---|
-| symbolId | int64 | optional | ID |
+| symbolId | int64 | optional | symbol identifier |
 | volume | int64 | optional | volume |
-| tradeSide | ProtoOATradeSide | optional | 方向 |
-| openTimestamp | int64 | optional | 時間戳 |
+| tradeSide | ProtoOATradeSide | optional | side |
+| openTimestamp | int64 | optional | timestamp |
 | label | string | optional | label |
-| guaranteedStopLoss | bool | optional | 停損虧損 |
+| guaranteedStopLoss | bool | optional | stop loss |
 | comment | string | optional | comment |
 
 ### ProtoOATrader
-中文功能解說（依名稱推定）：ProtoOA交易帳戶
-| Field | Type | Label | 中文解說(依名稱推定) |
+Inferred description (name-based): Trader
+| Field | Type | Label | Inferred description (name-based) |
 |---|---|---|---|
-| ctidTraderAccountId | int64 | optional | 交易帳戶帳戶ID |
+| ctidTraderAccountId | int64 | optional | trading account identifier |
 | balance | int64 | optional | balance |
 | balanceVersion | int64 | optional | Version |
 | managerBonus | int64 | optional | Bonus |
 | ibBonus | int64 | optional | Bonus |
 | nonWithdrawableBonus | int64 | optional | WithdrawableBonus |
-| accessRights | ProtoOAAccessRights | optional | Rights |
-| depositAssetId | int64 | optional | 資產ID |
-| swapFree | bool | optional | Free |
-| leverageInCents | uint32 | optional | InCents |
-| totalMarginCalculationType | ProtoOATotalMarginCalculationType | optional | 保證金Calculation類型 |
-| maxLeverage | uint32 | optional | 槓桿 |
-| frenchRisk | bool | optional | 風險 |
-| traderLogin | int64 | optional | Login |
-| accountType | ProtoOAAccountType | optional | 類型 |
-| brokerName | string | optional | Name |
-| registrationTimestamp | int64 | optional | 時間戳 |
-| isLimitedRisk | bool | optional | Limited風險 |
-| limitedRiskMarginCalculationStrategy | ProtoOALimitedRiskMarginCalculationStrategy | optional | 風險保證金CalculationStrategy |
-| moneyDigits | uint32 | optional | Digits |
+| accessRights | ProtoOAAccessRights | optional | access rights |
+| depositAssetId | int64 | optional | asset ID |
+| swapFree | bool | optional | swap-free flag |
+| leverageInCents | uint32 | optional | leverage value in cents |
+| totalMarginCalculationType | ProtoOATotalMarginCalculationType | optional | margin calculation type |
+| maxLeverage | uint32 | optional | leverage |
+| frenchRisk | bool | optional | risk |
+| traderLogin | int64 | optional | trader login identifier |
+| accountType | ProtoOAAccountType | optional | account type |
+| brokerName | string | optional | broker name |
+| registrationTimestamp | int64 | optional | timestamp |
+| isLimitedRisk | bool | optional | limited-risk flag |
+| limitedRiskMarginCalculationStrategy | ProtoOALimitedRiskMarginCalculationStrategy | optional | risk margin calculation strategy |
+| moneyDigits | uint32 | optional | money digits precision |
 
 ### ProtoOATrendbar
-中文功能解說（依名稱推定）：ProtoOAK線
-| Field | Type | Label | 中文解說(依名稱推定) |
+Inferred description (name-based): Trendbar
+| Field | Type | Label | Inferred description (name-based) |
 |---|---|---|---|
 | volume | int64 | optional | volume |
 | period | ProtoOATrendbarPeriod | optional | period |
 | low | int64 | optional | low |
-| deltaOpen | uint64 | optional | 開盤 |
-| deltaClose | uint64 | optional | 收盤 |
-| deltaHigh | uint64 | optional | 最高 |
-| utcTimestampInMinutes | uint32 | optional | 時間戳InMinutes |
-
-### Enums
+| deltaOpen | uint64 | optional | open |
+| deltaClose | uint64 | optional | close |
+| deltaHigh | uint64 | optional | high |
+| utcTimestampInMinutes | uint32 | optional | timestamp in minutes |
 
 ### ProtoOAAccessRights
-中文功能解說（依名稱推定）：ProtoOAAccessRights
-| Name | Value | 中文解說(依名稱推定) |
+Inferred description (name-based): Access rights
+| Name | Value | Inferred description (name-based) |
 |---|---|---|
-| FULL_ACCESS | 0 | FULLACCESS |
-| CLOSE_ONLY | 1 | CLOSEONLY |
-| NO_TRADING | 2 | NOTRADING |
-| NO_LOGIN | 3 | NOLOGIN |
+| FULL_ACCESS | 0 | Enum value `FULL_ACCESS`. |
+| CLOSE_ONLY | 1 | Enum value `CLOSE_ONLY`. |
+| NO_TRADING | 2 | Enum value `NO_TRADING`. |
+| NO_LOGIN | 3 | Enum value `NO_LOGIN`. |
 
 ### ProtoOAAccountType
-中文功能解說（依名稱推定）：ProtoOA帳戶類型
-| Name | Value | 中文解說(依名稱推定) |
+Inferred description (name-based): Account type
+| Name | Value | Inferred description (name-based) |
 |---|---|---|
-| HEDGED | 0 | HEDGED |
-| NETTED | 1 | NETTED |
-| SPREAD_BETTING | 2 | SPREADBETTING |
+| HEDGED | 0 | Enum value `HEDGED`. |
+| NETTED | 1 | Enum value `NETTED`. |
+| SPREAD_BETTING | 2 | Enum value `SPREAD_BETTING`. |
 
 ### ProtoOAChangeBalanceType
-中文功能解說（依名稱推定）：ProtoOAChangeBalance類型
-| Name | Value | 中文解說(依名稱推定) |
+Inferred description (name-based): Change balance type
+| Name | Value | Inferred description (name-based) |
 |---|---|---|
-| BALANCE_DEPOSIT | 0 | BALANCEDEPOSIT |
-| BALANCE_WITHDRAW | 1 | BALANCEWITHDRAW |
-| BALANCE_DEPOSIT_STRATEGY_COMMISSION_INNER | 3 | BALANCEDEPOSITSTRATEGYCOMMISSIONINNER |
-| BALANCE_WITHDRAW_STRATEGY_COMMISSION_INNER | 4 | BALANCEWITHDRAWSTRATEGYCOMMISSIONINNER |
-| BALANCE_DEPOSIT_IB_COMMISSIONS | 5 | BALANCEDEPOSITIBCOMMISSIONS |
-| BALANCE_WITHDRAW_IB_SHARED_PERCENTAGE | 6 | BALANCEWITHDRAWIBSHAREDPERCENTAGE |
-| BALANCE_DEPOSIT_IB_SHARED_PERCENTAGE_FROM_SUB_IB | 7 | BALANCEDEPOSITIBSHAREDPERCENTAGEFROMSUBIB |
-| BALANCE_DEPOSIT_IB_SHARED_PERCENTAGE_FROM_BROKER | 8 | BALANCEDEPOSITIBSHAREDPERCENTAGEFROMBROKER |
-| BALANCE_DEPOSIT_REBATE | 9 | BALANCEDEPOSITREBATE |
-| BALANCE_WITHDRAW_REBATE | 10 | BALANCEWITHDRAWREBATE |
-| BALANCE_DEPOSIT_STRATEGY_COMMISSION_OUTER | 11 | BALANCEDEPOSITSTRATEGYCOMMISSIONOUTER |
-| BALANCE_WITHDRAW_STRATEGY_COMMISSION_OUTER | 12 | BALANCEWITHDRAWSTRATEGYCOMMISSIONOUTER |
-| BALANCE_WITHDRAW_BONUS_COMPENSATION | 13 | BALANCEWITHDRAWBONUSCOMPENSATION |
-| BALANCE_WITHDRAW_IB_SHARED_PERCENTAGE_TO_BROKER | 14 | BALANCEWITHDRAWIBSHAREDPERCENTAGETOBROKER |
-| BALANCE_DEPOSIT_DIVIDENDS | 15 | BALANCEDEPOSITDIVIDENDS |
-| BALANCE_WITHDRAW_DIVIDENDS | 16 | BALANCEWITHDRAWDIVIDENDS |
-| BALANCE_WITHDRAW_GSL_CHARGE | 17 | BALANCEWITHDRAWGSLCHARGE |
-| BALANCE_WITHDRAW_ROLLOVER | 18 | BALANCEWITHDRAWROLLOVER |
-| BALANCE_DEPOSIT_NONWITHDRAWABLE_BONUS | 19 | BALANCEDEPOSITNONWITHDRAWABLEBONUS |
-| BALANCE_WITHDRAW_NONWITHDRAWABLE_BONUS | 20 | BALANCEWITHDRAWNONWITHDRAWABLEBONUS |
-| BALANCE_DEPOSIT_SWAP | 21 | BALANCEDEPOSITSWAP |
-| BALANCE_WITHDRAW_SWAP | 22 | BALANCEWITHDRAWSWAP |
-| BALANCE_DEPOSIT_MANAGEMENT_FEE | 27 | BALANCEDEPOSITMANAGEMENTFEE |
-| BALANCE_WITHDRAW_MANAGEMENT_FEE | 28 | BALANCEWITHDRAWMANAGEMENTFEE |
-| BALANCE_DEPOSIT_PERFORMANCE_FEE | 29 | BALANCEDEPOSITPERFORMANCEFEE |
-| BALANCE_WITHDRAW_FOR_SUBACCOUNT | 30 | BALANCEWITHDRAWFORSUBACCOUNT |
-| BALANCE_DEPOSIT_TO_SUBACCOUNT | 31 | BALANCEDEPOSITTOSUBACCOUNT |
-| BALANCE_WITHDRAW_FROM_SUBACCOUNT | 32 | BALANCEWITHDRAWFROMSUBACCOUNT |
-| BALANCE_DEPOSIT_FROM_SUBACCOUNT | 33 | BALANCEDEPOSITFROMSUBACCOUNT |
-| BALANCE_WITHDRAW_COPY_FEE | 34 | BALANCEWITHDRAWCOPYFEE |
-| BALANCE_WITHDRAW_INACTIVITY_FEE | 35 | BALANCEWITHDRAWINACTIVITYFEE |
-| BALANCE_DEPOSIT_TRANSFER | 36 | BALANCEDEPOSITTRANSFER |
-| BALANCE_WITHDRAW_TRANSFER | 37 | BALANCEWITHDRAWTRANSFER |
-| BALANCE_DEPOSIT_CONVERTED_BONUS | 38 | BALANCEDEPOSITCONVERTEDBONUS |
-| BALANCE_DEPOSIT_NEGATIVE_BALANCE_PROTECTION | 39 | BALANCEDEPOSITNEGATIVEBALANCEPROTECTION |
+| BALANCE_DEPOSIT | 0 | Enum value `BALANCE_DEPOSIT`. |
+| BALANCE_WITHDRAW | 1 | Enum value `BALANCE_WITHDRAW`. |
+| BALANCE_DEPOSIT_STRATEGY_COMMISSION_INNER | 3 | Enum value `BALANCE_DEPOSIT_STRATEGY_COMMISSION_INNER`. |
+| BALANCE_WITHDRAW_STRATEGY_COMMISSION_INNER | 4 | Enum value `BALANCE_WITHDRAW_STRATEGY_COMMISSION_INNER`. |
+| BALANCE_DEPOSIT_IB_COMMISSIONS | 5 | Enum value `BALANCE_DEPOSIT_IB_COMMISSIONS`. |
+| BALANCE_WITHDRAW_IB_SHARED_PERCENTAGE | 6 | Enum value `BALANCE_WITHDRAW_IB_SHARED_PERCENTAGE`. |
+| BALANCE_DEPOSIT_IB_SHARED_PERCENTAGE_FROM_SUB_IB | 7 | Enum value `BALANCE_DEPOSIT_IB_SHARED_PERCENTAGE_FROM_SUB_IB`. |
+| BALANCE_DEPOSIT_IB_SHARED_PERCENTAGE_FROM_BROKER | 8 | Enum value `BALANCE_DEPOSIT_IB_SHARED_PERCENTAGE_FROM_BROKER`. |
+| BALANCE_DEPOSIT_REBATE | 9 | Enum value `BALANCE_DEPOSIT_REBATE`. |
+| BALANCE_WITHDRAW_REBATE | 10 | Enum value `BALANCE_WITHDRAW_REBATE`. |
+| BALANCE_DEPOSIT_STRATEGY_COMMISSION_OUTER | 11 | Enum value `BALANCE_DEPOSIT_STRATEGY_COMMISSION_OUTER`. |
+| BALANCE_WITHDRAW_STRATEGY_COMMISSION_OUTER | 12 | Enum value `BALANCE_WITHDRAW_STRATEGY_COMMISSION_OUTER`. |
+| BALANCE_WITHDRAW_BONUS_COMPENSATION | 13 | Enum value `BALANCE_WITHDRAW_BONUS_COMPENSATION`. |
+| BALANCE_WITHDRAW_IB_SHARED_PERCENTAGE_TO_BROKER | 14 | Enum value `BALANCE_WITHDRAW_IB_SHARED_PERCENTAGE_TO_BROKER`. |
+| BALANCE_DEPOSIT_DIVIDENDS | 15 | Enum value `BALANCE_DEPOSIT_DIVIDENDS`. |
+| BALANCE_WITHDRAW_DIVIDENDS | 16 | Enum value `BALANCE_WITHDRAW_DIVIDENDS`. |
+| BALANCE_WITHDRAW_GSL_CHARGE | 17 | Enum value `BALANCE_WITHDRAW_GSL_CHARGE`. |
+| BALANCE_WITHDRAW_ROLLOVER | 18 | Enum value `BALANCE_WITHDRAW_ROLLOVER`. |
+| BALANCE_DEPOSIT_NONWITHDRAWABLE_BONUS | 19 | Enum value `BALANCE_DEPOSIT_NONWITHDRAWABLE_BONUS`. |
+| BALANCE_WITHDRAW_NONWITHDRAWABLE_BONUS | 20 | Enum value `BALANCE_WITHDRAW_NONWITHDRAWABLE_BONUS`. |
+| BALANCE_DEPOSIT_SWAP | 21 | Enum value `BALANCE_DEPOSIT_SWAP`. |
+| BALANCE_WITHDRAW_SWAP | 22 | Enum value `BALANCE_WITHDRAW_SWAP`. |
+| BALANCE_DEPOSIT_MANAGEMENT_FEE | 27 | Enum value `BALANCE_DEPOSIT_MANAGEMENT_FEE`. |
+| BALANCE_WITHDRAW_MANAGEMENT_FEE | 28 | Enum value `BALANCE_WITHDRAW_MANAGEMENT_FEE`. |
+| BALANCE_DEPOSIT_PERFORMANCE_FEE | 29 | Enum value `BALANCE_DEPOSIT_PERFORMANCE_FEE`. |
+| BALANCE_WITHDRAW_FOR_SUBACCOUNT | 30 | Enum value `BALANCE_WITHDRAW_FOR_SUBACCOUNT`. |
+| BALANCE_DEPOSIT_TO_SUBACCOUNT | 31 | Enum value `BALANCE_DEPOSIT_TO_SUBACCOUNT`. |
+| BALANCE_WITHDRAW_FROM_SUBACCOUNT | 32 | Enum value `BALANCE_WITHDRAW_FROM_SUBACCOUNT`. |
+| BALANCE_DEPOSIT_FROM_SUBACCOUNT | 33 | Enum value `BALANCE_DEPOSIT_FROM_SUBACCOUNT`. |
+| BALANCE_WITHDRAW_COPY_FEE | 34 | Enum value `BALANCE_WITHDRAW_COPY_FEE`. |
+| BALANCE_WITHDRAW_INACTIVITY_FEE | 35 | Enum value `BALANCE_WITHDRAW_INACTIVITY_FEE`. |
+| BALANCE_DEPOSIT_TRANSFER | 36 | Enum value `BALANCE_DEPOSIT_TRANSFER`. |
+| BALANCE_WITHDRAW_TRANSFER | 37 | Enum value `BALANCE_WITHDRAW_TRANSFER`. |
+| BALANCE_DEPOSIT_CONVERTED_BONUS | 38 | Enum value `BALANCE_DEPOSIT_CONVERTED_BONUS`. |
+| BALANCE_DEPOSIT_NEGATIVE_BALANCE_PROTECTION | 39 | Enum value `BALANCE_DEPOSIT_NEGATIVE_BALANCE_PROTECTION`. |
 
 ### ProtoOAChangeBonusType
-中文功能解說（依名稱推定）：ProtoOAChangeBonus類型
-| Name | Value | 中文解說(依名稱推定) |
+Inferred description (name-based): Change bonus type
+| Name | Value | Inferred description (name-based) |
 |---|---|---|
-| BONUS_DEPOSIT | 0 | BONUSDEPOSIT |
-| BONUS_WITHDRAW | 1 | BONUSWITHDRAW |
+| BONUS_DEPOSIT | 0 | Enum value `BONUS_DEPOSIT`. |
+| BONUS_WITHDRAW | 1 | Enum value `BONUS_WITHDRAW`. |
 
 ### ProtoOAClientPermissionScope
-中文功能解說（依名稱推定）：ProtoOAClientPermissionScope
-| Name | Value | 中文解說(依名稱推定) |
+Inferred description (name-based): Client permission scope
+| Name | Value | Inferred description (name-based) |
 |---|---|---|
-| SCOPE_VIEW | 0 | SCOPEVIEW |
-| SCOPE_TRADE | 1 | SCOPETRADE |
+| SCOPE_VIEW | 0 | Enum value `SCOPE_VIEW`. |
+| SCOPE_TRADE | 1 | Enum value `SCOPE_TRADE`. |
 
 ### ProtoOACommissionType
-中文功能解說（依名稱推定）：ProtoOACommission類型
-| Name | Value | 中文解說(依名稱推定) |
+Inferred description (name-based): Commission type
+| Name | Value | Inferred description (name-based) |
 |---|---|---|
-| USD_PER_MILLION_USD | 1 | USDPERMILLIONUSD |
-| USD_PER_LOT | 2 | USDPERLOT |
-| PERCENTAGE_OF_VALUE | 3 | PERCENTAGEOFVALUE |
-| QUOTE_CCY_PER_LOT | 4 | QUOTECCYPERLOT |
+| USD_PER_MILLION_USD | 1 | Enum value `USD_PER_MILLION_USD`. |
+| USD_PER_LOT | 2 | Enum value `USD_PER_LOT`. |
+| PERCENTAGE_OF_VALUE | 3 | Enum value `PERCENTAGE_OF_VALUE`. |
+| QUOTE_CCY_PER_LOT | 4 | Enum value `QUOTE_CCY_PER_LOT`. |
 
 ### ProtoOADayOfWeek
-中文功能解說（依名稱推定）：ProtoOADayOfWeek
-| Name | Value | 中文解說(依名稱推定) |
+Inferred description (name-based): Day of week
+| Name | Value | Inferred description (name-based) |
 |---|---|---|
-| NONE | 0 | NONE |
-| MONDAY | 1 | MONDAY |
-| TUESDAY | 2 | TUESDAY |
-| WEDNESDAY | 3 | WEDNESDAY |
-| THURSDAY | 4 | THURSDAY |
-| FRIDAY | 5 | FRIDAY |
-| SATURDAY | 6 | SATURDAY |
-| SUNDAY | 7 | SUNDAY |
+| NONE | 0 | Enum value `NONE`. |
+| MONDAY | 1 | Enum value `MONDAY`. |
+| TUESDAY | 2 | Enum value `TUESDAY`. |
+| WEDNESDAY | 3 | Enum value `WEDNESDAY`. |
+| THURSDAY | 4 | Enum value `THURSDAY`. |
+| FRIDAY | 5 | Enum value `FRIDAY`. |
+| SATURDAY | 6 | Enum value `SATURDAY`. |
+| SUNDAY | 7 | Enum value `SUNDAY`. |
 
 ### ProtoOADealStatus
-中文功能解說（依名稱推定）：ProtoOA成交狀態
-| Name | Value | 中文解說(依名稱推定) |
+Inferred description (name-based): Deal status
+| Name | Value | Inferred description (name-based) |
 |---|---|---|
-| FILLED | 2 | FILLED |
-| PARTIALLY_FILLED | 3 | PARTIALLYFILLED |
-| REJECTED | 4 | REJECTED |
-| INTERNALLY_REJECTED | 5 | INTERNALLYREJECTED |
-| ERROR | 6 | ERROR |
-| MISSED | 7 | MISSED |
+| FILLED | 2 | Enum value `FILLED`. |
+| PARTIALLY_FILLED | 3 | Enum value `PARTIALLY_FILLED`. |
+| REJECTED | 4 | Enum value `REJECTED`. |
+| INTERNALLY_REJECTED | 5 | Enum value `INTERNALLY_REJECTED`. |
+| ERROR | 6 | Enum value `ERROR`. |
+| MISSED | 7 | Enum value `MISSED`. |
 
 ### ProtoOAErrorCode
-中文功能解說（依名稱推定）：ProtoOA錯誤Code
-| Name | Value | 中文解說(依名稱推定) |
+Inferred description (name-based): Error code
+| Name | Value | Inferred description (name-based) |
 |---|---|---|
-| OA_AUTH_TOKEN_EXPIRED | 1 | OAAUTHTOKENEXPIRED |
-| ACCOUNT_NOT_AUTHORIZED | 2 | ACCOUNTNOTAUTHORIZED |
-| ALREADY_LOGGED_IN | 14 | ALREADYLOGGEDIN |
-| CH_CLIENT_AUTH_FAILURE | 101 | CHCLIENTAUTHFAILURE |
-| CH_CLIENT_NOT_AUTHENTICATED | 102 | CHCLIENTNOTAUTHENTICATED |
-| CH_CLIENT_ALREADY_AUTHENTICATED | 103 | CHCLIENTALREADYAUTHENTICATED |
-| CH_ACCESS_TOKEN_INVALID | 104 | CHACCESSTOKENINVALID |
-| CH_SERVER_NOT_REACHABLE | 105 | CHSERVERNOTREACHABLE |
-| CH_CTID_TRADER_ACCOUNT_NOT_FOUND | 106 | CHCTIDTRADERACCOUNTNOTFOUND |
-| CH_OA_CLIENT_NOT_FOUND | 107 | CHOACLIENTNOTFOUND |
-| REQUEST_FREQUENCY_EXCEEDED | 108 | REQUESTFREQUENCYEXCEEDED |
-| SERVER_IS_UNDER_MAINTENANCE | 109 | SERVERISUNDERMAINTENANCE |
-| CHANNEL_IS_BLOCKED | 110 | CHANNELISBLOCKED |
-| CONNECTIONS_LIMIT_EXCEEDED | 67 | CONNECTIONSLIMITEXCEEDED |
-| WORSE_GSL_NOT_ALLOWED | 68 | WORSEGSLNOTALLOWED |
-| SYMBOL_HAS_HOLIDAY | 69 | SYMBOLHASHOLIDAY |
-| NOT_SUBSCRIBED_TO_SPOTS | 112 | NOTSUBSCRIBEDTOSPOTS |
-| ALREADY_SUBSCRIBED | 113 | ALREADYSUBSCRIBED |
-| SYMBOL_NOT_FOUND | 114 | SYMBOLNOTFOUND |
-| UNKNOWN_SYMBOL | 115 | UNKNOWNSYMBOL |
-| INCORRECT_BOUNDARIES | 35 | INCORRECTBOUNDARIES |
-| NO_QUOTES | 117 | NOQUOTES |
-| NOT_ENOUGH_MONEY | 118 | NOTENOUGHMONEY |
-| MAX_EXPOSURE_REACHED | 119 | MAXEXPOSUREREACHED |
-| POSITION_NOT_FOUND | 120 | POSITIONNOTFOUND |
-| ORDER_NOT_FOUND | 121 | ORDERNOTFOUND |
-| POSITION_NOT_OPEN | 122 | POSITIONNOTOPEN |
-| POSITION_LOCKED | 123 | POSITIONLOCKED |
-| TOO_MANY_POSITIONS | 124 | TOOMANYPOSITIONS |
-| TRADING_BAD_VOLUME | 125 | TRADINGBADVOLUME |
-| TRADING_BAD_STOPS | 126 | TRADINGBADSTOPS |
-| TRADING_BAD_PRICES | 127 | TRADINGBADPRICES |
-| TRADING_BAD_STAKE | 128 | TRADINGBADSTAKE |
-| PROTECTION_IS_TOO_CLOSE_TO_MARKET | 129 | PROTECTIONISTOOCLOSETOMARKET |
-| TRADING_BAD_EXPIRATION_DATE | 130 | TRADINGBADEXPIRATIONDATE |
-| PENDING_EXECUTION | 131 | PENDINGEXECUTION |
-| TRADING_DISABLED | 132 | TRADINGDISABLED |
-| TRADING_NOT_ALLOWED | 133 | TRADINGNOTALLOWED |
-| UNABLE_TO_CANCEL_ORDER | 134 | UNABLETOCANCELORDER |
-| UNABLE_TO_AMEND_ORDER | 135 | UNABLETOAMENDORDER |
-| SHORT_SELLING_NOT_ALLOWED | 136 | SHORTSELLINGNOTALLOWED |
+| OA_AUTH_TOKEN_EXPIRED | 1 | Enum value `OA_AUTH_TOKEN_EXPIRED`. |
+| ACCOUNT_NOT_AUTHORIZED | 2 | Enum value `ACCOUNT_NOT_AUTHORIZED`. |
+| ALREADY_LOGGED_IN | 14 | Enum value `ALREADY_LOGGED_IN`. |
+| CH_CLIENT_AUTH_FAILURE | 101 | Enum value `CH_CLIENT_AUTH_FAILURE`. |
+| CH_CLIENT_NOT_AUTHENTICATED | 102 | Enum value `CH_CLIENT_NOT_AUTHENTICATED`. |
+| CH_CLIENT_ALREADY_AUTHENTICATED | 103 | Enum value `CH_CLIENT_ALREADY_AUTHENTICATED`. |
+| CH_ACCESS_TOKEN_INVALID | 104 | Enum value `CH_ACCESS_TOKEN_INVALID`. |
+| CH_SERVER_NOT_REACHABLE | 105 | Enum value `CH_SERVER_NOT_REACHABLE`. |
+| CH_CTID_TRADER_ACCOUNT_NOT_FOUND | 106 | Enum value `CH_CTID_TRADER_ACCOUNT_NOT_FOUND`. |
+| CH_OA_CLIENT_NOT_FOUND | 107 | Enum value `CH_OA_CLIENT_NOT_FOUND`. |
+| REQUEST_FREQUENCY_EXCEEDED | 108 | Enum value `REQUEST_FREQUENCY_EXCEEDED`. |
+| SERVER_IS_UNDER_MAINTENANCE | 109 | Enum value `SERVER_IS_UNDER_MAINTENANCE`. |
+| CHANNEL_IS_BLOCKED | 110 | Enum value `CHANNEL_IS_BLOCKED`. |
+| CONNECTIONS_LIMIT_EXCEEDED | 67 | Enum value `CONNECTIONS_LIMIT_EXCEEDED`. |
+| WORSE_GSL_NOT_ALLOWED | 68 | Enum value `WORSE_GSL_NOT_ALLOWED`. |
+| SYMBOL_HAS_HOLIDAY | 69 | Enum value `SYMBOL_HAS_HOLIDAY`. |
+| NOT_SUBSCRIBED_TO_SPOTS | 112 | Enum value `NOT_SUBSCRIBED_TO_SPOTS`. |
+| ALREADY_SUBSCRIBED | 113 | Enum value `ALREADY_SUBSCRIBED`. |
+| SYMBOL_NOT_FOUND | 114 | Enum value `SYMBOL_NOT_FOUND`. |
+| UNKNOWN_SYMBOL | 115 | Enum value `UNKNOWN_SYMBOL`. |
+| INCORRECT_BOUNDARIES | 35 | Enum value `INCORRECT_BOUNDARIES`. |
+| NO_QUOTES | 117 | Enum value `NO_QUOTES`. |
+| NOT_ENOUGH_MONEY | 118 | Enum value `NOT_ENOUGH_MONEY`. |
+| MAX_EXPOSURE_REACHED | 119 | Enum value `MAX_EXPOSURE_REACHED`. |
+| POSITION_NOT_FOUND | 120 | Enum value `POSITION_NOT_FOUND`. |
+| ORDER_NOT_FOUND | 121 | Enum value `ORDER_NOT_FOUND`. |
+| POSITION_NOT_OPEN | 122 | Enum value `POSITION_NOT_OPEN`. |
+| POSITION_LOCKED | 123 | Enum value `POSITION_LOCKED`. |
+| TOO_MANY_POSITIONS | 124 | Enum value `TOO_MANY_POSITIONS`. |
+| TRADING_BAD_VOLUME | 125 | Enum value `TRADING_BAD_VOLUME`. |
+| TRADING_BAD_STOPS | 126 | Enum value `TRADING_BAD_STOPS`. |
+| TRADING_BAD_PRICES | 127 | Enum value `TRADING_BAD_PRICES`. |
+| TRADING_BAD_STAKE | 128 | Enum value `TRADING_BAD_STAKE`. |
+| PROTECTION_IS_TOO_CLOSE_TO_MARKET | 129 | Enum value `PROTECTION_IS_TOO_CLOSE_TO_MARKET`. |
+| TRADING_BAD_EXPIRATION_DATE | 130 | Enum value `TRADING_BAD_EXPIRATION_DATE`. |
+| PENDING_EXECUTION | 131 | Enum value `PENDING_EXECUTION`. |
+| TRADING_DISABLED | 132 | Enum value `TRADING_DISABLED`. |
+| TRADING_NOT_ALLOWED | 133 | Enum value `TRADING_NOT_ALLOWED`. |
+| UNABLE_TO_CANCEL_ORDER | 134 | Enum value `UNABLE_TO_CANCEL_ORDER`. |
+| UNABLE_TO_AMEND_ORDER | 135 | Enum value `UNABLE_TO_AMEND_ORDER`. |
+| SHORT_SELLING_NOT_ALLOWED | 136 | Enum value `SHORT_SELLING_NOT_ALLOWED`. |
 
 ### ProtoOAExecutionType
-中文功能解說（依名稱推定）：ProtoOAExecution類型
-| Name | Value | 中文解說(依名稱推定) |
+Inferred description (name-based): Execution type
+| Name | Value | Inferred description (name-based) |
 |---|---|---|
-| ORDER_ACCEPTED | 2 | ORDERACCEPTED |
-| ORDER_FILLED | 3 | ORDERFILLED |
-| ORDER_REPLACED | 4 | ORDERREPLACED |
-| ORDER_CANCELLED | 5 | ORDERCANCELLED |
-| ORDER_EXPIRED | 6 | ORDEREXPIRED |
-| ORDER_REJECTED | 7 | ORDERREJECTED |
-| ORDER_CANCEL_REJECTED | 8 | ORDERCANCELREJECTED |
-| SWAP | 9 | SWAP |
-| DEPOSIT_WITHDRAW | 10 | DEPOSITWITHDRAW |
-| ORDER_PARTIAL_FILL | 11 | ORDERPARTIALFILL |
-| BONUS_DEPOSIT_WITHDRAW | 12 | BONUSDEPOSITWITHDRAW |
+| ORDER_ACCEPTED | 2 | Enum value `ORDER_ACCEPTED`. |
+| ORDER_FILLED | 3 | Enum value `ORDER_FILLED`. |
+| ORDER_REPLACED | 4 | Enum value `ORDER_REPLACED`. |
+| ORDER_CANCELLED | 5 | Enum value `ORDER_CANCELLED`. |
+| ORDER_EXPIRED | 6 | Enum value `ORDER_EXPIRED`. |
+| ORDER_REJECTED | 7 | Enum value `ORDER_REJECTED`. |
+| ORDER_CANCEL_REJECTED | 8 | Enum value `ORDER_CANCEL_REJECTED`. |
+| SWAP | 9 | Enum value `SWAP`. |
+| DEPOSIT_WITHDRAW | 10 | Enum value `DEPOSIT_WITHDRAW`. |
+| ORDER_PARTIAL_FILL | 11 | Enum value `ORDER_PARTIAL_FILL`. |
+| BONUS_DEPOSIT_WITHDRAW | 12 | Enum value `BONUS_DEPOSIT_WITHDRAW`. |
 
 ### ProtoOALimitedRiskMarginCalculationStrategy
-中文功能解說（依名稱推定）：ProtoOALimited風險保證金CalculationStrategy
-| Name | Value | 中文解說(依名稱推定) |
+Inferred description (name-based): Limited risk margin calculation strategy
+| Name | Value | Inferred description (name-based) |
 |---|---|---|
-| ACCORDING_TO_LEVERAGE | 0 | ACCORDINGTOLEVERAGE |
-| ACCORDING_TO_GSL | 1 | ACCORDINGTOGSL |
-| ACCORDING_TO_GSL_AND_LEVERAGE | 2 | ACCORDINGTOGSLANDLEVERAGE |
+| ACCORDING_TO_LEVERAGE | 0 | Enum value `ACCORDING_TO_LEVERAGE`. |
+| ACCORDING_TO_GSL | 1 | Enum value `ACCORDING_TO_GSL`. |
+| ACCORDING_TO_GSL_AND_LEVERAGE | 2 | Enum value `ACCORDING_TO_GSL_AND_LEVERAGE`. |
 
 ### ProtoOAMinCommissionType
-中文功能解說（依名稱推定）：ProtoOA最小Commission類型
-| Name | Value | 中文解說(依名稱推定) |
+Inferred description (name-based): Min commission type
+| Name | Value | Inferred description (name-based) |
 |---|---|---|
-| CURRENCY | 1 | CURRENCY |
-| QUOTE_CURRENCY | 2 | QUOTECURRENCY |
+| CURRENCY | 1 | Enum value `CURRENCY`. |
+| QUOTE_CURRENCY | 2 | Enum value `QUOTE_CURRENCY`. |
 
 ### ProtoOANotificationType
-中文功能解說（依名稱推定）：ProtoOANotification類型
-| Name | Value | 中文解說(依名稱推定) |
+Inferred description (name-based): Notification type
+| Name | Value | Inferred description (name-based) |
 |---|---|---|
-| MARGIN_LEVEL_THRESHOLD_1 | 61 | MARGINLEVELTHRESHOLD |
-| MARGIN_LEVEL_THRESHOLD_2 | 62 | MARGINLEVELTHRESHOLD |
-| MARGIN_LEVEL_THRESHOLD_3 | 63 | MARGINLEVELTHRESHOLD |
+| MARGIN_LEVEL_THRESHOLD_1 | 61 | Enum value `MARGIN_LEVEL_THRESHOLD_1`. |
+| MARGIN_LEVEL_THRESHOLD_2 | 62 | Enum value `MARGIN_LEVEL_THRESHOLD_2`. |
+| MARGIN_LEVEL_THRESHOLD_3 | 63 | Enum value `MARGIN_LEVEL_THRESHOLD_3`. |
 
 ### ProtoOAOrderStatus
-中文功能解說（依名稱推定）：ProtoOA訂單狀態
-| Name | Value | 中文解說(依名稱推定) |
+Inferred description (name-based): Order status
+| Name | Value | Inferred description (name-based) |
 |---|---|---|
-| ORDER_STATUS_ACCEPTED | 1 | ORDERSTATUSACCEPTED |
-| ORDER_STATUS_FILLED | 2 | ORDERSTATUSFILLED |
-| ORDER_STATUS_REJECTED | 3 | ORDERSTATUSREJECTED |
-| ORDER_STATUS_EXPIRED | 4 | ORDERSTATUSEXPIRED |
-| ORDER_STATUS_CANCELLED | 5 | ORDERSTATUSCANCELLED |
+| ORDER_STATUS_ACCEPTED | 1 | Enum value `ORDER_STATUS_ACCEPTED`. |
+| ORDER_STATUS_FILLED | 2 | Enum value `ORDER_STATUS_FILLED`. |
+| ORDER_STATUS_REJECTED | 3 | Enum value `ORDER_STATUS_REJECTED`. |
+| ORDER_STATUS_EXPIRED | 4 | Enum value `ORDER_STATUS_EXPIRED`. |
+| ORDER_STATUS_CANCELLED | 5 | Enum value `ORDER_STATUS_CANCELLED`. |
 
 ### ProtoOAOrderTriggerMethod
-中文功能解說（依名稱推定）：ProtoOA訂單TriggerMethod
-| Name | Value | 中文解說(依名稱推定) |
+Inferred description (name-based): Order trigger method
+| Name | Value | Inferred description (name-based) |
 |---|---|---|
-| TRADE | 1 | TRADE |
-| OPPOSITE | 2 | OPPOSITE |
-| DOUBLE_TRADE | 3 | DOUBLETRADE |
-| DOUBLE_OPPOSITE | 4 | DOUBLEOPPOSITE |
+| TRADE | 1 | Enum value `TRADE`. |
+| OPPOSITE | 2 | Enum value `OPPOSITE`. |
+| DOUBLE_TRADE | 3 | Enum value `DOUBLE_TRADE`. |
+| DOUBLE_OPPOSITE | 4 | Enum value `DOUBLE_OPPOSITE`. |
 
 ### ProtoOAOrderType
-中文功能解說（依名稱推定）：ProtoOA訂單類型
-| Name | Value | 中文解說(依名稱推定) |
+Inferred description (name-based): Order type
+| Name | Value | Inferred description (name-based) |
 |---|---|---|
-| MARKET | 1 | MARKET |
-| LIMIT | 2 | LIMIT |
-| STOP | 3 | STOP |
-| STOP_LOSS_TAKE_PROFIT | 4 | STOPLOSSTAKEPROFIT |
-| MARKET_RANGE | 5 | MARKETRANGE |
-| STOP_LIMIT | 6 | STOPLIMIT |
+| MARKET | 1 | Enum value `MARKET`. |
+| LIMIT | 2 | Enum value `LIMIT`. |
+| STOP | 3 | Enum value `STOP`. |
+| STOP_LOSS_TAKE_PROFIT | 4 | Enum value `STOP_LOSS_TAKE_PROFIT`. |
+| MARKET_RANGE | 5 | Enum value `MARKET_RANGE`. |
+| STOP_LIMIT | 6 | Enum value `STOP_LIMIT`. |
 
 ### ProtoOAPayloadType
-中文功能解說（依名稱推定）：ProtoOAPayload類型
-| Name | Value | 中文解說(依名稱推定) |
+Inferred description (name-based): Payload type
+| Name | Value | Inferred description (name-based) |
 |---|---|---|
-| PROTO_OA_APPLICATION_AUTH_REQ | 2100 | PROTOOAAPPLICATIONAUTHREQ |
-| PROTO_OA_APPLICATION_AUTH_RES | 2101 | PROTOOAAPPLICATIONAUTHRES |
-| PROTO_OA_ACCOUNT_AUTH_REQ | 2102 | PROTOOAACCOUNTAUTHREQ |
-| PROTO_OA_ACCOUNT_AUTH_RES | 2103 | PROTOOAACCOUNTAUTHRES |
-| PROTO_OA_VERSION_REQ | 2104 | PROTOOAVERSIONREQ |
-| PROTO_OA_VERSION_RES | 2105 | PROTOOAVERSIONRES |
-| PROTO_OA_NEW_ORDER_REQ | 2106 | PROTOOANEWORDERREQ |
-| PROTO_OA_TRAILING_SL_CHANGED_EVENT | 2107 | PROTOOATRAILINGSLCHANGEDEVENT |
-| PROTO_OA_CANCEL_ORDER_REQ | 2108 | PROTOOACANCELORDERREQ |
-| PROTO_OA_AMEND_ORDER_REQ | 2109 | PROTOOAAMENDORDERREQ |
-| PROTO_OA_AMEND_POSITION_SLTP_REQ | 2110 | PROTOOAAMENDPOSITIONSLTPREQ |
-| PROTO_OA_CLOSE_POSITION_REQ | 2111 | PROTOOACLOSEPOSITIONREQ |
-| PROTO_OA_ASSET_LIST_REQ | 2112 | PROTOOAASSETLISTREQ |
-| PROTO_OA_ASSET_LIST_RES | 2113 | PROTOOAASSETLISTRES |
-| PROTO_OA_SYMBOLS_LIST_REQ | 2114 | PROTOOASYMBOLSLISTREQ |
-| PROTO_OA_SYMBOLS_LIST_RES | 2115 | PROTOOASYMBOLSLISTRES |
-| PROTO_OA_SYMBOL_BY_ID_REQ | 2116 | PROTOOASYMBOLBYIDREQ |
-| PROTO_OA_SYMBOL_BY_ID_RES | 2117 | PROTOOASYMBOLBYIDRES |
-| PROTO_OA_SYMBOLS_FOR_CONVERSION_REQ | 2118 | PROTOOASYMBOLSFORCONVERSIONREQ |
-| PROTO_OA_SYMBOLS_FOR_CONVERSION_RES | 2119 | PROTOOASYMBOLSFORCONVERSIONRES |
-| PROTO_OA_SYMBOL_CHANGED_EVENT | 2120 | PROTOOASYMBOLCHANGEDEVENT |
-| PROTO_OA_TRADER_REQ | 2121 | PROTOOATRADERREQ |
-| PROTO_OA_TRADER_RES | 2122 | PROTOOATRADERRES |
-| PROTO_OA_TRADER_UPDATE_EVENT | 2123 | PROTOOATRADERUPDATEEVENT |
-| PROTO_OA_RECONCILE_REQ | 2124 | PROTOOARECONCILEREQ |
-| PROTO_OA_RECONCILE_RES | 2125 | PROTOOARECONCILERES |
-| PROTO_OA_EXECUTION_EVENT | 2126 | PROTOOAEXECUTIONEVENT |
-| PROTO_OA_SUBSCRIBE_SPOTS_REQ | 2127 | PROTOOASUBSCRIBESPOTSREQ |
-| PROTO_OA_SUBSCRIBE_SPOTS_RES | 2128 | PROTOOASUBSCRIBESPOTSRES |
-| PROTO_OA_UNSUBSCRIBE_SPOTS_REQ | 2129 | PROTOOAUNSUBSCRIBESPOTSREQ |
-| PROTO_OA_UNSUBSCRIBE_SPOTS_RES | 2130 | PROTOOAUNSUBSCRIBESPOTSRES |
-| PROTO_OA_SPOT_EVENT | 2131 | PROTOOASPOTEVENT |
-| PROTO_OA_ORDER_ERROR_EVENT | 2132 | PROTOOAORDERERROREVENT |
-| PROTO_OA_DEAL_LIST_REQ | 2133 | PROTOOADEALLISTREQ |
-| PROTO_OA_DEAL_LIST_RES | 2134 | PROTOOADEALLISTRES |
-| PROTO_OA_SUBSCRIBE_LIVE_TRENDBAR_REQ | 2135 | PROTOOASUBSCRIBELIVETRENDBARREQ |
-| PROTO_OA_UNSUBSCRIBE_LIVE_TRENDBAR_REQ | 2136 | PROTOOAUNSUBSCRIBELIVETRENDBARREQ |
-| PROTO_OA_GET_TRENDBARS_REQ | 2137 | PROTOOAGETTRENDBARSREQ |
-| PROTO_OA_GET_TRENDBARS_RES | 2138 | PROTOOAGETTRENDBARSRES |
-| PROTO_OA_EXPECTED_MARGIN_REQ | 2139 | PROTOOAEXPECTEDMARGINREQ |
-| PROTO_OA_EXPECTED_MARGIN_RES | 2140 | PROTOOAEXPECTEDMARGINRES |
-| PROTO_OA_MARGIN_CHANGED_EVENT | 2141 | PROTOOAMARGINCHANGEDEVENT |
-| PROTO_OA_ERROR_RES | 2142 | PROTOOAERRORRES |
-| PROTO_OA_CASH_FLOW_HISTORY_LIST_REQ | 2143 | PROTOOACASHFLOWHISTORYLISTREQ |
-| PROTO_OA_CASH_FLOW_HISTORY_LIST_RES | 2144 | PROTOOACASHFLOWHISTORYLISTRES |
-| PROTO_OA_GET_TICKDATA_REQ | 2145 | PROTOOAGETTICKDATAREQ |
-| PROTO_OA_GET_TICKDATA_RES | 2146 | PROTOOAGETTICKDATARES |
-| PROTO_OA_ACCOUNTS_TOKEN_INVALIDATED_EVENT | 2147 | PROTOOAACCOUNTSTOKENINVALIDATEDEVENT |
-| PROTO_OA_CLIENT_DISCONNECT_EVENT | 2148 | PROTOOACLIENTDISCONNECTEVENT |
-| PROTO_OA_GET_ACCOUNTS_BY_ACCESS_TOKEN_REQ | 2149 | PROTOOAGETACCOUNTSBYACCESSTOKENREQ |
-| PROTO_OA_GET_ACCOUNTS_BY_ACCESS_TOKEN_RES | 2150 | PROTOOAGETACCOUNTSBYACCESSTOKENRES |
-| PROTO_OA_GET_CTID_PROFILE_BY_TOKEN_REQ | 2151 | PROTOOAGETCTIDPROFILEBYTOKENREQ |
-| PROTO_OA_GET_CTID_PROFILE_BY_TOKEN_RES | 2152 | PROTOOAGETCTIDPROFILEBYTOKENRES |
-| PROTO_OA_ASSET_CLASS_LIST_REQ | 2153 | PROTOOAASSETCLASSLISTREQ |
-| PROTO_OA_ASSET_CLASS_LIST_RES | 2154 | PROTOOAASSETCLASSLISTRES |
-| PROTO_OA_DEPTH_EVENT | 2155 | PROTOOADEPTHEVENT |
-| PROTO_OA_SUBSCRIBE_DEPTH_QUOTES_REQ | 2156 | PROTOOASUBSCRIBEDEPTHQUOTESREQ |
-| PROTO_OA_SUBSCRIBE_DEPTH_QUOTES_RES | 2157 | PROTOOASUBSCRIBEDEPTHQUOTESRES |
-| PROTO_OA_UNSUBSCRIBE_DEPTH_QUOTES_REQ | 2158 | PROTOOAUNSUBSCRIBEDEPTHQUOTESREQ |
-| PROTO_OA_UNSUBSCRIBE_DEPTH_QUOTES_RES | 2159 | PROTOOAUNSUBSCRIBEDEPTHQUOTESRES |
-| PROTO_OA_SYMBOL_CATEGORY_REQ | 2160 | PROTOOASYMBOLCATEGORYREQ |
-| PROTO_OA_SYMBOL_CATEGORY_RES | 2161 | PROTOOASYMBOLCATEGORYRES |
-| PROTO_OA_ACCOUNT_LOGOUT_REQ | 2162 | PROTOOAACCOUNTLOGOUTREQ |
-| PROTO_OA_ACCOUNT_LOGOUT_RES | 2163 | PROTOOAACCOUNTLOGOUTRES |
-| PROTO_OA_ACCOUNT_DISCONNECT_EVENT | 2164 | PROTOOAACCOUNTDISCONNECTEVENT |
-| PROTO_OA_SUBSCRIBE_LIVE_TRENDBAR_RES | 2165 | PROTOOASUBSCRIBELIVETRENDBARRES |
-| PROTO_OA_UNSUBSCRIBE_LIVE_TRENDBAR_RES | 2166 | PROTOOAUNSUBSCRIBELIVETRENDBARRES |
-| PROTO_OA_MARGIN_CALL_LIST_REQ | 2167 | PROTOOAMARGINCALLLISTREQ |
-| PROTO_OA_MARGIN_CALL_LIST_RES | 2168 | PROTOOAMARGINCALLLISTRES |
-| PROTO_OA_MARGIN_CALL_UPDATE_REQ | 2169 | PROTOOAMARGINCALLUPDATEREQ |
-| PROTO_OA_MARGIN_CALL_UPDATE_RES | 2170 | PROTOOAMARGINCALLUPDATERES |
-| PROTO_OA_MARGIN_CALL_UPDATE_EVENT | 2171 | PROTOOAMARGINCALLUPDATEEVENT |
-| PROTO_OA_MARGIN_CALL_TRIGGER_EVENT | 2172 | PROTOOAMARGINCALLTRIGGEREVENT |
-| PROTO_OA_REFRESH_TOKEN_REQ | 2173 | PROTOOAREFRESHTOKENREQ |
-| PROTO_OA_REFRESH_TOKEN_RES | 2174 | PROTOOAREFRESHTOKENRES |
-| PROTO_OA_ORDER_LIST_REQ | 2175 | PROTOOAORDERLISTREQ |
-| PROTO_OA_ORDER_LIST_RES | 2176 | PROTOOAORDERLISTRES |
-| PROTO_OA_GET_DYNAMIC_LEVERAGE_REQ | 2177 | PROTOOAGETDYNAMICLEVERAGEREQ |
-| PROTO_OA_GET_DYNAMIC_LEVERAGE_RES | 2178 | PROTOOAGETDYNAMICLEVERAGERES |
-| PROTO_OA_DEAL_LIST_BY_POSITION_ID_REQ | 2179 | PROTOOADEALLISTBYPOSITIONIDREQ |
-| PROTO_OA_DEAL_LIST_BY_POSITION_ID_RES | 2180 | PROTOOADEALLISTBYPOSITIONIDRES |
-| PROTO_OA_ORDER_DETAILS_REQ | 2181 | PROTOOAORDERDETAILSREQ |
-| PROTO_OA_ORDER_DETAILS_RES | 2182 | PROTOOAORDERDETAILSRES |
-| PROTO_OA_ORDER_LIST_BY_POSITION_ID_REQ | 2183 | PROTOOAORDERLISTBYPOSITIONIDREQ |
-| PROTO_OA_ORDER_LIST_BY_POSITION_ID_RES | 2184 | PROTOOAORDERLISTBYPOSITIONIDRES |
-| PROTO_OA_DEAL_OFFSET_LIST_REQ | 2185 | PROTOOADEALOFFSETLISTREQ |
-| PROTO_OA_DEAL_OFFSET_LIST_RES | 2186 | PROTOOADEALOFFSETLISTRES |
-| PROTO_OA_GET_POSITION_UNREALIZED_PNL_REQ | 2187 | PROTOOAGETPOSITIONUNREALIZEDPNLREQ |
-| PROTO_OA_GET_POSITION_UNREALIZED_PNL_RES | 2188 | PROTOOAGETPOSITIONUNREALIZEDPNLRES |
+| PROTO_OA_APPLICATION_AUTH_REQ | 2100 | Enum value `PROTO_OA_APPLICATION_AUTH_REQ`. |
+| PROTO_OA_APPLICATION_AUTH_RES | 2101 | Enum value `PROTO_OA_APPLICATION_AUTH_RES`. |
+| PROTO_OA_ACCOUNT_AUTH_REQ | 2102 | Enum value `PROTO_OA_ACCOUNT_AUTH_REQ`. |
+| PROTO_OA_ACCOUNT_AUTH_RES | 2103 | Enum value `PROTO_OA_ACCOUNT_AUTH_RES`. |
+| PROTO_OA_VERSION_REQ | 2104 | Enum value `PROTO_OA_VERSION_REQ`. |
+| PROTO_OA_VERSION_RES | 2105 | Enum value `PROTO_OA_VERSION_RES`. |
+| PROTO_OA_NEW_ORDER_REQ | 2106 | Enum value `PROTO_OA_NEW_ORDER_REQ`. |
+| PROTO_OA_TRAILING_SL_CHANGED_EVENT | 2107 | Enum value `PROTO_OA_TRAILING_SL_CHANGED_EVENT`. |
+| PROTO_OA_CANCEL_ORDER_REQ | 2108 | Enum value `PROTO_OA_CANCEL_ORDER_REQ`. |
+| PROTO_OA_AMEND_ORDER_REQ | 2109 | Enum value `PROTO_OA_AMEND_ORDER_REQ`. |
+| PROTO_OA_AMEND_POSITION_SLTP_REQ | 2110 | Enum value `PROTO_OA_AMEND_POSITION_SLTP_REQ`. |
+| PROTO_OA_CLOSE_POSITION_REQ | 2111 | Enum value `PROTO_OA_CLOSE_POSITION_REQ`. |
+| PROTO_OA_ASSET_LIST_REQ | 2112 | Enum value `PROTO_OA_ASSET_LIST_REQ`. |
+| PROTO_OA_ASSET_LIST_RES | 2113 | Enum value `PROTO_OA_ASSET_LIST_RES`. |
+| PROTO_OA_SYMBOLS_LIST_REQ | 2114 | Enum value `PROTO_OA_SYMBOLS_LIST_REQ`. |
+| PROTO_OA_SYMBOLS_LIST_RES | 2115 | Enum value `PROTO_OA_SYMBOLS_LIST_RES`. |
+| PROTO_OA_SYMBOL_BY_ID_REQ | 2116 | Enum value `PROTO_OA_SYMBOL_BY_ID_REQ`. |
+| PROTO_OA_SYMBOL_BY_ID_RES | 2117 | Enum value `PROTO_OA_SYMBOL_BY_ID_RES`. |
+| PROTO_OA_SYMBOLS_FOR_CONVERSION_REQ | 2118 | Enum value `PROTO_OA_SYMBOLS_FOR_CONVERSION_REQ`. |
+| PROTO_OA_SYMBOLS_FOR_CONVERSION_RES | 2119 | Enum value `PROTO_OA_SYMBOLS_FOR_CONVERSION_RES`. |
+| PROTO_OA_SYMBOL_CHANGED_EVENT | 2120 | Enum value `PROTO_OA_SYMBOL_CHANGED_EVENT`. |
+| PROTO_OA_TRADER_REQ | 2121 | Enum value `PROTO_OA_TRADER_REQ`. |
+| PROTO_OA_TRADER_RES | 2122 | Enum value `PROTO_OA_TRADER_RES`. |
+| PROTO_OA_TRADER_UPDATE_EVENT | 2123 | Enum value `PROTO_OA_TRADER_UPDATE_EVENT`. |
+| PROTO_OA_RECONCILE_REQ | 2124 | Enum value `PROTO_OA_RECONCILE_REQ`. |
+| PROTO_OA_RECONCILE_RES | 2125 | Enum value `PROTO_OA_RECONCILE_RES`. |
+| PROTO_OA_EXECUTION_EVENT | 2126 | Enum value `PROTO_OA_EXECUTION_EVENT`. |
+| PROTO_OA_SUBSCRIBE_SPOTS_REQ | 2127 | Enum value `PROTO_OA_SUBSCRIBE_SPOTS_REQ`. |
+| PROTO_OA_SUBSCRIBE_SPOTS_RES | 2128 | Enum value `PROTO_OA_SUBSCRIBE_SPOTS_RES`. |
+| PROTO_OA_UNSUBSCRIBE_SPOTS_REQ | 2129 | Enum value `PROTO_OA_UNSUBSCRIBE_SPOTS_REQ`. |
+| PROTO_OA_UNSUBSCRIBE_SPOTS_RES | 2130 | Enum value `PROTO_OA_UNSUBSCRIBE_SPOTS_RES`. |
+| PROTO_OA_SPOT_EVENT | 2131 | Enum value `PROTO_OA_SPOT_EVENT`. |
+| PROTO_OA_ORDER_ERROR_EVENT | 2132 | Enum value `PROTO_OA_ORDER_ERROR_EVENT`. |
+| PROTO_OA_DEAL_LIST_REQ | 2133 | Enum value `PROTO_OA_DEAL_LIST_REQ`. |
+| PROTO_OA_DEAL_LIST_RES | 2134 | Enum value `PROTO_OA_DEAL_LIST_RES`. |
+| PROTO_OA_SUBSCRIBE_LIVE_TRENDBAR_REQ | 2135 | Enum value `PROTO_OA_SUBSCRIBE_LIVE_TRENDBAR_REQ`. |
+| PROTO_OA_UNSUBSCRIBE_LIVE_TRENDBAR_REQ | 2136 | Enum value `PROTO_OA_UNSUBSCRIBE_LIVE_TRENDBAR_REQ`. |
+| PROTO_OA_GET_TRENDBARS_REQ | 2137 | Enum value `PROTO_OA_GET_TRENDBARS_REQ`. |
+| PROTO_OA_GET_TRENDBARS_RES | 2138 | Enum value `PROTO_OA_GET_TRENDBARS_RES`. |
+| PROTO_OA_EXPECTED_MARGIN_REQ | 2139 | Enum value `PROTO_OA_EXPECTED_MARGIN_REQ`. |
+| PROTO_OA_EXPECTED_MARGIN_RES | 2140 | Enum value `PROTO_OA_EXPECTED_MARGIN_RES`. |
+| PROTO_OA_MARGIN_CHANGED_EVENT | 2141 | Enum value `PROTO_OA_MARGIN_CHANGED_EVENT`. |
+| PROTO_OA_ERROR_RES | 2142 | Enum value `PROTO_OA_ERROR_RES`. |
+| PROTO_OA_CASH_FLOW_HISTORY_LIST_REQ | 2143 | Enum value `PROTO_OA_CASH_FLOW_HISTORY_LIST_REQ`. |
+| PROTO_OA_CASH_FLOW_HISTORY_LIST_RES | 2144 | Enum value `PROTO_OA_CASH_FLOW_HISTORY_LIST_RES`. |
+| PROTO_OA_GET_TICKDATA_REQ | 2145 | Enum value `PROTO_OA_GET_TICKDATA_REQ`. |
+| PROTO_OA_GET_TICKDATA_RES | 2146 | Enum value `PROTO_OA_GET_TICKDATA_RES`. |
+| PROTO_OA_ACCOUNTS_TOKEN_INVALIDATED_EVENT | 2147 | Enum value `PROTO_OA_ACCOUNTS_TOKEN_INVALIDATED_EVENT`. |
+| PROTO_OA_CLIENT_DISCONNECT_EVENT | 2148 | Enum value `PROTO_OA_CLIENT_DISCONNECT_EVENT`. |
+| PROTO_OA_GET_ACCOUNTS_BY_ACCESS_TOKEN_REQ | 2149 | Enum value `PROTO_OA_GET_ACCOUNTS_BY_ACCESS_TOKEN_REQ`. |
+| PROTO_OA_GET_ACCOUNTS_BY_ACCESS_TOKEN_RES | 2150 | Enum value `PROTO_OA_GET_ACCOUNTS_BY_ACCESS_TOKEN_RES`. |
+| PROTO_OA_GET_CTID_PROFILE_BY_TOKEN_REQ | 2151 | Enum value `PROTO_OA_GET_CTID_PROFILE_BY_TOKEN_REQ`. |
+| PROTO_OA_GET_CTID_PROFILE_BY_TOKEN_RES | 2152 | Enum value `PROTO_OA_GET_CTID_PROFILE_BY_TOKEN_RES`. |
+| PROTO_OA_ASSET_CLASS_LIST_REQ | 2153 | Enum value `PROTO_OA_ASSET_CLASS_LIST_REQ`. |
+| PROTO_OA_ASSET_CLASS_LIST_RES | 2154 | Enum value `PROTO_OA_ASSET_CLASS_LIST_RES`. |
+| PROTO_OA_DEPTH_EVENT | 2155 | Enum value `PROTO_OA_DEPTH_EVENT`. |
+| PROTO_OA_SUBSCRIBE_DEPTH_QUOTES_REQ | 2156 | Enum value `PROTO_OA_SUBSCRIBE_DEPTH_QUOTES_REQ`. |
+| PROTO_OA_SUBSCRIBE_DEPTH_QUOTES_RES | 2157 | Enum value `PROTO_OA_SUBSCRIBE_DEPTH_QUOTES_RES`. |
+| PROTO_OA_UNSUBSCRIBE_DEPTH_QUOTES_REQ | 2158 | Enum value `PROTO_OA_UNSUBSCRIBE_DEPTH_QUOTES_REQ`. |
+| PROTO_OA_UNSUBSCRIBE_DEPTH_QUOTES_RES | 2159 | Enum value `PROTO_OA_UNSUBSCRIBE_DEPTH_QUOTES_RES`. |
+| PROTO_OA_SYMBOL_CATEGORY_REQ | 2160 | Enum value `PROTO_OA_SYMBOL_CATEGORY_REQ`. |
+| PROTO_OA_SYMBOL_CATEGORY_RES | 2161 | Enum value `PROTO_OA_SYMBOL_CATEGORY_RES`. |
+| PROTO_OA_ACCOUNT_LOGOUT_REQ | 2162 | Enum value `PROTO_OA_ACCOUNT_LOGOUT_REQ`. |
+| PROTO_OA_ACCOUNT_LOGOUT_RES | 2163 | Enum value `PROTO_OA_ACCOUNT_LOGOUT_RES`. |
+| PROTO_OA_ACCOUNT_DISCONNECT_EVENT | 2164 | Enum value `PROTO_OA_ACCOUNT_DISCONNECT_EVENT`. |
+| PROTO_OA_SUBSCRIBE_LIVE_TRENDBAR_RES | 2165 | Enum value `PROTO_OA_SUBSCRIBE_LIVE_TRENDBAR_RES`. |
+| PROTO_OA_UNSUBSCRIBE_LIVE_TRENDBAR_RES | 2166 | Enum value `PROTO_OA_UNSUBSCRIBE_LIVE_TRENDBAR_RES`. |
+| PROTO_OA_MARGIN_CALL_LIST_REQ | 2167 | Enum value `PROTO_OA_MARGIN_CALL_LIST_REQ`. |
+| PROTO_OA_MARGIN_CALL_LIST_RES | 2168 | Enum value `PROTO_OA_MARGIN_CALL_LIST_RES`. |
+| PROTO_OA_MARGIN_CALL_UPDATE_REQ | 2169 | Enum value `PROTO_OA_MARGIN_CALL_UPDATE_REQ`. |
+| PROTO_OA_MARGIN_CALL_UPDATE_RES | 2170 | Enum value `PROTO_OA_MARGIN_CALL_UPDATE_RES`. |
+| PROTO_OA_MARGIN_CALL_UPDATE_EVENT | 2171 | Enum value `PROTO_OA_MARGIN_CALL_UPDATE_EVENT`. |
+| PROTO_OA_MARGIN_CALL_TRIGGER_EVENT | 2172 | Enum value `PROTO_OA_MARGIN_CALL_TRIGGER_EVENT`. |
+| PROTO_OA_REFRESH_TOKEN_REQ | 2173 | Enum value `PROTO_OA_REFRESH_TOKEN_REQ`. |
+| PROTO_OA_REFRESH_TOKEN_RES | 2174 | Enum value `PROTO_OA_REFRESH_TOKEN_RES`. |
+| PROTO_OA_ORDER_LIST_REQ | 2175 | Enum value `PROTO_OA_ORDER_LIST_REQ`. |
+| PROTO_OA_ORDER_LIST_RES | 2176 | Enum value `PROTO_OA_ORDER_LIST_RES`. |
+| PROTO_OA_GET_DYNAMIC_LEVERAGE_REQ | 2177 | Enum value `PROTO_OA_GET_DYNAMIC_LEVERAGE_REQ`. |
+| PROTO_OA_GET_DYNAMIC_LEVERAGE_RES | 2178 | Enum value `PROTO_OA_GET_DYNAMIC_LEVERAGE_RES`. |
+| PROTO_OA_DEAL_LIST_BY_POSITION_ID_REQ | 2179 | Enum value `PROTO_OA_DEAL_LIST_BY_POSITION_ID_REQ`. |
+| PROTO_OA_DEAL_LIST_BY_POSITION_ID_RES | 2180 | Enum value `PROTO_OA_DEAL_LIST_BY_POSITION_ID_RES`. |
+| PROTO_OA_ORDER_DETAILS_REQ | 2181 | Enum value `PROTO_OA_ORDER_DETAILS_REQ`. |
+| PROTO_OA_ORDER_DETAILS_RES | 2182 | Enum value `PROTO_OA_ORDER_DETAILS_RES`. |
+| PROTO_OA_ORDER_LIST_BY_POSITION_ID_REQ | 2183 | Enum value `PROTO_OA_ORDER_LIST_BY_POSITION_ID_REQ`. |
+| PROTO_OA_ORDER_LIST_BY_POSITION_ID_RES | 2184 | Enum value `PROTO_OA_ORDER_LIST_BY_POSITION_ID_RES`. |
+| PROTO_OA_DEAL_OFFSET_LIST_REQ | 2185 | Enum value `PROTO_OA_DEAL_OFFSET_LIST_REQ`. |
+| PROTO_OA_DEAL_OFFSET_LIST_RES | 2186 | Enum value `PROTO_OA_DEAL_OFFSET_LIST_RES`. |
+| PROTO_OA_GET_POSITION_UNREALIZED_PNL_REQ | 2187 | Enum value `PROTO_OA_GET_POSITION_UNREALIZED_PNL_REQ`. |
+| PROTO_OA_GET_POSITION_UNREALIZED_PNL_RES | 2188 | Enum value `PROTO_OA_GET_POSITION_UNREALIZED_PNL_RES`. |
 
 ### ProtoOAPositionStatus
-中文功能解說（依名稱推定）：ProtoOA持倉狀態
-| Name | Value | 中文解說(依名稱推定) |
+Inferred description (name-based): Position status
+| Name | Value | Inferred description (name-based) |
 |---|---|---|
-| POSITION_STATUS_OPEN | 1 | POSITIONSTATUSOPEN |
-| POSITION_STATUS_CLOSED | 2 | POSITIONSTATUSCLOSED |
-| POSITION_STATUS_CREATED | 3 | POSITIONSTATUSCREATED |
-| POSITION_STATUS_ERROR | 4 | POSITIONSTATUSERROR |
+| POSITION_STATUS_OPEN | 1 | Enum value `POSITION_STATUS_OPEN`. |
+| POSITION_STATUS_CLOSED | 2 | Enum value `POSITION_STATUS_CLOSED`. |
+| POSITION_STATUS_CREATED | 3 | Enum value `POSITION_STATUS_CREATED`. |
+| POSITION_STATUS_ERROR | 4 | Enum value `POSITION_STATUS_ERROR`. |
 
 ### ProtoOAQuoteType
-中文功能解說（依名稱推定）：ProtoOAQuote類型
-| Name | Value | 中文解說(依名稱推定) |
+Inferred description (name-based): Quote type
+| Name | Value | Inferred description (name-based) |
 |---|---|---|
-| BID | 1 | BID |
-| ASK | 2 | ASK |
+| BID | 1 | Enum value `BID`. |
+| ASK | 2 | Enum value `ASK`. |
 
 ### ProtoOASwapCalculationType
-中文功能解說（依名稱推定）：ProtoOASwapCalculation類型
-| Name | Value | 中文解說(依名稱推定) |
+Inferred description (name-based): Swap calculation type
+| Name | Value | Inferred description (name-based) |
 |---|---|---|
-| PIPS | 0 | PIPS |
-| PERCENTAGE | 1 | PERCENTAGE |
+| PIPS | 0 | Enum value `PIPS`. |
+| PERCENTAGE | 1 | Enum value `PERCENTAGE`. |
 
 ### ProtoOASymbolDistanceType
-中文功能解說（依名稱推定）：ProtoOA交易品種Distance類型
-| Name | Value | 中文解說(依名稱推定) |
+Inferred description (name-based): Symbol distance type
+| Name | Value | Inferred description (name-based) |
 |---|---|---|
-| SYMBOL_DISTANCE_IN_POINTS | 1 | SYMBOLDISTANCEINPOINTS |
-| SYMBOL_DISTANCE_IN_PERCENTAGE | 2 | SYMBOLDISTANCEINPERCENTAGE |
+| SYMBOL_DISTANCE_IN_POINTS | 1 | Enum value `SYMBOL_DISTANCE_IN_POINTS`. |
+| SYMBOL_DISTANCE_IN_PERCENTAGE | 2 | Enum value `SYMBOL_DISTANCE_IN_PERCENTAGE`. |
 
 ### ProtoOATimeInForce
-中文功能解說（依名稱推定）：ProtoOA時間InForce
-| Name | Value | 中文解說(依名稱推定) |
+Inferred description (name-based): Time in force
+| Name | Value | Inferred description (name-based) |
 |---|---|---|
-| GOOD_TILL_DATE | 1 | GOODTILLDATE |
-| GOOD_TILL_CANCEL | 2 | GOODTILLCANCEL |
-| IMMEDIATE_OR_CANCEL | 3 | IMMEDIATEORCANCEL |
-| FILL_OR_KILL | 4 | FILLORKILL |
-| MARKET_ON_OPEN | 5 | MARKETONOPEN |
+| GOOD_TILL_DATE | 1 | Enum value `GOOD_TILL_DATE`. |
+| GOOD_TILL_CANCEL | 2 | Enum value `GOOD_TILL_CANCEL`. |
+| IMMEDIATE_OR_CANCEL | 3 | Enum value `IMMEDIATE_OR_CANCEL`. |
+| FILL_OR_KILL | 4 | Enum value `FILL_OR_KILL`. |
+| MARKET_ON_OPEN | 5 | Enum value `MARKET_ON_OPEN`. |
 
 ### ProtoOATotalMarginCalculationType
-中文功能解說（依名稱推定）：ProtoOATotal保證金Calculation類型
-| Name | Value | 中文解說(依名稱推定) |
+Inferred description (name-based): Total margin calculation type
+| Name | Value | Inferred description (name-based) |
 |---|---|---|
-| MAX | 0 | MAX |
-| SUM | 1 | SUM |
-| NET | 2 | NET |
+| MAX | 0 | Enum value `MAX`. |
+| SUM | 1 | Enum value `SUM`. |
+| NET | 2 | Enum value `NET`. |
 
 ### ProtoOATradeSide
-中文功能解說（依名稱推定）：ProtoOA交易方向
-| Name | Value | 中文解說(依名稱推定) |
+Inferred description (name-based): Trade side
+| Name | Value | Inferred description (name-based) |
 |---|---|---|
-| BUY | 1 | BUY |
-| SELL | 2 | SELL |
+| BUY | 1 | Enum value `BUY`. |
+| SELL | 2 | Enum value `SELL`. |
 
 ### ProtoOATradingMode
-中文功能解說（依名稱推定）：ProtoOATradingMode
-| Name | Value | 中文解說(依名稱推定) |
+Inferred description (name-based): Trading mode
+| Name | Value | Inferred description (name-based) |
 |---|---|---|
-| ENABLED | 0 | ENABLED |
-| DISABLED_WITHOUT_PENDINGS_EXECUTION | 1 | DISABLEDWITHOUTPENDINGSEXECUTION |
-| DISABLED_WITH_PENDINGS_EXECUTION | 2 | DISABLEDWITHPENDINGSEXECUTION |
-| CLOSE_ONLY_MODE | 3 | CLOSEONLYMODE |
+| ENABLED | 0 | Enum value `ENABLED`. |
+| DISABLED_WITHOUT_PENDINGS_EXECUTION | 1 | Enum value `DISABLED_WITHOUT_PENDINGS_EXECUTION`. |
+| DISABLED_WITH_PENDINGS_EXECUTION | 2 | Enum value `DISABLED_WITH_PENDINGS_EXECUTION`. |
+| CLOSE_ONLY_MODE | 3 | Enum value `CLOSE_ONLY_MODE`. |
 
 ### ProtoOATrendbarPeriod
-中文功能解說（依名稱推定）：ProtoOAK線週期
-| Name | Value | 中文解說(依名稱推定) |
+Inferred description (name-based): Trendbar period
+| Name | Value | Inferred description (name-based) |
 |---|---|---|
-| M1 | 1 | M1 |
-| M2 | 2 | M2 |
-| M3 | 3 | M3 |
-| M4 | 4 | M4 |
-| M5 | 5 | M5 |
-| M10 | 6 | M10 |
-| M15 | 7 | M15 |
-| M30 | 8 | M30 |
-| H1 | 9 | H1 |
-| H4 | 10 | H4 |
-| H12 | 11 | H12 |
-| D1 | 12 | D1 |
-| W1 | 13 | W1 |
-| MN1 | 14 | MN1 |
+| M1 | 1 | Enum value `M1`. |
+| M2 | 2 | Enum value `M2`. |
+| M3 | 3 | Enum value `M3`. |
+| M4 | 4 | Enum value `M4`. |
+| M5 | 5 | Enum value `M5`. |
+| M10 | 6 | Enum value `M10`. |
+| M15 | 7 | Enum value `M15`. |
+| M30 | 8 | Enum value `M30`. |
+| H1 | 9 | Enum value `H1`. |
+| H4 | 10 | Enum value `H4`. |
+| H12 | 11 | Enum value `H12`. |
+| D1 | 12 | Enum value `D1`. |
+| W1 | 13 | Enum value `W1`. |
+| MN1 | 14 | Enum value `MN1`. |
 
 ## Common Messages
 
-### Messages
-
 ### ProtoErrorRes
-中文功能解說（依名稱推定）：Proto錯誤回應
-| Field | Type | Label | 中文解說(依名稱推定) |
+Inferred description (name-based): Error response
+| Field | Type | Label | Inferred description (name-based) |
 |---|---|---|---|
-| payloadType | ProtoPayloadType | optional | 類型 |
-| errorCode | string | optional | Code |
-| description | string | optional | description |
-| maintenanceEndTimestamp | uint64 | optional | End時間戳 |
+| payloadType | ProtoPayloadType | optional | payload type identifier |
+| errorCode | string | optional | error code |
+| description | string | optional | text description |
+| maintenanceEndTimestamp | uint64 | optional | end timestamp |
 
 ### ProtoHeartbeatEvent
-中文功能解說（依名稱推定）：ProtoHeartbeat事件
-| Field | Type | Label | 中文解說(依名稱推定) |
+Inferred description (name-based): Heartbeat event
+| Field | Type | Label | Inferred description (name-based) |
 |---|---|---|---|
-| payloadType | ProtoPayloadType | optional | 類型 |
+| payloadType | ProtoPayloadType | optional | payload type identifier |
 
 ### ProtoMessage
-中文功能解說（依名稱推定）：ProtoMessage
-| Field | Type | Label | 中文解說(依名稱推定) |
+Inferred description (name-based): Message
+| Field | Type | Label | Inferred description (name-based) |
 |---|---|---|---|
-| payloadType | uint32 | optional | 類型 |
+| payloadType | uint32 | optional | payload type identifier |
 | payload | bytes | optional | payload |
-| clientMsgId | string | optional | MsgID |
+| clientMsgId | string | optional | client message identifier |
 
 ## Common Model Messages
 
-### Enums
-
 ### ProtoErrorCode
-中文功能解說（依名稱推定）：Proto錯誤Code
-| Name | Value | 中文解說(依名稱推定) |
+Inferred description (name-based): Error code
+| Name | Value | Inferred description (name-based) |
 |---|---|---|
-| UNKNOWN_ERROR | 1 | UNKNOWNERROR |
-| UNSUPPORTED_MESSAGE | 2 | UNSUPPORTEDMESSAGE |
-| INVALID_REQUEST | 3 | INVALIDREQUEST |
-| TIMEOUT_ERROR | 5 | TIMEOUTERROR |
-| ENTITY_NOT_FOUND | 6 | ENTITYNOTFOUND |
-| CANT_ROUTE_REQUEST | 7 | CANTROUTEREQUEST |
-| FRAME_TOO_LONG | 8 | FRAMETOOLONG |
-| MARKET_CLOSED | 9 | MARKETCLOSED |
-| CONCURRENT_MODIFICATION | 10 | CONCURRENTMODIFICATION |
-| BLOCKED_PAYLOAD_TYPE | 11 | BLOCKEDPAYLOADTYPE |
+| UNKNOWN_ERROR | 1 | Enum value `UNKNOWN_ERROR`. |
+| UNSUPPORTED_MESSAGE | 2 | Enum value `UNSUPPORTED_MESSAGE`. |
+| INVALID_REQUEST | 3 | Enum value `INVALID_REQUEST`. |
+| TIMEOUT_ERROR | 5 | Enum value `TIMEOUT_ERROR`. |
+| ENTITY_NOT_FOUND | 6 | Enum value `ENTITY_NOT_FOUND`. |
+| CANT_ROUTE_REQUEST | 7 | Enum value `CANT_ROUTE_REQUEST`. |
+| FRAME_TOO_LONG | 8 | Enum value `FRAME_TOO_LONG`. |
+| MARKET_CLOSED | 9 | Enum value `MARKET_CLOSED`. |
+| CONCURRENT_MODIFICATION | 10 | Enum value `CONCURRENT_MODIFICATION`. |
+| BLOCKED_PAYLOAD_TYPE | 11 | Enum value `BLOCKED_PAYLOAD_TYPE`. |
 
 ### ProtoPayloadType
-中文功能解說（依名稱推定）：ProtoPayload類型
-| Name | Value | 中文解說(依名稱推定) |
+Inferred description (name-based): Payload type
+| Name | Value | Inferred description (name-based) |
 |---|---|---|
-| PROTO_MESSAGE | 5 | PROTOMESSAGE |
-| ERROR_RES | 50 | ERRORRES |
-| HEARTBEAT_EVENT | 51 | HEARTBEATEVENT |
-
+| PROTO_MESSAGE | 5 | Enum value `PROTO_MESSAGE`. |
+| ERROR_RES | 50 | Enum value `ERROR_RES`. |
+| HEARTBEAT_EVENT | 51 | Enum value `HEARTBEAT_EVENT`. |

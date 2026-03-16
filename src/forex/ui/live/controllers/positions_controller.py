@@ -1,11 +1,10 @@
 from __future__ import annotations
 
-from typing import Optional
-
 from ctrader_open_api.messages.OpenApiMessages_pb2 import ProtoOAReconcileReq
 from ctrader_open_api.messages.OpenApiModelMessages_pb2 import ProtoOAPayloadType, ProtoOATradeSide
 from PySide6.QtCore import Qt
 from PySide6.QtWidgets import QTableWidgetItem
+
 
 class LivePositionsController:
     def __init__(self, window) -> None:
@@ -68,7 +67,10 @@ class LivePositionsController:
         except Exception:
             pos_list = []
         w._open_positions = pos_list
+        if not pos_list:
+            w._auto_used_margin = 0.0
         w._sync_auto_position_from_positions(pos_list)
+        w._refresh_account_balance()
         self.schedule_positions_refresh()
 
     def update_positions_table(self, positions: list[object]) -> None:
@@ -160,10 +162,10 @@ class LivePositionsController:
     def calc_position_pnl(
         self,
         *,
-        position: Optional[object],
-        trade_data: Optional[object],
-        symbol_id: Optional[int],
-        side_value: Optional[int],
+        position: object | None,
+        trade_data: object | None,
+        symbol_id: int | None,
+        side_value: int | None,
         entry_price,
         volume,
     ) -> str:
@@ -187,7 +189,11 @@ class LivePositionsController:
                 else:
                     current = None
                 if current is not None:
-                    pnl = (current - entry) * vol if side_value == ProtoOATradeSide.BUY else (entry - current) * vol
+                    pnl = (
+                        (current - entry) * vol
+                        if side_value == ProtoOATradeSide.BUY
+                        else (entry - current) * vol
+                    )
                     return f"{pnl:,.2f}"
 
         position_id = getattr(position, "positionId", None)
@@ -198,8 +204,17 @@ class LivePositionsController:
         for source in (position, trade_data):
             if source is None:
                 continue
-            money_digits = getattr(source, "moneyDigits", None) or getattr(position, "moneyDigits", None)
-            for attr in ("netProfit", "netUnrealizedPnl", "unrealizedPnl", "profit", "grossProfit", "pnl"):
+            money_digits = getattr(source, "moneyDigits", None) or getattr(
+                position, "moneyDigits", None
+            )
+            for attr in (
+                "netProfit",
+                "netUnrealizedPnl",
+                "unrealizedPnl",
+                "profit",
+                "grossProfit",
+                "pnl",
+            ):
                 value = getattr(source, attr, None)
                 if value is None:
                     continue
@@ -243,7 +258,7 @@ class LivePositionsController:
         return float(value) / (10**digits)
 
     @staticmethod
-    def format_money(value: Optional[float], digits: int) -> str:
+    def format_money(value: float | None, digits: int) -> str:
         if value is None:
             return "-"
         if digits <= 0:
@@ -267,10 +282,18 @@ class LivePositionsController:
         if balance is not None and equity is not None:
             net_pnl = float(equity) - float(balance)
 
-        w._account_summary_labels["balance"].setText(self.format_money(balance, money_digits))
-        w._account_summary_labels["equity"].setText(self.format_money(equity, money_digits))
-        w._account_summary_labels["free_margin"].setText(self.format_money(free_margin, money_digits))
-        w._account_summary_labels["used_margin"].setText(self.format_money(used_margin, money_digits))
+        w._account_summary_labels["balance"].setText(
+            self.format_money(balance, money_digits)
+        )
+        w._account_summary_labels["equity"].setText(
+            self.format_money(equity, money_digits)
+        )
+        w._account_summary_labels["free_margin"].setText(
+            self.format_money(free_margin, money_digits)
+        )
+        w._account_summary_labels["used_margin"].setText(
+            self.format_money(used_margin, money_digits)
+        )
         if margin_level is None:
             w._account_summary_labels["margin_level"].setText("-")
         else:

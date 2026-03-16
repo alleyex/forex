@@ -1,5 +1,10 @@
 """Config package."""
 
+from forex.config.data_governance import (
+    SCHEMA_VERSION,
+    normalize_timeframe,
+    write_metadata_for_csv,
+)
 from forex.config.logging import setup_logging
 from forex.config.paths import (
     DATA_DIR,
@@ -13,7 +18,6 @@ from forex.config.paths import (
     TOKEN_FILE,
     TRAIN_PPO_SCRIPT,
 )
-from forex.config.data_governance import SCHEMA_VERSION, normalize_timeframe, write_metadata_for_csv
 from forex.config.runtime import load_config
 
 __all__ = [

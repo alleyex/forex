@@ -112,12 +112,55 @@ QToolBar {
     background: #222831;
     border-bottom: 1px solid #2e3641;
     spacing: 6px;
+    padding: 6px 8px;
+    min-height: 38px;
+}
+
+QToolBar#liveToolbar {
+    spacing: 8px;
+}
+
+QToolBar#liveToolbar QToolButton {
+    background: #2a323c;
+    border: 1px solid #3a4552;
+    border-radius: 8px;
+    color: #dce3eb;
+    padding: 6px 12px;
+    min-height: 28px;
+    font-size: 12px;
+    font-weight: 600;
+}
+
+QToolBar#liveToolbar QToolButton:hover {
+    background: #343e4a;
+    border-color: #425160;
+}
+
+QToolBar#liveToolbar QToolButton:pressed {
+    background: #232a33;
+    border-color: #3a4552;
 }
 
 QStatusBar {
     background: #222831;
     border-top: 1px solid #2e3641;
     color: #b8c1cc;
+    padding: 4px 8px;
+}
+
+QStatusBar::item {
+    border: none;
+}
+
+QStatusBar#liveStatusBar QLabel#statusChip {
+    background: #2a323c;
+    border: 1px solid #343c46;
+    border-radius: 8px;
+    color: #d3d8e0;
+    padding: 4px 10px;
+    margin-right: 6px;
+    font-size: 12px;
+    font-weight: 500;
 }
 
 QSplitter::handle {

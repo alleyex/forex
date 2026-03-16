@@ -1,29 +1,57 @@
-# Forex Project
+# Forex Platform
 
-This repository contains a desktop trading UI, broker integration (cTrader), and RL tooling for training and simulation.
+Desktop trading UI, cTrader integration, and reinforcement-learning tooling for training, simulation, and live operations.
 
-## Layout
+## Overview
 
-- `src/` application code (app, application, domain, infrastructure, ui, ml, tools)
-- `data/` runtime artifacts (ignored from git)
-- `docs/` architecture and operational notes
+This repository is organized as a layered Python application with:
 
-## Setup
+- `src/forex/domain`: core domain models and rules
+- `src/forex/application`: use cases and orchestration
+- `src/forex/infrastructure`: broker adapters, storage, and external integrations
+- `src/forex/ui`: desktop UI for training and live workflows
+- `src/forex/ml`: RL environments, features, and training utilities
+- `src/forex/tools`: diagnostics, research, and operational tooling
+- `tests`: automated tests
+- `docs`: architecture, operations, and governance documents
 
-Recommended Python version: 3.10+
+Additional project guidance:
+
+- Development workflow: [`docs/development.md`](docs/development.md)
+- Contribution guide: [`CONTRIBUTING.md`](CONTRIBUTING.md)
+- Architecture notes: [`docs/architecture.md`](docs/architecture.md)
+- Repository structure: [`docs/project_structure.md`](docs/project_structure.md)
+- Operations runbook: [`docs/operations.md`](docs/operations.md)
+- Data governance: [`docs/data_governance.md`](docs/data_governance.md)
+- Versioning and releases: [`docs/versioning.md`](docs/versioning.md)
+- Security policy: [`SECURITY.md`](SECURITY.md)
+- Support guide: [`SUPPORT.md`](SUPPORT.md)
+- Changelog: [`CHANGELOG.md`](CHANGELOG.md)
+
+Published package metadata includes project URLs, classifiers, and release governance links so release artifacts are self-describing in package indexes and build outputs.
+Dependency and GitHub Actions maintenance are also scheduled through Dependabot for regular update visibility.
+
+## Quick Start
+
+Recommended Python version: `3.10+`
 
 ```bash
-pip install -e '.[dev]'
+./scripts/bootstrap.sh
 ```
 
-If you only need the UI or ML parts, you can install:
+Create local configuration from the sample file before running live features:
 
 ```bash
-pip install -e '.[ui]'
-pip install -e '.[ml]'
+cp .env.example .env
 ```
 
-## Run
+## Running The Application
+
+Launcher:
+
+```bash
+forex
+```
 
 Training UI:
 
@@ -37,39 +65,62 @@ Live UI:
 QT_OPENGL=software LOG_LEVEL=INFO forex-live
 ```
 
-Direct CLI modules:
+Module entrypoints are also available:
 
 ```bash
-QT_OPENGL=software LOG_LEVEL=INFO python -m forex.app.cli.train
-QT_OPENGL=software LOG_LEVEL=INFO python -m forex.app.cli.live
-python -m forex.app.cli.launcher
+python3 -m forex.app.cli.launcher
+python3 -m forex.app.cli.train
+python3 -m forex.app.cli.live
 ```
 
-## Tests
+Convenience scripts:
 
 ```bash
-pytest -q
+./scripts/run-train.sh
+./scripts/run-live.sh
+```
+
+## Development Commands
+
+Use `make help` to list the available workflows.
+
+```bash
+make install-dev
+make lint
+make test
+make check-core
+make check-hygiene
+make release-check
+make check-release-metadata
+make clean-release-artifacts
+make release-checksums
+make verify-release-artifacts
+make verify-release-checksums
+make bump-version VERSION=0.1.1
 ```
 
 ## Configuration
 
-Environment variables (defaults in `src/forex/config/runtime.py`):
+Runtime configuration is environment-driven. See `.env.example` and `src/forex/config/runtime.py`.
 
-- `TOKEN_FILE`: path to token.json
-- `BROKER_PROVIDER`: `ctrader` by default
-- `LOG_LEVEL`: `INFO` by default
-- `LOG_FILE`: optional file output for logs
-- `CTRADER_REQUEST_TIMEOUT`: request timeout seconds
-- `CTRADER_OAUTH_TIMEOUT`: OAuth auth timeout seconds
-- `CTRADER_OAUTH_LOGIN_TIMEOUT`: OAuth login browser flow timeout
-- `CTRADER_RETRY_MAX_ATTEMPTS`: 0 disables retries
+Common variables:
+
+- `TOKEN_FILE`: local token file path
+- `BROKER_PROVIDER`: broker provider name, default `ctrader`
+- `LOG_LEVEL`: logging level, default `INFO`
+- `LOG_FILE`: optional log output file
+- `CTRADER_REQUEST_TIMEOUT`: request timeout in seconds
+- `CTRADER_OAUTH_TIMEOUT`: OAuth auth timeout
+- `CTRADER_OAUTH_LOGIN_TIMEOUT`: browser login flow timeout
+- `CTRADER_RETRY_MAX_ATTEMPTS`: retry attempts, `0` disables retries
 - `CTRADER_RETRY_BACKOFF_SECONDS`: retry backoff delay
-- `METRICS_LOG_INTERVAL`: metrics snapshot log interval
+- `METRICS_LOG_INTERVAL`: metrics snapshot interval
 
-## Operations
+## Repository Conventions
 
-See `docs/operations.md` for runbooks, troubleshooting, and operational tips.
-
-## Data Governance
-
-See `docs/data_governance.md` for data layout, schema versioning, and metadata format.
+- Production code lives under `src/`
+- Tests live under `tests/`
+- Developer scripts live under `scripts/`
+- Runtime artifacts stay in `runtime/` or ignored local files
+- Research outputs and operational notes stay in `docs/`
+- Generated data belongs in `data/` and should not be committed unless intentional

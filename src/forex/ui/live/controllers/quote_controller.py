@@ -48,7 +48,9 @@ class LiveQuoteController:
         except Exception:
             return
         desired_ids = set(w._quote_rows.keys())
-        if desired_ids and desired_ids.issubset(w._quote_subscribed_ids | w._quote_subscribe_inflight):
+        if desired_ids and desired_ids.issubset(
+            w._quote_subscribed_ids | w._quote_subscribe_inflight
+        ):
             return
         self.ensure_quote_handler()
 

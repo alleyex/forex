@@ -1,22 +1,16 @@
 """
-V2: 共用基礎類別與協定定義（Protocol + Generic + 型別安全）
+V2: shared base classes and protocol definitions
+(Protocol + Generic + type-safe contracts)
 """
 from __future__ import annotations
 
-from dataclasses import dataclass
 import logging
-from typing import (
-    Callable,
-    Generic,
-    Optional,
-    TypeVar,
-    cast,
-)
-
 from abc import ABC
+from collections.abc import Callable
+from dataclasses import dataclass
+from typing import Generic, TypeVar, cast
 
 from forex.config.constants import ConnectionStatus
-
 
 # --- Type variables ---
 TClient = TypeVar("TClient")
@@ -30,9 +24,10 @@ logger = logging.getLogger(__name__)
 # --- Callback dataclass ---
 @dataclass
 class BaseCallbacks:
-    on_error: Optional[Callable[[str], None]] = None
-    on_log: Optional[Callable[[str], None]] = None
-    on_status_changed: Optional[Callable[[ConnectionStatus], None]] = None
+    on_error: Callable[[str], None] | None = None
+    on_log: Callable[[str], None] | None = None
+    on_status_changed: Callable[[ConnectionStatus], None] | None = None
+
 
 def build_callbacks(callback_cls: type[TCallbacks], **kwargs) -> TCallbacks:
     return callback_cls(**kwargs)
@@ -41,8 +36,8 @@ def build_callbacks(callback_cls: type[TCallbacks], **kwargs) -> TCallbacks:
 # --- Mixins ---
 class LoggingMixin(Generic[TCb]):
     """
-    提供日誌和錯誤發送功能的混入類別
-    使用此混入的類別必須定義 _callbacks 屬性（符合 BaseCallbacks）
+    Mixin that provides log and error emission helpers.
+    Classes using this mixin must define a _callbacks attribute compatible with BaseCallbacks.
     """
 
     _callbacks: TCb
@@ -62,7 +57,7 @@ class LoggingMixin(Generic[TCb]):
 
 
 class LogHistoryMixin(LoggingMixin[TCb], Generic[TCb]):
-    """提供日誌歷史紀錄與回放"""
+    """Provide log history storage and replay."""
 
     _log_history: list[str]
 
@@ -82,8 +77,8 @@ class LogHistoryMixin(LoggingMixin[TCb], Generic[TCb]):
 
 class StatusMixin(Generic[TCb]):
     """
-    提供狀態管理功能的混入類別
-    需要：
+    Mixin that provides status management.
+    Requires:
     - _status: ConnectionStatus
     - _callbacks: BaseCallbacks
     """
@@ -98,7 +93,7 @@ class StatusMixin(Generic[TCb]):
 
 
 class OperationStateMixin:
-    """追蹤異步/長操作是否進行中（防止重複觸發）"""
+    """Track whether an async or long-running operation is in progress."""
 
     _in_progress: bool = False
 
@@ -118,13 +113,13 @@ class OperationStateMixin:
 
 class BaseService(LogHistoryMixin[TCb], StatusMixin[TCb], OperationStateMixin, ABC, Generic[TCb]):
     """
-    服務基礎類別：整合 log/status/in-progress
+    Base service class integrating log, status, and in-progress state.
     """
 
     _callbacks: TCb
     _status: ConnectionStatus
 
-    def __init__(self, callbacks: Optional[TCb] = None):
+    def __init__(self, callbacks: TCb | None = None):
         if callbacks is None:
             callbacks = cast(TCb, BaseCallbacks())
         self._log_history = []
@@ -137,16 +132,16 @@ class BaseService(LogHistoryMixin[TCb], StatusMixin[TCb], OperationStateMixin, A
         return self._status
 
 
-# --- Auth service: msg handler 也型別安全 ---
+# --- Auth service: message handlers remain type-safe ---
 MessageHandler = Callable[[TClient, TMsg], bool]
 
 
 class BaseAuthService(BaseService[TCb], Generic[TCb, TClient, TMsg]):
     """
-    認證服務基礎類別：提供訊息處理器註冊功能（型別安全）
+    Base authentication service with type-safe message handler registration.
     """
 
-    def __init__(self, callbacks: Optional[TCb] = None):
+    def __init__(self, callbacks: TCb | None = None):
         super().__init__(callbacks=callbacks)
         self._message_handlers: list[MessageHandler[TClient, TMsg]] = []
 
@@ -168,21 +163,27 @@ class BaseAuthService(BaseService[TCb], Generic[TCb, TClient, TMsg]):
     def message_handler_count(self) -> int:
         return len(self._message_handlers)
 
-    def _dispatch_to_handlers(self, client: TClient, msg: TMsg, *, stop_on_handled: bool = True) -> bool:
+    def _dispatch_to_handlers(
+        self,
+        client: TClient,
+        msg: TMsg,
+        *,
+        stop_on_handled: bool = True,
+    ) -> bool:
         """
-        將訊息分發給已註冊的處理器
+        Dispatch a message to registered handlers.
 
         Args:
             stop_on_handled:
-                True  -> 任一 handler 回 True 就停止（常見、效率高）
-                False -> 讓所有 handler 都有機會處理（做廣播/監聽時用）
+                True  -> stop after the first handler returns True.
+                False -> let all handlers process the message.
 
         Returns:
-            bool: 若任一處理器處理了訊息則回傳 True
+            bool: True if any handler processed the message.
         """
         handled_any = False
 
-        for handler in list(self._message_handlers):  # 複製一份，避免迭代時被移除/新增造成問題
+        for handler in list(self._message_handlers):  # Copy to avoid mutation during iteration.
             try:
                 handled = handler(client, msg)
                 if handled:
@@ -190,6 +191,6 @@ class BaseAuthService(BaseService[TCb], Generic[TCb, TClient, TMsg]):
                     if stop_on_handled:
                         break
             except Exception as e:
-                self._log(f"⚠️ 訊息處理器錯誤: {e}")
+                self._log(f"⚠️ Message handler error: {e}")
 
         return handled_any

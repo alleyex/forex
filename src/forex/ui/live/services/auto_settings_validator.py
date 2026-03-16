@@ -1,19 +1,17 @@
 from __future__ import annotations
 
-from typing import List, Tuple
-
 
 class AutoTradeSettingsValidator:
     """Validates Auto Trade UI settings before starting trading."""
 
-    _TIMEFRAMES = {"M1", "M5", "M15", "M30", "H1", "H4"}
+    _TIMEFRAMES = {"M1", "M5", "M10", "M15", "M30", "H1", "H4"}
 
     def __init__(self, window) -> None:
         self._window = window
 
-    def validate_start(self) -> Tuple[bool, List[str]]:
+    def validate_start(self) -> tuple[bool, list[str]]:
         w = self._window
-        errors: List[str] = []
+        errors: list[str] = []
 
         symbol = ""
         timeframe = ""
@@ -64,6 +62,9 @@ class AutoTradeSettingsValidator:
             if w._lot_risk.isChecked():
                 if lot_value <= 0.0:
                     errors.append("Risk % must be > 0.")
+                stop_loss = float(w._stop_loss.value())
+                if stop_loss <= 0.0:
+                    errors.append("Stop loss must be > 0 when Risk % sizing is enabled.")
             else:
                 if lot_value <= 0.0:
                     errors.append("Fixed lot must be > 0.")
@@ -71,4 +72,3 @@ class AutoTradeSettingsValidator:
             errors.append("Invalid Lot / Risk% value.")
 
         return len(errors) == 0, errors
-

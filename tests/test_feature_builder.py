@@ -2,25 +2,25 @@ from __future__ import annotations
 
 import numpy as np
 import pandas as pd
-
 import pytest
 
 from forex.ml.rl.features.feature_builder import (
-    ALPHA_FEATURE_COLUMNS,
     ALPHA8_FEATURE_COLUMNS,
     ALPHA12_FEATURE_COLUMNS,
     ALPHA16_FEATURE_COLUMNS,
     ALPHA20_FEATURE_COLUMNS,
+    ALPHA_FEATURE_COLUMNS,
     ALPHA_SOURCE_COLUMNS,
     CORE20_ALPHA4_FEATURE_COLUMNS,
     CORE20_ALPHA8_FEATURE_COLUMNS,
     CORE20_FEATURE_COLUMNS,
     RESIDUAL_CONTEXT_COLUMNS,
+    _parse_datetimes,
     apply_feature_profile,
     build_feature_frame,
     build_features,
-    fit_scaler,
     filter_feature_rows_by_session,
+    fit_scaler,
     infer_feature_profile_from_names,
     required_raw_columns_for_profile,
     select_feature_columns,
@@ -86,6 +86,11 @@ def test_build_feature_frame_exposes_extended_feature_set() -> None:
         "distance_to_prev_day_low",
         "distance_to_day_high_so_far",
         "distance_to_day_low_so_far",
+        "asia_range_width_atr",
+        "distance_to_asia_high",
+        "distance_to_asia_low",
+        "london_breakout_of_asia",
+        "pre_london_compression",
         "since_london_open_return",
         "since_ny_open_return",
         "ny_open_gap_prev_close",
@@ -100,6 +105,7 @@ def test_build_feature_frame_exposes_extended_feature_set() -> None:
         "minute_of_week_cos",
         "is_monday_open_window",
         "is_london_session",
+        "is_london_pre_ny_session",
         "is_ny_session",
         "is_london_ny_overlap",
     }
@@ -142,7 +148,12 @@ def test_session_context_features_have_expected_signs() -> None:
     close = base + wave
     df = pd.DataFrame(
         {
-            "timestamp": pd.date_range("2024-01-01", periods=rows, freq="15min", tz="UTC").astype(str),
+            "timestamp": pd.date_range(
+                "2024-01-01",
+                periods=rows,
+                freq="15min",
+                tz="UTC",
+            ).astype(str),
             "open": close - 0.1,
             "close": close,
             "high": close + 0.4,
@@ -164,6 +175,21 @@ def test_session_context_features_have_expected_signs() -> None:
     assert np.all(np.isfinite(features["ny_open_gap_prev_close"].to_numpy()))
     assert np.all(np.isfinite(features["london_to_ny_open_return"].to_numpy()))
     assert np.all(np.isfinite(features["ny_reversal_pressure"].to_numpy()))
+    assert set(
+        np.unique(features["is_london_pre_ny_session"].to_numpy())
+    ).issubset({0.0, 1.0})
+    assert np.all(
+        features["is_london_pre_ny_session"].to_numpy()
+        <= features["is_london_session"].to_numpy()
+    )
+    assert np.all(np.isfinite(features["asia_range_width_atr"].to_numpy()))
+    assert np.all(np.isfinite(features["distance_to_asia_high"].to_numpy()))
+    assert np.all(np.isfinite(features["distance_to_asia_low"].to_numpy()))
+    assert np.all(np.isfinite(features["london_breakout_of_asia"].to_numpy()))
+    assert np.all(
+        (features["pre_london_compression"].to_numpy() >= 0.0)
+        & (features["pre_london_compression"].to_numpy() <= 1.0)
+    )
 
 
 def test_build_feature_frame_keeps_uptrend_rows_and_sets_rsi_to_100() -> None:
@@ -232,6 +258,151 @@ def test_breakout_20_is_not_a_duplicate_of_distance_to_rolling_high_20() -> None
     )
 
 
+def test_distance_to_mean_50_uses_price_mean_not_normalized_sma_feature() -> None:
+    rows = 320
+    base = np.linspace(100.0, 120.0, num=rows, dtype=np.float64)
+    wave = np.sin(np.linspace(0.0, 10.0, num=rows)) * 0.7
+    close = base + wave
+    df = pd.DataFrame(
+        {
+            "timestamp": pd.date_range("2024-01-01", periods=rows, freq="15min").astype(str),
+            "open": close - 0.1,
+            "close": close,
+            "high": close + 0.4,
+            "low": close - 0.4,
+            "volume": np.linspace(1000.0, 2000.0, num=rows),
+        }
+    )
+
+    features, _, _ = build_feature_frame(df, ["sma_50", "distance_to_mean_50"])
+    expected_ma50 = pd.Series(close).rolling(50).mean().iloc[-1]
+    expected_distance = close[-1] / expected_ma50 - 1.0
+
+    assert np.isfinite(features["distance_to_mean_50"].to_numpy()).all()
+    assert features["distance_to_mean_50"].abs().max() < 0.1
+    assert features.iloc[-1]["distance_to_mean_50"] == pytest.approx(expected_distance)
+
+
+def test_bollinger_band_width_20_uses_price_bands_over_middle_band() -> None:
+    rows = 320
+    base = np.linspace(100.0, 118.0, num=rows, dtype=np.float64)
+    wave = np.sin(np.linspace(0.0, 20.0, num=rows)) * 1.5
+    close = base + wave
+    df = pd.DataFrame(
+        {
+            "timestamp": pd.date_range("2024-01-01", periods=rows, freq="15min").astype(str),
+            "open": close - 0.1,
+            "close": close,
+            "high": close + 0.4,
+            "low": close - 0.4,
+            "volume": np.linspace(1000.0, 2000.0, num=rows),
+        }
+    )
+
+    features, _, _ = build_feature_frame(df, ["bollinger_band_width_20"])
+    close_series = pd.Series(close)
+    expected_mid = close_series.rolling(20).mean().iloc[-1]
+    expected_std = close_series.rolling(20).std().iloc[-1]
+    expected_width = (4.0 * expected_std) / expected_mid
+
+    assert np.isfinite(features["bollinger_band_width_20"].to_numpy()).all()
+    assert (features["bollinger_band_width_20"] > 0.0).all()
+    assert features.iloc[-1]["bollinger_band_width_20"] == pytest.approx(expected_width)
+
+
+def test_asia_to_london_breakout_features_capture_post_open_escape() -> None:
+    rows = 7 * 24 * 4
+    timestamps = pd.date_range("2024-01-01", periods=rows, freq="15min", tz="UTC")
+    close = np.full(rows, 100.0, dtype=np.float64)
+    london_times = timestamps.tz_convert("Europe/London")
+
+    for idx, ts in enumerate(london_times):
+        hour = ts.hour + (ts.minute / 60.0)
+        if ts.strftime("%Y-%m-%d") == "2024-01-07":
+            if 0.0 <= hour < 8.0:
+                close[idx] = 100.0 + 0.2 * np.sin(idx)
+            elif 8.0 <= hour < 12.0:
+                close[idx] = 102.5
+            else:
+                close[idx] = 101.5
+        else:
+            close[idx] = 100.0 + 0.15 * np.sin(idx / 8.0)
+
+    df = pd.DataFrame(
+        {
+            "timestamp": timestamps.astype(str),
+            "open": close - 0.1,
+            "close": close,
+            "high": close + 0.25,
+            "low": close - 0.25,
+            "volume": np.linspace(1000.0, 2000.0, num=rows),
+        }
+    )
+
+    features, _, _ = build_feature_frame(
+        df,
+        [
+            "asia_range_width_atr",
+            "distance_to_asia_high",
+            "distance_to_asia_low",
+            "london_breakout_of_asia",
+            "pre_london_compression",
+            "is_london_session",
+        ],
+    )
+
+    london_breakouts = features.loc[features["is_london_session"] > 0.5, "london_breakout_of_asia"]
+    assert london_breakouts.max() > 0.01
+    assert features["asia_range_width_atr"].max() > 0.0
+    assert features["distance_to_asia_high"].max() > 0.0
+    assert features["distance_to_asia_low"].min() >= -0.01
+
+
+def test_session_context_features_do_not_leak_future_open_information() -> None:
+    rows = 7 * 24 * 4
+    timestamps = pd.date_range("2024-01-01", periods=rows, freq="15min", tz="UTC")
+    close = 100.0 + np.sin(np.linspace(0.0, 30.0, num=rows))
+    df = pd.DataFrame(
+        {
+            "timestamp": timestamps.astype(str),
+            "open": close - 0.1,
+            "close": close,
+            "high": close + 0.4,
+            "low": close - 0.4,
+            "volume": np.linspace(1000.0, 2000.0, num=rows),
+        }
+    )
+
+    features, _, _ = build_feature_frame(
+        df,
+        [
+            "asia_range_width_atr",
+            "distance_to_asia_high",
+            "distance_to_asia_low",
+            "pre_london_compression",
+            "ny_open_gap_prev_close",
+            "london_to_ny_open_return",
+            "ny_reversal_pressure",
+        ],
+    )
+    feature_times = timestamps[-len(features) :]
+    london_times = feature_times.tz_convert("Europe/London")
+    ny_times = feature_times.tz_convert("America/New_York")
+    london_hours = london_times.hour + london_times.minute / 60.0
+    ny_hours = ny_times.hour + ny_times.minute / 60.0
+
+    before_london = london_hours < 8.0
+    before_ny = ny_hours < 8.0
+
+    assert np.allclose(features.loc[before_london, "asia_range_width_atr"], 0.0)
+    assert np.allclose(features.loc[before_london, "distance_to_asia_high"], 0.0)
+    assert np.allclose(features.loc[before_london, "distance_to_asia_low"], 0.0)
+    assert np.allclose(features.loc[before_london, "pre_london_compression"], 0.0)
+    assert np.allclose(features.loc[before_ny, "ny_open_gap_prev_close"], 0.0)
+    assert np.allclose(features.loc[before_ny, "london_to_ny_open_return"], 0.0)
+    assert np.allclose(features.loc[before_ny, "ny_reversal_pressure"], 0.0)
+
+
 def test_select_feature_columns_preserves_requested_order() -> None:
     features = pd.DataFrame(
         {
@@ -280,7 +451,12 @@ def test_filter_feature_rows_by_session_keeps_only_requested_session_rows() -> N
     close = np.linspace(100.0, 110.0, num=rows, dtype=np.float64)
     df = pd.DataFrame(
         {
-            "timestamp": pd.date_range("2024-01-01", periods=rows, freq="15min", tz="UTC").astype(str),
+            "timestamp": pd.date_range(
+                "2024-01-01",
+                periods=rows,
+                freq="15min",
+                tz="UTC",
+            ).astype(str),
             "open": close - 0.1,
             "close": close,
             "high": close + 0.4,
@@ -337,7 +513,10 @@ def test_apply_feature_profile_alpha_and_residual_shapes() -> None:
     assert not alpha.isna().any().any()
 
     residual = apply_feature_profile(raw_features, "residual")
-    expected_residual = [*ALPHA_FEATURE_COLUMNS, *[name for name in RESIDUAL_CONTEXT_COLUMNS if name in raw_features.columns]]
+    expected_residual = [
+        *ALPHA_FEATURE_COLUMNS,
+        *[name for name in RESIDUAL_CONTEXT_COLUMNS if name in raw_features.columns],
+    ]
     assert list(residual.columns) == expected_residual
     assert not residual.isna().any().any()
     assert infer_feature_profile_from_names(alpha.columns) == "alpha4"
@@ -356,13 +535,21 @@ def test_apply_feature_profile_alpha_and_residual_shapes() -> None:
     core20_alpha8 = apply_feature_profile(raw_features, "alpha8_from_core20")
 
     assert list(alpha8.columns) == list(ALPHA8_FEATURE_COLUMNS)
-    assert list(alpha8_residual.columns[: len(ALPHA8_FEATURE_COLUMNS)]) == list(ALPHA8_FEATURE_COLUMNS)
+    assert list(alpha8_residual.columns[: len(ALPHA8_FEATURE_COLUMNS)]) == list(
+        ALPHA8_FEATURE_COLUMNS
+    )
     assert list(alpha12.columns) == list(ALPHA12_FEATURE_COLUMNS)
     assert list(alpha16.columns) == list(ALPHA16_FEATURE_COLUMNS)
     assert list(alpha20.columns) == list(ALPHA20_FEATURE_COLUMNS)
-    assert list(alpha12_residual.columns[: len(ALPHA12_FEATURE_COLUMNS)]) == list(ALPHA12_FEATURE_COLUMNS)
-    assert list(alpha16_residual.columns[: len(ALPHA16_FEATURE_COLUMNS)]) == list(ALPHA16_FEATURE_COLUMNS)
-    assert list(alpha20_residual.columns[: len(ALPHA20_FEATURE_COLUMNS)]) == list(ALPHA20_FEATURE_COLUMNS)
+    assert list(alpha12_residual.columns[: len(ALPHA12_FEATURE_COLUMNS)]) == list(
+        ALPHA12_FEATURE_COLUMNS
+    )
+    assert list(alpha16_residual.columns[: len(ALPHA16_FEATURE_COLUMNS)]) == list(
+        ALPHA16_FEATURE_COLUMNS
+    )
+    assert list(alpha20_residual.columns[: len(ALPHA20_FEATURE_COLUMNS)]) == list(
+        ALPHA20_FEATURE_COLUMNS
+    )
     assert list(core20.columns) == list(CORE20_FEATURE_COLUMNS)
     assert list(core20_alpha4.columns) == list(CORE20_ALPHA4_FEATURE_COLUMNS)
     assert list(core20_alpha8.columns) == list(CORE20_ALPHA8_FEATURE_COLUMNS)
@@ -414,6 +601,18 @@ def test_build_features_preserves_alpha8_scaler_profile() -> None:
     bundle = build_features(df, scaler=scaler)
     assert list(bundle.names) == scaler.names
     assert bundle.features.shape[1] == len(ALPHA8_FEATURE_COLUMNS)
+
+
+def test_parse_datetimes_prefers_utc_timestamp_minutes() -> None:
+    df = pd.DataFrame(
+        {
+            "timestamp": ["10:40", "10:50"],
+            "utc_timestamp_minutes": [10, 20],
+        }
+    )
+    parsed = _parse_datetimes(df)
+    assert str(parsed.iloc[0]) == "1970-01-01 00:10:00+00:00"
+    assert str(parsed.iloc[1]) == "1970-01-01 00:20:00+00:00"
 
 
 def test_required_raw_columns_for_profile() -> None:

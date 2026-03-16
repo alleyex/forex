@@ -3,9 +3,14 @@
 ## 1) Entry and Bootstrap
 - `src/forex/app/cli/*`: primary CLI entry points (train/live/launcher).
 - CLI entry points via `pyproject.toml`:
+  - `forex` -> `forex.app.cli.launcher:main`
   - `forex-train` -> `forex.app.cli.train:main`
   - `forex-live` -> `forex.app.cli.live:main`
-- Legacy wrappers: `main_train.py` / `main_live.py` / `app.py` (optional; prefer CLI or `python -m forex.app.cli.*`).
+- Operator convenience scripts:
+  - `scripts/bootstrap.sh`
+  - `scripts/run-train.sh`
+  - `scripts/run-live.sh`
+  - `scripts/windows/run-live.ps1`
 - `src/forex/app/bootstrap.py`: initializes logging, provider registry, use cases, event bus, and app state.
 - `forex.config.runtime`: reads environment config (TOKEN_FILE, BROKER_PROVIDER, LOG_LEVEL).
 

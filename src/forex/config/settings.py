@@ -1,8 +1,9 @@
-from dataclasses import dataclass
-from typing import Optional, Union
+from __future__ import annotations
+
 import json
 import os
 import time
+from dataclasses import dataclass
 
 
 def _safe_chmod(filepath: str, mode: int) -> None:
@@ -14,48 +15,51 @@ def _safe_chmod(filepath: str, mode: int) -> None:
 
 @dataclass
 class AppCredentials:
-    """Application credentials container"""
+    """Application credentials container."""
+
     host: str
     client_id: str
     client_secret: str
 
     @classmethod
-    def from_file(cls, filepath: str) -> Optional["AppCredentials"]:
-        """Load credentials from JSON file"""
+    def from_file(cls, filepath: str) -> AppCredentials | None:
+        """Load credentials from a JSON file."""
         if not os.path.exists(filepath):
             raise FileNotFoundError(f"Credentials file not found: {filepath}")
-        
-        with open(filepath, "r", encoding="utf-8") as f:
+
+        with open(filepath, encoding="utf-8") as f:
             data = json.load(f)
-        
+
         host_type = data.get("host_type", "demo")
         client_id = data.get("client_id", "")
         client_secret = data.get("client_secret", "")
 
         if host_type not in ("demo", "live"):
             raise ValueError(f"Invalid host type in credentials file: {host_type}")
-        
+
         return cls(
             host=host_type,
-            client_id=client_id, 
-            client_secret=client_secret
-            )
-    
+            client_id=client_id,
+            client_secret=client_secret,
+        )
+
     def save(self, filepath: str) -> None:
-        """Save credentials to JSON file"""
+        """Save credentials to a JSON file."""
         data = {}
         if os.path.exists(filepath):
             try:
-                with open(filepath, "r", encoding="utf-8") as file:
+                with open(filepath, encoding="utf-8") as file:
                     data = json.load(file)
             except Exception:
                 data = {}
 
-        data.update({
-            "host_type": self.host,
-            "client_id": self.client_id,
-            "client_secret": self.client_secret
-        })
+        data.update(
+            {
+                "host_type": self.host,
+                "client_id": self.client_id,
+                "client_secret": self.client_secret,
+            }
+        )
 
         with open(filepath, "w", encoding="utf-8") as file:
             json.dump(data, file, indent=2, ensure_ascii=False)
@@ -64,11 +68,12 @@ class AppCredentials:
 
 @dataclass
 class OAuthTokens:
-    """OAuth tokens container"""
+    """OAuth tokens container."""
+
     access_token: str
     refresh_token: str
-    expires_at: Optional[Union[int, str]]
-    account_id: Optional[int]
+    expires_at: int | str | None
+    account_id: int | None
 
     def is_expired(self, *, leeway_seconds: int = 60) -> bool:
         try:
@@ -79,7 +84,7 @@ class OAuthTokens:
             return False
         return int(time.time()) >= (expiry - max(0, leeway_seconds))
 
-    def seconds_to_expiry(self) -> Optional[int]:
+    def seconds_to_expiry(self) -> int | None:
         try:
             expiry = int(self.expires_at) if self.expires_at is not None else None
         except (TypeError, ValueError):
@@ -89,12 +94,12 @@ class OAuthTokens:
         return max(0, expiry - int(time.time()))
 
     @classmethod
-    def from_file(cls, filepath: str) -> Optional["OAuthTokens"]:
-        """Load tokens from JSON file"""
+    def from_file(cls, filepath: str) -> OAuthTokens | None:
+        """Load tokens from a JSON file."""
         if not os.path.exists(filepath):
             raise FileNotFoundError(f"Token file not found: {filepath}")
 
-        with open(filepath, "r", encoding="utf-8") as f:
+        with open(filepath, encoding="utf-8") as f:
             data = json.load(f)
 
         return cls(
@@ -105,21 +110,23 @@ class OAuthTokens:
         )
 
     def save(self, filepath: str) -> None:
-        """Save tokens to JSON file"""
+        """Save tokens to a JSON file."""
         data = {}
         if os.path.exists(filepath):
             try:
-                with open(filepath, "r", encoding="utf-8") as file:
+                with open(filepath, encoding="utf-8") as file:
                     data = json.load(file)
             except Exception:
                 data = {}
 
-        data.update({
-            "access_token": self.access_token,
-            "refresh_token": self.refresh_token,
-            "expires_at": self.expires_at,
-            "account_id": self.account_id,
-        })
+        data.update(
+            {
+                "access_token": self.access_token,
+                "refresh_token": self.refresh_token,
+                "expires_at": self.expires_at,
+                "account_id": self.account_id,
+            }
+        )
 
         with open(filepath, "w", encoding="utf-8") as file:
             json.dump(data, file, indent=2, ensure_ascii=False)

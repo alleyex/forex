@@ -1,6 +1,7 @@
 from __future__ import annotations
 
-from typing import Callable, Optional, Protocol, Sequence
+from collections.abc import Callable, Sequence
+from typing import Protocol
 
 from forex.domain.accounts import Account, AccountFundsSnapshot
 
@@ -43,7 +44,7 @@ class OAuthServiceLike(Protocol):
     ) -> None:
         ...
 
-    def connect(self, timeout_seconds: Optional[int] = None) -> None:
+    def connect(self, timeout_seconds: int | None = None) -> None:
         ...
 
     def disconnect(self) -> None:
@@ -69,7 +70,7 @@ class AccountListUseCaseLike(Protocol):
 
     def set_callbacks(
         self,
-        on_accounts_received: Optional[Callable[[list[Account]], None]] = None,
+        on_accounts_received: Callable[[list[Account]], None] | None = None,
         on_error=None,
         on_log=None,
     ) -> None:
@@ -78,7 +79,7 @@ class AccountListUseCaseLike(Protocol):
     def clear_log_history(self) -> None:
         ...
 
-    def fetch(self, timeout_seconds: Optional[int] = None) -> None:
+    def fetch(self, timeout_seconds: int | None = None) -> None:
         ...
 
 
@@ -87,8 +88,8 @@ class AccountFundsUseCaseLike(Protocol):
 
     def set_callbacks(
         self,
-        on_funds_received: Optional[Callable[[AccountFundsSnapshot], None]] = None,
-        on_position_pnl: Optional[Callable[[dict[int, float]], None]] = None,
+        on_funds_received: Callable[[AccountFundsSnapshot], None] | None = None,
+        on_position_pnl: Callable[[dict[int, float]], None] | None = None,
         on_error=None,
         on_log=None,
     ) -> None:
@@ -97,7 +98,7 @@ class AccountFundsUseCaseLike(Protocol):
     def clear_log_history(self) -> None:
         ...
 
-    def fetch(self, account_id: int, timeout_seconds: Optional[int] = None) -> None:
+    def fetch(self, account_id: int, timeout_seconds: int | None = None) -> None:
         ...
 
 
@@ -114,7 +115,7 @@ class SymbolListUseCaseLike(Protocol):
         self,
         account_id: int,
         include_archived: bool = False,
-        timeout_seconds: Optional[int] = None,
+        timeout_seconds: int | None = None,
     ) -> None:
         ...
 
@@ -133,7 +134,7 @@ class SymbolByIdUseCaseLike(Protocol):
         account_id: int,
         symbol_ids: Sequence[int],
         include_archived: bool = False,
-        timeout_seconds: Optional[int] = None,
+        timeout_seconds: int | None = None,
     ) -> None:
         ...
 
@@ -167,9 +168,9 @@ class TrendbarHistoryServiceLike(Protocol):
         symbol_id: int,
         count: int = 100,
         timeframe: str = "M5",
-        from_ts: Optional[int] = None,
-        to_ts: Optional[int] = None,
-        ) -> None:
+        from_ts: int | None = None,
+        to_ts: int | None = None,
+    ) -> None:
         ...
 
 
@@ -186,13 +187,13 @@ class OrderServiceLike(Protocol):
         symbol_id: int,
         trade_side: str,
         volume: int,
-        stop_loss: Optional[float] = None,
-        take_profit: Optional[float] = None,
-        label: Optional[str] = None,
-        comment: Optional[str] = None,
-        client_order_id: Optional[str] = None,
-        slippage_points: Optional[int] = None,
-    ) -> Optional[str]:
+        stop_loss: float | None = None,
+        take_profit: float | None = None,
+        label: str | None = None,
+        comment: str | None = None,
+        client_order_id: str | None = None,
+        slippage_points: int | None = None,
+    ) -> str | None:
         ...
 
     def close_position(self, *, account_id: int, position_id: int, volume: int) -> bool:
@@ -200,37 +201,37 @@ class OrderServiceLike(Protocol):
 
 
 class AccountFundsLike(Protocol):
-    money_digits: Optional[int]
-    balance: Optional[float]
-    balance_version: Optional[int]
-    equity: Optional[float]
-    free_margin: Optional[float]
-    used_margin: Optional[float]
-    margin_level: Optional[float]
-    currency: Optional[str]
-    ctid_trader_account_id: Optional[int]
-    manager_bonus: Optional[float]
-    ib_bonus: Optional[float]
-    non_withdrawable_bonus: Optional[float]
-    access_rights: Optional[int]
-    deposit_asset_id: Optional[int]
-    swap_free: Optional[bool]
-    leverage_in_cents: Optional[int]
-    total_margin_calculation_type: Optional[int]
-    max_leverage: Optional[int]
-    french_risk: Optional[bool]
-    trader_login: Optional[int]
-    account_type: Optional[int]
-    broker_name: Optional[str]
-    registration_timestamp: Optional[int]
-    is_limited_risk: Optional[bool]
-    limited_risk_margin_calculation_strategy: Optional[int]
-    fair_stop_out: Optional[bool]
-    stop_out_strategy: Optional[int]
+    money_digits: int | None
+    balance: float | None
+    balance_version: int | None
+    equity: float | None
+    free_margin: float | None
+    used_margin: float | None
+    margin_level: float | None
+    currency: str | None
+    ctid_trader_account_id: int | None
+    manager_bonus: float | None
+    ib_bonus: float | None
+    non_withdrawable_bonus: float | None
+    access_rights: int | None
+    deposit_asset_id: int | None
+    swap_free: bool | None
+    leverage_in_cents: int | None
+    total_margin_calculation_type: int | None
+    max_leverage: int | None
+    french_risk: bool | None
+    trader_login: int | None
+    account_type: int | None
+    broker_name: str | None
+    registration_timestamp: int | None
+    is_limited_risk: bool | None
+    limited_risk_margin_calculation_strategy: int | None
+    fair_stop_out: bool | None
+    stop_out_strategy: int | None
 
 
 class AccountProfileLike(Protocol):
-    user_id: Optional[int]
+    user_id: int | None
 
 
 class CtidProfileUseCaseLike(Protocol):
@@ -245,7 +246,7 @@ class CtidProfileUseCaseLike(Protocol):
     def clear_log_history(self) -> None:
         ...
 
-    def fetch(self, timeout_seconds: Optional[int] = None) -> None:
+    def fetch(self, timeout_seconds: int | None = None) -> None:
         ...
 
 
@@ -255,11 +256,15 @@ class BrokerUseCaseFactory(Protocol):
     def create_app_auth(self, host_type: str, token_file: str) -> AppAuthServiceLike:
         ...
 
-    def create_oauth(self, app_auth_service: AppAuthServiceLike, token_file: str) -> OAuthServiceLike:
+    def create_oauth(
+        self,
+        app_auth_service: AppAuthServiceLike,
+        token_file: str,
+    ) -> OAuthServiceLike:
         ...
 
     def create_oauth_login(
-        self, token_file: str, redirect_uri: Optional[str] = None
+        self, token_file: str, redirect_uri: str | None = None
     ) -> OAuthLoginServiceLike:
         ...
 
@@ -273,7 +278,10 @@ class BrokerUseCaseFactory(Protocol):
     ) -> CtidProfileUseCaseLike:
         ...
 
-    def create_account_funds_service(self, app_auth_service: AppAuthServiceLike) -> AccountFundsUseCaseLike:
+    def create_account_funds_service(
+        self,
+        app_auth_service: AppAuthServiceLike,
+    ) -> AccountFundsUseCaseLike:
         ...
 
     def create_symbol_list_service(
@@ -286,7 +294,10 @@ class BrokerUseCaseFactory(Protocol):
     ) -> SymbolByIdUseCaseLike:
         ...
 
-    def create_trendbar_service(self, app_auth_service: AppAuthServiceLike) -> TrendbarServiceLike:
+    def create_trendbar_service(
+        self,
+        app_auth_service: AppAuthServiceLike,
+    ) -> TrendbarServiceLike:
         ...
 
     def create_trendbar_history_service(

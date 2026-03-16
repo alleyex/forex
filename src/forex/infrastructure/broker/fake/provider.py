@@ -1,7 +1,7 @@
 from __future__ import annotations
 
+from collections.abc import Callable
 from dataclasses import dataclass, field
-from typing import Callable, Optional
 
 from forex.application.broker.provider import BrokerProvider
 from forex.infrastructure.broker.base import BaseCallbacks, build_callbacks
@@ -11,53 +11,53 @@ Callback = Callable[..., None]
 
 @dataclass
 class FakeAppAuthCallbacks(BaseCallbacks):
-    on_app_auth_success: Optional[Callback] = None
+    on_app_auth_success: Callback | None = None
 
 
 @dataclass
 class FakeOAuthCallbacks(BaseCallbacks):
-    on_oauth_success: Optional[Callback] = None
+    on_oauth_success: Callback | None = None
 
 
 @dataclass
 class FakeOAuthLoginCallbacks(BaseCallbacks):
-    on_oauth_login_success: Optional[Callback] = None
+    on_oauth_login_success: Callback | None = None
 
 
 @dataclass
 class FakeAccountListCallbacks(BaseCallbacks):
-    on_accounts_received: Optional[Callback] = None
+    on_accounts_received: Callback | None = None
 
 
 @dataclass
 class FakeCtidProfileCallbacks(BaseCallbacks):
-    on_profile_received: Optional[Callback] = None
+    on_profile_received: Callback | None = None
 
 
 @dataclass
 class FakeAccountFundsCallbacks(BaseCallbacks):
-    on_funds_received: Optional[Callback] = None
-    on_position_pnl: Optional[Callback] = None
+    on_funds_received: Callback | None = None
+    on_position_pnl: Callback | None = None
 
 
 @dataclass
 class FakeTrendbarCallbacks(BaseCallbacks):
-    on_trendbar: Optional[Callback] = None
+    on_trendbar: Callback | None = None
 
 
 @dataclass
 class FakeTrendbarHistoryCallbacks(BaseCallbacks):
-    on_history_received: Optional[Callback] = None
+    on_history_received: Callback | None = None
 
 
 @dataclass
 class FakeSymbolsCallbacks(BaseCallbacks):
-    on_symbols_received: Optional[Callback] = None
+    on_symbols_received: Callback | None = None
 
 
 @dataclass
 class FakeOrderCallbacks(BaseCallbacks):
-    on_execution: Optional[Callback] = None
+    on_execution: Callback | None = None
 
 
 @dataclass
@@ -66,9 +66,18 @@ class FakeAppAuthService:
     token_file: str
     status: int = 0
     is_app_authenticated: bool = False
-    _callbacks: FakeAppAuthCallbacks = field(default_factory=FakeAppAuthCallbacks, repr=False)
+    _callbacks: FakeAppAuthCallbacks = field(
+        default_factory=FakeAppAuthCallbacks,
+        repr=False,
+    )
 
-    def set_callbacks(self, on_app_auth_success=None, on_error=None, on_log=None, on_status_changed=None) -> None:
+    def set_callbacks(
+        self,
+        on_app_auth_success=None,
+        on_error=None,
+        on_log=None,
+        on_status_changed=None,
+    ) -> None:
         self._callbacks = build_callbacks(
             FakeAppAuthCallbacks,
             on_app_auth_success=on_app_auth_success,
@@ -98,9 +107,18 @@ class FakeOAuthService:
     app_auth_service: FakeAppAuthService
     token_file: str
     status: int = 0
-    _callbacks: FakeOAuthCallbacks = field(default_factory=FakeOAuthCallbacks, repr=False)
+    _callbacks: FakeOAuthCallbacks = field(
+        default_factory=FakeOAuthCallbacks,
+        repr=False,
+    )
 
-    def set_callbacks(self, on_oauth_success=None, on_error=None, on_log=None, on_status_changed=None) -> None:
+    def set_callbacks(
+        self,
+        on_oauth_success=None,
+        on_error=None,
+        on_log=None,
+        on_status_changed=None,
+    ) -> None:
         self._callbacks = build_callbacks(
             FakeOAuthCallbacks,
             on_oauth_success=on_oauth_success,
@@ -109,7 +127,7 @@ class FakeOAuthService:
             on_status_changed=on_status_changed,
         )
 
-    def connect(self, timeout_seconds: Optional[int] = None) -> None:
+    def connect(self, timeout_seconds: int | None = None) -> None:
         _ = timeout_seconds
         cb = self._callbacks.on_oauth_success
         if cb:
@@ -122,7 +140,7 @@ class FakeOAuthService:
 @dataclass
 class FakeOAuthLoginService:
     token_file: str
-    redirect_uri: Optional[str]
+    redirect_uri: str | None
     _callbacks: FakeOAuthLoginCallbacks = field(default_factory=FakeOAuthLoginCallbacks, repr=False)
 
     def set_callbacks(self, on_oauth_login_success=None, on_error=None, on_log=None) -> None:
@@ -148,7 +166,10 @@ class FakeAccountListService:
     app_auth_service: FakeAppAuthService
     access_token: str
     in_progress: bool = False
-    _callbacks: FakeAccountListCallbacks = field(default_factory=FakeAccountListCallbacks, repr=False)
+    _callbacks: FakeAccountListCallbacks = field(
+        default_factory=FakeAccountListCallbacks,
+        repr=False,
+    )
 
     def set_access_token(self, access_token: str) -> None:
         self.access_token = access_token
@@ -164,7 +185,7 @@ class FakeAccountListService:
     def clear_log_history(self) -> None:
         pass
 
-    def fetch(self, timeout_seconds: Optional[int] = None) -> None:
+    def fetch(self, timeout_seconds: int | None = None) -> None:
         _ = timeout_seconds
         cb = self._callbacks.on_accounts_received
         if cb:
@@ -176,8 +197,11 @@ class FakeCtidProfileService:
     app_auth_service: FakeAppAuthService
     access_token: str
     in_progress: bool = False
-    user_id: Optional[int] = None
-    _callbacks: FakeCtidProfileCallbacks = field(default_factory=FakeCtidProfileCallbacks, repr=False)
+    user_id: int | None = None
+    _callbacks: FakeCtidProfileCallbacks = field(
+        default_factory=FakeCtidProfileCallbacks,
+        repr=False,
+    )
 
     def set_access_token(self, access_token: str) -> None:
         self.access_token = access_token
@@ -193,7 +217,7 @@ class FakeCtidProfileService:
     def clear_log_history(self) -> None:
         pass
 
-    def fetch(self, timeout_seconds: Optional[int] = None) -> None:
+    def fetch(self, timeout_seconds: int | None = None) -> None:
         _ = timeout_seconds
         cb = self._callbacks.on_profile_received
         if cb:
@@ -204,36 +228,45 @@ class FakeCtidProfileService:
 class FakeAccountFundsService:
     app_auth_service: FakeAppAuthService
     in_progress: bool = False
-    balance: Optional[float] = None
-    balance_version: Optional[int] = None
-    equity: Optional[float] = None
-    free_margin: Optional[float] = None
-    used_margin: Optional[float] = None
-    margin_level: Optional[float] = None
-    currency: Optional[str] = None
-    money_digits: Optional[int] = None
-    ctid_trader_account_id: Optional[int] = None
-    manager_bonus: Optional[float] = None
-    ib_bonus: Optional[float] = None
-    non_withdrawable_bonus: Optional[float] = None
-    access_rights: Optional[int] = None
-    deposit_asset_id: Optional[int] = None
-    swap_free: Optional[bool] = None
-    leverage_in_cents: Optional[int] = None
-    total_margin_calculation_type: Optional[int] = None
-    max_leverage: Optional[int] = None
-    french_risk: Optional[bool] = None
-    trader_login: Optional[int] = None
-    account_type: Optional[int] = None
-    broker_name: Optional[str] = None
-    registration_timestamp: Optional[int] = None
-    is_limited_risk: Optional[bool] = None
-    limited_risk_margin_calculation_strategy: Optional[int] = None
-    fair_stop_out: Optional[bool] = None
-    stop_out_strategy: Optional[int] = None
-    _callbacks: FakeAccountFundsCallbacks = field(default_factory=FakeAccountFundsCallbacks, repr=False)
+    balance: float | None = None
+    balance_version: int | None = None
+    equity: float | None = None
+    free_margin: float | None = None
+    used_margin: float | None = None
+    margin_level: float | None = None
+    currency: str | None = None
+    money_digits: int | None = None
+    ctid_trader_account_id: int | None = None
+    manager_bonus: float | None = None
+    ib_bonus: float | None = None
+    non_withdrawable_bonus: float | None = None
+    access_rights: int | None = None
+    deposit_asset_id: int | None = None
+    swap_free: bool | None = None
+    leverage_in_cents: int | None = None
+    total_margin_calculation_type: int | None = None
+    max_leverage: int | None = None
+    french_risk: bool | None = None
+    trader_login: int | None = None
+    account_type: int | None = None
+    broker_name: str | None = None
+    registration_timestamp: int | None = None
+    is_limited_risk: bool | None = None
+    limited_risk_margin_calculation_strategy: int | None = None
+    fair_stop_out: bool | None = None
+    stop_out_strategy: int | None = None
+    _callbacks: FakeAccountFundsCallbacks = field(
+        default_factory=FakeAccountFundsCallbacks,
+        repr=False,
+    )
 
-    def set_callbacks(self, on_funds_received=None, on_position_pnl=None, on_error=None, on_log=None) -> None:
+    def set_callbacks(
+        self,
+        on_funds_received=None,
+        on_position_pnl=None,
+        on_error=None,
+        on_log=None,
+    ) -> None:
         self._callbacks = build_callbacks(
             FakeAccountFundsCallbacks,
             on_funds_received=on_funds_received,
@@ -245,7 +278,7 @@ class FakeAccountFundsService:
     def clear_log_history(self) -> None:
         pass
 
-    def fetch(self, account_id: int, timeout_seconds: Optional[int] = None) -> None:
+    def fetch(self, account_id: int, timeout_seconds: int | None = None) -> None:
         _ = account_id, timeout_seconds
         cb = self._callbacks.on_funds_received
         if cb:
@@ -279,7 +312,10 @@ class FakeTrendbarService:
 @dataclass
 class FakeTrendbarHistoryService:
     app_auth_service: FakeAppAuthService
-    _callbacks: FakeTrendbarHistoryCallbacks = field(default_factory=FakeTrendbarHistoryCallbacks, repr=False)
+    _callbacks: FakeTrendbarHistoryCallbacks = field(
+        default_factory=FakeTrendbarHistoryCallbacks,
+        repr=False,
+    )
 
     def set_callbacks(self, on_history_received=None, on_error=None, on_log=None) -> None:
         self._callbacks = build_callbacks(
@@ -298,8 +334,8 @@ class FakeTrendbarHistoryService:
         symbol_id: int,
         count: int = 100000,
         timeframe: str = "M5",
-        from_ts: Optional[int] = None,
-        to_ts: Optional[int] = None,
+        from_ts: int | None = None,
+        to_ts: int | None = None,
     ) -> None:
         _ = account_id, symbol_id, count, timeframe, from_ts, to_ts
         cb = self._callbacks.on_history_received
@@ -328,7 +364,7 @@ class FakeSymbolListService:
         self,
         account_id: int,
         include_archived: bool = False,
-        timeout_seconds: Optional[int] = None,
+        timeout_seconds: int | None = None,
     ) -> None:
         _ = account_id, include_archived, timeout_seconds
         cb = self._callbacks.on_symbols_received
@@ -358,7 +394,7 @@ class FakeSymbolByIdService:
         account_id: int,
         symbol_ids: list[int],
         include_archived: bool = False,
-        timeout_seconds: Optional[int] = None,
+        timeout_seconds: int | None = None,
     ) -> None:
         _ = account_id, symbol_ids, include_archived, timeout_seconds
         cb = self._callbacks.on_symbols_received
@@ -370,7 +406,7 @@ class FakeSymbolByIdService:
 class FakeOrderService:
     app_auth_service: FakeAppAuthService
     in_progress: bool = False
-    _permission_scope: Optional[int] = None
+    _permission_scope: int | None = None
     _callbacks: FakeOrderCallbacks = field(default_factory=FakeOrderCallbacks, repr=False)
 
     def set_callbacks(self, on_execution=None, on_error=None, on_log=None) -> None:
@@ -381,7 +417,7 @@ class FakeOrderService:
             on_log=on_log,
         )
 
-    def set_permission_scope(self, scope: Optional[int]) -> None:
+    def set_permission_scope(self, scope: int | None) -> None:
         self._permission_scope = None if scope is None else int(scope)
 
     def place_market_order(
@@ -391,13 +427,13 @@ class FakeOrderService:
         symbol_id: int,
         trade_side: str,
         volume: int,
-        stop_loss: Optional[float] = None,
-        take_profit: Optional[float] = None,
-        label: Optional[str] = None,
-        comment: Optional[str] = None,
-        client_order_id: Optional[str] = None,
-        slippage_points: Optional[int] = None,
-    ) -> Optional[str]:
+        stop_loss: float | None = None,
+        take_profit: float | None = None,
+        label: str | None = None,
+        comment: str | None = None,
+        client_order_id: str | None = None,
+        slippage_points: int | None = None,
+    ) -> str | None:
         _ = (
             account_id,
             symbol_id,
@@ -449,7 +485,7 @@ class FakeProvider(BrokerProvider):
     def create_oauth(self, app_auth_service, token_file: str):
         return FakeOAuthService(app_auth_service=app_auth_service, token_file=token_file)
 
-    def create_oauth_login(self, token_file: str, redirect_uri: Optional[str] = None):
+    def create_oauth_login(self, token_file: str, redirect_uri: str | None = None):
         return FakeOAuthLoginService(token_file=token_file, redirect_uri=redirect_uri)
 
     def create_account_list_service(self, app_auth_service, access_token: str):

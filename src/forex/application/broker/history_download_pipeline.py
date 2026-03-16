@@ -1,8 +1,8 @@
 from __future__ import annotations
 
 import csv
+from collections.abc import Callable, Iterable
 from pathlib import Path
-from typing import Callable, Iterable, Optional, Union
 
 from forex.application.broker.protocols import AppAuthServiceLike, TrendbarHistoryServiceLike
 from forex.application.broker.use_cases import BrokerUseCases
@@ -17,12 +17,12 @@ class HistoryDownloadPipeline:
         self,
         broker_use_cases: BrokerUseCases,
         app_auth_service: AppAuthServiceLike,
-        raw_dir: Union[str, Path] = RAW_HISTORY_DIR,
+        raw_dir: str | Path = RAW_HISTORY_DIR,
     ) -> None:
         self._use_cases = broker_use_cases
         self._app_auth_service = app_auth_service
         self._raw_dir = Path(raw_dir)
-        self._history_service: Optional[TrendbarHistoryServiceLike] = None
+        self._history_service: TrendbarHistoryServiceLike | None = None
 
     def fetch_to_raw(
         self,
@@ -31,12 +31,12 @@ class HistoryDownloadPipeline:
         count: int = 25000,
         *,
         timeframe: str = "M5",
-        from_ts: Optional[int] = None,
-        to_ts: Optional[int] = None,
-        output_path: Optional[Union[str, Path]] = None,
-        on_saved: Optional[Callable[[str], None]] = None,
-        on_error: Optional[Callable[[str], None]] = None,
-        on_log: Optional[Callable[[str], None]] = None,
+        from_ts: int | None = None,
+        to_ts: int | None = None,
+        output_path: str | Path | None = None,
+        on_saved: Callable[[str], None] | None = None,
+        on_error: Callable[[str], None] | None = None,
+        on_log: Callable[[str], None] | None = None,
     ) -> bool:
         if self._history_service is None:
             self._history_service = self._use_cases.create_trendbar_history(self._app_auth_service)
@@ -73,7 +73,7 @@ class HistoryDownloadPipeline:
         symbol_id: int,
         timeframe: str,
         *,
-        output_path: Optional[Union[str, Path]] = None,
+        output_path: str | Path | None = None,
     ) -> str:
         rows_list = list(rows)
         if not rows_list:
@@ -119,7 +119,10 @@ class HistoryDownloadPipeline:
         timestamps = [row.get("timestamp") for row in rows if row.get("timestamp")]
         if not timestamps:
             return ("unknown", "unknown")
-        return (HistoryDownloadPipeline._format_ts(timestamps[0]), HistoryDownloadPipeline._format_ts(timestamps[-1]))
+        return (
+            HistoryDownloadPipeline._format_ts(timestamps[0]),
+            HistoryDownloadPipeline._format_ts(timestamps[-1]),
+        )
 
     @staticmethod
     def _format_ts(value: str) -> str:

@@ -1,7 +1,8 @@
 from __future__ import annotations
 
+from collections.abc import Callable
 from inspect import signature
-from typing import Any, Callable
+from typing import Any
 
 
 def clear_log_history_safe(service: object) -> None:

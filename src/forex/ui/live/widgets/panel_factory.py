@@ -16,9 +16,29 @@ from PySide6.QtWidgets import (
 
 class LivePanelFactory:
     @staticmethod
+    def _configure_dense_table(
+        table: QTableWidget,
+        *,
+        header_height: int = 34,
+        row_height: int = 30,
+    ) -> None:
+        header = table.horizontalHeader()
+        header.setSectionResizeMode(QHeaderView.Stretch)
+        header.setMinimumHeight(header_height)
+        header.setFixedHeight(header_height)
+        header.setHighlightSections(False)
+        vertical = table.verticalHeader()
+        vertical.setDefaultSectionSize(row_height)
+        vertical.setMinimumSectionSize(row_height)
+        table.setWordWrap(False)
+        table.setCornerButtonEnabled(False)
+
+    @staticmethod
     def build_positions_panel(window) -> QWidget:
         panel = QGroupBox("Positions")
         layout = QVBoxLayout(panel)
+        layout.setContentsMargins(10, 10, 10, 10)
+        layout.setSpacing(8)
 
         account_combo = QComboBox()
         account_combo.setObjectName("accountSelector")
@@ -77,11 +97,15 @@ class LivePanelFactory:
             }
             QLabel#summaryTitle {
                 color: #9aa6b2;
-                font-size: 11px;
+                font-size: 10px;
+                font-weight: 500;
+                letter-spacing: 0.3px;
+                text-transform: uppercase;
             }
             QLabel#summaryValue {
                 color: #e3e9ef;
                 font-weight: 600;
+                font-size: 13px;
             }
             """
         )
@@ -90,16 +114,45 @@ class LivePanelFactory:
         table = QTableWidget(0, 10)
         table.setObjectName("positionsTable")
         table.setHorizontalHeaderLabels(
-            ["Symbol", "Side", "Volume", "Entry", "Current", "P/L", "SL", "TP", "Open Time", "Pos ID"]
+            [
+                "Symbol",
+                "Side",
+                "Volume",
+                "Entry",
+                "Current",
+                "P/L",
+                "SL",
+                "TP",
+                "Open Time",
+                "Pos ID",
+            ]
         )
         table.verticalHeader().setVisible(False)
         table.setEditTriggers(QTableWidget.NoEditTriggers)
         table.setSelectionBehavior(QTableWidget.SelectRows)
         table.setSelectionMode(QTableWidget.SingleSelection)
         table.setAlternatingRowColors(True)
-        table.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
+        LivePanelFactory._configure_dense_table(table)
         table.setStyleSheet(
             """
+            QTableWidget#positionsTable {
+                background: #1f252d;
+                alternate-background-color: #252c35;
+                color: #d3d8e0;
+                selection-background-color: #2f6db3;
+                selection-color: #f5f7fb;
+                gridline-color: #2a323c;
+                font-size: 12px;
+            }
+            QTableWidget#positionsTable::item {
+                color: #d3d8e0;
+                background: transparent;
+                padding: 0 8px;
+            }
+            QTableWidget#positionsTable::item:selected {
+                color: #f5f7fb;
+                background: #2f6db3;
+            }
             QTableWidget#positionsTable QScrollBar:vertical {
                 background: transparent;
                 width: 8px;
@@ -151,6 +204,8 @@ class LivePanelFactory:
     def build_quotes_panel(window) -> QWidget:
         panel = QGroupBox("Quotes")
         layout = QVBoxLayout(panel)
+        layout.setContentsMargins(10, 10, 10, 10)
+        layout.setSpacing(8)
 
         rows = max(1, len(window._quote_symbols))
         table = QTableWidget(rows, 5)
@@ -161,9 +216,27 @@ class LivePanelFactory:
         table.setSelectionBehavior(QTableWidget.SelectRows)
         table.setSelectionMode(QTableWidget.SingleSelection)
         table.setAlternatingRowColors(True)
-        table.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
+        LivePanelFactory._configure_dense_table(table)
         table.setStyleSheet(
             """
+            QTableWidget#quotesTable {
+                background: #1f252d;
+                alternate-background-color: #252c35;
+                color: #d3d8e0;
+                selection-background-color: #2f6db3;
+                selection-color: #f5f7fb;
+                gridline-color: #2a323c;
+                font-size: 12px;
+            }
+            QTableWidget#quotesTable::item {
+                color: #d3d8e0;
+                background: transparent;
+                padding: 0 8px;
+            }
+            QTableWidget#quotesTable::item:selected {
+                color: #f5f7fb;
+                background: #2f6db3;
+            }
             QTableWidget#quotesTable QScrollBar:vertical {
                 background: transparent;
                 width: 8px;

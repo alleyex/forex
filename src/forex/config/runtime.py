@@ -1,6 +1,5 @@
 import os
 from dataclasses import dataclass
-from typing import Optional
 
 from forex.config.paths import TOKEN_FILE
 
@@ -9,8 +8,8 @@ from forex.config.paths import TOKEN_FILE
 class AppConfig:
     token_file: str
     provider: str
-    log_level: Optional[str]
-    log_file: Optional[str]
+    log_level: str | None
+    log_file: str | None
     heartbeat_interval: float
     heartbeat_timeout: float
     request_timeout: float
@@ -81,7 +80,7 @@ def load_config() -> AppConfig:
     )
 
 
-def retry_policy_from_config(config: AppConfig) -> Optional[RetryPolicy]:
+def retry_policy_from_config(config: AppConfig) -> RetryPolicy | None:
     if config.retry_max_attempts <= 0:
         return None
     return RetryPolicy(

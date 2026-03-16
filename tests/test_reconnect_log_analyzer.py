@@ -12,16 +12,16 @@ from forex.tools.diagnostics.reconnect_log_analyzer import (
 
 def test_analyze_reconnect_log_counts_key_events() -> None:
     lines = [
-        "[11:41:15] [ERROR] [NETWORK] 已斷線 (...)",
-        "[11:41:15] [INFO] 偵測到斷線，將自動嘗試重新連線",
-        "[11:41:15] [INFO] 連線中斷，3.0s 後重連 (attempt 1)",
-        "[11:41:18] [INFO] 正在連線到 cTrader...",
-        "[11:41:30] [INFO] 已連線！",
-        "[11:41:30] [INFO] 正在發送應用程式認證...",
-        "[11:41:31] [INFO] 應用程式已授權！",
-        "[11:41:33] [INFO] 帳戶已授權！",
-        "[11:41:43] [INFO] 請求逾時或失敗: (5, 'Deferred')",
-        "[11:41:45] [INFO] [TIMEOUT] 取得帳戶資金逾時",
+        "[11:41:15] [ERROR] [NETWORK] Disconnected (...)",
+        "[11:41:15] [INFO] Detected disconnect; automatic reconnect will be attempted",
+        "[11:41:15] [INFO] Connection interrupted, reconnecting in 3.0s (attempt 1)",
+        "[11:41:18] [INFO] Connecting to cTrader...",
+        "[11:41:30] [INFO] Connected!",
+        "[11:41:30] [INFO] Sending application authentication...",
+        "[11:41:31] [INFO] Application authorized!",
+        "[11:41:33] [INFO] Account authorized!",
+        "[11:41:43] [INFO] Request timed out or failed: (5, 'Deferred')",
+        "[11:41:45] [INFO] [TIMEOUT] Account funds request timed out",
         "[11:41:50] [INFO] runtime_stalled | idle=20s | phase=READY",
         "[11:41:55] [INFO] runtime_resume | reason=oauth_authenticated",
     ]
@@ -44,7 +44,9 @@ def test_analyze_reconnect_log_counts_key_events() -> None:
 
 
 def test_render_summary_contains_metrics() -> None:
-    stats = analyze_reconnect_log(["[11:00:00] [INFO] 連線中斷，3s 後重連 (attempt 2)"])
+    stats = analyze_reconnect_log(
+        ["[11:00:00] [INFO] Connection interrupted, reconnecting in 3s (attempt 2)"]
+    )
     summary = render_summary(stats)
 
     assert "Reconnect Log Summary" in summary

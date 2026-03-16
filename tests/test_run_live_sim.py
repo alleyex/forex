@@ -1,11 +1,16 @@
 from __future__ import annotations
 
 import numpy as np
+import pandas as pd
+import pytest
 
 from forex.ml.rl.envs.trading_env import TradingConfig
 from forex.tools.rl.run_live_sim import (
     PlaybackBundle,
+    _apply_policy_envelope,
+    _build_threshold_bump_array,
     _classify_position_change,
+    _parse_threshold_bump_specs,
     _split_transition_cost,
     run_playback,
 )
@@ -20,6 +25,17 @@ class _StubModel:
         action = self._actions[min(self._idx, len(self._actions) - 1)]
         self._idx += 1
         return np.array([action], dtype=np.float32), None
+
+
+class _DiscreteStubModel:
+    def __init__(self, actions: list[int]) -> None:
+        self._actions = actions
+        self._idx = 0
+
+    def predict(self, _obs, deterministic: bool = True):
+        action = int(self._actions[min(self._idx, len(self._actions) - 1)])
+        self._idx += 1
+        return action, None
 
 
 def test_split_transition_cost_handles_reversal_and_resize() -> None:
@@ -121,3 +137,108 @@ def test_run_playback_range_ends_at_last_processed_timestamp() -> None:
     assert result.processed_steps == 3
     assert result.end_index == 2
     assert result.end_ts == "t2"
+
+
+def test_run_playback_action_scale_can_trigger_policy_envelope_entries() -> None:
+    bundle = PlaybackBundle(
+        features=np.zeros((4, 1), dtype=np.float32),
+        closes=np.array([100.0, 101.0, 102.0, 103.0], dtype=np.float32),
+        timestamps=[0, 1, 2, 3],
+        config=TradingConfig(
+            transaction_cost_bps=0.0,
+            slippage_bps=0.0,
+            holding_cost_bps=0.0,
+            window_size=1,
+            reward_horizon=1,
+            max_position=1.0,
+            min_position_change=0.0,
+            position_step=0.0,
+        ),
+        model=_StubModel([0.06, 0.06, 0.06]),
+        action_scale=2.0,
+        long_threshold=0.10,
+        short_threshold=-0.10,
+        long_exit_threshold=0.10,
+        short_exit_threshold=-0.10,
+    )
+
+    result = run_playback(bundle, start_index=0, max_steps=3, quiet=True)
+
+    assert result.trades >= 1
+    assert result.long_ratio > 0.0
+
+
+def test_run_playback_supports_native_discrete_policy_actions() -> None:
+    bundle = PlaybackBundle(
+        features=np.zeros((4, 1), dtype=np.float32),
+        closes=np.array([100.0, 101.0, 102.0, 102.0], dtype=np.float32),
+        timestamps=[0, 1, 2, 3],
+        config=TradingConfig(
+            transaction_cost_bps=0.0,
+            slippage_bps=0.0,
+            holding_cost_bps=0.0,
+            window_size=1,
+            reward_horizon=1,
+            max_position=1.0,
+            min_position_change=0.0,
+            position_step=0.0,
+            discretize_actions=True,
+            native_discrete_actions=True,
+            discrete_positions=(-1.0, 0.0, 1.0),
+        ),
+        model=_DiscreteStubModel([2, 2, 1]),
+    )
+
+    result = run_playback(bundle, start_index=0, max_steps=3, quiet=True)
+
+    assert result.long_ratio > 0.0
+    assert result.trades >= 1
+
+
+def test_apply_policy_envelope_blocks_subthreshold_entries_and_closes_existing_position() -> None:
+    assert _apply_policy_envelope(
+        0.20,
+        current_position=0.0,
+        gate_enabled=True,
+        action_gate_mode="entry_only",
+        long_threshold=0.25,
+        short_threshold=-0.25,
+        long_exit_threshold=0.25,
+        short_exit_threshold=-0.25,
+    ) == 0.0
+    assert _apply_policy_envelope(
+        0.10,
+        current_position=1.0,
+        gate_enabled=True,
+        action_gate_mode="entry_only",
+        long_threshold=0.25,
+        short_threshold=-0.25,
+        long_exit_threshold=0.25,
+        short_exit_threshold=-0.25,
+    ) == 0.0
+
+
+def test_apply_policy_envelope_entry_only_gate_blocks_new_position_when_closed() -> None:
+    assert _apply_policy_envelope(
+        0.50,
+        current_position=0.0,
+        gate_enabled=False,
+        action_gate_mode="entry_only",
+        long_threshold=0.25,
+        short_threshold=-0.25,
+        long_exit_threshold=0.25,
+        short_exit_threshold=-0.25,
+    ) == 0.0
+
+
+def test_parse_threshold_bump_specs_and_build_array_for_playback_policy() -> None:
+    specs = _parse_threshold_bump_specs(["volatility_regime_z:0.85::0.04"])
+    bumps = _build_threshold_bump_array(
+        pd.DataFrame({"volatility_regime_z": [0.80, 0.90, 1.10]}),
+        specs,
+    )
+
+    assert specs == [
+        {"feature": "volatility_regime_z", "min": 0.85, "max": None, "bump": 0.04},
+    ]
+    assert bumps.tolist() == pytest.approx([0.0, 0.04, 0.04])

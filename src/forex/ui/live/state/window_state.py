@@ -27,8 +27,17 @@ def initialize_live_window_state(window) -> None:
     window._auto_feature_scaler = None
     window._auto_position = 0.0
     window._auto_position_id = None
+    window._auto_startup_warmup_bars = 2
+    window._auto_startup_seen_bars = 0
+    window._auto_first_trade_done = False
+    window._auto_first_trade_max_abs_position = 0.5
     window._auto_last_action_ts = None
     window._auto_balance = None
+    window._auto_used_margin = None
+    window._auto_free_margin = None
+    window._auto_leverage = None
+    window._auto_max_leverage = None
+    window._auto_margin_usage_cap_ratio = 0.5
     window._auto_peak_balance = None
     window._auto_day_balance = None
     window._auto_day_key = None
@@ -62,9 +71,12 @@ def initialize_live_window_state(window) -> None:
     window._candlestick_item = None
     window._last_price_line = None
     window._last_price_label = None
-    window._project_root = Path(__file__).resolve().parents[2]
+    window._project_root = Path(__file__).resolve().parents[5]
     window._symbol_names, window._symbol_id_map = window._load_symbol_catalog()
-    window._symbol_id_to_name = {symbol_id: name for name, symbol_id in window._symbol_id_map.items()}
+    window._symbol_id_to_name = {
+        symbol_id: name
+        for name, symbol_id in window._symbol_id_map.items()
+    }
     window._symbol_volume_constraints = {}
     window._symbol_volume_loaded = False
     window._symbol_details_by_id = {}
@@ -147,7 +159,10 @@ def initialize_live_window_state(window) -> None:
         "GBPUSD": 5,
         "AUDUSD": 5,
     }
-    window._quote_symbol_ids = {name: window._resolve_symbol_id(name) for name in window._quote_symbols}
+    window._quote_symbol_ids = {
+        name: window._resolve_symbol_id(name)
+        for name in window._quote_symbols
+    }
     window._quote_rows = {}
     window._quote_row_digits = {}
     window._quote_last_mid = {}

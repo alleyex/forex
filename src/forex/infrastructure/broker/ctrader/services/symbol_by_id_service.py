@@ -3,15 +3,20 @@ Symbol-by-id service for cTrader.
 """
 from __future__ import annotations
 
+from collections.abc import Callable, Sequence
 from dataclasses import dataclass
-from typing import Callable, Optional, Protocol, Sequence
+from typing import Protocol
 
 from ctrader_open_api import Client
 from ctrader_open_api.messages.OpenApiMessages_pb2 import ProtoOASymbolByIdReq
 from ctrader_open_api.messages.OpenApiModelMessages_pb2 import ProtoOAPayloadType
 
-from forex.infrastructure.broker.base import BaseCallbacks, LogHistoryMixin, OperationStateMixin, build_callbacks
-from forex.infrastructure.broker.errors import ErrorCode, error_message
+from forex.infrastructure.broker.base import (
+    BaseCallbacks,
+    LogHistoryMixin,
+    OperationStateMixin,
+    build_callbacks,
+)
 from forex.infrastructure.broker.ctrader.services.app_auth_service import AppAuthService
 from forex.infrastructure.broker.ctrader.services.base import CTraderRequestLifecycleMixin
 from forex.infrastructure.broker.ctrader.services.message_helpers import (
@@ -21,6 +26,7 @@ from forex.infrastructure.broker.ctrader.services.message_helpers import (
     format_success,
     is_already_subscribed,
 )
+from forex.infrastructure.broker.errors import ErrorCode, error_message
 
 
 class FullSymbolMessage(Protocol):
@@ -37,7 +43,7 @@ class SymbolByIdMessage(Protocol):
 
 @dataclass
 class SymbolByIdServiceCallbacks(BaseCallbacks):
-    on_symbols_received: Optional[Callable[[list], None]] = None
+    on_symbols_received: Callable[[list], None] | None = None
 
 
 class SymbolByIdService(
@@ -54,13 +60,13 @@ class SymbolByIdService(
         self._callbacks = SymbolByIdServiceCallbacks()
         self._in_progress = False
         self._log_history = []
-        self._account_id: Optional[int] = None
+        self._account_id: int | None = None
 
     def set_callbacks(
         self,
-        on_symbols_received: Optional[Callable[[list], None]] = None,
-        on_error: Optional[Callable[[str], None]] = None,
-        on_log: Optional[Callable[[str], None]] = None,
+        on_symbols_received: Callable[[list], None] | None = None,
+        on_error: Callable[[str], None] | None = None,
+        on_log: Callable[[str], None] | None = None,
     ) -> None:
         self._callbacks = build_callbacks(
             SymbolByIdServiceCallbacks,
@@ -76,13 +82,13 @@ class SymbolByIdService(
         account_id: int,
         symbol_ids: Sequence[int],
         include_archived: bool = False,
-        timeout_seconds: Optional[int] = None,
+        timeout_seconds: int | None = None,
     ) -> None:
         if not account_id:
-            self._emit_error(error_message(ErrorCode.VALIDATION, "缺少帳戶 ID"))
+            self._emit_error(error_message(ErrorCode.VALIDATION, "Missing account ID"))
             return
         if not symbol_ids:
-            self._emit_error(error_message(ErrorCode.VALIDATION, "缺少 Symbol ID"))
+            self._emit_error(error_message(ErrorCode.VALIDATION, "Missing symbol ID"))
             return
         if not self._start_operation():
             return
@@ -94,7 +100,7 @@ class SymbolByIdService(
                 request.symbolId.append(int(symbol_id))
         if hasattr(request, "includeArchivedSymbols"):
             request.includeArchivedSymbols = bool(include_archived)
-        self._log(format_request("正在取得 symbol details..."))
+        self._log(format_request("Fetching symbol details..."))
         self._app_auth_service.add_message_handler(self._handle_message)
         if not self._send_request_with_client(
             request=request,
@@ -117,7 +123,7 @@ class SymbolByIdService(
     def _on_symbols_received(self, msg: SymbolByIdMessage) -> None:
         self._cleanup_request_lifecycle(timeout_tracker=None, handler=self._handle_message)
         symbols = self._parse_symbols(getattr(msg, "symbol", []))
-        self._log(format_success(f"已接收 symbol details: {len(symbols)} 筆"))
+        self._log(format_success(f"Received symbol details: {len(symbols)}"))
         if self._callbacks.on_symbols_received:
             self._callbacks.on_symbols_received(symbols)
 

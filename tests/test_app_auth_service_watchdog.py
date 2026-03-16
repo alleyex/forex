@@ -27,9 +27,21 @@ def test_handle_connected_resets_watchdog_window(monkeypatch) -> None:
 
     calls = {"watchdog": 0, "heartbeat": 0, "send_auth": 0}
 
-    monkeypatch.setattr(service, "_start_connect_watchdog", lambda: calls.__setitem__("watchdog", calls["watchdog"] + 1))
-    monkeypatch.setattr(service, "_start_heartbeat_loop", lambda: calls.__setitem__("heartbeat", calls["heartbeat"] + 1))
-    monkeypatch.setattr(service, "_send_app_auth", lambda _client: calls.__setitem__("send_auth", calls["send_auth"] + 1))
+    monkeypatch.setattr(
+        service,
+        "_start_connect_watchdog",
+        lambda: calls.__setitem__("watchdog", calls["watchdog"] + 1),
+    )
+    monkeypatch.setattr(
+        service,
+        "_start_heartbeat_loop",
+        lambda: calls.__setitem__("heartbeat", calls["heartbeat"] + 1),
+    )
+    monkeypatch.setattr(
+        service,
+        "_send_app_auth",
+        lambda _client: calls.__setitem__("send_auth", calls["send_auth"] + 1),
+    )
 
     service._handle_connected(client)
 
@@ -40,42 +52,62 @@ def test_handle_connected_resets_watchdog_window(monkeypatch) -> None:
     assert service.status == ConnectionStatus.CONNECTED
 
 
-def test_connect_timeout_schedules_reconnect_when_client_exists_before_tcp_connected(monkeypatch) -> None:
+def test_connect_timeout_reconnects_before_tcp_connected(monkeypatch) -> None:
     service = _make_service()
     service._status = ConnectionStatus.CONNECTING
     service._client = _DummyClient()
 
     calls = {"reason": None, "stopped": 0}
     logs: list[str] = []
-    monkeypatch.setattr(service, "_stop_client_service", lambda *_args, **_kwargs: calls.__setitem__("stopped", calls["stopped"] + 1))
-    monkeypatch.setattr(service, "_schedule_reconnect", lambda reason: calls.__setitem__("reason", reason))
+    monkeypatch.setattr(
+        service,
+        "_stop_client_service",
+        lambda *_args, **_kwargs: calls.__setitem__(
+            "stopped", calls["stopped"] + 1
+        ),
+    )
+    monkeypatch.setattr(
+        service,
+        "_schedule_reconnect",
+        lambda reason: calls.__setitem__("reason", reason),
+    )
     monkeypatch.setattr(service, "_log", lambda message: logs.append(str(message)))
 
     service._on_connect_timeout()
 
     assert calls["stopped"] == 1
-    assert calls["reason"] == "連線逾時"
-    assert any("連線逾時" in message for message in logs)
+    assert calls["reason"] == "Connection timed out"
+    assert any("Connection timed out" in message for message in logs)
     assert service.status == ConnectionStatus.DISCONNECTED
     assert service._client is None
 
 
-def test_connect_timeout_schedules_reconnect_when_client_exists_after_tcp_connected(monkeypatch) -> None:
+def test_connect_timeout_reconnects_after_tcp_connected(monkeypatch) -> None:
     service = _make_service()
     service._status = ConnectionStatus.CONNECTED
     service._client = _DummyClient()
 
     calls = {"reason": None, "stopped": 0}
     logs: list[str] = []
-    monkeypatch.setattr(service, "_stop_client_service", lambda *_args, **_kwargs: calls.__setitem__("stopped", calls["stopped"] + 1))
-    monkeypatch.setattr(service, "_schedule_reconnect", lambda reason: calls.__setitem__("reason", reason))
+    monkeypatch.setattr(
+        service,
+        "_stop_client_service",
+        lambda *_args, **_kwargs: calls.__setitem__(
+            "stopped", calls["stopped"] + 1
+        ),
+    )
+    monkeypatch.setattr(
+        service,
+        "_schedule_reconnect",
+        lambda reason: calls.__setitem__("reason", reason),
+    )
     monkeypatch.setattr(service, "_log", lambda message: logs.append(str(message)))
 
     service._on_connect_timeout()
 
     assert calls["stopped"] == 1
-    assert calls["reason"] == "App 認證逾時"
-    assert any("App 認證逾時" in message for message in logs)
+    assert calls["reason"] == "App authentication timed out"
+    assert any("App authentication timed out" in message for message in logs)
     assert service.status == ConnectionStatus.DISCONNECTED
     assert service._client is None
 
@@ -86,14 +118,24 @@ def test_connect_timeout_schedules_reconnect_when_no_client(monkeypatch) -> None
     service._client = None
 
     calls = {"reason": None, "stopped": 0}
-    monkeypatch.setattr(service, "_stop_client_service", lambda *_args, **_kwargs: calls.__setitem__("stopped", calls["stopped"] + 1))
-    monkeypatch.setattr(service, "_schedule_reconnect", lambda reason: calls.__setitem__("reason", reason))
+    monkeypatch.setattr(
+        service,
+        "_stop_client_service",
+        lambda *_args, **_kwargs: calls.__setitem__(
+            "stopped", calls["stopped"] + 1
+        ),
+    )
+    monkeypatch.setattr(
+        service,
+        "_schedule_reconnect",
+        lambda reason: calls.__setitem__("reason", reason),
+    )
     monkeypatch.setattr(service, "_log", lambda _message: None)
 
     service._on_connect_timeout()
 
     assert calls["stopped"] == 1
-    assert calls["reason"] == "連線逾時"
+    assert calls["reason"] == "Connection timed out"
 
 
 def test_handle_disconnected_skips_duplicate_schedule_when_reconnect_pending(monkeypatch) -> None:
@@ -112,7 +154,11 @@ def test_handle_disconnected_skips_duplicate_schedule_when_reconnect_pending(mon
     service._reconnect_timer = _AliveTimer()
 
     calls = {"scheduled": 0}
-    monkeypatch.setattr(service, "_schedule_reconnect", lambda _reason: calls.__setitem__("scheduled", calls["scheduled"] + 1))
+    monkeypatch.setattr(
+        service,
+        "_schedule_reconnect",
+        lambda _reason: calls.__setitem__("scheduled", calls["scheduled"] + 1),
+    )
     monkeypatch.setattr(service, "_emit_error", lambda _err: None)
     monkeypatch.setattr(service, "_cancel_connect_watchdog", lambda: None)
     monkeypatch.setattr(service, "_cancel_app_auth_retry_timer", lambda: None)

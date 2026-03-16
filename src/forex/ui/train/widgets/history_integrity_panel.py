@@ -2,7 +2,6 @@ from __future__ import annotations
 
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Optional
 
 from PySide6.QtCore import Qt
 from PySide6.QtWidgets import (
@@ -23,21 +22,24 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from forex.application.broker.history_integrity import HistoryIntegrityReport, HistoryIntegrityService
+from forex.application.broker.history_integrity import (
+    HistoryIntegrityReport,
+    HistoryIntegrityService,
+)
+from forex.ui.shared.styles.tokens import FORM_LABEL_WIDTH_WIDE
 from forex.ui.shared.widgets.layout_helpers import (
     align_form_fields,
     apply_form_label_width,
     build_browse_row,
     configure_form_layout,
 )
-from forex.ui.shared.styles.tokens import FORM_LABEL_WIDTH_WIDE
 
 
 class HistoryIntegrityPanel(QWidget):
-    def __init__(self, parent: Optional[QWidget] = None) -> None:
+    def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
         self._service = HistoryIntegrityService()
-        self._report: Optional[HistoryIntegrityReport] = None
+        self._report: HistoryIntegrityReport | None = None
         self._setup_ui()
 
     def _setup_ui(self) -> None:
@@ -52,7 +54,11 @@ class HistoryIntegrityPanel(QWidget):
             label_alignment=Qt.AlignRight | Qt.AlignVCenter,
             field_growth_policy=QFormLayout.AllNonFixedFieldsGrow,
         )
-        apply_form_label_width(file_form, FORM_LABEL_WIDTH_WIDE, alignment=Qt.AlignRight | Qt.AlignVCenter)
+        apply_form_label_width(
+            file_form,
+            FORM_LABEL_WIDTH_WIDE,
+            alignment=Qt.AlignRight | Qt.AlignVCenter,
+        )
         align_form_fields(file_form, Qt.AlignLeft | Qt.AlignVCenter)
 
         self._csv_path = QLineEdit("data/raw_history/history.csv")
@@ -108,14 +114,27 @@ class HistoryIntegrityPanel(QWidget):
         gaps_layout = QVBoxLayout(gaps_box)
         gaps_layout.setContentsMargins(8, 8, 8, 8)
         self._gaps_table = QTableWidget(0, 5)
-        self._gaps_table.setHorizontalHeaderLabels(["Start (UTC)", "End (UTC)", "Diff (min)", "Missing Bars", "Minute Range"])
+        self._gaps_table.setHorizontalHeaderLabels(
+            [
+                "Start (UTC)",
+                "End (UTC)",
+                "Diff (min)",
+                "Missing Bars",
+                "Minute Range",
+            ]
+        )
         self._gaps_table.horizontalHeader().setStretchLastSection(True)
         self._gaps_table.setEditTriggers(QTableWidget.NoEditTriggers)
         gaps_layout.addWidget(self._gaps_table)
         root.addWidget(gaps_box, stretch=1)
 
     def _browse_csv(self) -> None:
-        path, _ = QFileDialog.getOpenFileName(self, "Select History CSV", self._csv_path.text(), "CSV (*.csv)")
+        path, _ = QFileDialog.getOpenFileName(
+            self,
+            "Select History CSV",
+            self._csv_path.text(),
+            "CSV (*.csv)",
+        )
         if path:
             self._csv_path.setText(path)
 
@@ -125,7 +144,10 @@ class HistoryIntegrityPanel(QWidget):
             QMessageBox.warning(self, "Missing File", "Please select a CSV file first.")
             return
         try:
-            report = self._service.analyze(path, exclude_weekends=bool(self._exclude_weekends.isChecked()))
+            report = self._service.analyze(
+                path,
+                exclude_weekends=bool(self._exclude_weekends.isChecked()),
+            )
         except Exception as exc:
             QMessageBox.warning(self, "Check Failed", str(exc))
             return
@@ -160,7 +182,12 @@ class HistoryIntegrityPanel(QWidget):
         if not self._report:
             return
         default_name = Path(self._report.csv_path).with_suffix(".integrity.json").name
-        path, _ = QFileDialog.getSaveFileName(self, "Export Integrity Report (JSON)", default_name, "JSON (*.json)")
+        path, _ = QFileDialog.getSaveFileName(
+            self,
+            "Export Integrity Report (JSON)",
+            default_name,
+            "JSON (*.json)",
+        )
         if not path:
             return
         try:
@@ -174,7 +201,12 @@ class HistoryIntegrityPanel(QWidget):
         if not self._report:
             return
         default_name = Path(self._report.csv_path).with_suffix(".gaps.csv").name
-        path, _ = QFileDialog.getSaveFileName(self, "Export Gap List (CSV)", default_name, "CSV (*.csv)")
+        path, _ = QFileDialog.getSaveFileName(
+            self,
+            "Export Gap List (CSV)",
+            default_name,
+            "CSV (*.csv)",
+        )
         if not path:
             return
         try:

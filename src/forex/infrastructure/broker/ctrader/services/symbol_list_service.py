@@ -1,16 +1,23 @@
 """
 Symbol list service
 """
-from dataclasses import dataclass
+from __future__ import annotations
+
 import time
-from typing import Callable, Optional, Protocol, Sequence
+from collections.abc import Callable, Sequence
+from dataclasses import dataclass
+from typing import Protocol
 
 from ctrader_open_api import Client
 from ctrader_open_api.messages.OpenApiMessages_pb2 import ProtoOASymbolsListReq
 from ctrader_open_api.messages.OpenApiModelMessages_pb2 import ProtoOAPayloadType
 
-from forex.infrastructure.broker.base import BaseCallbacks, LogHistoryMixin, OperationStateMixin, build_callbacks
-from forex.infrastructure.broker.errors import ErrorCode, error_message
+from forex.infrastructure.broker.base import (
+    BaseCallbacks,
+    LogHistoryMixin,
+    OperationStateMixin,
+    build_callbacks,
+)
 from forex.infrastructure.broker.ctrader.services.app_auth_service import AppAuthService
 from forex.infrastructure.broker.ctrader.services.base import CTraderRequestLifecycleMixin
 from forex.infrastructure.broker.ctrader.services.message_helpers import (
@@ -21,6 +28,7 @@ from forex.infrastructure.broker.ctrader.services.message_helpers import (
     format_warning,
 )
 from forex.infrastructure.broker.ctrader.services.timeout_tracker import TimeoutTracker
+from forex.infrastructure.broker.errors import ErrorCode, error_message
 from forex.utils.metrics import metrics
 
 
@@ -38,7 +46,7 @@ class SymbolListMessage(Protocol):
 
 @dataclass
 class SymbolListServiceCallbacks(BaseCallbacks):
-    on_symbols_received: Optional[Callable[[list], None]] = None
+    on_symbols_received: Callable[[list], None] | None = None
 
 
 class SymbolListService(
@@ -56,14 +64,14 @@ class SymbolListService(
         self._in_progress = False
         self._timeout_tracker = TimeoutTracker(self._on_timeout)
         self._log_history = []
-        self._account_id: Optional[int] = None
+        self._account_id: int | None = None
         self._include_archived = False
 
     def set_callbacks(
         self,
-        on_symbols_received: Optional[Callable[[list], None]] = None,
-        on_error: Optional[Callable[[str], None]] = None,
-        on_log: Optional[Callable[[str], None]] = None,
+        on_symbols_received: Callable[[list], None] | None = None,
+        on_error: Callable[[str], None] | None = None,
+        on_log: Callable[[str], None] | None = None,
     ) -> None:
         self._callbacks = build_callbacks(
             SymbolListServiceCallbacks,
@@ -77,10 +85,10 @@ class SymbolListService(
         self,
         account_id: int,
         include_archived: bool = False,
-        timeout_seconds: Optional[int] = None,
+        timeout_seconds: int | None = None,
     ) -> None:
         if not account_id:
-            self._emit_error(error_message(ErrorCode.VALIDATION, "缺少帳戶 ID"))
+            self._emit_error(error_message(ErrorCode.VALIDATION, "Missing account ID"))
             return
 
         if not self._start_operation():
@@ -100,7 +108,7 @@ class SymbolListService(
         request = ProtoOASymbolsListReq()
         request.ctidTraderAccountId = int(self._account_id or 0)
         request.includeArchivedSymbols = bool(self._include_archived)
-        self._log(format_request("正在取得 symbol list..."))
+        self._log(format_request("Fetching symbol list..."))
         if not self._send_request_with_client(
             request=request,
             timeout_tracker=self._timeout_tracker,
@@ -120,32 +128,44 @@ class SymbolListService(
         )
 
     def _on_symbols_received(self, msg: SymbolListMessage) -> None:
-        self._cleanup_request_lifecycle(timeout_tracker=self._timeout_tracker, handler=self._handle_message)
+        self._cleanup_request_lifecycle(
+            timeout_tracker=self._timeout_tracker,
+            handler=self._handle_message,
+        )
         symbols = self._parse_symbols(msg.symbol)
-        self._log(format_success(f"已接收 symbol: {len(symbols)} 筆"))
+        self._log(format_success(f"Received symbols: {len(symbols)}"))
         metrics.inc("ctrader.symbol_list.success")
         started_at = getattr(self, "_metrics_started_at", None)
         if started_at is not None:
-            metrics.observe("ctrader.symbol_list.latency_s", time.monotonic() - started_at)
+            metrics.observe(
+                "ctrader.symbol_list.latency_s",
+                time.monotonic() - started_at,
+            )
         if self._callbacks.on_symbols_received:
             self._callbacks.on_symbols_received(symbols)
 
     def _on_error(self, msg: SymbolListMessage) -> None:
-        self._cleanup_request_lifecycle(timeout_tracker=self._timeout_tracker, handler=self._handle_message)
+        self._cleanup_request_lifecycle(
+            timeout_tracker=self._timeout_tracker,
+            handler=self._handle_message,
+        )
         metrics.inc("ctrader.symbol_list.error")
         self._emit_error(format_error(msg.errorCode, msg.description))
 
     def _on_timeout(self) -> None:
         if not self._in_progress:
             return
-        self._cleanup_request_lifecycle(timeout_tracker=self._timeout_tracker, handler=self._handle_message)
+        self._cleanup_request_lifecycle(
+            timeout_tracker=self._timeout_tracker,
+            handler=self._handle_message,
+        )
         metrics.inc("ctrader.symbol_list.timeout")
-        self._emit_error(error_message(ErrorCode.TIMEOUT, "取得 symbol list 逾時"))
+        self._emit_error(error_message(ErrorCode.TIMEOUT, "Symbol list request timed out"))
 
     def _retry_request(self, attempt: int) -> None:
         if not self._in_progress:
             return
-        self._log(format_warning(f"symbol list 逾時，重試第 {attempt} 次"))
+        self._log(format_warning(f"Symbol list timed out, retry attempt {attempt}"))
         metrics.inc("ctrader.symbol_list.retry")
         self._send_request()
 

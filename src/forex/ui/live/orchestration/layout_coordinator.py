@@ -15,17 +15,17 @@ class LiveLayoutCoordinator:
         total = splitter.width()
         if total <= 0:
             return
-        # Match the quotes panel width so the autotrade panel lines up.
+        # Keep Auto Trading narrower than chart, but aligned with the quotes/log grid.
         left = None
         bottom = getattr(w, "_bottom_splitter", None)
         if bottom is not None:
             sizes = bottom.sizes()
             if sizes:
-                left = sizes[0]
+                left = sizes[0] + max(32, int(total * 0.04))
         if left is None:
-            left = max(220, int(total * 0.25))
-        left = max(220, left)
-        right = max(260, total - left)
+            left = max(320, int(total * 0.30))
+        left = max(320, min(int(total * 0.38), left))
+        right = max(640, total - left)
         splitter.setSizes([left, right])
 
     def align_panels_at_startup(self) -> None:
@@ -58,9 +58,9 @@ class LiveLayoutCoordinator:
         total = splitter.height()
         if total <= 0:
             return
-        min_top = 180
-        min_bottom = 220
-        preferred_bottom = max(min_bottom, int(total * 0.30))
+        min_top = 260
+        min_bottom = 240
+        preferred_bottom = max(min_bottom, int(total * 0.34))
         max_bottom = max(min_bottom, total - min_top)
         bottom = min(preferred_bottom, max_bottom)
         top = total - bottom
@@ -76,10 +76,10 @@ class LiveLayoutCoordinator:
         total = splitter.width()
         if total <= 0:
             return
-        quotes = max(220, int(total * 0.25))
-        positions = max(420, int(total * 0.50))
-        log = max(260, total - quotes - positions)
+        quotes = max(240, int(total * 0.23))
+        positions = max(500, int(total * 0.52))
+        log = max(300, total - quotes - positions)
         if quotes + positions + log > total:
-            log = max(200, total - quotes - positions)
+            log = max(240, total - quotes - positions)
         if quotes + positions + log <= total:
             splitter.setSizes([quotes, positions, log])

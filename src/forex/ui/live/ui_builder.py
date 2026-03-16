@@ -12,6 +12,7 @@ from PySide6.QtWidgets import (
     QHBoxLayout,
     QLabel,
     QLineEdit,
+    QPushButton,
     QRadioButton,
     QSpinBox,
     QStyle,
@@ -33,14 +34,30 @@ class LiveUIBuilder:
     def build_autotrade_panel(self) -> QWidget:
         panel = QGroupBox("Auto Trading")
         layout = QVBoxLayout(panel)
-        layout.setContentsMargins(12, 12, 12, 12)
-        layout.setSpacing(10)
+        layout.setContentsMargins(10, 10, 10, 10)
+        layout.setSpacing(8)
 
         tabs = self._create_tabs(layout)
-        _model_tab, model_tab_layout, form_model = self._create_tab_form(tabs, "Model Lab", object_name="modelTab")
-        _basic_tab, _basic_tab_layout, form_basic = self._create_tab_form(tabs, "Basic", object_name="basicTab")
-        _trade_tab, _trade_tab_layout, form_trade = self._create_tab_form(tabs, "Trade", object_name="tradeTab")
-        _adv_tab, _adv_tab_layout, form_adv = self._create_tab_form(tabs, "Advanced", object_name="advancedTab")
+        _model_tab, model_tab_layout, form_model = self._create_tab_form(
+            tabs,
+            "Model Lab",
+            object_name="modelTab",
+        )
+        _basic_tab, _basic_tab_layout, form_basic = self._create_tab_form(
+            tabs,
+            "Basic",
+            object_name="basicTab",
+        )
+        _trade_tab, _trade_tab_layout, form_trade = self._create_tab_form(
+            tabs,
+            "Trade",
+            object_name="tradeTab",
+        )
+        _adv_tab, _adv_tab_layout, form_adv = self._create_tab_form(
+            tabs,
+            "Advanced",
+            object_name="advancedTab",
+        )
 
         self._apply_tabs_style(tabs)
         self._build_model_tab(form_model=form_model, model_tab_layout=model_tab_layout, panel=panel)
@@ -226,8 +243,9 @@ class LiveUIBuilder:
             QWidget#tradeTab QGroupBox#card::title,
             QWidget#advancedTab QGroupBox#card::title {
                 color: #cdd6e1;
-                font-weight: 500;
-                letter-spacing: 0.2px;
+                font-weight: 600;
+                font-size: 12px;
+                letter-spacing: 0.3px;
                 padding: 0px 8px;
                 background: #262d36;
                 subcontrol-origin: margin;
@@ -236,8 +254,9 @@ class LiveUIBuilder:
             }
             QWidget#modelTab QGroupBox#card::title {
                 color: #cdd6e1;
-                font-weight: 500;
-                letter-spacing: 0.2px;
+                font-weight: 600;
+                font-size: 12px;
+                letter-spacing: 0.3px;
                 padding: 0px 8px;
                 background: #262d36;
                 subcontrol-origin: margin;
@@ -293,10 +312,19 @@ class LiveUIBuilder:
         tabs_style = tabs_style.replace(
             "__CARD_LINE_TITLE_FONT_SIZE_PX__", str(w._CARD_LINE_TITLE_FONT_SIZE_PX)
         )
-        tabs_style = tabs_style.replace("__CARD_LINE_TITLE_OFFSET_PX__", str(w._CARD_LINE_TITLE_OFFSET_PX))
+        tabs_style = tabs_style.replace(
+            "__CARD_LINE_TITLE_OFFSET_PX__",
+            str(w._CARD_LINE_TITLE_OFFSET_PX),
+        )
         tabs.setStyleSheet(tabs_style)
 
-    def _build_model_tab(self, *, form_model: QFormLayout, model_tab_layout: QVBoxLayout, panel: QWidget) -> None:
+    def _build_model_tab(
+        self,
+        *,
+        form_model: QFormLayout,
+        model_tab_layout: QVBoxLayout,
+        panel: QWidget,
+    ) -> None:
         w = self._window
         model_row = QWidget()
         model_layout = QVBoxLayout(model_row)
@@ -347,6 +375,9 @@ class LiveUIBuilder:
         model_field_layout.addWidget(w._model_path, 1)
         model_field_layout.addWidget(w._browse_model_dir_button)
         model_layout.addWidget(model_field_row)
+        w._load_best_model_button = QPushButton("Use Best Playback Model")
+        w._load_best_model_button.clicked.connect(w._apply_best_playback_model_preset)
+        model_layout.addWidget(w._load_best_model_button, 0, Qt.AlignLeft)
 
         w._auto_trade_toggle = QCheckBox("Enable")
         w._auto_trade_toggle.toggled.connect(w._toggle_auto_trade)
@@ -389,27 +420,27 @@ class LiveUIBuilder:
         w._trade_symbol.currentTextChanged.connect(w._handle_trade_symbol_changed)
 
         w._trade_timeframe = QComboBox()
-        w._trade_timeframe.addItems(["M1", "M5", "M15", "M30", "H1", "H4"])
+        w._trade_timeframe.addItems(["M1", "M5", "M10", "M15", "M30", "H1", "H4"])
         basic_card_form.addRow("Timeframe", w._trade_timeframe)
         w._trade_timeframe.currentTextChanged.connect(w._handle_trade_timeframe_changed)
         form_basic.addRow(basic_card)
 
     def _build_trade_tab(self, *, form_trade: QFormLayout, panel: QWidget) -> None:
         w = self._window
-        trade_card, trade_card_form = self._create_card("Position Sizing", title_tone="line")
+        trade_card, trade_card_form = self._create_card("Risk Sizing", title_tone="line")
         lot_row = QWidget()
         lot_layout = QVBoxLayout(lot_row)
         lot_layout.setContentsMargins(0, 0, 0, 0)
         lot_layout.setSpacing(4)
-        w._lot_fixed = QRadioButton("Fixed lot")
-        w._lot_risk = QRadioButton("Risk %")
+        w._lot_fixed = QRadioButton("Fixed lot size")
+        w._lot_risk = QRadioButton("Risk % of balance")
         w._lot_fixed.setChecked(True)
         lot_group = QButtonGroup(panel)
         lot_group.addButton(w._lot_fixed)
         lot_group.addButton(w._lot_risk)
         lot_layout.addWidget(w._lot_fixed)
         lot_layout.addWidget(w._lot_risk)
-        trade_card_form.addRow("Sizing", lot_row)
+        trade_card_form.addRow("Sizing mode", lot_row)
 
         w._lot_value = QDoubleSpinBox()
         w._lot_value.setDecimals(2)
@@ -417,10 +448,22 @@ class LiveUIBuilder:
         w._lot_value.setSingleStep(0.01)
         w._lot_value.setValue(0.1)
         w._lot_value.setSuffix(" lots")
-        trade_card_form.addRow("Lot / Risk%", w._lot_value)
+        w._lot_value.setToolTip(
+            "Fixed mode: direct lot size. Risk mode: percent of balance sized against stop loss."
+        )
+        trade_card_form.addRow("Lot or risk %", w._lot_value)
         w._lot_fixed.toggled.connect(w._sync_lot_value_style)
         w._lot_risk.toggled.connect(w._sync_lot_value_style)
         w._sync_lot_value_style()
+        w._lot_fixed.toggled.connect(w._refresh_risk_sizing_preview)
+        w._lot_risk.toggled.connect(w._refresh_risk_sizing_preview)
+        w._lot_value.valueChanged.connect(w._refresh_risk_sizing_preview)
+
+        w._risk_sizing_preview = QLabel("-")
+        w._risk_sizing_preview.setWordWrap(True)
+        w._risk_sizing_preview.setObjectName("riskSizingPreview")
+        w._risk_sizing_preview.setStyleSheet("color:#9aa6b2; font-size:11px;")
+        trade_card_form.addRow("Estimated lot size", w._risk_sizing_preview)
 
         w._max_positions = QSpinBox()
         w._max_positions.setRange(1, 20)
@@ -436,6 +479,7 @@ class LiveUIBuilder:
         w._stop_loss.setValue(500.0)
         w._stop_loss.setSuffix(" pt")
         risk_card_form.addRow("Stop loss (points)", w._stop_loss)
+        w._stop_loss.valueChanged.connect(w._refresh_risk_sizing_preview)
 
         w._take_profit = QDoubleSpinBox()
         w._take_profit.setDecimals(0)
@@ -467,7 +511,10 @@ class LiveUIBuilder:
 
     def _build_advanced_tab(self, *, form_adv: QFormLayout) -> None:
         w = self._window
-        advanced_card, advanced_card_form = self._create_card("Advanced Settings", title_tone="line")
+        advanced_card, advanced_card_form = self._create_card(
+            "Advanced Settings",
+            title_tone="line",
+        )
         w._min_signal_interval = QSpinBox()
         w._min_signal_interval.setRange(0, 3600)
         w._min_signal_interval.setValue(5)

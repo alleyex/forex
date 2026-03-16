@@ -1,6 +1,7 @@
 from __future__ import annotations
 
-from typing import Callable, Optional, Protocol
+from collections.abc import Callable
+from typing import Protocol
 
 from PySide6.QtCore import QObject
 from PySide6.QtWidgets import QLabel
@@ -28,8 +29,8 @@ class ConnectionPresenter(QObject):
         app_auth_label: QLabel,
         oauth_label: QLabel,
         toggle_action,
-        app_state: Optional[AppState] = None,
-        on_app_disconnected: Optional[Callable[[], None]] = None,
+        app_state: AppState | None = None,
+        on_app_disconnected: Callable[[], None] | None = None,
     ) -> None:
         super().__init__(parent)
         self._log_panel = log_panel
@@ -38,13 +39,13 @@ class ConnectionPresenter(QObject):
         self._toggle_action = toggle_action
         self._app_state = app_state
         self._on_app_disconnected = on_app_disconnected
-        self._service: Optional[AppAuthServiceLike] = None
-        self._oauth_service: Optional[OAuthServiceLike] = None
+        self._service: AppAuthServiceLike | None = None
+        self._oauth_service: OAuthServiceLike | None = None
 
     def set_services(
         self,
-        service: Optional[AppAuthServiceLike],
-        oauth_service: Optional[OAuthServiceLike],
+        service: AppAuthServiceLike | None,
+        oauth_service: OAuthServiceLike | None,
     ) -> None:
         self._service = service
         self._oauth_service = oauth_service
@@ -101,7 +102,10 @@ class ConnectionPresenter(QObject):
         return format_oauth_status(status)
 
     def _sync_connection_action(self) -> None:
-        if self._oauth_service and self._oauth_service.status >= ConnectionStatus.ACCOUNT_AUTHENTICATED:
+        if (
+            self._oauth_service
+            and self._oauth_service.status >= ConnectionStatus.ACCOUNT_AUTHENTICATED
+        ):
             self._toggle_action.setText("Disconnect")
         else:
             self._toggle_action.setText("Connect")

@@ -1,9 +1,8 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Optional
 
-from PySide6.QtCore import Qt, QObject, QTimer
+from PySide6.QtCore import QObject, Qt, QTimer
 from PySide6.QtWidgets import QDockWidget, QMainWindow, QWidget
 
 
@@ -59,11 +58,17 @@ class DockManager:
         if mode == "training":
             self._dock_set.training_params.setVisible(True)
             self._dock_set.simulation_params.setVisible(False)
-            self._resize_left_dock(self._dock_set.training_params, self._TRAINING_DOCK_DEFAULT_WIDTH)
+            self._resize_left_dock(
+                self._dock_set.training_params,
+                self._TRAINING_DOCK_DEFAULT_WIDTH,
+            )
         elif mode == "simulation":
             self._dock_set.training_params.setVisible(False)
             self._dock_set.simulation_params.setVisible(True)
-            self._resize_left_dock(self._dock_set.simulation_params, self._SIMULATION_DOCK_DEFAULT_WIDTH)
+            self._resize_left_dock(
+                self._dock_set.simulation_params,
+                self._SIMULATION_DOCK_DEFAULT_WIDTH,
+            )
         else:
             self._dock_set.training_params.setVisible(False)
             self._dock_set.simulation_params.setVisible(False)
@@ -101,9 +106,15 @@ class DockManager:
 
     def _apply_initial_dock_sizes(self) -> None:
         if self._dock_set.training_params.isVisible():
-            self._resize_left_dock(self._dock_set.training_params, self._TRAINING_DOCK_DEFAULT_WIDTH)
+            self._resize_left_dock(
+                self._dock_set.training_params,
+                self._TRAINING_DOCK_DEFAULT_WIDTH,
+            )
         if self._dock_set.simulation_params.isVisible():
-            self._resize_left_dock(self._dock_set.simulation_params, self._SIMULATION_DOCK_DEFAULT_WIDTH)
+            self._resize_left_dock(
+                self._dock_set.simulation_params,
+                self._SIMULATION_DOCK_DEFAULT_WIDTH,
+            )
 
     def _resize_left_dock(self, dock: QDockWidget, width: int) -> None:
         if not dock.isVisible():
@@ -122,7 +133,7 @@ class DockManagerController(QObject):
         log_panel: QWidget,
         training_params_panel: QWidget,
         simulation_params_panel: QWidget,
-        on_log_visibility_changed: Optional[callable] = None,
+        on_log_visibility_changed: callable | None = None,
     ) -> None:
         super().__init__(parent)
         self._manager = DockManager(

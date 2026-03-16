@@ -3,58 +3,43 @@ from __future__ import annotations
 import csv
 import json
 import math
+from collections import deque
+from collections.abc import Sequence
 from datetime import datetime
 from pathlib import Path
-from typing import Optional
 
 try:
     import pyqtgraph as pg
 except ImportError:  # pragma: no cover - optional dependency
     pg = None
-from collections import deque
-from PySide6.QtCore import Qt, Signal, QElapsedTimer
+
+from PySide6.QtCore import QElapsedTimer, Qt, Signal
 from PySide6.QtWidgets import (
-    QWidget,
-    QVBoxLayout,
-    QHBoxLayout,
-    QFormLayout,
-    QGridLayout,
-    QLabel,
-    QSpinBox,
-    QDoubleSpinBox,
-    QPushButton,
     QCheckBox,
     QComboBox,
-    QLineEdit,
-    QFileDialog,
-    QSizePolicy,
-    QGroupBox,
-    QTabWidget,
-    QStackedWidget,
-    QInputDialog,
-    QMessageBox,
-    QRadioButton,
-    QSplitter,
     QDialog,
-    QPlainTextEdit,
+    QDoubleSpinBox,
+    QFileDialog,
+    QFormLayout,
+    QGridLayout,
+    QGroupBox,
+    QHBoxLayout,
+    QInputDialog,
+    QLabel,
+    QLineEdit,
+    QMessageBox,
+    QPushButton,
+    QRadioButton,
     QScrollArea,
+    QSizePolicy,
+    QSpinBox,
+    QSplitter,
+    QStackedWidget,
+    QTabWidget,
+    QVBoxLayout,
+    QWidget,
 )
 
-from forex.ui.shared.utils.formatters import (
-    format_optuna_best_params,
-    format_optuna_empty_best,
-    format_optuna_empty_trial,
-    format_optuna_trial_summary,
-)
-from forex.ui.shared.widgets.layout_helpers import (
-    apply_form_label_width,
-    align_form_fields,
-    build_browse_row,
-    configure_form_layout,
-)
-from forex.ui.shared.widgets.log_widget import LogWidget
-from forex.ui.shared.utils.path_utils import latest_file_in_dir
-from forex.ui.shared.styles.tokens import FORM_LABEL_WIDTH_COMPACT, PRIMARY, TRAINING_PARAMS
 from forex.config.paths import DATA_DIR, RAW_HISTORY_DIR
 from forex.ml.rl.features.feature_builder import (
     ALPHA_FEATURE_COLUMNS,
@@ -62,7 +47,24 @@ from forex.ml.rl.features.feature_builder import (
     build_feature_frame,
     load_csv,
 )
+from forex.ui.shared.styles.tokens import FORM_LABEL_WIDTH_COMPACT, PRIMARY, TRAINING_PARAMS
+from forex.ui.shared.utils.formatters import (
+    format_optuna_best_params,
+    format_optuna_empty_best,
+    format_optuna_empty_trial,
+    format_optuna_trial_summary,
+)
+from forex.ui.shared.utils.path_utils import latest_file_in_dir
+from forex.ui.shared.widgets.layout_helpers import (
+    align_form_fields,
+    apply_form_label_width,
+    build_browse_row,
+    configure_form_layout,
+)
+from forex.ui.shared.widgets.log_widget import LogWidget
 from forex.ui.train.services import UIParamsStore
+
+BEST_PLAYBACK_PRESET_PATH = Path("config/training_presets/best_playback_s12.json")
 
 
 def _apply_card_tabs_style(tabs: QTabWidget) -> None:
@@ -178,7 +180,7 @@ class AdaptiveFormGrid(QWidget):
         label_min_width: int = 0,
         max_columns: int = 2,
         split_labels: bool = True,
-        parent: Optional[QWidget] = None,
+        parent: QWidget | None = None,
     ) -> None:
         super().__init__(parent)
         self._min_cell_width = max(220, int(min_cell_width))
@@ -242,7 +244,7 @@ class AdaptiveFormGrid(QWidget):
             self._grid.addWidget(cell, row, col, Qt.AlignLeft | Qt.AlignTop)
 
         # Align fields per visual column: label width = longest label in the column + small gap.
-        cjk_gap = max(1, self.fontMetrics().horizontalAdvance("中"))
+        cjk_gap = max(1, self.fontMetrics().horizontalAdvance("M"))
         for col_idx in range(cols):
             col_labels = [self._labels[idx] for idx in range(col_idx, len(self._labels), cols)]
             if not col_labels:
@@ -275,7 +277,7 @@ class TrainingParamsPanel(QWidget):
     history_download_requested = Signal()
     tab_changed = Signal(str)
 
-    def __init__(self, parent: Optional[QWidget] = None) -> None:
+    def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
         self._training_running = False
         self._loading_params = False
@@ -479,7 +481,11 @@ class TrainingParamsPanel(QWidget):
             layout.addWidget(widget)
             return container
 
-        def _build_run_section(title: str, checkbox: QCheckBox, note: str) -> tuple[QGroupBox, AdaptiveFormGrid]:
+        def _build_run_section(
+            title: str,
+            checkbox: QCheckBox,
+            note: str,
+        ) -> tuple[QGroupBox, AdaptiveFormGrid]:
             group = QGroupBox(title)
             _apply_live_card_style(group)
             group_layout = QVBoxLayout(group)
@@ -521,7 +527,11 @@ class TrainingParamsPanel(QWidget):
         checkpoint_group, checkpoint_layout = _build_run_section(
             "Checkpoint Gate",
             self._save_best_checkpoint,
-            "Promote the strongest validation checkpoint. Activity thresholds are shared from the card below; this card adds checkpoint-only limits.",
+            (
+                "Promote the strongest validation checkpoint. "
+                "Activity thresholds are shared from the card below; "
+                "this card adds checkpoint-only limits."
+            ),
         )
 
         eval_activity_group = QGroupBox("Shared Activity Thresholds")
@@ -558,7 +568,10 @@ class TrainingParamsPanel(QWidget):
         anti_flat_group, anti_flat_layout = _build_run_section(
             "Anti-flat",
             self._anti_flat_enabled,
-            "Stop runs that collapse into no-trade or one-sided behavior. Uses the shared activity thresholds above.",
+            (
+                "Stop runs that collapse into no-trade or one-sided behavior. "
+                "Uses the shared activity thresholds above."
+            ),
         )
 
         self._early_stop_warmup_steps = QSpinBox()
@@ -608,7 +621,10 @@ class TrainingParamsPanel(QWidget):
         self._eval_profile_min_trade_rate.setSingleStep(0.1)
         self._eval_profile_min_trade_rate.setValue(5.0)
         self._eval_profile_min_trade_rate.setFixedWidth(spin_width)
-        eval_activity_layout.add_row("Min trades/1k", _wrap_field(self._eval_profile_min_trade_rate))
+        eval_activity_layout.add_row(
+            "Min trades/1k",
+            _wrap_field(self._eval_profile_min_trade_rate),
+        )
 
         self._eval_profile_max_flat_ratio = TrimmedDoubleSpinBox()
         self._eval_profile_max_flat_ratio.setRange(0.0, 1.0)
@@ -616,7 +632,10 @@ class TrainingParamsPanel(QWidget):
         self._eval_profile_max_flat_ratio.setSingleStep(0.01)
         self._eval_profile_max_flat_ratio.setValue(0.98)
         self._eval_profile_max_flat_ratio.setFixedWidth(spin_width)
-        eval_activity_layout.add_row("Max flat ratio", _wrap_field(self._eval_profile_max_flat_ratio))
+        eval_activity_layout.add_row(
+            "Max flat ratio",
+            _wrap_field(self._eval_profile_max_flat_ratio),
+        )
 
         self._eval_profile_max_ls_imbalance = TrimmedDoubleSpinBox()
         self._eval_profile_max_ls_imbalance.setRange(0.0, 1.0)
@@ -624,7 +643,10 @@ class TrainingParamsPanel(QWidget):
         self._eval_profile_max_ls_imbalance.setSingleStep(0.01)
         self._eval_profile_max_ls_imbalance.setValue(0.2)
         self._eval_profile_max_ls_imbalance.setFixedWidth(spin_width)
-        eval_activity_layout.add_row("Max L/S imbalance", _wrap_field(self._eval_profile_max_ls_imbalance))
+        eval_activity_layout.add_row(
+            "Max L/S imbalance",
+            _wrap_field(self._eval_profile_max_ls_imbalance),
+        )
 
         self._curriculum_steps = QSpinBox()
         self._curriculum_steps.setRange(0, 10_000_000)
@@ -654,7 +676,10 @@ class TrainingParamsPanel(QWidget):
         self._curriculum_min_position_change.setSingleStep(0.01)
         self._curriculum_min_position_change.setValue(0.05)
         self._curriculum_min_position_change.setFixedWidth(spin_width)
-        curriculum_layout.add_row("Curriculum min change", _wrap_field(self._curriculum_min_position_change))
+        curriculum_layout.add_row(
+            "Curriculum min change",
+            _wrap_field(self._curriculum_min_position_change),
+        )
         self._curriculum_setting_cards.append(curriculum_group)
 
         self._anti_flat_warmup_steps = QSpinBox()
@@ -859,7 +884,8 @@ class TrainingParamsPanel(QWidget):
         self._feature_profile.setFixedWidth(max(spin_width, 280))
         self._feature_profile.setToolTip(
             "Choose which feature profile to feed into PPO. "
-            "Residual uses alpha plus a small execution context. Core 20 profiles use a compact raw feature set."
+            "Residual uses alpha plus a small execution context. "
+            "Core 20 profiles use a compact raw feature set."
         )
         episode_layout.add_row(
             "Feature profile",
@@ -948,10 +974,13 @@ class TrainingParamsPanel(QWidget):
         self._reward_mode.setCurrentIndex(5)
         self._reward_mode.setFixedWidth(spin_width)
         self._reward_mode.setToolTip(
-            "Linear PnL is a pure net return baseline. Log return is a pure log(1 + net return) baseline. "
-            "Risk-adjusted log return adds risk, downside, drawdown, turnover, and exposure penalties. "
+            "Linear PnL is a pure net return baseline. "
+            "Log return is a pure log(1 + net return) baseline. "
+            "Risk-adjusted log return adds risk, downside, drawdown, "
+            "turnover, and exposure penalties. "
             "Fixed horizon terminal penalizes terminal reward by max adverse excursion. "
-            "Path penalty scores the whole forward path. TP/SL proxy approximates an early take-profit/stop-loss outcome."
+            "Path penalty scores the whole forward path. "
+            "TP/SL proxy approximates an early take-profit/stop-loss outcome."
         )
         reward_core_fields.add_row(
             "Reward mode",
@@ -976,7 +1005,8 @@ class TrainingParamsPanel(QWidget):
         self._drawdown_penalty.setValue(2.0)
         self._drawdown_penalty.setFixedWidth(spin_width)
         self._drawdown_penalty.setToolTip(
-            "Penalty applied only when drawdown worsens: drawdown_penalty * max(0, drawdown_t - drawdown_t-1)."
+            "Penalty applied only when drawdown worsens: "
+            "drawdown_penalty * max(0, drawdown_t - drawdown_t-1)."
         )
         penalty_fields.add_row(
             "Drawdown penalty",
@@ -1019,7 +1049,8 @@ class TrainingParamsPanel(QWidget):
         self._exposure_penalty.setValue(1e-4)
         self._exposure_penalty.setFixedWidth(spin_width)
         self._exposure_penalty.setToolTip(
-            "Penalty applied to absolute target exposure to discourage oversized persistent positions."
+            "Penalty applied to absolute target exposure "
+            "to discourage oversized persistent positions."
         )
         penalty_fields.add_row(
             "Exposure penalty",
@@ -1075,7 +1106,8 @@ class TrainingParamsPanel(QWidget):
         self._target_vol.setValue(0.005)
         self._target_vol.setFixedWidth(spin_width)
         self._target_vol.setToolTip(
-            "Target realized volatility used to scale raw positions. 0 disables volatility targeting."
+            "Target realized volatility used to scale raw positions. "
+            "0 disables volatility targeting."
         )
         control_fields.add_row(
             "Target vol",
@@ -1315,6 +1347,8 @@ class TrainingParamsPanel(QWidget):
         self._start_button = QPushButton("Start Training")
         self._start_button.setProperty("class", PRIMARY)
         self._start_button.clicked.connect(self._emit_start)
+        self._load_best_preset_button = QPushButton("Load Best Playback Preset")
+        self._load_best_preset_button.clicked.connect(self._emit_load_best_playback_preset)
 
         tabs = QTabWidget()
         self._tabs = tabs
@@ -1349,6 +1383,7 @@ class TrainingParamsPanel(QWidget):
         run_layout.setSpacing(8)
         run_layout.addWidget(file_group)
         run_layout.addWidget(runtime_card)
+        run_layout.addWidget(self._load_best_preset_button)
         run_layout.addWidget(self._start_button)
         run_layout.addStretch(1)
 
@@ -1466,6 +1501,15 @@ class TrainingParamsPanel(QWidget):
         self._start_button.setText("Stop Training" if running else "Start Training")
 
     def apply_optuna_params(self, params: dict) -> None:
+        self._apply_training_params(params)
+
+    def _apply_training_params(self, params: dict) -> None:
+        if "data_path" in params:
+            self._data_path.setText(str(params["data_path"]))
+        elif "data" in params:
+            self._data_path.setText(str(params["data"]))
+        if "total_steps" in params:
+            self._total_steps.setValue(int(params["total_steps"]))
         if "learning_rate" in params:
             self._learning_rate.setValue(float(params["learning_rate"]))
         if "gamma" in params:
@@ -1484,22 +1528,84 @@ class TrainingParamsPanel(QWidget):
             self._target_kl.setValue(float(params["target_kl"]))
         if "device" in params:
             self._set_device(str(params["device"]))
+        if "seed" in params:
+            self._seed.setValue(int(params["seed"]))
+        if "curriculum_enabled" in params:
+            self._curriculum_enabled.setChecked(bool(params["curriculum_enabled"]))
+        if "curriculum_steps" in params:
+            self._curriculum_steps.setValue(int(params["curriculum_steps"]))
+        if "curriculum_max_position" in params:
+            self._curriculum_max_position.setValue(float(params["curriculum_max_position"]))
+        if "curriculum_position_step" in params:
+            self._curriculum_position_step.setValue(float(params["curriculum_position_step"]))
+        if "curriculum_min_position_change" in params:
+            self._curriculum_min_position_change.setValue(
+                float(params["curriculum_min_position_change"])
+            )
         if "vf_coef" in params:
             self._vf_coef.setValue(float(params["vf_coef"]))
         if "n_epochs" in params:
             self._n_epochs.setValue(int(params["n_epochs"]))
         if "episode_length" in params:
             self._episode_length.setValue(int(params["episode_length"]))
+        if "eval_split" in params:
+            self._eval_split.setValue(float(params["eval_split"]))
+        if "save_best_checkpoint" in params:
+            self._save_best_checkpoint.setChecked(bool(params["save_best_checkpoint"]))
+        if "checkpoint_max_trade_rate" in params:
+            self._checkpoint_max_trade_rate.setValue(float(params["checkpoint_max_trade_rate"]))
+        if "checkpoint_max_drawdown" in params:
+            self._checkpoint_max_drawdown.setValue(float(params["checkpoint_max_drawdown"]))
+        if "eval_profile_steps" in params:
+            self._eval_profile_steps.setValue(int(params["eval_profile_steps"]))
+        elif "anti_flat_profile_steps" in params:
+            self._eval_profile_steps.setValue(int(params["anti_flat_profile_steps"]))
+        if "eval_profile_min_trade_rate" in params:
+            self._eval_profile_min_trade_rate.setValue(float(params["eval_profile_min_trade_rate"]))
+        elif "checkpoint_min_trade_rate" in params:
+            self._eval_profile_min_trade_rate.setValue(float(params["checkpoint_min_trade_rate"]))
+        elif "anti_flat_min_trade_rate" in params:
+            self._eval_profile_min_trade_rate.setValue(float(params["anti_flat_min_trade_rate"]))
+        if "eval_profile_max_flat_ratio" in params:
+            self._eval_profile_max_flat_ratio.setValue(float(params["eval_profile_max_flat_ratio"]))
+        elif "checkpoint_max_flat_ratio" in params:
+            self._eval_profile_max_flat_ratio.setValue(float(params["checkpoint_max_flat_ratio"]))
+        elif "anti_flat_max_flat_ratio" in params:
+            self._eval_profile_max_flat_ratio.setValue(float(params["anti_flat_max_flat_ratio"]))
+        if "eval_profile_max_ls_imbalance" in params:
+            self._eval_profile_max_ls_imbalance.setValue(
+                float(params["eval_profile_max_ls_imbalance"])
+            )
+        elif "checkpoint_max_ls_imbalance" in params:
+            self._eval_profile_max_ls_imbalance.setValue(
+                float(params["checkpoint_max_ls_imbalance"])
+            )
+        elif "anti_flat_max_ls_imbalance" in params:
+            self._eval_profile_max_ls_imbalance.setValue(
+                float(params["anti_flat_max_ls_imbalance"])
+            )
         if "reward_horizon" in params:
             self._reward_horizon.setValue(int(params["reward_horizon"]))
         if "window_size" in params:
             self._window_size.setValue(int(params["window_size"]))
+        if "reward_scale" in params:
+            self._reward_scale.setValue(float(params["reward_scale"]))
         if "reward_clip" in params:
             self._reward_clip.setValue(float(params["reward_clip"]))
         if "reward_mode" in params:
             self._set_reward_mode(str(params["reward_mode"]))
         if "feature_profile" in params:
             self._set_feature_profile(str(params["feature_profile"]))
+        if "transaction_cost_bps" in params:
+            self._transaction_cost_bps.setValue(float(params["transaction_cost_bps"]))
+        if "slippage_bps" in params:
+            self._slippage_bps.setValue(float(params["slippage_bps"]))
+        if "holding_cost_bps" in params:
+            self._holding_cost_bps.setValue(float(params["holding_cost_bps"]))
+        if "start_mode" in params:
+            self._set_start_mode(str(params["start_mode"]))
+        elif "random_start" in params:
+            self._set_start_mode("random" if bool(params["random_start"]) else "first")
         if "min_position_change" in params:
             self._min_position_change.setValue(float(params["min_position_change"]))
         if "position_step" in params:
@@ -1532,9 +1638,76 @@ class TrainingParamsPanel(QWidget):
             self._path_downside_penalty.setValue(float(params["path_downside_penalty"]))
         if "max_position" in params:
             self._max_position.setValue(float(params["max_position"]))
+        if "early_stop_enabled" in params:
+            self._early_stop_enabled.setChecked(bool(params["early_stop_enabled"]))
+        if "early_stop_warmup_steps" in params:
+            self._early_stop_warmup_steps.setValue(int(params["early_stop_warmup_steps"]))
+        if "early_stop_patience_evals" in params:
+            self._early_stop_patience_evals.setValue(int(params["early_stop_patience_evals"]))
+        if "early_stop_min_delta" in params:
+            self._early_stop_min_delta.setValue(float(params["early_stop_min_delta"]))
+        if "anti_flat_enabled" in params:
+            self._anti_flat_enabled.setChecked(bool(params["anti_flat_enabled"]))
+        if "anti_flat_warmup_steps" in params:
+            self._anti_flat_warmup_steps.setValue(int(params["anti_flat_warmup_steps"]))
+        if "anti_flat_patience_evals" in params:
+            self._anti_flat_patience_evals.setValue(int(params["anti_flat_patience_evals"]))
+        if "optuna_trials" in params:
+            self._optuna_trials.setValue(int(params["optuna_trials"]))
+        if "optuna_steps" in params:
+            self._optuna_steps.setValue(int(params["optuna_steps"]))
+        if "optuna_auto_select" in params:
+            self._optuna_auto_select.setChecked(bool(params["optuna_auto_select"]))
+        if "optuna_select_mode" in params:
+            mode = str(params["optuna_select_mode"]).strip().lower()
+            self._optuna_select_mode.setCurrentIndex(1 if mode == "top_percent" else 0)
+        if "optuna_top_k" in params:
+            self._optuna_top_k.setValue(int(params["optuna_top_k"]))
+        if "optuna_top_percent" in params:
+            self._optuna_top_percent.setValue(float(params["optuna_top_percent"]))
+        if "optuna_min_candidates" in params:
+            self._optuna_min_candidates.setValue(int(params["optuna_min_candidates"]))
+        if "optuna_replay_enabled" in params:
+            self._optuna_replay_enabled.setChecked(bool(params["optuna_replay_enabled"]))
+        if "optuna_replay_steps" in params:
+            self._optuna_replay_steps.setValue(int(params["optuna_replay_steps"]))
+        if "optuna_replay_seeds" in params:
+            self._optuna_replay_seeds.setValue(int(params["optuna_replay_seeds"]))
+        if "optuna_replay_score_mode" in params:
+            self._set_replay_score_mode(str(params["optuna_replay_score_mode"]))
+        if "optuna_replay_walk_forward_segments" in params:
+            self._optuna_replay_walk_forward_segments.setValue(
+                int(params["optuna_replay_walk_forward_segments"])
+            )
+        if "optuna_replay_walk_forward_steps" in params:
+            self._optuna_replay_walk_forward_steps.setValue(
+                int(params["optuna_replay_walk_forward_steps"])
+            )
+        if "optuna_replay_walk_forward_stride" in params:
+            self._optuna_replay_walk_forward_stride.setValue(
+                int(params["optuna_replay_walk_forward_stride"])
+            )
+        if "optuna_replay_min_trade_rate" in params:
+            self._optuna_replay_min_trade_rate.setValue(float(params["optuna_replay_min_trade_rate"]))
+        if "optuna_replay_max_flat_ratio" in params:
+            self._optuna_replay_max_flat_ratio.setValue(float(params["optuna_replay_max_flat_ratio"]))
+        if "optuna_replay_max_ls_imbalance" in params:
+            self._optuna_replay_max_ls_imbalance.setValue(
+                float(params["optuna_replay_max_ls_imbalance"])
+            )
+        self._sync_batch_size_limit()
+        self._sync_execution_constraints()
+        self._sync_feature_selection_controls()
+        self._refresh_view_features_button()
+        self._refresh_optuna_select_controls()
+        self._refresh_optuna_replay_controls()
+        self._sync_early_stop_controls()
+        self._sync_curriculum_controls()
+        self._sync_anti_flat_controls()
+        self._refresh_optuna_plan_hint()
 
     @staticmethod
-    def _set_label_text_safe(label: Optional[QLabel], text: str) -> None:
+    def _set_label_text_safe(label: QLabel | None, text: str) -> None:
         if label is None:
             return
         try:
@@ -1720,7 +1893,11 @@ class TrainingParamsPanel(QWidget):
             if not self._selected_feature_names:
                 self._selected_feature_names = list(self._data_feature_names)
             else:
-                selected = [name for name in self._selected_feature_names if name in self._data_feature_names]
+                selected = [
+                    name
+                    for name in self._selected_feature_names
+                    if name in self._data_feature_names
+                ]
                 self._selected_feature_names = selected or list(self._data_feature_names)
             self._sync_feature_selection_controls()
             self._refresh_view_features_button()
@@ -1800,15 +1977,19 @@ class TrainingParamsPanel(QWidget):
             "minute_of_week_cos",
             "is_monday_open_window",
             "is_london_session",
+            "is_london_pre_ny_session",
             "is_ny_session",
             "is_london_ny_overlap",
         }
+        trend_prefixes = ("sma_", "momentum_", "price_z_")
+        volatility_prefixes = ("atr_", "vol_", "bollinger_")
+        regime_prefixes = ("rsi_", "adx_", "trend_flag_", "range_strength_")
         for name in feature_names:
             if name.startswith("returns_"):
                 group_map["Returns"].append(name)
-            elif name.startswith("sma_") or name.startswith("momentum_") or name.startswith("price_z_"):
+            elif name.startswith(trend_prefixes):
                 group_map["Trend & Momentum"].append(name)
-            elif name.startswith("atr_") or name.startswith("vol_") or name.startswith("bollinger_"):
+            elif name.startswith(volatility_prefixes):
                 group_map["Volatility"].append(name)
             elif name.startswith("breakout_") or name in (
                 "distance_to_rolling_high_20",
@@ -1817,9 +1998,7 @@ class TrainingParamsPanel(QWidget):
                 group_map["Breakout & Range"].append(name)
             elif name in ("body_size_ratio", "close_location_in_bar"):
                 group_map["Candlestick"].append(name)
-            elif name.startswith("rsi_") or name.startswith("adx_") or name.startswith("trend_flag_") or name.startswith(
-                "range_strength_"
-            ):
+            elif name.startswith(regime_prefixes):
                 group_map["Regime & Oscillator"].append(name)
             elif name in session_context_names:
                 group_map["Session Context"].append(name)
@@ -1838,15 +2017,29 @@ class TrainingParamsPanel(QWidget):
             )
             return
         if not self._data_feature_names:
-            QMessageBox.information(self, "Features", "No feature list available for the selected data.")
+            QMessageBox.information(
+                self,
+                "Features",
+                "No feature list available for the selected data.",
+            )
             return
         dialog = QDialog(self)
         dialog.setWindowTitle("Select Features")
         dialog.resize(640, 620)
         layout = QVBoxLayout(dialog)
+        regime_names = (
+            "vol_pct_72_252",
+            "trend_flag_25",
+            "range_strength_10_50_atr14",
+        )
+        regime_text = (
+            ", ".join(name for name in regime_names if name in self._data_feature_names)
+            or "-"
+        )
         summary = QLabel(
-            f"{len(self._selected_feature_names) or len(self._data_feature_names)} / {len(self._data_feature_names)} selected\n"
-            f"regime: {', '.join(name for name in ('vol_pct_72_252', 'trend_flag_25', 'range_strength_10_50_atr14') if name in self._data_feature_names) or '-'}"
+            f"{len(self._selected_feature_names) or len(self._data_feature_names)} / "
+            f"{len(self._data_feature_names)} selected\n"
+            f"regime: {regime_text}"
         )
         summary.setTextInteractionFlags(Qt.TextSelectableByMouse)
         layout.addWidget(summary)
@@ -1878,7 +2071,7 @@ class TrainingParamsPanel(QWidget):
             count = sum(1 for cb in checkboxes.values() if cb.isChecked())
             summary.setText(
                 f"{count} / {len(self._data_feature_names)} selected\n"
-                f"regime: {', '.join(name for name in ('vol_pct_72_252', 'trend_flag_25', 'range_strength_10_50_atr14') if name in self._data_feature_names) or '-'}"
+                f"regime: {regime_text}"
             )
 
         for checkbox in checkboxes.values():
@@ -1890,12 +2083,20 @@ class TrainingParamsPanel(QWidget):
         apply_button = QPushButton("Apply", dialog)
         apply_button.setProperty("class", PRIMARY)
 
-        select_all_button.clicked.connect(lambda: [cb.setChecked(True) for cb in checkboxes.values()])
-        clear_button.clicked.connect(lambda: [cb.setChecked(False) for cb in checkboxes.values()])
+        select_all_button.clicked.connect(
+            lambda: [cb.setChecked(True) for cb in checkboxes.values()]
+        )
+        clear_button.clicked.connect(
+            lambda: [cb.setChecked(False) for cb in checkboxes.values()]
+        )
         cancel_button.clicked.connect(dialog.reject)
 
         def apply_selection() -> None:
-            selected_names = [name for name in self._data_feature_names if checkboxes[name].isChecked()]
+            selected_names = [
+                name
+                for name in self._data_feature_names
+                if checkboxes[name].isChecked()
+            ]
             if not selected_names:
                 QMessageBox.information(dialog, "Features", "Select at least one feature.")
                 return
@@ -1920,7 +2121,10 @@ class TrainingParamsPanel(QWidget):
         if profile != "raw53":
             labels = {
                 "alpha4": f"Features: Alpha4 ({len(ALPHA_FEATURE_COLUMNS)})",
-                "residual": f"Features: Alpha4 + context ({len(ALPHA_FEATURE_COLUMNS) + len(RESIDUAL_CONTEXT_COLUMNS)})",
+                "residual": (
+                    "Features: Alpha4 + context "
+                    f"({len(ALPHA_FEATURE_COLUMNS) + len(RESIDUAL_CONTEXT_COLUMNS)})"
+                ),
                 "alpha8": "Features: Alpha8 (8)",
                 "alpha8_residual": "Features: Alpha8 + context (16)",
                 "alpha12": "Features: Alpha12 (12)",
@@ -1964,14 +2168,22 @@ class TrainingParamsPanel(QWidget):
         try:
             payload = json.loads(replay_path.read_text(encoding="utf-8"))
         except (OSError, json.JSONDecodeError) as exc:
-            QMessageBox.warning(self, "Replay Parse Error", f"Failed to parse replay results: {exc}")
+            QMessageBox.warning(
+                self,
+                "Replay Parse Error",
+                f"Failed to parse replay results: {exc}",
+            )
             return
         if not isinstance(payload, dict):
             QMessageBox.warning(self, "Replay Parse Error", "Invalid replay results format.")
             return
         raw_results = payload.get("results", [])
         if not isinstance(raw_results, list) or not raw_results:
-            QMessageBox.information(self, "No Replay Results", "Replay results are empty.")
+            QMessageBox.information(
+                self,
+                "No Replay Results",
+                "Replay results are empty.",
+            )
             return
 
         candidates: list[dict] = []
@@ -1994,7 +2206,11 @@ class TrainingParamsPanel(QWidget):
             labels.append(label)
 
         if not candidates:
-            QMessageBox.information(self, "No Replay Results", "No valid replay parameter rows found.")
+            QMessageBox.information(
+                self,
+                "No Replay Results",
+                "No valid replay parameter rows found.",
+            )
             return
 
         selected_label, ok = QInputDialog.getItem(
@@ -2019,14 +2235,40 @@ class TrainingParamsPanel(QWidget):
         self.apply_optuna_params(params)
         self.update_optuna_best_params(params)
         self.update_optuna_trial_summary(
-            (
-                f"Replay selected: trial={selected.get('trial', '?')} "
-                f"score={float(selected.get('score', 0.0)):.6g} "
-                f"mean_reward={float(selected.get('mean_reward', 0.0)):.6g} "
-                f"std={float(selected.get('std_reward', 0.0)):.6g}"
-            )
+            f"Replay selected: trial={selected.get('trial', '?')} "
+            f"score={float(selected.get('score', 0.0)):.6g} "
+            f"mean_reward={float(selected.get('mean_reward', 0.0)):.6g} "
+            f"std={float(selected.get('std_reward', 0.0)):.6g}"
         )
         self._auto_save_params()
+
+    @staticmethod
+    def _load_json_payload(path: Path) -> dict | None:
+        try:
+            payload = json.loads(path.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError):
+            return None
+        return payload if isinstance(payload, dict) else None
+
+    def _emit_load_best_playback_preset(self) -> None:
+        payload = self._load_json_payload(BEST_PLAYBACK_PRESET_PATH)
+        if payload is None:
+            QMessageBox.warning(
+                self,
+                "Preset Load Error",
+                f"Failed to load preset from {BEST_PLAYBACK_PRESET_PATH}.",
+            )
+            return
+        self.apply_optuna_params(payload)
+        self._auto_save_params()
+        source_run = str(payload.get("source_run", "")).strip()
+        summary = str(payload.get("summary", "")).strip()
+        message = "Applied the best historical playback preset to the training form."
+        if source_run:
+            message += f"\n\nSource run: {source_run}"
+        if summary:
+            message += f"\n{summary}"
+        QMessageBox.information(self, "Preset Loaded", message)
 
     def _on_tab_changed(self, index: int) -> None:
         if hasattr(self, "_tab_bar") and hasattr(self, "_optuna_tab_index"):
@@ -2573,7 +2815,8 @@ class TrainingParamsPanel(QWidget):
             self._view_features_button.setToolTip("Select raw features used by training.")
         else:
             self._view_features_button.setToolTip(
-                "Feature profile controls the active features. Raw feature selection is disabled for this mode."
+                "Feature profile controls the active features. "
+                "Raw feature selection is disabled for this mode."
             )
         self._refresh_view_features_button()
 
@@ -2661,7 +2904,7 @@ class TrainingParamsPanel(QWidget):
 
 
 class TrainingPanel(QWidget):
-    def __init__(self, parent: Optional[QWidget] = None) -> None:
+    def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
         self._current_step = 0
         self._charts_available = pg is not None
@@ -2749,7 +2992,7 @@ class TrainingPanel(QWidget):
                 "#59A14F",
                 "#EDC948",
             ]
-            for index, (label, key) in enumerate(self._metrics):
+            for index, (_label, key) in enumerate(self._metrics):
                 color = colors[index % len(colors)]
                 curve = plot.plot(pen=pg.mkPen(color, width=2))
                 self._curves[key] = curve
@@ -2817,7 +3060,9 @@ class TrainingPanel(QWidget):
             self._optuna_best_summary_cells: list[tuple[QLabel, QLabel]] = []
             for index in range(12):
                 label_widget = QLabel("", self._optuna_best_summary_panel)
-                label_widget.setStyleSheet("color: #90a0b6; font-size: 12px; font-weight: 600;")
+                label_widget.setStyleSheet(
+                    "color: #90a0b6; font-size: 12px; font-weight: 600;"
+                )
                 value_widget = QLabel("", self._optuna_best_summary_panel)
                 value_widget.setStyleSheet(
                     "color: #e7edf7; font-size: 13px; font-weight: 600;"
@@ -2858,7 +3103,9 @@ class TrainingPanel(QWidget):
                 checkbox = QRadioButton(label)
                 checked = label == "eval/mean_reward"
                 checkbox.setChecked(checked)
-                checkbox.toggled.connect(lambda checked_state, k=key: self._toggle_curve(k, checked_state))
+                checkbox.toggled.connect(
+                    lambda checked_state, k=key: self._toggle_curve(k, checked_state)
+                )
                 self._checkboxes[key] = checkbox
                 row = idx // 4
                 col = idx % 4
@@ -2917,30 +3164,37 @@ class TrainingPanel(QWidget):
             summary_grid.setColumnStretch(1, 1)
             summary_grid.setColumnStretch(3, 1)
 
-            def add_summary_row(row_index: int, left_label: str, left_value: QLabel, right_label: str, right_value: QLabel) -> None:
+            title_style = (
+                "color: #90a0b6; font-size: 12px; "
+                "font-weight: 600; padding-bottom: 2px;"
+            )
+            value_style = (
+                "color: #e7edf7; font-size: 13px; "
+                "font-weight: 600; padding-bottom: 2px;"
+            )
+
+            def add_summary_row(
+                row_index: int,
+                left_label: str,
+                left_value: QLabel,
+                right_label: str,
+                right_value: QLabel,
+            ) -> None:
                 left_title = QLabel(left_label, reward_group)
-                left_title.setStyleSheet(
-                    "color: #90a0b6; font-size: 12px; font-weight: 600; padding-bottom: 2px;"
-                )
+                left_title.setStyleSheet(title_style)
                 left_value.setParent(reward_group)
                 left_value.setWordWrap(True)
                 left_value.setTextInteractionFlags(Qt.TextSelectableByMouse)
                 left_value.setMinimumHeight(left_value.sizeHint().height() + 4)
-                left_value.setStyleSheet(
-                    "color: #e7edf7; font-size: 13px; font-weight: 600; padding-bottom: 2px;"
-                )
+                left_value.setStyleSheet(value_style)
 
                 right_title = QLabel(right_label, reward_group)
-                right_title.setStyleSheet(
-                    "color: #90a0b6; font-size: 12px; font-weight: 600; padding-bottom: 2px;"
-                )
+                right_title.setStyleSheet(title_style)
                 right_value.setParent(reward_group)
                 right_value.setWordWrap(True)
                 right_value.setTextInteractionFlags(Qt.TextSelectableByMouse)
                 right_value.setMinimumHeight(right_value.sizeHint().height() + 4)
-                right_value.setStyleSheet(
-                    "color: #e7edf7; font-size: 13px; font-weight: 600; padding-bottom: 2px;"
-                )
+                right_value.setStyleSheet(value_style)
 
                 summary_grid.addWidget(left_title, row_index, 0, Qt.AlignLeft | Qt.AlignTop)
                 summary_grid.addWidget(left_value, row_index, 1, Qt.AlignLeft | Qt.AlignTop)
@@ -2949,42 +3203,93 @@ class TrainingPanel(QWidget):
 
             def add_summary_full_row(row_index: int, label_text: str, value_label: QLabel) -> None:
                 title = QLabel(label_text, reward_group)
-                title.setStyleSheet(
-                    "color: #90a0b6; font-size: 12px; font-weight: 600; padding-bottom: 2px;"
-                )
+                title.setStyleSheet(title_style)
                 value_label.setParent(reward_group)
                 value_label.setTextInteractionFlags(Qt.TextSelectableByMouse)
                 value_label.setMinimumHeight(value_label.sizeHint().height() + 4)
-                value_label.setStyleSheet(
-                    "color: #e7edf7; font-size: 13px; font-weight: 600; padding-bottom: 2px;"
-                )
+                value_label.setStyleSheet(value_style)
                 summary_grid.addWidget(title, row_index, 0, Qt.AlignLeft | Qt.AlignTop)
-                summary_grid.addWidget(value_label, row_index, 1, 1, 3, Qt.AlignLeft | Qt.AlignTop)
-
-            def add_summary_single_row(row_index: int, label_text: str, value_label: QLabel) -> None:
-                title = QLabel(label_text, reward_group)
-                title.setStyleSheet(
-                    "color: #90a0b6; font-size: 12px; font-weight: 600; padding-bottom: 2px;"
+                summary_grid.addWidget(
+                    value_label,
+                    row_index,
+                    1,
+                    1,
+                    3,
+                    Qt.AlignLeft | Qt.AlignTop,
                 )
+
+            def add_summary_single_row(
+                row_index: int,
+                label_text: str,
+                value_label: QLabel,
+            ) -> None:
+                title = QLabel(label_text, reward_group)
+                title.setStyleSheet(title_style)
                 value_label.setParent(reward_group)
                 value_label.setWordWrap(True)
                 value_label.setTextInteractionFlags(Qt.TextSelectableByMouse)
                 value_label.setMinimumHeight(value_label.sizeHint().height() + 4)
-                value_label.setStyleSheet(
-                    "color: #e7edf7; font-size: 13px; font-weight: 600; padding-bottom: 2px;"
-                )
+                value_label.setStyleSheet(value_style)
                 summary_grid.addWidget(title, row_index, 0, Qt.AlignLeft | Qt.AlignTop)
                 summary_grid.addWidget(value_label, row_index, 1, Qt.AlignLeft | Qt.AlignTop)
 
-            add_summary_row(0, "samples", self._reward_count_value, "reward mean", self._reward_mean_value)
-            add_summary_row(1, "reward std", self._reward_std_value, "reward SNR", self._reward_snr_value)
+            add_summary_row(
+                0,
+                "samples",
+                self._reward_count_value,
+                "reward mean",
+                self._reward_mean_value,
+            )
+            add_summary_row(
+                1,
+                "reward std",
+                self._reward_std_value,
+                "reward SNR",
+                self._reward_snr_value,
+            )
             add_summary_full_row(2, "quantiles", self._reward_quantiles_value)
-            add_summary_row(3, "eval mean reward", self._reward_eval_value, "best eval", self._reward_best_eval_value)
-            add_summary_row(4, "train-eval gap", self._reward_train_eval_gap_value, "eval trend", self._reward_eval_trend_value)
-            add_summary_row(5, "rolling sharpe", self._reward_rolling_sharpe_value, "cost drag ratio", self._reward_cost_drag_ratio_value)
-            add_summary_row(6, "action/move ratio", self._reward_action_to_move_ratio_value, "explained variance", self._reward_explained_variance_value)
-            add_summary_row(7, "eval trade/1k", self._reward_eval_trade_rate_value, "checkpoint gate", self._reward_checkpoint_gate_value)
-            add_summary_row(8, "eval flat ratio", self._reward_eval_flat_ratio_value, "eval max dd", self._reward_eval_max_drawdown_value)
+            add_summary_row(
+                3,
+                "eval mean reward",
+                self._reward_eval_value,
+                "best eval",
+                self._reward_best_eval_value,
+            )
+            add_summary_row(
+                4,
+                "train-eval gap",
+                self._reward_train_eval_gap_value,
+                "eval trend",
+                self._reward_eval_trend_value,
+            )
+            add_summary_row(
+                5,
+                "rolling sharpe",
+                self._reward_rolling_sharpe_value,
+                "cost drag ratio",
+                self._reward_cost_drag_ratio_value,
+            )
+            add_summary_row(
+                6,
+                "action/move ratio",
+                self._reward_action_to_move_ratio_value,
+                "explained variance",
+                self._reward_explained_variance_value,
+            )
+            add_summary_row(
+                7,
+                "eval trade/1k",
+                self._reward_eval_trade_rate_value,
+                "checkpoint gate",
+                self._reward_checkpoint_gate_value,
+            )
+            add_summary_row(
+                8,
+                "eval flat ratio",
+                self._reward_eval_flat_ratio_value,
+                "eval max dd",
+                self._reward_eval_max_drawdown_value,
+            )
             add_summary_single_row(9, "eval ls imbalance", self._reward_eval_ls_imbalance_value)
             summary_grid.setRowStretch(10, 1)
             reward_group_layout.addLayout(summary_grid)
@@ -3007,52 +3312,56 @@ class TrainingPanel(QWidget):
             heuristic_grid.setColumnStretch(1, 1)
             heuristic_grid.setColumnStretch(3, 1)
 
-            def add_heuristic_row(row_index: int, left_label: str, left_value: QLabel, right_label: str, right_value: QLabel) -> None:
+            def add_heuristic_row(
+                row_index: int,
+                left_label: str,
+                left_value: QLabel,
+                right_label: str,
+                right_value: QLabel,
+            ) -> None:
                 left_title = QLabel(left_label, heuristic_group)
-                left_title.setStyleSheet(
-                    "color: #90a0b6; font-size: 12px; font-weight: 600; padding-bottom: 2px;"
-                )
+                left_title.setStyleSheet(title_style)
                 left_value.setParent(heuristic_group)
                 left_value.setWordWrap(True)
                 left_value.setTextInteractionFlags(Qt.TextSelectableByMouse)
                 left_value.setMinimumHeight(left_value.sizeHint().height() + 4)
-                left_value.setStyleSheet(
-                    "color: #e7edf7; font-size: 13px; font-weight: 600; padding-bottom: 2px;"
-                )
+                left_value.setStyleSheet(value_style)
 
                 right_title = QLabel(right_label, heuristic_group)
-                right_title.setStyleSheet(
-                    "color: #90a0b6; font-size: 12px; font-weight: 600; padding-bottom: 2px;"
-                )
+                right_title.setStyleSheet(title_style)
                 right_value.setParent(heuristic_group)
                 right_value.setWordWrap(True)
                 right_value.setTextInteractionFlags(Qt.TextSelectableByMouse)
                 right_value.setMinimumHeight(right_value.sizeHint().height() + 4)
-                right_value.setStyleSheet(
-                    "color: #e7edf7; font-size: 13px; font-weight: 600; padding-bottom: 2px;"
-                )
+                right_value.setStyleSheet(value_style)
 
                 heuristic_grid.addWidget(left_title, row_index, 0, Qt.AlignLeft | Qt.AlignTop)
                 heuristic_grid.addWidget(left_value, row_index, 1, Qt.AlignLeft | Qt.AlignTop)
                 heuristic_grid.addWidget(right_title, row_index, 2, Qt.AlignLeft | Qt.AlignTop)
                 heuristic_grid.addWidget(right_value, row_index, 3, Qt.AlignLeft | Qt.AlignTop)
 
-            def add_heuristic_single_row(row_index: int, label_text: str, value_label: QLabel) -> None:
+            def add_heuristic_single_row(
+                row_index: int,
+                label_text: str,
+                value_label: QLabel,
+            ) -> None:
                 title = QLabel(label_text, heuristic_group)
-                title.setStyleSheet(
-                    "color: #90a0b6; font-size: 12px; font-weight: 600; padding-bottom: 2px;"
-                )
+                title.setStyleSheet(title_style)
                 value_label.setParent(heuristic_group)
                 value_label.setWordWrap(True)
                 value_label.setTextInteractionFlags(Qt.TextSelectableByMouse)
                 value_label.setMinimumHeight(value_label.sizeHint().height() + 4)
-                value_label.setStyleSheet(
-                    "color: #e7edf7; font-size: 13px; font-weight: 600; padding-bottom: 2px;"
-                )
+                value_label.setStyleSheet(value_style)
                 heuristic_grid.addWidget(title, row_index, 0, Qt.AlignLeft | Qt.AlignTop)
                 heuristic_grid.addWidget(value_label, row_index, 1, Qt.AlignLeft | Qt.AlignTop)
 
-            add_heuristic_row(0, "signal band", self._reward_signal_band_value, "update regime", self._reward_update_regime_value)
+            add_heuristic_row(
+                0,
+                "signal band",
+                self._reward_signal_band_value,
+                "update regime",
+                self._reward_update_regime_value,
+            )
             add_heuristic_single_row(1, "critic regime", self._reward_critic_regime_value)
             heuristic_group_layout.addLayout(heuristic_grid)
 
@@ -3071,21 +3380,21 @@ class TrainingPanel(QWidget):
             self._reward_quality_flags_value.setWordWrap(False)
             self._reward_hint_value.setWordWrap(False)
             self._reward_missing_eval_fields_value.setWordWrap(False)
-            self._reward_quality_flags_value.setMinimumHeight(self._reward_quality_flags_value.sizeHint().height() + 4)
-            self._reward_hint_value.setMinimumHeight(self._reward_hint_value.sizeHint().height() + 4)
-            self._reward_missing_eval_fields_value.setMinimumHeight(self._reward_missing_eval_fields_value.sizeHint().height() + 4)
+            self._reward_quality_flags_value.setMinimumHeight(
+                self._reward_quality_flags_value.sizeHint().height() + 4
+            )
+            self._reward_hint_value.setMinimumHeight(
+                self._reward_hint_value.sizeHint().height() + 4
+            )
+            self._reward_missing_eval_fields_value.setMinimumHeight(
+                self._reward_missing_eval_fields_value.sizeHint().height() + 4
+            )
             quality_title = QLabel("quality flags", heuristic_group)
-            quality_title.setStyleSheet(
-                "color: #90a0b6; font-size: 12px; font-weight: 600; padding-bottom: 2px;"
-            )
+            quality_title.setStyleSheet(title_style)
             missing_eval_title = QLabel("missing eval fields", heuristic_group)
-            missing_eval_title.setStyleSheet(
-                "color: #90a0b6; font-size: 12px; font-weight: 600; padding-bottom: 2px;"
-            )
+            missing_eval_title.setStyleSheet(title_style)
             interpretation_title = QLabel("interpretation", heuristic_group)
-            interpretation_title.setStyleSheet(
-                "color: #90a0b6; font-size: 12px; font-weight: 600; padding-bottom: 2px;"
-            )
+            interpretation_title.setStyleSheet(title_style)
             self._reward_quality_flags_value.setStyleSheet(
                 "color: #dbe4f2; font-size: 13px; padding-bottom: 2px;"
             )
@@ -3095,12 +3404,42 @@ class TrainingPanel(QWidget):
             self._reward_hint_value.setStyleSheet(
                 "color: #dbe4f2; font-size: 13px; padding-bottom: 2px;"
             )
-            heuristic_narrative_layout.addWidget(quality_title, 0, 0, Qt.AlignLeft | Qt.AlignTop)
-            heuristic_narrative_layout.addWidget(self._reward_quality_flags_value, 0, 1, Qt.AlignLeft | Qt.AlignTop)
-            heuristic_narrative_layout.addWidget(missing_eval_title, 1, 0, Qt.AlignLeft | Qt.AlignTop)
-            heuristic_narrative_layout.addWidget(self._reward_missing_eval_fields_value, 1, 1, Qt.AlignLeft | Qt.AlignTop)
-            heuristic_narrative_layout.addWidget(interpretation_title, 2, 0, Qt.AlignLeft | Qt.AlignTop)
-            heuristic_narrative_layout.addWidget(self._reward_hint_value, 2, 1, Qt.AlignLeft | Qt.AlignTop)
+            heuristic_narrative_layout.addWidget(
+                quality_title,
+                0,
+                0,
+                Qt.AlignLeft | Qt.AlignTop,
+            )
+            heuristic_narrative_layout.addWidget(
+                self._reward_quality_flags_value,
+                0,
+                1,
+                Qt.AlignLeft | Qt.AlignTop,
+            )
+            heuristic_narrative_layout.addWidget(
+                missing_eval_title,
+                1,
+                0,
+                Qt.AlignLeft | Qt.AlignTop,
+            )
+            heuristic_narrative_layout.addWidget(
+                self._reward_missing_eval_fields_value,
+                1,
+                1,
+                Qt.AlignLeft | Qt.AlignTop,
+            )
+            heuristic_narrative_layout.addWidget(
+                interpretation_title,
+                2,
+                0,
+                Qt.AlignLeft | Qt.AlignTop,
+            )
+            heuristic_narrative_layout.addWidget(
+                self._reward_hint_value,
+                2,
+                1,
+                Qt.AlignLeft | Qt.AlignTop,
+            )
             heuristic_narrative_layout.setRowStretch(3, 1)
             heuristic_group_layout.addLayout(heuristic_narrative_layout)
             heuristic_group_layout.addStretch(1)
@@ -3675,7 +4014,9 @@ class TrainingPanel(QWidget):
         self._reward_std_value.setText(self._format_stat(std))
         self._reward_snr_value.setText(snr_text)
         self._reward_quantiles_value.setText(
-            f"p10={self._format_stat(p10)}  p50={self._format_stat(p50)}  p90={self._format_stat(p90)}"
+            f"p10={self._format_stat(p10)}  "
+            f"p50={self._format_stat(p50)}  "
+            f"p90={self._format_stat(p90)}"
         )
         self._reward_eval_value.setText(
             "-" if eval_mean_reward is None else self._format_stat(float(eval_mean_reward))
@@ -3726,7 +4067,10 @@ class TrainingPanel(QWidget):
         else:
             hint = "Reward signal is stronger than its recent volatility."
         if abs(p90 - p10) > max(std * 2.5, 1e-9):
-            hint += " Wide percentile spread suggests a heavy-tailed or unstable reward distribution."
+            hint += (
+                " Wide percentile spread suggests a heavy-tailed "
+                "or unstable reward distribution."
+            )
         self._reward_hint_value.setText(hint)
         self._append_reward_diagnostics_row(
             samples=count,
@@ -3964,7 +4308,7 @@ class TrainingPanel(QWidget):
         return f"{value:.6g}"
 
     @staticmethod
-    def _format_csv_metric_value(value: Optional[float]) -> str:
+    def _format_csv_metric_value(value: float | None) -> str:
         if value is None:
             return ""
         if math.isinf(value):
@@ -3972,7 +4316,7 @@ class TrainingPanel(QWidget):
         return f"{value:.10g}"
 
     @staticmethod
-    def _safe_subtract(base: Optional[float], *parts: Optional[float]) -> Optional[float]:
+    def _safe_subtract(base: float | None, *parts: float | None) -> float | None:
         if base is None:
             return None
         total = float(base)
@@ -3982,14 +4326,14 @@ class TrainingPanel(QWidget):
         return total
 
     @staticmethod
-    def _safe_add(*parts: Optional[float]) -> Optional[float]:
+    def _safe_add(*parts: float | None) -> float | None:
         values = [float(part) for part in parts if part is not None]
         if not values:
             return None
         return sum(values)
 
     @staticmethod
-    def _safe_divide(numerator: Optional[float], denominator: Optional[float]) -> Optional[float]:
+    def _safe_divide(numerator: float | None, denominator: float | None) -> float | None:
         if numerator is None or denominator is None or abs(float(denominator)) <= 1e-12:
             return None
         return float(numerator) / float(denominator)
@@ -4006,8 +4350,8 @@ class TrainingPanel(QWidget):
 
     @staticmethod
     def _classify_update_regime(
-        approx_kl: Optional[float],
-        clip_fraction: Optional[float],
+        approx_kl: float | None,
+        clip_fraction: float | None,
     ) -> str:
         if approx_kl is None and clip_fraction is None:
             return "unknown"
@@ -4020,7 +4364,7 @@ class TrainingPanel(QWidget):
         return "healthy"
 
     @staticmethod
-    def _classify_critic_regime(explained_variance: Optional[float]) -> str:
+    def _classify_critic_regime(explained_variance: float | None) -> str:
         if explained_variance is None:
             return "unknown"
         value = float(explained_variance)
@@ -4043,10 +4387,10 @@ class TrainingPanel(QWidget):
 
     @staticmethod
     def _missing_eval_fields(
-        eval_trade_rate_1k: Optional[float],
-        eval_flat_ratio: Optional[float],
-        eval_ls_imbalance: Optional[float],
-        eval_max_drawdown: Optional[float],
+        eval_trade_rate_1k: float | None,
+        eval_flat_ratio: float | None,
+        eval_ls_imbalance: float | None,
+        eval_max_drawdown: float | None,
     ) -> str:
         mapping = [
             ("trade_rate", eval_trade_rate_1k),
@@ -4064,12 +4408,20 @@ class TrainingPanel(QWidget):
     @staticmethod
     def _classify_checkpoint_gate(
         *,
-        eval_trade_rate_1k: Optional[float],
-        eval_flat_ratio: Optional[float],
-        eval_ls_imbalance: Optional[float],
-        eval_max_drawdown: Optional[float],
+        eval_trade_rate_1k: float | None,
+        eval_flat_ratio: float | None,
+        eval_ls_imbalance: float | None,
+        eval_max_drawdown: float | None,
     ) -> str:
-        if any(value is None for value in (eval_trade_rate_1k, eval_flat_ratio, eval_ls_imbalance, eval_max_drawdown)):
+        if any(
+            value is None
+            for value in (
+                eval_trade_rate_1k,
+                eval_flat_ratio,
+                eval_ls_imbalance,
+                eval_max_drawdown,
+            )
+        ):
             return "waiting"
         reasons: list[str] = []
         if float(eval_trade_rate_1k) < 5.0:
@@ -4091,12 +4443,12 @@ class TrainingPanel(QWidget):
         cls,
         *,
         snr: float,
-        eval_mean_reward: Optional[float],
-        approx_kl: Optional[float],
-        clip_fraction: Optional[float],
-        explained_variance: Optional[float],
-        abs_delta_mean: Optional[float],
-        abs_price_return_mean: Optional[float],
+        eval_mean_reward: float | None,
+        approx_kl: float | None,
+        clip_fraction: float | None,
+        explained_variance: float | None,
+        abs_delta_mean: float | None,
+        abs_price_return_mean: float | None,
     ) -> str:
         flags: list[str] = []
         if not math.isinf(snr) and snr < 0.5:
@@ -4151,7 +4503,7 @@ class TrainingPanel(QWidget):
         return ordered[lower] * (1.0 - weight) + ordered[upper] * weight
 
     @staticmethod
-    def _compute_rolling_sharpe(values: deque[float]) -> Optional[float]:
+    def _compute_rolling_sharpe(values: deque[float]) -> float | None:
         count = len(values)
         if count < 2:
             return None
@@ -4168,7 +4520,7 @@ class TrainingPanel(QWidget):
         return datetime.now().isoformat(timespec="seconds")
 
     @staticmethod
-    def _parse_kv_line(line: str) -> Optional[tuple[str, float]]:
+    def _parse_kv_line(line: str) -> tuple[str, float] | None:
         parts = [part.strip() for part in line.split("|") if part.strip()]
         if len(parts) < 2:
             return None
@@ -4178,7 +4530,7 @@ class TrainingPanel(QWidget):
             return None
 
     @staticmethod
-    def _parse_csv_line(line: str) -> Optional[tuple[int, str, float]]:
+    def _parse_csv_line(line: str) -> tuple[int, str, float] | None:
         if "," not in line:
             return None
         parts = line.strip().split(",", 2)
@@ -4193,7 +4545,7 @@ class TrainingPanel(QWidget):
         return step, metric, value
 
     @staticmethod
-    def _parse_optuna_csv_line(line: str) -> Optional[tuple[float, float, float, float]]:
+    def _parse_optuna_csv_line(line: str) -> tuple[float, float, float, float] | None:
         if "," not in line:
             return None
         parts = line.strip().split(",", 3)
@@ -4211,7 +4563,7 @@ class TrainingPanel(QWidget):
         return trial, trial_value, best_value, duration
 
     @staticmethod
-    def _parse_float(key: str, line: str) -> Optional[float]:
+    def _parse_float(key: str, line: str) -> float | None:
         parts = [part.strip() for part in line.split("|") if part.strip()]
         if len(parts) < 2:
             return None
@@ -4223,7 +4575,7 @@ class TrainingPanel(QWidget):
             return None
 
     @staticmethod
-    def _parse_int(key: str, line: str) -> Optional[int]:
+    def _parse_int(key: str, line: str) -> int | None:
         value = TrainingPanel._parse_float(key, line)
         if value is None:
             return None

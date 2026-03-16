@@ -19,6 +19,9 @@ class LiveAutoSettingsPersistence:
             w._lot_value.setSuffix(" lots")
             w._lot_value.setSingleStep(0.01)
             w._lot_value.setRange(0.01, 100.0)
+        refresh = getattr(w, "_refresh_risk_sizing_preview", None)
+        if callable(refresh):
+            refresh()
 
     def setup(self) -> None:
         w = self._window
@@ -135,13 +138,17 @@ class LiveAutoSettingsPersistence:
                     int(data.get("min_signal_interval", w._min_signal_interval.value()))
                 )
             if "slippage_bps" in data:
-                w._slippage_bps.setValue(float(data.get("slippage_bps", w._slippage_bps.value())))
+                w._slippage_bps.setValue(
+                    float(data.get("slippage_bps", w._slippage_bps.value()))
+                )
             if "fee_bps" in data:
                 w._fee_bps.setValue(float(data.get("fee_bps", w._fee_bps.value())))
             if "confidence" in data:
                 w._confidence.setValue(float(data.get("confidence", w._confidence.value())))
             if "position_step" in data:
-                w._position_step.setValue(float(data.get("position_step", w._position_step.value())))
+                w._position_step.setValue(
+                    float(data.get("position_step", w._position_step.value()))
+                )
             if "near_full_hold" in data:
                 w._near_full_hold.setChecked(bool(data.get("near_full_hold", True)))
             if "same_side_rebalance" in data:

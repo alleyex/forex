@@ -1,16 +1,20 @@
 from __future__ import annotations
 
-from dataclasses import replace
-from datetime import datetime
 import json
 import time
-from typing import Optional
+from dataclasses import replace
+from datetime import datetime
 
 import numpy as np
 import pandas as pd
 from ctrader_open_api.messages.OpenApiModelMessages_pb2 import ProtoOATradeSide
 
-from forex.ml.rl.envs.trading_env import TradingConfig, apply_risk_engine, build_window_observation
+from forex.ml.rl.envs.trading_env import (
+    TradingConfig,
+    apply_risk_engine,
+    build_window_observation,
+    decode_policy_action,
+)
 from forex.ml.rl.features.feature_builder import build_features
 
 
@@ -67,20 +71,36 @@ class LiveAutoTradeCoordinator:
             return
         if not w._app_state or not w._app_state.selected_account_id:
             return
+        config = self._effective_trading_config()
+        min_bars_required = max(64, int(getattr(config, "window_size", 1)) + 16)
         w._auto_last_decision_ts = time.time()
         now_ts = datetime.utcnow().timestamp()
-        min_interval = int(w._min_signal_interval.value()) if hasattr(w, "_min_signal_interval") else 0
+        min_interval = (
+            int(w._min_signal_interval.value())
+            if hasattr(w, "_min_signal_interval")
+            else 0
+        )
         if w._auto_last_action_ts and now_ts - w._auto_last_action_ts < min_interval:
             remain = max(0.0, min_interval - (now_ts - w._auto_last_action_ts))
             w._auto_debug_fields("signal_throttled", wait_s=f"{remain:.1f}")
             return
-        if len(w._candles) < 30:
-            w._auto_debug_fields("insufficient_candles", have=len(w._candles), need=30)
+        if len(w._candles) < min_bars_required:
+            w._auto_debug_fields(
+                "insufficient_candles",
+                have=len(w._candles),
+                need=min_bars_required,
+                window=int(getattr(config, "window_size", 1)),
+            )
+            w._request_recent_history(force=True)
             return
 
         df = pd.DataFrame(
             {
-                "timestamp": [datetime.utcfromtimestamp(c[0]).strftime("%H:%M") for c in w._candles],
+                "utc_timestamp_minutes": [int(c[0] // 60) for c in w._candles],
+                "timestamp": [
+                    datetime.utcfromtimestamp(c[0]).strftime("%Y-%m-%d %H:%M:%S")
+                    for c in w._candles
+                ],
                 "open": [c[1] for c in w._candles],
                 "high": [c[2] for c in w._candles],
                 "low": [c[3] for c in w._candles],
@@ -93,9 +113,26 @@ class LiveAutoTradeCoordinator:
             w._auto_log(f"❌ Feature build failed: {exc}")
             return
         if feature_set.features.shape[0] <= 0:
-            w._auto_debug_log("feature rows empty")
+            w._auto_debug_fields(
+                "feature_rows_empty",
+                candles=len(w._candles),
+                need=min_bars_required,
+                window=int(getattr(config, "window_size", 1)),
+                scaler_features=len(getattr(w._auto_feature_scaler, "names", []) or []),
+            )
+            w._request_recent_history(force=True)
             return
-        config = self._effective_trading_config()
+        warmup_bars = max(0, int(getattr(w, "_auto_startup_warmup_bars", 0)))
+        seen_bars = int(getattr(w, "_auto_startup_seen_bars", 0)) + 1
+        w._auto_startup_seen_bars = seen_bars
+        if seen_bars <= warmup_bars:
+            w._auto_debug_fields(
+                "startup_warmup",
+                bars_seen=seen_bars,
+                bars_needed=warmup_bars,
+                candles=len(w._candles),
+            )
+            return
         max_position = max(1e-6, float(config.max_position))
         obs_idx = int(feature_set.features.shape[0] - 1)
         obs = build_window_observation(
@@ -110,6 +147,7 @@ class LiveAutoTradeCoordinator:
         except Exception as exc:
             w._auto_log(f"❌ Model inference failed: {exc}")
             return
+        raw_action = decode_policy_action(action, config=config)
         equity = float(w._auto_balance) if w._auto_balance and float(w._auto_balance) > 0.0 else 1.0
         peak_equity = (
             float(w._auto_peak_balance)
@@ -117,7 +155,7 @@ class LiveAutoTradeCoordinator:
             else equity
         )
         target_position, risk_info = apply_risk_engine(
-            float(action[0]),
+            raw_action,
             current_position=float(w._auto_position),
             config=config,
             closes=np.asarray(feature_set.closes, dtype=np.float32),
@@ -133,7 +171,7 @@ class LiveAutoTradeCoordinator:
             features=int(feature_set.features.shape[1]),
             window=int(getattr(config, "window_size", 1)),
             pos=f"{w._auto_position:.3f}",
-            action=f"{float(action[0]):.3f}",
+            action=f"{raw_action:.3f}",
             target=f"{target_position:.3f}",
             vol_scale=f"{risk_info['vol_target_scale']:.3f}",
             dd_scale=f"{risk_info['drawdown_governor_scale']:.3f}",
@@ -141,7 +179,8 @@ class LiveAutoTradeCoordinator:
         )
         if confidence_threshold > 0 and abs(target_position) < confidence_threshold:
             w._auto_log(
-                f"ℹ️ Signal skipped by confidence: |{target_position:.3f}| < {confidence_threshold:.3f}"
+                "ℹ️ Signal skipped by confidence: "
+                f"|{target_position:.3f}| < {confidence_threshold:.3f}"
             )
         did_execute = self.execute_target_position(target_position, feature_set=feature_set)
         if did_execute:
@@ -203,11 +242,11 @@ class LiveAutoTradeCoordinator:
         self,
         position_id: int,
         *,
-        desired_position: Optional[float] = None,
-        current_position: Optional[float] = None,
+        desired_position: float | None = None,
+        current_position: float | None = None,
     ) -> int:
         w = self._window
-        position_volume: Optional[int] = None
+        position_volume: int | None = None
         for position in w._open_positions:
             try:
                 current_id = getattr(position, "positionId", None)
@@ -240,10 +279,16 @@ class LiveAutoTradeCoordinator:
             and desired_position * current_position > 0.0
             and abs(desired_position) < abs(current_position)
         ):
-            keep_ratio = max(0.0, min(1.0, abs(desired_position) / abs(current_position)))
+            keep_ratio = max(
+                0.0,
+                min(1.0, abs(desired_position) / abs(current_position)),
+            )
             reduce_ratio = 1.0 - keep_ratio
             requested = int(round(position_volume * reduce_ratio))
-            close_volume = self._normalize_close_volume(requested=requested, available=position_volume)
+            close_volume = self._normalize_close_volume(
+                requested=requested,
+                available=position_volume,
+            )
             if close_volume <= 0:
                 return 0
             w._auto_debug_fields(
@@ -259,7 +304,11 @@ class LiveAutoTradeCoordinator:
 
     def _normalize_close_volume(self, *, requested: int, available: int) -> int:
         w = self._window
-        symbol_name = w._trade_symbol.currentText() if hasattr(w, "_trade_symbol") else w._symbol_name
+        symbol_name = (
+            w._trade_symbol.currentText()
+            if hasattr(w, "_trade_symbol")
+            else w._symbol_name
+        )
         min_volume, volume_step = self.get_volume_constraints(symbol_name)
         volume = max(0, int(requested))
         available = max(0, int(available))
@@ -319,8 +368,14 @@ class LiveAutoTradeCoordinator:
         side = str(desired_side or "").strip().lower()
         if side not in {"buy", "sell"}:
             return 0
-        expected_side = ProtoOATradeSide.BUY if side == "buy" else ProtoOATradeSide.SELL
-        symbol_name = w._trade_symbol.currentText() if hasattr(w, "_trade_symbol") else w._symbol_name
+        expected_side = (
+            ProtoOATradeSide.BUY if side == "buy" else ProtoOATradeSide.SELL
+        )
+        symbol_name = (
+            w._trade_symbol.currentText()
+            if hasattr(w, "_trade_symbol")
+            else w._symbol_name
+        )
         count = 0
         for position in w._open_positions:
             trade_data = getattr(position, "tradeData", None)
@@ -339,7 +394,11 @@ class LiveAutoTradeCoordinator:
 
     def count_open_positions_for_symbol(self, *, symbol_id: int) -> int:
         w = self._window
-        symbol_name = w._trade_symbol.currentText() if hasattr(w, "_trade_symbol") else w._symbol_name
+        symbol_name = (
+            w._trade_symbol.currentText()
+            if hasattr(w, "_trade_symbol")
+            else w._symbol_name
+        )
         count = 0
         for position in w._open_positions:
             if not self._position_matches_symbol(
@@ -356,7 +415,11 @@ class LiveAutoTradeCoordinator:
         if not w._app_state or not w._app_state.selected_account_id:
             return False
         account_id = int(w._app_state.selected_account_id)
-        symbol_name = w._trade_symbol.currentText() if hasattr(w, "_trade_symbol") else w._symbol_name
+        symbol_name = (
+            w._trade_symbol.currentText()
+            if hasattr(w, "_trade_symbol")
+            else w._symbol_name
+        )
         symbol_id = int(w._resolve_symbol_id(symbol_name))
         if w._open_positions:
             self.sync_auto_position_from_positions(w._open_positions)
@@ -369,7 +432,27 @@ class LiveAutoTradeCoordinator:
         confidence_threshold = float(w._confidence.value()) if hasattr(w, "_confidence") else 0.0
         threshold = max(0.05, min(1.0, confidence_threshold))
         desired_raw = 0.0 if abs(target) < threshold else target
-        desired = float(np.clip(desired_raw, -self._effective_max_position(), self._effective_max_position()))
+        desired = float(
+            np.clip(
+                desired_raw,
+                -self._effective_max_position(),
+                self._effective_max_position(),
+            )
+        )
+        if not bool(getattr(w, "_auto_first_trade_done", False)) and desired != 0.0:
+            first_trade_cap = max(
+                0.0,
+                float(getattr(w, "_auto_first_trade_max_abs_position", 0.5)),
+            )
+            capped_desired = float(np.clip(desired, -first_trade_cap, first_trade_cap))
+            if capped_desired != desired:
+                w._auto_debug_fields(
+                    "first_trade_cap",
+                    original=f"{desired:.3f}",
+                    capped=f"{capped_desired:.3f}",
+                    limit=f"{first_trade_cap:.3f}",
+                )
+                desired = capped_desired
         desired_side = "buy" if desired > 0 else "sell"
         w._auto_debug_fields(
             "decision_normalized",
@@ -409,7 +492,10 @@ class LiveAutoTradeCoordinator:
         )
 
         if one_position_mode and symbol_count > 1:
-            primary = self._select_symbol_primary_position(symbol_id=symbol_id, symbol_name=symbol_name)
+            primary = self._select_symbol_primary_position(
+                symbol_id=symbol_id,
+                symbol_name=symbol_name,
+            )
             primary_id = getattr(primary, "positionId", None) if primary is not None else None
             for position in list(w._open_positions):
                 if not self._position_matches_symbol(
@@ -611,6 +697,9 @@ class LiveAutoTradeCoordinator:
             return False
 
         volume = self.calc_volume(signal_strength=abs(desired))
+        if volume <= 0:
+            w._auto_log("ℹ️ Trade skipped by margin cap: no safe volume available.")
+            return False
         stop_loss_points, take_profit_points = self.calc_sl_tp_pips()
         w._auto_debug_fields(
             "place_order",
@@ -633,17 +722,12 @@ class LiveAutoTradeCoordinator:
         if not order_id:
             return False
         w._auto_position = desired
+        w._auto_first_trade_done = True
         return True
 
-    def calc_volume(self, *, signal_strength: Optional[float] = None) -> int:
+    def calc_volume(self, *, signal_strength: float | None = None) -> int:
         w = self._window
-        lot = float(w._lot_value.value())
-        if w._lot_risk.isChecked():
-            balance = w._auto_balance
-            if balance:
-                lot = max(0.01, (balance * (lot / 100.0)) / 100000.0)
-            else:
-                w._auto_log("⚠️ Balance unavailable; using fixed lot.")
+        lot = self._calculate_base_lot()
         if (
             signal_strength is not None
             and hasattr(w, "_scale_lot_by_signal")
@@ -658,6 +742,8 @@ class LiveAutoTradeCoordinator:
                 strength=f"{strength:.3f}",
                 scaled_lot=f"{lot:.4f}",
             )
+        if lot <= 0.0:
+            return 0
         units = int(max(1, round(lot * 100000)))
         raw_volume = units * 100
         symbol_name = ""
@@ -677,6 +763,265 @@ class LiveAutoTradeCoordinator:
                 f"⚠️ Volume adjusted {raw_volume} → {volume} (min {min_volume}, step {volume_step})."
             )
         return volume
+
+    def _calculate_base_lot(self) -> float:
+        w = self._window
+        configured_value = float(w._lot_value.value())
+        if not w._lot_risk.isChecked():
+            return configured_value
+
+        balance = getattr(w, "_auto_balance", None)
+        if not balance or float(balance) <= 0.0:
+            w._auto_log("⚠️ Balance unavailable; using fixed lot.")
+            return configured_value
+
+        stop_loss_points, _ = self.calc_sl_tp_pips()
+        if not stop_loss_points or stop_loss_points <= 0:
+            fallback_lot = max(0.01, (float(balance) * (configured_value / 100.0)) / 100000.0)
+            w._auto_log("⚠️ Stop loss unavailable for risk sizing; using balance-percent fallback.")
+            return fallback_lot
+
+        point_value_per_lot = self._estimate_point_value_per_lot()
+        if point_value_per_lot <= 0.0:
+            fallback_lot = max(0.01, (float(balance) * (configured_value / 100.0)) / 100000.0)
+            w._auto_log(
+                "⚠️ Point value unavailable for risk sizing; "
+                "using balance-percent fallback."
+            )
+            return fallback_lot
+
+        risk_lot = self._estimate_risk_lot_only()
+        margin_capped_lot, margin_meta = self._apply_margin_cap_to_lot(risk_lot)
+        w._auto_debug_fields(
+            "risk_sizing",
+            balance=f"{float(balance):.2f}",
+            risk_pct=f"{configured_value:.2f}",
+            risk_amount=f"{float(balance) * (configured_value / 100.0):.2f}",
+            stop_loss_points=stop_loss_points,
+            point_value_per_lot=f"{point_value_per_lot:.4f}",
+            risk_lot=f"{risk_lot:.4f}",
+            margin_cap_lot=f"{margin_capped_lot:.4f}",
+            final_lot=f"{margin_capped_lot:.4f}",
+        )
+        if margin_meta["cap_applied"]:
+            w._auto_debug_fields(
+                "margin_cap",
+                balance=f"{margin_meta['balance']:.2f}",
+                used_margin=f"{margin_meta['used_margin']:.2f}",
+                max_used_margin=f"{margin_meta['max_used_margin']:.2f}",
+                remaining_budget=f"{margin_meta['remaining_budget']:.2f}",
+                leverage=f"{margin_meta['leverage']:.1f}",
+                per_lot=f"{margin_meta['margin_per_lot']:.2f}",
+                risk_lot=f"{risk_lot:.4f}",
+                capped_lot=f"{margin_capped_lot:.4f}",
+            )
+        return margin_capped_lot
+
+    def estimate_base_lot(self) -> float:
+        return float(self._calculate_base_lot())
+
+    def estimate_lot_preview(self) -> dict[str, float | bool | str]:
+        w = self._window
+        configured_value = float(w._lot_value.value())
+        if not w._lot_risk.isChecked():
+            return {
+                "mode": "fixed",
+                "configured_lot": configured_value,
+                "final_lot": configured_value,
+                "cap_applied": False,
+            }
+        risk_lot = self._estimate_risk_lot_only()
+        final_lot, margin_meta = self._apply_margin_cap_to_lot(risk_lot)
+        return {
+            "mode": "risk",
+            "risk_lot": risk_lot,
+            "final_lot": final_lot,
+            "cap_applied": bool(margin_meta["cap_applied"]),
+            "balance": float(margin_meta["balance"]),
+            "used_margin": float(margin_meta["used_margin"]),
+            "max_used_margin": float(margin_meta["max_used_margin"]),
+            "remaining_budget": float(margin_meta["remaining_budget"]),
+            "stop_loss_points": float(self.calc_sl_tp_pips()[0]),
+        }
+
+    def _estimate_risk_lot_only(self) -> float:
+        w = self._window
+        configured_value = float(w._lot_value.value())
+        balance = getattr(w, "_auto_balance", None)
+        if not balance or float(balance) <= 0.0:
+            return configured_value
+
+        stop_loss_points, _ = self.calc_sl_tp_pips()
+        if not stop_loss_points or stop_loss_points <= 0:
+            return max(0.01, (float(balance) * (configured_value / 100.0)) / 100000.0)
+
+        point_value_per_lot = self._estimate_point_value_per_lot()
+        if point_value_per_lot <= 0.0:
+            return max(0.01, (float(balance) * (configured_value / 100.0)) / 100000.0)
+
+        risk_amount = float(balance) * (configured_value / 100.0)
+        stop_loss_cost_per_lot = float(stop_loss_points) * point_value_per_lot
+        if stop_loss_cost_per_lot <= 0.0:
+            return max(0.01, (float(balance) * (configured_value / 100.0)) / 100000.0)
+        return max(0.01, risk_amount / stop_loss_cost_per_lot)
+
+    def _apply_margin_cap_to_lot(self, lot: float) -> tuple[float, dict[str, float | bool]]:
+        w = self._window
+        balance = float(getattr(w, "_auto_balance", None) or 0.0)
+        open_positions = list(getattr(w, "_open_positions", []) or [])
+        if open_positions:
+            used_margin = max(0.0, float(getattr(w, "_auto_used_margin", None) or 0.0))
+        else:
+            used_margin = 0.0
+        cap_ratio = max(
+            0.0,
+            min(1.0, float(getattr(w, "_auto_margin_usage_cap_ratio", 0.5))),
+        )
+        max_used_margin = max(0.0, balance * cap_ratio)
+        remaining_budget = max_used_margin - used_margin
+        margin_per_lot = self._estimate_margin_required_per_lot()
+        leverage = self._effective_account_leverage()
+        meta = {
+            "balance": balance,
+            "used_margin": used_margin,
+            "max_used_margin": max_used_margin,
+            "remaining_budget": remaining_budget,
+            "margin_per_lot": margin_per_lot,
+            "leverage": leverage,
+            "cap_applied": False,
+        }
+        if lot <= 0.0:
+            return 0.0, meta
+        if balance <= 0.0 or margin_per_lot <= 0.0:
+            return lot, meta
+        if remaining_budget <= 0.0:
+            meta["cap_applied"] = True
+            return 0.0, meta
+        margin_lot_cap = remaining_budget / margin_per_lot
+        final_lot = max(0.0, min(float(lot), float(margin_lot_cap)))
+        meta["cap_applied"] = final_lot + 1e-9 < float(lot)
+        return final_lot, meta
+
+    def _effective_account_leverage(self) -> float:
+        w = self._window
+        leverage = float(getattr(w, "_auto_leverage", None) or 0.0)
+        if leverage > 0.0:
+            return leverage
+        max_leverage = float(getattr(w, "_auto_max_leverage", None) or 0.0)
+        if max_leverage > 0.0:
+            return max_leverage
+        return 100.0
+
+    def _estimate_margin_required_per_lot(self) -> float:
+        w = self._window
+        symbol_name = ""
+        try:
+            symbol_name = w._trade_symbol.currentText()
+        except Exception:
+            symbol_name = w._symbol_name
+        symbol_name = str(symbol_name or "").strip().upper()
+        if len(symbol_name) != 6:
+            return 0.0
+
+        base_currency = symbol_name[:3]
+        account_currency = self._account_currency()
+        leverage = self._effective_account_leverage()
+        if leverage <= 0.0:
+            return 0.0
+        base_to_account = self._estimate_fx_conversion_rate(
+            from_currency=base_currency,
+            to_currency=account_currency,
+        )
+        if base_to_account <= 0.0:
+            return 0.0
+        contract_size = 100000.0
+        notional_in_account = contract_size * base_to_account
+        return notional_in_account / leverage
+
+    def _estimate_point_value_per_lot(self) -> float:
+        w = self._window
+        symbol_name = ""
+        try:
+            symbol_name = w._trade_symbol.currentText()
+        except Exception:
+            symbol_name = w._symbol_name
+        symbol_name = str(symbol_name or "").strip().upper()
+        if len(symbol_name) != 6:
+            return 0.0
+
+        price = self._current_symbol_price(symbol_name)
+        digits = int(w._quote_digits.get(symbol_name, w._price_digits or 5))
+        point_size = 10 ** (-digits)
+        contract_size = 100000.0
+        quote_currency = symbol_name[3:]
+        account_currency = self._account_currency()
+        point_value_in_quote = contract_size * point_size
+
+        if quote_currency == account_currency:
+            return point_value_in_quote
+        if price <= 0.0:
+            return 0.0
+        if symbol_name[:3] == account_currency:
+            return point_value_in_quote / price
+
+        conversion_rate = self._estimate_fx_conversion_rate(
+            from_currency=quote_currency,
+            to_currency=account_currency,
+        )
+        if conversion_rate > 0.0:
+            return point_value_in_quote * conversion_rate
+        return 0.0
+
+    def _current_symbol_price(self, symbol_name: str) -> float:
+        w = self._window
+        symbol_id = w._symbol_id_map.get(symbol_name)
+        if symbol_id is not None:
+            mid = w._quote_last_mid.get(int(symbol_id))
+            if mid and float(mid) > 0.0:
+                return float(mid)
+            bid = w._quote_last_bid.get(int(symbol_id))
+            ask = w._quote_last_ask.get(int(symbol_id))
+            if bid and ask:
+                return (float(bid) + float(ask)) / 2.0
+            if bid and float(bid) > 0.0:
+                return float(bid)
+            if ask and float(ask) > 0.0:
+                return float(ask)
+        if w._candles:
+            try:
+                return float(w._candles[-1][4])
+            except Exception:
+                return 0.0
+        return 0.0
+
+    def _account_currency(self) -> str:
+        w = self._window
+        label = getattr(w, "_account_summary_labels", {}).get("currency")
+        if label is not None:
+            try:
+                text = str(label.text()).strip().upper()
+            except Exception:
+                text = ""
+            if len(text) == 3:
+                return text
+        return "USD"
+
+    def _estimate_fx_conversion_rate(self, *, from_currency: str, to_currency: str) -> float:
+        w = self._window
+        if from_currency == to_currency:
+            return 1.0
+        direct = f"{from_currency}{to_currency}"
+        inverse = f"{to_currency}{from_currency}"
+        for symbol_name, invert in ((direct, False), (inverse, True)):
+            price = self._current_symbol_price(symbol_name)
+            if price > 0.0:
+                return (1.0 / price) if invert else price
+            symbol_id = w._symbol_id_map.get(symbol_name)
+            if symbol_id is not None:
+                mid = w._quote_last_mid.get(int(symbol_id))
+                if mid and float(mid) > 0.0:
+                    return (1.0 / float(mid)) if invert else float(mid)
+        return 0.0
 
     def get_volume_constraints(self, symbol_name: str) -> tuple[int, int]:
         w = self._window
@@ -794,7 +1139,7 @@ class LiveAutoTradeCoordinator:
                 w._symbol_digits_by_name[name] = digits_int
                 w._quote_digits[name] = digits_int
 
-    def calc_sl_tp_pips(self) -> tuple[Optional[int], Optional[int]]:
+    def calc_sl_tp_pips(self) -> tuple[int | None, int | None]:
         w = self._window
         sl_points = float(w._stop_loss.value())
         tp_points = float(w._take_profit.value())
@@ -818,7 +1163,11 @@ class LiveAutoTradeCoordinator:
         symbol_id = w._resolve_symbol_id(symbol_name) if symbol_name else None
         matched = []
         for position in positions:
-            if self._position_matches_symbol(position=position, symbol_id=symbol_id, symbol_name=symbol_name):
+            if self._position_matches_symbol(
+                position=position,
+                symbol_id=symbol_id,
+                symbol_name=symbol_name,
+            ):
                 matched.append(position)
         if not matched:
             w._auto_position_id = None
@@ -843,32 +1192,34 @@ class LiveAutoTradeCoordinator:
         # This prevents stale +/-1.0 direction flags from forcing perpetual "reduce" logic.
         magnitude = max_position
         trade_volume = getattr(trade_data, "volume", None) if trade_data else None
-        lot_value: Optional[float] = None
+        lot_value: float | None = None
         try:
             if trade_volume is not None:
                 lot_value = float(trade_volume) / 10000000.0
         except (TypeError, ValueError):
             lot_value = None
         if lot_value is not None and lot_value > 0.0:
-            base_lot = float(w._lot_value.value()) if hasattr(w, "_lot_value") else 0.0
-            if getattr(w, "_lot_risk", None) and w._lot_risk.isChecked():
-                balance = getattr(w, "_auto_balance", None)
-                if balance:
-                    try:
-                        base_lot = max(0.01, (float(balance) * (base_lot / 100.0)) / 100000.0)
-                    except (TypeError, ValueError):
-                        pass
+            base_lot = self._calculate_base_lot() if hasattr(w, "_lot_value") else 0.0
             if base_lot > 0.0:
                 if getattr(w, "_scale_lot_by_signal", None) and w._scale_lot_by_signal.isChecked():
                     magnitude = min(max_position, max(0.0, lot_value / base_lot))
                 else:
-                    magnitude = max_position * min(1.0, max(0.0, lot_value / base_lot))
+                    magnitude = max_position * min(
+                        1.0,
+                        max(0.0, lot_value / base_lot),
+                    )
             else:
                 magnitude = max_position
 
         w._auto_position = side_sign * float(magnitude)
 
-    def _position_matches_symbol(self, *, position: object, symbol_id: int | None, symbol_name: str) -> bool:
+    def _position_matches_symbol(
+        self,
+        *,
+        position: object,
+        symbol_id: int | None,
+        symbol_name: str,
+    ) -> bool:
         w = self._window
         trade_data = getattr(position, "tradeData", None)
         if not trade_data:
@@ -897,7 +1248,11 @@ class LiveAutoTradeCoordinator:
         matched = [
             p
             for p in w._open_positions
-            if self._position_matches_symbol(position=p, symbol_id=symbol_id, symbol_name=symbol_name)
+            if self._position_matches_symbol(
+                position=p,
+                symbol_id=symbol_id,
+                symbol_name=symbol_name,
+            )
         ]
         if not matched:
             return None

@@ -1,16 +1,21 @@
-"""
-CTID Profile 服務
-"""
-from dataclasses import dataclass
+"""CTID profile service."""
+from __future__ import annotations
+
 import time
-from typing import Callable, Optional, Protocol
+from collections.abc import Callable
+from dataclasses import dataclass
+from typing import Protocol
 
 from ctrader_open_api import Client
 from ctrader_open_api.messages.OpenApiMessages_pb2 import ProtoOAGetCtidProfileByTokenReq
 from ctrader_open_api.messages.OpenApiModelMessages_pb2 import ProtoOAPayloadType
 
-from forex.infrastructure.broker.base import BaseCallbacks, LogHistoryMixin, OperationStateMixin, build_callbacks
-from forex.infrastructure.broker.errors import ErrorCode, error_message
+from forex.infrastructure.broker.base import (
+    BaseCallbacks,
+    LogHistoryMixin,
+    OperationStateMixin,
+    build_callbacks,
+)
 from forex.infrastructure.broker.ctrader.services.app_auth_service import AppAuthService
 from forex.infrastructure.broker.ctrader.services.base import CTraderRequestLifecycleMixin
 from forex.infrastructure.broker.ctrader.services.message_helpers import (
@@ -21,6 +26,7 @@ from forex.infrastructure.broker.ctrader.services.message_helpers import (
     format_warning,
 )
 from forex.infrastructure.broker.ctrader.services.timeout_tracker import TimeoutTracker
+from forex.infrastructure.broker.errors import ErrorCode, error_message
 from forex.utils.metrics import metrics
 
 
@@ -32,17 +38,17 @@ class ProfileResponseMessage(Protocol):
     payloadType: int
     errorCode: int
     description: str
-    profile: Optional[ProfileMessage]
+    profile: ProfileMessage | None
 
 
 @dataclass
 class CtidProfile:
-    user_id: Optional[int]
+    user_id: int | None
 
 
 @dataclass
 class CtidProfileServiceCallbacks(BaseCallbacks):
-    on_profile_received: Optional[Callable[[CtidProfile], None]] = None
+    on_profile_received: Callable[[CtidProfile], None] | None = None
 
 
 class CtidProfileService(
@@ -51,7 +57,7 @@ class CtidProfileService(
     OperationStateMixin,
 ):
     """
-    透過存取權杖取得 CTID Profile
+    Fetch the CTID profile using an access token.
     """
 
     def __init__(self, app_auth_service: AppAuthService, access_token: str):
@@ -67,9 +73,9 @@ class CtidProfileService(
 
     def set_callbacks(
         self,
-        on_profile_received: Optional[Callable[[CtidProfile], None]] = None,
-        on_error: Optional[Callable[[str], None]] = None,
-        on_log: Optional[Callable[[str], None]] = None,
+        on_profile_received: Callable[[CtidProfile], None] | None = None,
+        on_error: Callable[[str], None] | None = None,
+        on_log: Callable[[str], None] | None = None,
     ) -> None:
         self._callbacks = build_callbacks(
             CtidProfileServiceCallbacks,
@@ -79,9 +85,9 @@ class CtidProfileService(
         )
         self._replay_log_history()
 
-    def fetch(self, timeout_seconds: Optional[int] = None) -> None:
+    def fetch(self, timeout_seconds: int | None = None) -> None:
         if not self._access_token:
-            self._emit_error(error_message(ErrorCode.VALIDATION, "缺少存取權杖"))
+            self._emit_error(error_message(ErrorCode.VALIDATION, "Missing access token"))
             return
 
         if not self._start_operation():
@@ -98,7 +104,7 @@ class CtidProfileService(
     def _send_request(self) -> None:
         request = ProtoOAGetCtidProfileByTokenReq()
         request.accessToken = self._access_token
-        self._log(format_request("正在取得 CTID Profile..."))
+        self._log(format_request("Fetching CTID profile..."))
         if not self._send_request_with_client(
             request=request,
             timeout_tracker=self._timeout_tracker,
@@ -112,39 +118,53 @@ class CtidProfileService(
         return dispatch_payload(
             msg,
             {
-                ProtoOAPayloadType.PROTO_OA_GET_CTID_PROFILE_BY_TOKEN_RES: self._on_profile_received,
+                ProtoOAPayloadType.PROTO_OA_GET_CTID_PROFILE_BY_TOKEN_RES: (
+                    self._on_profile_received
+                ),
                 ProtoOAPayloadType.PROTO_OA_ERROR_RES: self._on_error,
             },
         )
 
     def _on_profile_received(self, msg: ProfileResponseMessage) -> None:
-        self._cleanup_request_lifecycle(timeout_tracker=self._timeout_tracker, handler=self._handle_message)
+        self._cleanup_request_lifecycle(
+            timeout_tracker=self._timeout_tracker,
+            handler=self._handle_message,
+        )
         profile = getattr(msg, "profile", None)
         user_id = None if profile is None else int(getattr(profile, "userId", 0))
         data = CtidProfile(user_id=user_id if user_id else None)
-        self._log(format_success("已接收 CTID Profile"))
+        self._log(format_success("Received CTID profile"))
         metrics.inc("ctrader.ctid_profile.success")
         started_at = getattr(self, "_metrics_started_at", None)
         if started_at is not None:
-            metrics.observe("ctrader.ctid_profile.latency_s", time.monotonic() - started_at)
+            metrics.observe(
+                "ctrader.ctid_profile.latency_s",
+                time.monotonic() - started_at,
+            )
         if self._callbacks.on_profile_received:
             self._callbacks.on_profile_received(data)
 
     def _on_error(self, msg: ProfileResponseMessage) -> None:
-        self._cleanup_request_lifecycle(timeout_tracker=self._timeout_tracker, handler=self._handle_message)
+        self._cleanup_request_lifecycle(
+            timeout_tracker=self._timeout_tracker,
+            handler=self._handle_message,
+        )
         metrics.inc("ctrader.ctid_profile.error")
         self._emit_error(format_error(msg.errorCode, msg.description))
 
     def _on_timeout(self) -> None:
         if not self._in_progress:
             return
-        self._cleanup_request_lifecycle(timeout_tracker=self._timeout_tracker, handler=self._handle_message)
+        self._cleanup_request_lifecycle(
+            timeout_tracker=self._timeout_tracker,
+            handler=self._handle_message,
+        )
         metrics.inc("ctrader.ctid_profile.timeout")
-        self._emit_error(error_message(ErrorCode.TIMEOUT, "取得 CTID Profile 逾時"))
+        self._emit_error(error_message(ErrorCode.TIMEOUT, "CTID profile request timed out"))
 
     def _retry_request(self, attempt: int) -> None:
         if not self._in_progress:
             return
-        self._log(format_warning(f"CTID Profile 逾時，重試第 {attempt} 次"))
+        self._log(format_warning(f"CTID profile timed out, retry attempt {attempt}"))
         metrics.inc("ctrader.ctid_profile.retry")
         self._send_request()

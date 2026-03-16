@@ -1,10 +1,10 @@
 from __future__ import annotations
 
+import json
+import warnings
+from collections.abc import Sequence
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Sequence
-
-import json
 
 import numpy as np
 import pandas as pd
@@ -80,6 +80,7 @@ ALPHA_SOURCE_COLUMNS: tuple[str, ...] = (
     "london_to_ny_open_return",
     "ny_reversal_pressure",
     "is_london_session",
+    "is_london_pre_ny_session",
     "is_ny_session",
     "is_london_ny_overlap",
 )
@@ -87,6 +88,7 @@ RESIDUAL_CONTEXT_COLUMNS: tuple[str, ...] = (
     "atr_14",
     "vol_pct_72_252",
     "is_london_session",
+    "is_london_pre_ny_session",
     "is_ny_session",
     "is_london_ny_overlap",
     "since_london_open_return",
@@ -171,6 +173,11 @@ ALL_FEATURE_COLUMNS: tuple[str, ...] = (
     "distance_to_prev_day_low",
     "distance_to_day_high_so_far",
     "distance_to_day_low_so_far",
+    "asia_range_width_atr",
+    "distance_to_asia_high",
+    "distance_to_asia_low",
+    "london_breakout_of_asia",
+    "pre_london_compression",
     "since_london_open_return",
     "since_ny_open_return",
     "ny_open_gap_prev_close",
@@ -185,6 +192,7 @@ ALL_FEATURE_COLUMNS: tuple[str, ...] = (
     "minute_of_week_cos",
     "is_monday_open_window",
     "is_london_session",
+    "is_london_pre_ny_session",
     "is_ny_session",
     "is_london_ny_overlap",
 )
@@ -243,19 +251,27 @@ def infer_feature_profile_from_names(feature_names: Sequence[str]) -> str:
         return "core20"
     if names == alpha20_names:
         return "alpha20"
-    if alpha20_names.issubset(names) and names.issubset(alpha20_names | set(RESIDUAL_CONTEXT_COLUMNS)):
+    if alpha20_names.issubset(names) and names.issubset(
+        alpha20_names | set(RESIDUAL_CONTEXT_COLUMNS)
+    ):
         return "alpha20_residual"
     if names == alpha16_names:
         return "alpha16"
-    if alpha16_names.issubset(names) and names.issubset(alpha16_names | set(RESIDUAL_CONTEXT_COLUMNS)):
+    if alpha16_names.issubset(names) and names.issubset(
+        alpha16_names | set(RESIDUAL_CONTEXT_COLUMNS)
+    ):
         return "alpha16_residual"
     if names == alpha8_names:
         return "alpha8"
     if names == alpha12_names:
         return "alpha12"
-    if alpha8_names.issubset(names) and names.issubset(alpha8_names | set(RESIDUAL_CONTEXT_COLUMNS)):
+    if alpha8_names.issubset(names) and names.issubset(
+        alpha8_names | set(RESIDUAL_CONTEXT_COLUMNS)
+    ):
         return "alpha8_residual"
-    if alpha12_names.issubset(names) and names.issubset(alpha12_names | set(RESIDUAL_CONTEXT_COLUMNS)):
+    if alpha12_names.issubset(names) and names.issubset(
+        alpha12_names | set(RESIDUAL_CONTEXT_COLUMNS)
+    ):
         return "alpha12_residual"
     if names == alpha4_names:
         return "alpha4"
@@ -300,10 +316,14 @@ def apply_feature_profile(features: pd.DataFrame, profile: str) -> pd.DataFrame:
     if profile_name == "core20":
         return features.loc[:, list(CORE20_FEATURE_COLUMNS)].copy()
     if profile_name == "alpha4_from_core20":
-        core20_alpha_frame = _build_core20_alpha_layer(features.loc[:, list(CORE20_FEATURE_COLUMNS)].copy())
+        core20_alpha_frame = _build_core20_alpha_layer(
+            features.loc[:, list(CORE20_FEATURE_COLUMNS)].copy()
+        )
         return core20_alpha_frame.loc[:, list(CORE20_ALPHA4_FEATURE_COLUMNS)].copy()
     if profile_name == "alpha8_from_core20":
-        core20_alpha_frame = _build_core20_alpha_layer(features.loc[:, list(CORE20_FEATURE_COLUMNS)].copy())
+        core20_alpha_frame = _build_core20_alpha_layer(
+            features.loc[:, list(CORE20_FEATURE_COLUMNS)].copy()
+        )
         return core20_alpha_frame.loc[:, list(CORE20_ALPHA8_FEATURE_COLUMNS)].copy()
     raise ValueError(f"Unknown feature profile: {profile}")
 
@@ -314,7 +334,13 @@ def required_raw_columns_for_profile(profile: str) -> tuple[str, ...]:
         return tuple()
     if profile_name in {"alpha4", "alpha8", "alpha12", "alpha16", "alpha20"}:
         return ALPHA_SOURCE_COLUMNS
-    if profile_name in {"residual", "alpha8_residual", "alpha12_residual", "alpha16_residual", "alpha20_residual"}:
+    if profile_name in {
+        "residual",
+        "alpha8_residual",
+        "alpha12_residual",
+        "alpha16_residual",
+        "alpha20_residual",
+    }:
         return (*ALPHA_SOURCE_COLUMNS, *RESIDUAL_CONTEXT_COLUMNS)
     if profile_name == "core20":
         return CORE20_FEATURE_COLUMNS
@@ -334,6 +360,7 @@ def filter_feature_rows_by_session(
         "all": None,
         "monday_open": "is_monday_open_window",
         "london": "is_london_session",
+        "london_pre_ny": "is_london_pre_ny_session",
         "ny": "is_ny_session",
         "overlap": "is_london_ny_overlap",
     }
@@ -409,22 +436,55 @@ def build_feature_frame(
     if returns_60 is not None:
         features_dict["returns_60"] = returns_60
 
-    sma_10 = close.rolling(10).mean() / close - 1.0 if wants("sma_10", "range_strength_10_50_atr14") else None
+    sma_10_price = (
+        close.rolling(10).mean()
+        if wants("sma_10", "range_strength_10_50_atr14")
+        else None
+    )
+    sma_10 = sma_10_price / close - 1.0 if sma_10_price is not None else None
     if "sma_10" in requested:
         features_dict["sma_10"] = sma_10
-    sma_20 = close.rolling(20).mean() / close - 1.0 if wants("sma_20", "trend_strength_20_100_atr14") else None
-    if sma_20 is not None:
+    sma_20_price = (
+        close.rolling(20).mean()
+        if wants(
+            "sma_20",
+            "trend_strength_20_100_atr14",
+            "bollinger_band_width_20",
+        )
+        else None
+    )
+    sma_20 = sma_20_price / close - 1.0 if sma_20_price is not None else None
+    if "sma_20" in requested:
         features_dict["sma_20"] = sma_20
-    sma_50 = close.rolling(50).mean() / close - 1.0 if wants("sma_50", "range_strength_10_50_atr14", "distance_to_mean_50") else None
+    sma_50_price = (
+        close.rolling(50).mean()
+        if wants(
+            "sma_50",
+            "range_strength_10_50_atr14",
+            "distance_to_mean_50",
+        )
+        else None
+    )
+    sma_50 = sma_50_price / close - 1.0 if sma_50_price is not None else None
     if "sma_50" in requested:
         features_dict["sma_50"] = sma_50
-    sma_100 = close.rolling(100).mean() if wants("trend_strength_20_100_atr14") else None
+    sma_100 = (
+        close.rolling(100).mean()
+        if wants("trend_strength_20_100_atr14")
+        else None
+    )
     if "momentum_10_20" in requested:
-        features_dict["momentum_10_20"] = close.rolling(10).mean() / close.rolling(20).mean() - 1.0
+        features_dict["momentum_10_20"] = (
+            close.rolling(10).mean() / close.rolling(20).mean() - 1.0
+        )
     if "momentum_20_50" in requested:
-        features_dict["momentum_20_50"] = close.rolling(20).mean() / close.rolling(50).mean() - 1.0
+        features_dict["momentum_20_50"] = (
+            close.rolling(20).mean() / close.rolling(50).mean() - 1.0
+        )
     if "momentum_50_100" in requested:
-        features_dict["momentum_50_100"] = close.rolling(50).mean() / close.rolling(100).mean() - 1.0
+        features_dict["momentum_50_100"] = (
+            close.rolling(50).mean() / close.rolling(100).mean() - 1.0
+        )
     if "price_z_20" in requested:
         features_dict["price_z_20"] = _rolling_zscore(close, 20)
     if "price_z_50" in requested:
@@ -432,7 +492,9 @@ def build_feature_frame(
     if "price_z_100" in requested:
         features_dict["price_z_100"] = _rolling_zscore(close, 100)
     if "distance_to_mean_50" in requested:
-        features_dict["distance_to_mean_50"] = close / sma_50.replace(0, np.nan) - 1.0
+        features_dict["distance_to_mean_50"] = (
+            close / sma_50_price.replace(0, np.nan) - 1.0
+        )
     if "breakout_20" in requested:
         features_dict["breakout_20"] = close / high.shift(1).rolling(20).max() - 1.0
     if "breakout_50" in requested:
@@ -440,12 +502,18 @@ def build_feature_frame(
     if "rsi_14" in requested:
         features_dict["rsi_14"] = _rsi(close, period=14)
 
-    atr_14 = _atr(high, low, close, period=14) / close if wants(
-        "atr_14",
-        "atr_ratio_14_50",
-        "atr_ratio_14_100",
-        "range_strength_10_50_atr14",
-    ) else None
+    atr_14 = (
+        _atr(high, low, close, period=14) / close
+        if wants(
+            "atr_14",
+            "atr_ratio_14_50",
+            "atr_ratio_14_100",
+            "range_strength_10_50_atr14",
+            "asia_range_width_atr",
+            "pre_london_compression",
+        )
+        else None
+    )
     if "atr_14" in requested:
         features_dict["atr_14"] = atr_14
     if wants("atr_ratio_14_50"):
@@ -467,18 +535,30 @@ def build_feature_frame(
     if "volatility_regime_z" in requested:
         rolling_std_72 = returns_1.rolling(72).std()
         rolling_mean_252 = rolling_std_72.rolling(252, min_periods=min(252, 64)).mean()
-        rolling_std_252 = rolling_std_72.rolling(252, min_periods=min(252, 64)).std().replace(0, np.nan)
-        features_dict["volatility_regime_z"] = (rolling_std_72 - rolling_mean_252) / rolling_std_252
+        rolling_std_252 = (
+            rolling_std_72.rolling(252, min_periods=min(252, 64))
+            .std()
+            .replace(0, np.nan)
+        )
+        features_dict["volatility_regime_z"] = (
+            rolling_std_72 - rolling_mean_252
+        ) / rolling_std_252
     if "bollinger_band_width_20" in requested:
-        rolling_std_20 = returns_1.rolling(20).std()
-        features_dict["bollinger_band_width_20"] = (4.0 * rolling_std_20) / close.replace(0, np.nan)
+        rolling_std_20_price = close.rolling(20).std()
+        features_dict["bollinger_band_width_20"] = (
+            4.0 * rolling_std_20_price
+        ) / sma_20_price.replace(0, np.nan)
 
     if "distance_to_rolling_high_20" in requested:
         rolling_high_20 = high.rolling(20).max()
-        features_dict["distance_to_rolling_high_20"] = close / rolling_high_20.replace(0, np.nan) - 1.0
+        features_dict["distance_to_rolling_high_20"] = (
+            close / rolling_high_20.replace(0, np.nan) - 1.0
+        )
     if "distance_to_rolling_low_20" in requested:
         rolling_low_20 = low.rolling(20).min()
-        features_dict["distance_to_rolling_low_20"] = close / rolling_low_20.replace(0, np.nan) - 1.0
+        features_dict["distance_to_rolling_low_20"] = (
+            close / rolling_low_20.replace(0, np.nan) - 1.0
+        )
     if wants("body_size_ratio", "close_location_in_bar"):
         bar_range = (high - low).replace(0, np.nan)
         if "body_size_ratio" in requested:
@@ -493,7 +573,9 @@ def build_feature_frame(
         features_dict["trend_flag_25"] = (adx_14 > 25.0).astype(float)
     if "trend_strength_20_100_atr14" in requested:
         sma_20_price = close.rolling(20).mean()
-        trend_strength = (sma_20_price - sma_100).abs() / ((atr_14 * close).replace(0, np.nan) + 1e-8)
+        trend_strength = (sma_20_price - sma_100).abs() / (
+            (atr_14 * close).replace(0, np.nan) + 1e-8
+        )
         features_dict["trend_strength_20_100_atr14"] = trend_strength
     if "range_strength_10_50_atr14" in requested:
         trend_distance_atr = (sma_10 - sma_50).abs() / (atr_14 + 1e-8)
@@ -508,6 +590,7 @@ def build_feature_frame(
         "minute_of_week_cos",
         "is_monday_open_window",
         "is_london_session",
+        "is_london_pre_ny_session",
         "is_ny_session",
         "is_london_ny_overlap",
     }
@@ -519,6 +602,11 @@ def build_feature_frame(
         "distance_to_prev_day_low",
         "distance_to_day_high_so_far",
         "distance_to_day_low_so_far",
+        "asia_range_width_atr",
+        "distance_to_asia_high",
+        "distance_to_asia_low",
+        "london_breakout_of_asia",
+        "pre_london_compression",
         "since_london_open_return",
         "since_ny_open_return",
         "ny_open_gap_prev_close",
@@ -535,6 +623,7 @@ def build_feature_frame(
             minute_of_week_cos,
             is_monday_open_window,
             is_london_session,
+            is_london_pre_ny_session,
             is_ny_session,
             is_london_ny_overlap,
         ) = _time_features(datetimes)
@@ -547,6 +636,7 @@ def build_feature_frame(
             "minute_of_week_cos": minute_of_week_cos,
             "is_monday_open_window": is_monday_open_window,
             "is_london_session": is_london_session,
+            "is_london_pre_ny_session": is_london_pre_ny_session,
             "is_ny_session": is_ny_session,
             "is_london_ny_overlap": is_london_ny_overlap,
         }
@@ -560,6 +650,7 @@ def build_feature_frame(
                 close=close,
                 high=high,
                 low=low,
+                atr_14=atr_14,
                 is_london_session=is_london_session,
                 is_ny_session=is_ny_session,
             )
@@ -572,6 +663,11 @@ def build_feature_frame(
                     "distance_to_prev_day_low",
                     "distance_to_day_high_so_far",
                     "distance_to_day_low_so_far",
+                    "asia_range_width_atr",
+                    "distance_to_asia_high",
+                    "distance_to_asia_low",
+                    "london_breakout_of_asia",
+                    "pre_london_compression",
                     "since_london_open_return",
                     "since_ny_open_return",
                     "ny_open_gap_prev_close",
@@ -579,6 +675,7 @@ def build_feature_frame(
                     "ny_reversal_pressure",
                 ),
                 session_features,
+                strict=False,
             ):
                 if name in requested:
                     features_dict[name] = series
@@ -657,8 +754,15 @@ def _build_residual_frame(
     residual = alpha_frame.loc[:, list(alpha_columns)].copy()
     for name in RESIDUAL_CONTEXT_COLUMNS:
         if name in features.columns:
-            residual[name] = pd.to_numeric(features[name], errors="coerce").fillna(0.0).astype(float)
-    ordered = [*alpha_columns, *[name for name in RESIDUAL_CONTEXT_COLUMNS if name in residual.columns]]
+            residual[name] = (
+                pd.to_numeric(features[name], errors="coerce")
+                .fillna(0.0)
+                .astype(float)
+            )
+    ordered = [
+        *alpha_columns,
+        *[name for name in RESIDUAL_CONTEXT_COLUMNS if name in residual.columns],
+    ]
     return residual.loc[:, ordered].copy()
 
 
@@ -677,7 +781,6 @@ def _build_alpha_layer(features: pd.DataFrame) -> pd.DataFrame:
     momentum_slow = g("momentum_50_100")
     price_z_20 = g("price_z_20")
     price_z_50 = g("price_z_50")
-    price_z_100 = g("price_z_100")
     distance_to_mean_50 = g("distance_to_mean_50")
     trend_flag = g("trend_flag_25")
     trend_strength = g("trend_strength_20_100_atr14")
@@ -730,19 +833,37 @@ def _build_alpha_layer(features: pd.DataFrame) -> pd.DataFrame:
     vol_core = (0.35 * atr_14) + (0.20 * atr_ratio) + (0.20 * vol_ratio) + (0.15 * boll_width)
     volatility_score = np.tanh((2.0 * vol_core) + (1.0 * vol_regime_z) + (1.2 * (vol_pct - 0.5)))
 
-    mean_reversion_score = np.tanh((-1.8 * distance_to_mean_50) - (0.6 * price_z_50) - (0.5 * (rsi - 50.0) / 50.0))
-    trend_accel_score = np.tanh((5.0 * (momentum_fast - momentum_mid)) + (2.0 * (returns_5 - returns_20)))
-    breakout_quality_score = np.tanh((3.0 * breakout_core) + (1.2 * adx_14 / 50.0) + (0.8 * body_size))
+    mean_reversion_score = np.tanh(
+        (-1.8 * distance_to_mean_50) - (0.6 * price_z_50) - (0.5 * (rsi - 50.0) / 50.0)
+    )
+    trend_accel_score = np.tanh(
+        (5.0 * (momentum_fast - momentum_mid)) + (2.0 * (returns_5 - returns_20))
+    )
+    breakout_quality_score = np.tanh(
+        (3.0 * breakout_core) + (1.2 * adx_14 / 50.0) + (0.8 * body_size)
+    )
     liquidity_score = np.tanh((0.8 * vol_z) - (0.6 * atr_14) - (0.5 * boll_width))
 
-    regime_confidence_score = np.tanh((0.9 * trend_strength) + (0.7 * adx_14 / 50.0) - (0.5 * range_strength))
+    regime_confidence_score = np.tanh(
+        (0.9 * trend_strength) + (0.7 * adx_14 / 50.0) - (0.5 * range_strength)
+    )
     trend_consensus_score = np.tanh((3.0 * trend_core) + (1.8 * returns_20) + (1.0 * returns_60))
-    volatility_pressure_score = np.tanh((1.5 * vol_regime_z) + (1.0 * atr_ratio) + (0.8 * (vol_pct - 0.5)))
-    reversal_pressure_score = np.tanh((1.2 * ny_reversal_pressure) - (1.0 * london_to_ny_open_return) - (0.8 * price_z_20))
+    volatility_pressure_score = np.tanh(
+        (1.5 * vol_regime_z) + (1.0 * atr_ratio) + (0.8 * (vol_pct - 0.5))
+    )
+    reversal_pressure_score = np.tanh(
+        (1.2 * ny_reversal_pressure)
+        - (1.0 * london_to_ny_open_return)
+        - (0.8 * price_z_20)
+    )
 
     micro_momentum_score = np.tanh((4.0 * returns_1) + (2.5 * returns_5) + (1.2 * momentum_fast))
     swing_return_score = np.tanh((2.5 * returns_20) + (1.5 * returns_60) + (1.0 * momentum_slow))
-    range_location_score = np.tanh((1.5 * prev_day_range_position) - (1.8 * close_location) - (1.0 * distance_to_mean_50))
+    range_location_score = np.tanh(
+        (1.5 * prev_day_range_position)
+        - (1.8 * close_location)
+        - (1.0 * distance_to_mean_50)
+    )
     session_alignment_score = np.tanh(
         (1.0 * is_london_session)
         + (1.0 * is_ny_session)
@@ -752,9 +873,19 @@ def _build_alpha_layer(features: pd.DataFrame) -> pd.DataFrame:
     )
 
     intrabar_pressure_score = np.tanh((2.2 * body_size) + (1.8 * (close_location - 0.5)))
-    distance_pressure_score = np.tanh((2.5 * distance_high.abs()) + (2.5 * distance_low.abs()) - (1.0 * distance_to_mean_50.abs()))
-    day_context_score = np.tanh((1.5 * prev_day_range_position) + (1.2 * since_ny_open_return) + (0.8 * since_london_open_return))
-    trend_range_blend_score = np.tanh((0.7 * trend_score) - (0.5 * range_score) + (0.8 * mean_reversion_score))
+    distance_pressure_score = np.tanh(
+        (2.5 * distance_high.abs())
+        + (2.5 * distance_low.abs())
+        - (1.0 * distance_to_mean_50.abs())
+    )
+    day_context_score = np.tanh(
+        (1.5 * prev_day_range_position)
+        + (1.2 * since_ny_open_return)
+        + (0.8 * since_london_open_return)
+    )
+    trend_range_blend_score = np.tanh(
+        (0.7 * trend_score) - (0.5 * range_score) + (0.8 * mean_reversion_score)
+    )
 
     alpha = pd.DataFrame(
         {
@@ -813,7 +944,9 @@ def _build_core20_alpha_layer(features: pd.DataFrame) -> pd.DataFrame:
         + (0.8 * g("close_location_in_bar", 0.5))
         + (0.7 * g("adx_14") / 50.0)
     )
-    time_context_score = np.tanh(g("hour_sin") + g("hour_cos") + g("weekday_sin") + g("weekday_cos"))
+    time_context_score = np.tanh(
+        g("hour_sin") + g("hour_cos") + g("weekday_sin") + g("weekday_cos")
+    )
     micro_return_score = np.tanh((5.0 * g("returns_1")) + (2.0 * g("returns_5")))
     range_location_score = np.tanh(
         (1.5 * g("distance_to_mean_50"))
@@ -903,12 +1036,42 @@ def _adx(high: pd.Series, low: pd.Series, close: pd.Series, period: int) -> pd.S
 
 
 def _parse_datetimes(df: pd.DataFrame) -> pd.Series:
-    if "timestamp" in df.columns:
-        parsed = pd.to_datetime(df["timestamp"], errors="coerce", utc=True)
+    if "utc_timestamp_minutes" in df.columns:
+        parsed = pd.to_datetime(
+            df["utc_timestamp_minutes"],
+            unit="m",
+            errors="coerce",
+            utc=True,
+        )
         if parsed.notna().any():
             return parsed
-    if "utc_timestamp_minutes" in df.columns:
-        return pd.to_datetime(df["utc_timestamp_minutes"], unit="m", errors="coerce", utc=True)
+    if "timestamp" in df.columns:
+        timestamp_text = df["timestamp"].astype(str)
+        for fmt in (
+            "%Y-%m-%d %H:%M:%S",
+            "%Y-%m-%d %H:%M",
+            "%Y-%m-%d %H:%M:%S%z",
+            "%Y-%m-%dT%H:%M:%S%z",
+            "%Y-%m-%dT%H:%M:%S",
+            "%H:%M",
+        ):
+            parsed = pd.to_datetime(
+                timestamp_text,
+                format=fmt,
+                errors="coerce",
+                utc=True,
+            )
+            if parsed.notna().any():
+                return parsed
+        with warnings.catch_warnings():
+            warnings.filterwarnings(
+                "ignore",
+                message="Could not infer format, so each element will be parsed individually",
+                category=UserWarning,
+            )
+            parsed = pd.to_datetime(timestamp_text, errors="coerce", utc=True)
+        if parsed.notna().any():
+            return parsed
     return pd.Series(pd.NaT, index=df.index)
 
 
@@ -922,14 +1085,39 @@ def _timestamp_strings(df: pd.DataFrame, datetimes: pd.Series) -> pd.Series:
 
 def _time_features(
     datetimes: pd.Series,
-) -> tuple[pd.Series, pd.Series, pd.Series, pd.Series, pd.Series, pd.Series, pd.Series, pd.Series, pd.Series, pd.Series]:
-    hours = datetimes.dt.hour.fillna(0).astype(float) + datetimes.dt.minute.fillna(0).astype(float) / 60.0
+) -> tuple[
+    pd.Series,
+    pd.Series,
+    pd.Series,
+    pd.Series,
+    pd.Series,
+    pd.Series,
+    pd.Series,
+    pd.Series,
+    pd.Series,
+    pd.Series,
+    pd.Series,
+]:
+    hours = (
+        datetimes.dt.hour.fillna(0).astype(float)
+        + datetimes.dt.minute.fillna(0).astype(float) / 60.0
+    )
     weekdays = datetimes.dt.dayofweek.fillna(0).astype(float)
-    minutes_of_week = weekdays * 24.0 * 60.0 + datetimes.dt.hour.fillna(0).astype(float) * 60.0 + datetimes.dt.minute.fillna(0).astype(float)
+    minutes_of_week = (
+        weekdays * 24.0 * 60.0
+        + datetimes.dt.hour.fillna(0).astype(float) * 60.0
+        + datetimes.dt.minute.fillna(0).astype(float)
+    )
     london = datetimes.dt.tz_convert("Europe/London")
     new_york = datetimes.dt.tz_convert("America/New_York")
-    london_hours = london.dt.hour.fillna(0).astype(float) + london.dt.minute.fillna(0).astype(float) / 60.0
-    new_york_hours = new_york.dt.hour.fillna(0).astype(float) + new_york.dt.minute.fillna(0).astype(float) / 60.0
+    london_hours = (
+        london.dt.hour.fillna(0).astype(float)
+        + london.dt.minute.fillna(0).astype(float) / 60.0
+    )
+    new_york_hours = (
+        new_york.dt.hour.fillna(0).astype(float)
+        + new_york.dt.minute.fillna(0).astype(float) / 60.0
+    )
 
     hour_angle = 2.0 * np.pi * hours / 24.0
     weekday_angle = 2.0 * np.pi * weekdays / 7.0
@@ -938,6 +1126,10 @@ def _time_features(
     is_monday_open_window = ((weekdays == 0.0) & (hours < 3.0)).astype(float)
     is_london_session = ((london_hours >= 8.0) & (london_hours < 17.0)).astype(float)
     is_ny_session = ((new_york_hours >= 8.0) & (new_york_hours < 17.0)).astype(float)
+    is_london_pre_ny_session = (
+        ((london_hours >= 8.0) & (london_hours < 17.0))
+        & ~((new_york_hours >= 8.0) & (new_york_hours < 17.0))
+    ).astype(float)
     is_london_ny_overlap = (
         ((london_hours >= 8.0) & (london_hours < 17.0))
         & ((new_york_hours >= 8.0) & (new_york_hours < 17.0))
@@ -958,6 +1150,7 @@ def _time_features(
         minute_of_week_cos,
         pd.Series(is_monday_open_window, index=datetimes.index),
         pd.Series(is_london_session, index=datetimes.index),
+        pd.Series(is_london_pre_ny_session, index=datetimes.index),
         pd.Series(is_ny_session, index=datetimes.index),
         pd.Series(is_london_ny_overlap, index=datetimes.index),
     )
@@ -970,6 +1163,7 @@ def _session_context_features(
     close: pd.Series,
     high: pd.Series,
     low: pd.Series,
+    atr_14: pd.Series | None,
     is_london_session: pd.Series,
     is_ny_session: pd.Series,
 ) -> tuple[
@@ -985,15 +1179,48 @@ def _session_context_features(
     pd.Series,
     pd.Series,
     pd.Series,
+    pd.Series,
+    pd.Series,
+    pd.Series,
+    pd.Series,
+    pd.Series,
 ]:
     if not datetimes.notna().any():
         zeros = pd.Series(0.0, index=close.index, dtype=float)
-        return (zeros, zeros, zeros, zeros, zeros, zeros, zeros, zeros, zeros, zeros, zeros, zeros)
+        return (
+            zeros,
+            zeros,
+            zeros,
+            zeros,
+            zeros,
+            zeros,
+            zeros,
+            zeros,
+            zeros,
+            zeros,
+            zeros,
+            zeros,
+            zeros,
+            zeros,
+            zeros,
+            zeros,
+            zeros,
+        )
 
     new_york = datetimes.dt.tz_convert("America/New_York")
     london = datetimes.dt.tz_convert("Europe/London")
     ny_dates = new_york.dt.strftime("%Y-%m-%d").fillna("")
     london_dates = london.dt.strftime("%Y-%m-%d").fillna("")
+    london_hours = (
+        london.dt.hour.fillna(0).astype(float)
+        + london.dt.minute.fillna(0).astype(float) / 60.0
+    )
+    ny_hours = (
+        new_york.dt.hour.fillna(0).astype(float)
+        + new_york.dt.minute.fillna(0).astype(float) / 60.0
+    )
+    london_after_open = london_hours >= 8.0
+    ny_after_open = ny_hours >= 8.0
 
     daily = pd.DataFrame(
         {
@@ -1027,12 +1254,55 @@ def _session_context_features(
     distance_to_day_high_so_far = close / day_high_so_far.replace(0, np.nan) - 1.0
     distance_to_day_low_so_far = close / day_low_so_far.replace(0, np.nan) - 1.0
 
-    london_start_close = close.where(is_london_session > 0.5).groupby(london_dates, sort=False).transform("first")
-    ny_start_close = close.where(is_ny_session > 0.5).groupby(ny_dates, sort=False).transform("first")
-    ny_open_gap_prev_close = ny_start_close / prev_day_close.replace(0, np.nan) - 1.0
-    london_to_ny_open_return = ny_start_close / london_start_close.replace(0, np.nan) - 1.0
-    london_after_open = london.dt.hour.fillna(0).astype(float) >= 8.0
-    ny_after_open = new_york.dt.hour.fillna(0).astype(float) >= 8.0
+    asia_window = (london_hours >= 0.0) & (london_hours < 8.0)
+    asia_high = high.where(asia_window).groupby(london_dates, sort=False).transform("max")
+    asia_low = low.where(asia_window).groupby(london_dates, sort=False).transform("min")
+    asia_range = asia_high - asia_low
+    atr_abs = None
+    if atr_14 is not None:
+        atr_abs = (atr_14.astype(float) * close).replace(0, np.nan)
+    asia_range_width_atr = (
+        asia_range / atr_abs
+        if atr_abs is not None
+        else pd.Series(np.nan, index=close.index)
+    )
+    distance_to_asia_high = close / asia_high.replace(0, np.nan) - 1.0
+    distance_to_asia_low = close / asia_low.replace(0, np.nan) - 1.0
+    asia_range_width_atr = asia_range_width_atr.where(london_after_open, 0.0)
+    distance_to_asia_high = distance_to_asia_high.where(london_after_open, 0.0)
+    distance_to_asia_low = distance_to_asia_low.where(london_after_open, 0.0)
+
+    london_start_close = (
+        close.where(is_london_session > 0.5)
+        .groupby(london_dates, sort=False)
+        .transform("first")
+    )
+    ny_start_close = (
+        close.where(is_ny_session > 0.5)
+        .groupby(ny_dates, sort=False)
+        .transform("first")
+    )
+    ny_open_gap_prev_close = (
+        ny_start_close / prev_day_close.replace(0, np.nan) - 1.0
+    ).where(
+        ny_after_open,
+        0.0,
+    )
+    london_to_ny_open_return = (
+        ny_start_close / london_start_close.replace(0, np.nan) - 1.0
+    ).where(
+        ny_after_open & london_start_close.notna(),
+        0.0,
+    )
+    london_breakout_up = distance_to_asia_high.clip(lower=0.0)
+    london_breakout_down = distance_to_asia_low.clip(upper=0.0)
+    london_breakout_of_asia = (
+        london_breakout_up + london_breakout_down
+    ).where(london_after_open, 0.0)
+    pre_london_compression = (1.0 / (1.0 + asia_range_width_atr.clip(lower=0.0))).where(
+        london_after_open & asia_range_width_atr.notna(),
+        0.0,
+    )
     since_london_open_return = (close / london_start_close.replace(0, np.nan) - 1.0).where(
         london_after_open & london_start_close.notna(),
         0.0,
@@ -1054,6 +1324,11 @@ def _session_context_features(
             distance_to_prev_day_low,
             distance_to_day_high_so_far,
             distance_to_day_low_so_far,
+            asia_range_width_atr,
+            distance_to_asia_high,
+            distance_to_asia_low,
+            london_breakout_of_asia,
+            pre_london_compression,
             since_london_open_return,
             since_ny_open_return,
             ny_open_gap_prev_close,

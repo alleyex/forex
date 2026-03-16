@@ -9,9 +9,16 @@ import numpy as np
 import pandas as pd
 
 from forex.ml.rl.envs.trading_config_io import load_trading_config
-from forex.ml.rl.envs.trading_env import TradingConfig, apply_risk_engine, simulate_step_transition
-from forex.ml.rl.features.feature_builder import build_feature_frame, load_csv
-from forex.ml.rl.features.feature_builder import filter_feature_rows_by_session
+from forex.ml.rl.envs.trading_env import (
+    TradingConfig,
+    apply_risk_engine,
+    simulate_step_transition,
+)
+from forex.ml.rl.features.feature_builder import (
+    build_feature_frame,
+    filter_feature_rows_by_session,
+    load_csv,
+)
 from forex.tools.rl.run_live_sim import PlaybackResult, print_playback_result
 from forex.utils.metrics import compute_sharpe_ratio_from_equity
 
@@ -173,6 +180,7 @@ SESSION_FILTERS = {
     "all": None,
     "monday_open": "is_monday_open_window",
     "london": "is_london_session",
+    "london_pre_ny": "is_london_pre_ny_session",
     "ny": "is_ny_session",
     "overlap": "is_london_ny_overlap",
 }
@@ -374,15 +382,45 @@ def run_heuristic_playback(
 
 
 def build_argument_parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(description="Evaluate simple non-RL trading baselines on the same playback stack.")
+    parser = argparse.ArgumentParser(
+        description=(
+            "Evaluate simple non-RL trading baselines "
+            "on the same playback stack."
+        )
+    )
     parser.add_argument("--data", required=True, help="Path to raw history CSV.")
     parser.add_argument("--env-config", default="", help="Optional env config JSON.")
-    parser.add_argument("--transaction-cost-bps", type=float, default=1.0, help="Transaction cost in bps.")
+    parser.add_argument(
+        "--transaction-cost-bps",
+        type=float,
+        default=1.0,
+        help="Transaction cost in bps.",
+    )
     parser.add_argument("--slippage-bps", type=float, default=0.5, help="Slippage in bps.")
-    parser.add_argument("--start-index", type=int, default=0, help="Zero-based bar index to start playback from.")
-    parser.add_argument("--max-steps", type=int, default=10000, help="Playback steps per strategy (0 = full length).")
-    parser.add_argument("--segments", type=int, default=1, help="Number of walk-forward segments to evaluate.")
-    parser.add_argument("--stride", type=int, default=5000, help="Start-index stride between segments.")
+    parser.add_argument(
+        "--start-index",
+        type=int,
+        default=0,
+        help="Zero-based bar index to start playback from.",
+    )
+    parser.add_argument(
+        "--max-steps",
+        type=int,
+        default=10000,
+        help="Playback steps per strategy (0 = full length).",
+    )
+    parser.add_argument(
+        "--segments",
+        type=int,
+        default=1,
+        help="Number of walk-forward segments to evaluate.",
+    )
+    parser.add_argument(
+        "--stride",
+        type=int,
+        default=5000,
+        help="Start-index stride between segments.",
+    )
     parser.add_argument(
         "--strategies",
         default="momentum,breakout20,breakout50,mean_revert,short_bias,regime_switch,regime_short_mr,long,short,flat",
@@ -391,7 +429,7 @@ def build_argument_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--sessions",
         default="all",
-        help="Comma-separated session filters: all,monday_open,london,ny,overlap.",
+        help="Comma-separated session filters: all,monday_open,london,london_pre_ny,ny,overlap.",
     )
     parser.add_argument("--json-out", default="", help="Optional JSON path to save summary rows.")
     return parser
@@ -437,11 +475,19 @@ def main() -> None:
                     break
                 segment_results.append(result)
                 if int(args.segments) > 1:
-                    gate_text = "PASS" if not result.gate_reasons else f"FAIL ({'; '.join(result.gate_reasons)})"
+                    gate_text = (
+                        "PASS"
+                        if not result.gate_reasons
+                        else f"FAIL ({'; '.join(result.gate_reasons)})"
+                    )
                     print(
-                        f"Segment {segment_idx + 1}: range={result.start_ts} -> {result.end_ts} "
-                        f"return={result.total_return:.6f} sharpe={result.sharpe:.6f} "
-                        f"max_dd={result.max_drawdown:.6f} trade_rate/1k={result.trade_rate_1k:.2f} gate={gate_text}"
+                        f"Segment {segment_idx + 1}: "
+                        f"range={result.start_ts} -> {result.end_ts} "
+                        f"return={result.total_return:.6f} "
+                        f"sharpe={result.sharpe:.6f} "
+                        f"max_dd={result.max_drawdown:.6f} "
+                        f"trade_rate/1k={result.trade_rate_1k:.2f} "
+                        f"gate={gate_text}"
                     )
             if not segment_results:
                 continue
@@ -452,7 +498,8 @@ def main() -> None:
                 print(
                     "Aggregate: "
                     f"segments={aggregate['segments']} pass={aggregate['pass_count']} "
-                    f"avg_return={aggregate['avg_return']:.6f} avg_sharpe={aggregate['avg_sharpe']:.6f} "
+                    f"avg_return={aggregate['avg_return']:.6f} "
+                    f"avg_sharpe={aggregate['avg_sharpe']:.6f} "
                     f"avg_max_dd={aggregate['avg_max_drawdown']:.6f} "
                     f"worst_max_dd={aggregate['worst_max_drawdown']:.6f} "
                     f"avg_trade_rate/1k={aggregate['avg_trade_rate_1k']:.2f}"
@@ -468,7 +515,10 @@ def main() -> None:
     if args.json_out.strip():
         out_path = Path(args.json_out)
         out_path.parent.mkdir(parents=True, exist_ok=True)
-        out_path.write_text(json.dumps(summaries, ensure_ascii=True, indent=2), encoding="utf-8")
+        out_path.write_text(
+            json.dumps(summaries, ensure_ascii=True, indent=2),
+            encoding="utf-8",
+        )
 
 
 if __name__ == "__main__":

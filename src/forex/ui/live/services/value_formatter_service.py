@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 from datetime import datetime
-from typing import Optional
 
 from ctrader_open_api.messages.OpenApiModelMessages_pb2 import ProtoOATradeSide
 
@@ -12,7 +11,12 @@ class LiveValueFormatterService:
     def __init__(self, window) -> None:
         self._window = window
 
-    def current_price_text(self, *, symbol_id: Optional[int], side_value: Optional[int]) -> str:
+    def current_price_text(
+        self,
+        *,
+        symbol_id: int | None,
+        side_value: int | None,
+    ) -> str:
         w = self._window
         if symbol_id is None:
             return "-"
@@ -53,7 +57,12 @@ class LiveValueFormatterService:
             ts_val = ts_val / 1000.0
         return datetime.utcfromtimestamp(ts_val).strftime("%H:%M:%S")
 
-    def normalize_price(self, value, *, digits: Optional[int] = None) -> Optional[float]:
+    def normalize_price(
+        self,
+        value,
+        *,
+        digits: int | None = None,
+    ) -> float | None:
         if value is None:
             return None
         try:
@@ -76,11 +85,10 @@ class LiveValueFormatterService:
             return numeric / 100000.0
         return numeric
 
-    def format_price(self, value, *, digits: Optional[int] = None) -> str:
+    def format_price(self, value, *, digits: int | None = None) -> str:
         w = self._window
         normalized = self.normalize_price(value, digits=digits)
         if normalized is None:
             return "-"
         use_digits = w._price_digits if digits is None else digits
         return f"{normalized:.{use_digits}f}"
-

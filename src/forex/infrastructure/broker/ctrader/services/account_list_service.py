@@ -1,16 +1,21 @@
-"""
-帳戶列表服務
-"""
-from dataclasses import dataclass
+"""Account list service."""
+from __future__ import annotations
+
 import time
-from typing import Callable, Optional, Protocol, Sequence
+from collections.abc import Callable, Sequence
+from dataclasses import dataclass
+from typing import Protocol
 
 from ctrader_open_api import Client
 from ctrader_open_api.messages.OpenApiMessages_pb2 import ProtoOAGetAccountListByAccessTokenReq
 from ctrader_open_api.messages.OpenApiModelMessages_pb2 import ProtoOAPayloadType
 
-from forex.infrastructure.broker.base import BaseCallbacks, LogHistoryMixin, OperationStateMixin, build_callbacks
-from forex.infrastructure.broker.errors import ErrorCode, error_message
+from forex.infrastructure.broker.base import (
+    BaseCallbacks,
+    LogHistoryMixin,
+    OperationStateMixin,
+    build_callbacks,
+)
 from forex.infrastructure.broker.ctrader.services.app_auth_service import AppAuthService
 from forex.infrastructure.broker.ctrader.services.base import CTraderRequestLifecycleMixin
 from forex.infrastructure.broker.ctrader.services.message_helpers import (
@@ -20,30 +25,31 @@ from forex.infrastructure.broker.ctrader.services.message_helpers import (
     format_success,
     format_warning,
 )
-from forex.utils.metrics import metrics
 from forex.infrastructure.broker.ctrader.services.timeout_tracker import TimeoutTracker
+from forex.infrastructure.broker.errors import ErrorCode, error_message
+from forex.utils.metrics import metrics
 
 
 class AccountInfoMessage(Protocol):
     ctidTraderAccountId: int
     isLive: bool
-    traderLogin: Optional[int]
-    lastClosingDealTimestamp: Optional[int]
-    lastBalanceUpdateTimestamp: Optional[int]
+    traderLogin: int | None
+    lastClosingDealTimestamp: int | None
+    lastBalanceUpdateTimestamp: int | None
 
 
 class AccountListMessage(Protocol):
     payloadType: int
     errorCode: int
     description: str
-    permissionScope: Optional[int]
+    permissionScope: int | None
     ctidTraderAccount: Sequence[AccountInfoMessage]
 
 
 @dataclass
 class AccountListServiceCallbacks(BaseCallbacks):
-    """AccountListService 的回調函式"""
-    on_accounts_received: Optional[Callable[[list], None]] = None
+    """Callbacks for AccountListService."""
+    on_accounts_received: Callable[[list], None] | None = None
 
 
 class AccountListService(
@@ -52,9 +58,9 @@ class AccountListService(
     OperationStateMixin,
 ):
     """
-    透過存取權杖取得帳戶列表
+    Fetch the account list using an access token.
 
-    使用方式：
+    Usage:
         service = AccountListService(app_auth_service, access_token)
         service.set_callbacks(on_accounts_received=..., on_error=...)
         service.fetch()
@@ -73,11 +79,11 @@ class AccountListService(
 
     def set_callbacks(
         self,
-        on_accounts_received: Optional[Callable[[list], None]] = None,
-        on_error: Optional[Callable[[str], None]] = None,
-        on_log: Optional[Callable[[str], None]] = None,
+        on_accounts_received: Callable[[list], None] | None = None,
+        on_error: Callable[[str], None] | None = None,
+        on_log: Callable[[str], None] | None = None,
     ) -> None:
-        """設定回調函式"""
+        """Set callbacks."""
         self._callbacks = build_callbacks(
             AccountListServiceCallbacks,
             on_accounts_received=on_accounts_received,
@@ -86,10 +92,10 @@ class AccountListService(
         )
         self._replay_log_history()
 
-    def fetch(self, timeout_seconds: Optional[int] = None) -> None:
-        """取得帳戶列表"""
+    def fetch(self, timeout_seconds: int | None = None) -> None:
+        """Fetch the account list."""
         if not self._access_token:
-            self._emit_error(error_message(ErrorCode.VALIDATION, "缺少存取權杖"))
+            self._emit_error(error_message(ErrorCode.VALIDATION, "Missing access token"))
             return
 
         if not self._start_operation():
@@ -104,10 +110,10 @@ class AccountListService(
         )
 
     def _send_request(self) -> None:
-        """發送帳戶列表請求"""
+        """Send the account list request."""
         request = ProtoOAGetAccountListByAccessTokenReq()
         request.accessToken = self._access_token
-        self._log(format_request("正在取得帳戶列表..."))
+        self._log(format_request("Fetching account list..."))
         if not self._send_request_with_client(
             request=request,
             timeout_tracker=self._timeout_tracker,
@@ -116,65 +122,82 @@ class AccountListService(
             return
 
     def _handle_message(self, client: Client, msg: AccountListMessage) -> bool:
-        """處理帳戶列表回應"""
+        """Handle the account list response."""
         if not self._in_progress:
             return False
         return dispatch_payload(
             msg,
             {
-                ProtoOAPayloadType.PROTO_OA_GET_ACCOUNTS_BY_ACCESS_TOKEN_RES: self._on_accounts_received,
+                ProtoOAPayloadType.PROTO_OA_GET_ACCOUNTS_BY_ACCESS_TOKEN_RES: (
+                    self._on_accounts_received
+                ),
                 ProtoOAPayloadType.PROTO_OA_ERROR_RES: self._on_error,
             },
         )
 
     def _on_accounts_received(self, msg: AccountListMessage) -> None:
-        """帳戶列表接收成功"""
-        self._cleanup_request_lifecycle(timeout_tracker=self._timeout_tracker, handler=self._handle_message)
+        """Handle successful account list retrieval."""
+        self._cleanup_request_lifecycle(
+            timeout_tracker=self._timeout_tracker,
+            handler=self._handle_message,
+        )
         permission_scope = getattr(msg, "permissionScope", None)
         accounts = self._parse_accounts(msg.ctidTraderAccount, permission_scope)
-        self._log(format_success(f"已接收帳戶: {len(accounts)} 個"))
+        self._log(format_success(f"Received accounts: {len(accounts)}"))
         metrics.inc("ctrader.account_list.success")
         started_at = getattr(self, "_metrics_started_at", None)
         if started_at is not None:
-            metrics.observe("ctrader.account_list.latency_s", time.monotonic() - started_at)
+            metrics.observe(
+                "ctrader.account_list.latency_s",
+                time.monotonic() - started_at,
+            )
         if self._callbacks.on_accounts_received:
             self._callbacks.on_accounts_received(accounts)
 
     def _on_error(self, msg: AccountListMessage) -> None:
-        """帳戶列表接收失敗"""
-        self._cleanup_request_lifecycle(timeout_tracker=self._timeout_tracker, handler=self._handle_message)
+        """Handle account list retrieval failure."""
+        self._cleanup_request_lifecycle(
+            timeout_tracker=self._timeout_tracker,
+            handler=self._handle_message,
+        )
         metrics.inc("ctrader.account_list.error")
         self._emit_error(format_error(msg.errorCode, msg.description))
 
     def _on_timeout(self) -> None:
         if not self._in_progress:
             return
-        self._cleanup_request_lifecycle(timeout_tracker=self._timeout_tracker, handler=self._handle_message)
+        self._cleanup_request_lifecycle(
+            timeout_tracker=self._timeout_tracker,
+            handler=self._handle_message,
+        )
         metrics.inc("ctrader.account_list.timeout")
-        self._emit_error(error_message(ErrorCode.TIMEOUT, "取得帳戶列表逾時"))
+        self._emit_error(error_message(ErrorCode.TIMEOUT, "Account list request timed out"))
 
     def _retry_request(self, attempt: int) -> None:
         if not self._in_progress:
             return
-        self._log(format_warning(f"帳戶列表逾時，重試第 {attempt} 次"))
+        self._log(format_warning(f"Account list timed out, retry attempt {attempt}"))
         metrics.inc("ctrader.account_list.retry")
         self._send_request()
 
     @staticmethod
     def _parse_accounts(
-        raw_accounts: Sequence[AccountInfoMessage], permission_scope: Optional[int]
+        raw_accounts: Sequence[AccountInfoMessage],
+        permission_scope: int | None,
     ) -> list:
-        """解析原始帳戶資料"""
+        """Parse raw account data."""
         return [
             {
                 "account_id": int(account.ctidTraderAccountId),
                 "is_live": bool(account.isLive),
                 "trader_login": int(account.traderLogin) if account.traderLogin else None,
                 "permission_scope": permission_scope,
-                "last_closing_deal_timestamp": int(getattr(account, "lastClosingDealTimestamp", 0))
-                or None,
-                "last_balance_update_timestamp": int(getattr(account, "lastBalanceUpdateTimestamp", 0))
-                or None,
+                "last_closing_deal_timestamp": (
+                    int(getattr(account, "lastClosingDealTimestamp", 0)) or None
+                ),
+                "last_balance_update_timestamp": (
+                    int(getattr(account, "lastBalanceUpdateTimestamp", 0)) or None
+                ),
             }
             for account in raw_accounts
         ]

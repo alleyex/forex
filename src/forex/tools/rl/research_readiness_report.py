@@ -53,22 +53,40 @@ def _pick_best(rows: list[dict[str, object]]) -> dict[str, object] | None:
     return best
 
 
-def _readiness(best_heuristic: dict[str, object] | None, best_supervised: dict[str, object] | None) -> tuple[str, list[str]]:
+def _readiness(
+    best_heuristic: dict[str, object] | None,
+    best_supervised: dict[str, object] | None,
+) -> tuple[str, list[str]]:
     reasons: list[str] = []
     verdict = "STOP"
     candidates = [item for item in (best_heuristic, best_supervised) if item]
     if not candidates:
         reasons.append("No valid baseline aggregates were provided.")
         return verdict, reasons
-    best_sharpe = max(float(item["aggregate"]["avg_sharpe"]) for item in candidates if isinstance(item.get("aggregate"), dict))
-    best_pass_rate = max(float(item["aggregate"]["pass_rate"]) for item in candidates if isinstance(item.get("aggregate"), dict))
-    best_drawdown = min(float(item["aggregate"]["avg_max_drawdown"]) for item in candidates if isinstance(item.get("aggregate"), dict))
+    best_sharpe = max(
+        float(item["aggregate"]["avg_sharpe"])
+        for item in candidates
+        if isinstance(item.get("aggregate"), dict)
+    )
+    best_pass_rate = max(
+        float(item["aggregate"]["pass_rate"])
+        for item in candidates
+        if isinstance(item.get("aggregate"), dict)
+    )
+    best_drawdown = min(
+        float(item["aggregate"]["avg_max_drawdown"])
+        for item in candidates
+        if isinstance(item.get("aggregate"), dict)
+    )
     if best_sharpe < 0.05:
         reasons.append(f"Best baseline avg_sharpe is only {best_sharpe:.4f}.")
     if best_pass_rate < 0.34:
         reasons.append(f"Best baseline pass_rate is only {best_pass_rate:.2f}.")
     if best_drawdown > 0.15:
-        reasons.append(f"No baseline keeps average max drawdown under 15% (best {best_drawdown:.4f}).")
+        reasons.append(
+            "No baseline keeps average max drawdown under 15% "
+            f"(best {best_drawdown:.4f})."
+        )
     if best_sharpe >= 0.05 and best_pass_rate >= 0.34 and best_drawdown <= 0.15:
         verdict = "GO"
         reasons.append("At least one baseline clears the minimum readiness thresholds.")
@@ -99,9 +117,24 @@ def _format_candidate(title: str, row: dict[str, object] | None) -> list[str]:
 
 
 def build_argument_parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(description="Summarize heuristic/supervised baseline outputs into an RL readiness verdict.")
-    parser.add_argument("--heuristic-json", action="append", default=[], help="Heuristic baseline JSON output path. Repeatable.")
-    parser.add_argument("--supervised-json", action="append", default=[], help="Supervised baseline JSON output path. Repeatable.")
+    parser = argparse.ArgumentParser(
+        description=(
+            "Summarize heuristic/supervised baseline outputs "
+            "into an RL readiness verdict."
+        )
+    )
+    parser.add_argument(
+        "--heuristic-json",
+        action="append",
+        default=[],
+        help="Heuristic baseline JSON output path. Repeatable.",
+    )
+    parser.add_argument(
+        "--supervised-json",
+        action="append",
+        default=[],
+        help="Supervised baseline JSON output path. Repeatable.",
+    )
     parser.add_argument("--markdown-out", default="", help="Optional markdown report output path.")
     parser.add_argument("--json-out", default="", help="Optional JSON summary output path.")
     return parser
@@ -130,7 +163,7 @@ def main() -> None:
     markdown_lines = [
         "# Research Readiness Report",
         "",
-        f"## Verdict",
+        "## Verdict",
         "",
         f"`{verdict}`",
         "",

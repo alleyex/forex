@@ -3,8 +3,8 @@ Shared timeout helper for cTrader services.
 """
 from __future__ import annotations
 
-from typing import Callable, Optional
 import threading
+from collections.abc import Callable
 
 from forex.config.runtime import RetryPolicy
 
@@ -12,21 +12,21 @@ from forex.config.runtime import RetryPolicy
 class TimeoutTracker:
     def __init__(self, on_timeout: Callable[[], None]):
         self._on_timeout = on_timeout
-        self._timer: Optional[threading.Timer] = None
-        self._policy: Optional[RetryPolicy] = None
-        self._on_retry: Optional[Callable[[int], None]] = None
+        self._timer: threading.Timer | None = None
+        self._policy: RetryPolicy | None = None
+        self._on_retry: Callable[[int], None] | None = None
         self._attempt = 0
-        self._timeout_seconds: Optional[float] = None
+        self._timeout_seconds: float | None = None
 
     def configure_retry(
         self,
-        policy: Optional[RetryPolicy],
-        on_retry: Optional[Callable[[int], None]],
+        policy: RetryPolicy | None,
+        on_retry: Callable[[int], None] | None,
     ) -> None:
         self._policy = policy
         self._on_retry = on_retry
 
-    def start(self, timeout_seconds: Optional[float]) -> None:
+    def start(self, timeout_seconds: float | None) -> None:
         if not timeout_seconds:
             return
         self.cancel()

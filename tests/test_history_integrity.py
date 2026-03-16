@@ -8,7 +8,17 @@ from forex.application.broker.history_integrity import HistoryIntegrityService
 
 def _write_csv(path, rows: list[int]) -> None:
     with path.open("w", newline="", encoding="utf-8") as handle:
-        writer = csv.DictWriter(handle, fieldnames=["utc_timestamp_minutes", "timestamp", "open", "high", "low", "close"])
+        writer = csv.DictWriter(
+            handle,
+            fieldnames=[
+                "utc_timestamp_minutes",
+                "timestamp",
+                "open",
+                "high",
+                "low",
+                "close",
+            ],
+        )
         writer.writeheader()
         for value in rows:
             writer.writerow(

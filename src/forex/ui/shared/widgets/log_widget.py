@@ -1,16 +1,25 @@
 """
 Reusable log display widget
 """
-from datetime import datetime
-import time
+
 import re
-from PySide6.QtCore import Qt, Signal, Slot, QThread
-from PySide6.QtGui import QAction, QColor, QFontDatabase, QIcon, QTextCharFormat, QSyntaxHighlighter
+import time
+from datetime import datetime
+
+from PySide6.QtCore import Qt, QThread, Signal, Slot
+from PySide6.QtGui import (
+    QAction,
+    QColor,
+    QFontDatabase,
+    QIcon,
+    QSyntaxHighlighter,
+    QTextCharFormat,
+)
 from PySide6.QtWidgets import (
     QApplication,
-    QMenu,
-    QLabel,
     QHBoxLayout,
+    QLabel,
+    QMenu,
     QPlainTextEdit,
     QStyle,
     QToolButton,
@@ -46,7 +55,11 @@ class _LogSyntaxHighlighter(QSyntaxHighlighter):
     def highlightBlock(self, text: str) -> None:
         ts_match = self._timestamp_pattern.search(text)
         if ts_match:
-            self.setFormat(ts_match.start(), ts_match.end() - ts_match.start(), self._timestamp_format)
+            self.setFormat(
+                ts_match.start(),
+                ts_match.end() - ts_match.start(),
+                self._timestamp_format,
+            )
 
         for match in self._level_pattern.finditer(text):
             level = match.group(1).upper()
@@ -87,14 +100,14 @@ class LogWidget(QWidget):
     }
     appendRequested = Signal(str)
     """
-    日誌顯示元件
-    
-    提供：
-    - 唯讀的文字區域
-    - 自動捲動到最新訊息
-    - 可選的標題標籤
+    Log display widget.
+
+    Provides:
+    - A read-only text area
+    - Auto-scroll to the latest message
+    - An optional title label
     """
-    
+
     def __init__(
         self,
         title: str = "Connection Log:",
@@ -111,14 +124,24 @@ class LogWidget(QWidget):
         self._font_point_delta = font_point_delta
         self._entries: list[tuple[str, str]] = []
         self._max_entries = max(1, int(max_entries))
-        self._level_pattern = re.compile(r"\[(DEBUG|TRADE|TRADING|INFO|OK|WARN|ERROR)\]", re.IGNORECASE)
-        self._history_request_pattern = re.compile(
-            r"(?:fetch|取得)\s+([A-Za-z0-9]+)\s+(?:history|歷史資料)[:：](\d+)\s+rows\s+\(milliseconds,\s*window=([^,]+),\s*from=([^,]+),\s*to=([^)]+)\)"
+        self._level_pattern = re.compile(
+            r"\[(DEBUG|TRADE|TRADING|INFO|OK|WARN|ERROR)\]",
+            re.IGNORECASE,
         )
-        self._request_history_pattern = re.compile(r"Request history\s+\(account_id=(\d+),\s*symbol_id=(\d+)\)")
+        self._history_request_pattern = re.compile(
+            r"fetch\s+([A-Za-z0-9]+)\s+history[:：](\d+)\s+rows\s+\(milliseconds,\s*window=([^,]+),\s*from=([^,]+),\s*to=([^)]+)\)"
+        )
+        self._request_history_pattern = re.compile(
+            r"Request history\s+\(account_id=(\d+),\s*symbol_id=(\d+)\)"
+        )
         self._loaded_candles_pattern = re.compile(r"Loaded\s+(\d+)\s+candles", re.IGNORECASE)
-        self._unhandled_type_pattern = re.compile(r"(?:Unhandled message type|未處理的訊息類型)[:：]\s*(\d+)")
-        self._error_invalid_pattern = re.compile(r"(?:ERROR|錯誤)\s+INVALID_REQUEST[:：]\s*(.+)", re.IGNORECASE)
+        self._unhandled_type_pattern = re.compile(
+            r"Unhandled message type[:：]\s*(\d+)"
+        )
+        self._error_invalid_pattern = re.compile(
+            r"ERROR\s+INVALID_REQUEST[:：]\s*(.+)",
+            re.IGNORECASE,
+        )
         self._strategy_profile_pattern = re.compile(
             r"strategy\s*profile\s*:\s*same-side\s+near-full\s+hold\s*=\s*(ON|OFF)",
             re.IGNORECASE,
@@ -131,18 +154,21 @@ class LogWidget(QWidget):
         self._repeat_suppressed_count = 0
         self._setup_ui(title)
         self.appendRequested.connect(self._append_on_ui_thread, Qt.QueuedConnection)
-    
+
     def _setup_ui(self, title: str) -> None:
         layout = QVBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(4)
-        
+
         header = QHBoxLayout()
         header.setContentsMargins(0, 0, 0, 0)
         header.setSpacing(8)
 
         if title:
             self._title_label = QLabel(title)
+            self._title_label.setStyleSheet(
+                "color:#cfd6df; font-weight:600; font-size:12px; letter-spacing:0.2px;"
+            )
             header.addWidget(self._title_label)
 
         header.addStretch(1)
@@ -154,6 +180,7 @@ class LogWidget(QWidget):
         self._btn_filter.setToolTip("Filter level: All")
         self._btn_filter.setPopupMode(QToolButton.InstantPopup)
         self._btn_filter.setAutoRaise(True)
+        self._btn_filter.setFixedSize(22, 22)
         self._btn_filter.setStyleSheet(
             """
             QToolButton {
@@ -180,9 +207,12 @@ class LogWidget(QWidget):
         header.addWidget(self._btn_filter)
 
         self._btn_copy = QToolButton()
-        self._btn_copy.setIcon(self._resolve_icon(["edit-copy"], QStyle.SP_FileDialogDetailedView))
+        self._btn_copy.setIcon(
+            self._resolve_icon(["edit-copy"], QStyle.SP_FileDialogDetailedView)
+        )
         self._btn_copy.setToolTip("Copy")
         self._btn_copy.setAutoRaise(True)
+        self._btn_copy.setFixedSize(22, 22)
         self._btn_copy.setStyleSheet(
             """
             QToolButton {
@@ -204,9 +234,12 @@ class LogWidget(QWidget):
         header.addWidget(self._btn_copy)
 
         self._btn_clear = QToolButton()
-        self._btn_clear.setIcon(self._resolve_icon(["edit-delete", "user-trash"], QStyle.SP_TrashIcon))
+        self._btn_clear.setIcon(
+            self._resolve_icon(["edit-delete", "user-trash"], QStyle.SP_TrashIcon)
+        )
         self._btn_clear.setToolTip("Clear")
         self._btn_clear.setAutoRaise(True)
+        self._btn_clear.setFixedSize(22, 22)
         self._btn_clear.setStyleSheet(
             """
             QToolButton {
@@ -228,7 +261,7 @@ class LogWidget(QWidget):
         header.addWidget(self._btn_clear)
 
         layout.addLayout(header)
-        
+
         self._text_edit = QPlainTextEdit()
         self._text_edit.setReadOnly(True)
         # Keep each log entry on a single row for stable visual alignment.
@@ -238,6 +271,9 @@ class LogWidget(QWidget):
             QPlainTextEdit {
                 background: #0f1115;
                 border: 1px solid #2f3742;
+                color: #d8e0ea;
+                selection-background-color: #2f6db3;
+                selection-color: #f5f7fb;
             }
             QPlainTextEdit QScrollBar:vertical {
                 background: transparent;
@@ -288,7 +324,7 @@ class LogWidget(QWidget):
             self._text_edit.setFont(font)
         self._syntax_highlighter = _LogSyntaxHighlighter(self._text_edit.document())
         layout.addWidget(self._text_edit)
-    
+
     @Slot(str)
     def append(self, message: str) -> None:
         if QThread.currentThread() is not self.thread():
@@ -298,7 +334,7 @@ class LogWidget(QWidget):
 
     @Slot(str)
     def _append_on_ui_thread(self, message: str) -> None:
-        """新增訊息並捲動到底部"""
+        """Append a message and scroll to the bottom."""
         message = self._normalize_message(message)
         if self._with_timestamp:
             ts = datetime.now().strftime("%H:%M:%S")
@@ -339,13 +375,23 @@ class LogWidget(QWidget):
         return True
 
     def clear_logs(self) -> None:
-        """Clear所有日誌"""
+        """Clear all logs."""
         self._entries.clear()
         self._last_entry_text = ""
         self._last_entry_ts = 0.0
         self._last_repeat_notice_ts = 0.0
         self._repeat_suppressed_count = 0
         self._text_edit.clear()
+
+    @property
+    def current_filter(self) -> str:
+        return self._current_filter
+
+    def set_filter_level(self, level: str) -> None:
+        normalized = str(level or "All").strip()
+        if normalized not in self._FILTER_LEVELS:
+            normalized = "All"
+        self._set_filter(normalized)
 
     def _extract_level(self, message: str) -> str:
         match = self._level_pattern.search(message)
@@ -426,16 +472,20 @@ class LogWidget(QWidget):
 
         if "funds received" in lower:
             return "funds_received"
-        if "發送 heartbeat" in body or "sending heartbeat" in lower:
+        if "sending heartbeat" in lower:
             return "heartbeat_sent"
-        if "已送出報價訂閱" in body or "quotes subscribed" in lower:
-            value = body.split("：", 1)[-1].strip() if "：" in body else body.split(":", 1)[-1].strip()
+        if "quotes subscribed" in lower:
+            value = (
+                body.split("：", 1)[-1].strip()
+                if "：" in body
+                else body.split(":", 1)[-1].strip()
+            )
             return f"quotes_subscribed | symbols={value}"
         if lower.startswith("order executed"):
             return body.replace("Order executed", "order_executed", 1)
-        if "正在取得 symbol details" in body or "fetching symbol details" in lower:
+        if "fetching symbol details" in lower:
             return "symbol_details_request"
-        if "已接收 symbol details" in body or "symbol details received" in lower:
+        if "symbol details received" in lower:
             return "symbol_details_received"
         return self._normalize_event_prefix(body)
 

@@ -3,23 +3,27 @@ Order service for cTrader.
 """
 from __future__ import annotations
 
-from dataclasses import dataclass
-from typing import Callable, Optional, Protocol
+import threading
 import time
 import uuid
-import threading
+from collections.abc import Callable
+from dataclasses import dataclass
+from typing import Protocol
 
 from ctrader_open_api import Client
-from ctrader_open_api.messages.OpenApiMessages_pb2 import ProtoOANewOrderReq, ProtoOAClosePositionReq
+from ctrader_open_api.messages.OpenApiMessages_pb2 import (
+    ProtoOAClosePositionReq,
+    ProtoOANewOrderReq,
+)
 from ctrader_open_api.messages.OpenApiModelMessages_pb2 import (
-    ProtoOAPayloadType,
     ProtoOAOrderType,
+    ProtoOAPayloadType,
     ProtoOATradeSide,
 )
 
 from forex.infrastructure.broker.base import BaseCallbacks, build_callbacks
-from forex.infrastructure.broker.ctrader.services.base import CTraderServiceBase
 from forex.infrastructure.broker.ctrader.services.app_auth_service import AppAuthService
+from forex.infrastructure.broker.ctrader.services.base import CTraderServiceBase
 from forex.infrastructure.broker.ctrader.services.message_helpers import (
     dispatch_payload,
     format_error,
@@ -43,7 +47,7 @@ class ExecutionMessage(Protocol):
 class OrderServiceCallbacks(BaseCallbacks):
     """OrderService callbacks."""
 
-    on_execution: Optional[Callable[[dict], None]] = None
+    on_execution: Callable[[dict], None] | None = None
 
 
 class OrderService(CTraderServiceBase[OrderServiceCallbacks]):
@@ -53,20 +57,20 @@ class OrderService(CTraderServiceBase[OrderServiceCallbacks]):
 
     def __init__(self, app_auth_service: AppAuthService):
         super().__init__(app_auth_service=app_auth_service, callbacks=OrderServiceCallbacks())
-        self._account_id: Optional[int] = None
-        self._permission_scope: Optional[int] = None
-        self._client_order_id: Optional[str] = None
-        self._position_id: Optional[int] = None
-        self._last_requested_volume: Optional[int] = None
+        self._account_id: int | None = None
+        self._permission_scope: int | None = None
+        self._client_order_id: str | None = None
+        self._position_id: int | None = None
+        self._last_requested_volume: int | None = None
         self._order_timeout_seconds: int = 20
-        self._order_timeout_timer: Optional[threading.Timer] = None
+        self._order_timeout_timer: threading.Timer | None = None
         self._log(f"OrderService loaded from {__file__}")
 
     def set_callbacks(
         self,
-        on_execution: Optional[Callable[[dict], None]] = None,
-        on_error: Optional[Callable[[str], None]] = None,
-        on_log: Optional[Callable[[str], None]] = None,
+        on_execution: Callable[[dict], None] | None = None,
+        on_error: Callable[[str], None] | None = None,
+        on_log: Callable[[str], None] | None = None,
     ) -> None:
         self._callbacks = build_callbacks(
             OrderServiceCallbacks,
@@ -76,7 +80,7 @@ class OrderService(CTraderServiceBase[OrderServiceCallbacks]):
         )
         self._replay_log_history()
 
-    def set_permission_scope(self, scope: Optional[int]) -> None:
+    def set_permission_scope(self, scope: int | None) -> None:
         self._permission_scope = None if scope is None else int(scope)
 
     def place_market_order(
@@ -86,15 +90,15 @@ class OrderService(CTraderServiceBase[OrderServiceCallbacks]):
         symbol_id: int,
         trade_side: str,
         volume: int,
-        stop_loss: Optional[float] = None,
-        take_profit: Optional[float] = None,
-        relative_stop_loss: Optional[float] = None,
-        relative_take_profit: Optional[float] = None,
-        label: Optional[str] = None,
-        comment: Optional[str] = None,
-        client_order_id: Optional[str] = None,
-        slippage_points: Optional[int] = None,
-    ) -> Optional[str]:
+        stop_loss: float | None = None,
+        take_profit: float | None = None,
+        relative_stop_loss: float | None = None,
+        relative_take_profit: float | None = None,
+        label: str | None = None,
+        comment: str | None = None,
+        client_order_id: str | None = None,
+        slippage_points: int | None = None,
+    ) -> str | None:
         if not self._ensure_trade_allowed():
             return None
         if not self._start_operation():
@@ -203,7 +207,11 @@ class OrderService(CTraderServiceBase[OrderServiceCallbacks]):
         # Only reject when server explicitly provides a non-matching ID.
         if self._client_order_id and client_order_id and client_order_id != self._client_order_id:
             return
-        if self._position_id and position_id not in (self._position_id, None) and deal_position_id != self._position_id:
+        if (
+            self._position_id
+            and position_id not in (self._position_id, None)
+            and deal_position_id != self._position_id
+        ):
             return
 
         self._cancel_order_timeout()
@@ -250,7 +258,11 @@ class OrderService(CTraderServiceBase[OrderServiceCallbacks]):
         if order_volume is not None:
             self._log(format_request(f"Order error volume seen by server: {order_volume}"))
         if order_id is not None or client_order_id is not None:
-            self._log(format_request(f"Order error ids: orderId={order_id}, clientOrderId={client_order_id}"))
+            self._log(
+                format_request(
+                    f"Order error ids: orderId={order_id}, clientOrderId={client_order_id}"
+                )
+            )
         self._emit_error(format_error(error_code, description))
 
     def _on_error(self, msg: ExecutionMessage) -> None:
@@ -263,7 +275,12 @@ class OrderService(CTraderServiceBase[OrderServiceCallbacks]):
 
     def _ensure_trade_allowed(self) -> bool:
         if self._permission_scope == 0:
-            self._emit_error(error_message(ErrorCode.AUTH, "帳戶權限僅檢視，禁止交易"))
+            self._emit_error(
+                error_message(
+                    ErrorCode.AUTH,
+                    "Account is view-only; trading is blocked",
+                )
+            )
             return False
         return True
 
@@ -292,6 +309,11 @@ class OrderService(CTraderServiceBase[OrderServiceCallbacks]):
         # broker doesn't send a matching execution/error callback.
         if not self._in_progress:
             return
-        self._log(format_error("TIMEOUT", f"Order request timed out after {self._order_timeout_seconds}s"))
+        self._log(
+            format_error(
+                "TIMEOUT",
+                f"Order request timed out after {self._order_timeout_seconds}s",
+            )
+        )
         self._end_operation()
         self._unbind_handler(self._handle_message)

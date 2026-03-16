@@ -1,7 +1,7 @@
 """
 Shared helpers for spot subscription messages.
 """
-from typing import Callable, Optional, Sequence, Union
+from collections.abc import Callable, Sequence
 
 from ctrader_open_api import Client
 from ctrader_open_api.messages.OpenApiMessages_pb2 import (
@@ -14,12 +14,13 @@ from forex.infrastructure.broker.ctrader.services.message_helpers import (
     format_sent_unsubscribe,
 )
 
+
 def send_spot_subscribe(
     client: Client,
     *,
     account_id: int,
-    symbol_id: Union[int, Sequence[int]],
-    log: Optional[Callable[[str], None]] = None,
+    symbol_id: int | Sequence[int],
+    log: Callable[[str], None] | None = None,
     subscribe_to_spot_timestamp: bool = True,
 ) -> None:
     request = ProtoOASubscribeSpotsReq()
@@ -31,15 +32,15 @@ def send_spot_subscribe(
     request.subscribeToSpotTimestamp = subscribe_to_spot_timestamp
     client.send(request)
     if log:
-        log(format_sent_subscribe(f"已送出報價訂閱：{symbol_id}"))
+        log(format_sent_subscribe(f"Quote subscription sent: {symbol_id}"))
 
 
 def send_spot_unsubscribe(
     client: Client,
     *,
     account_id: int,
-    symbol_id: Union[int, Sequence[int]],
-    log: Optional[Callable[[str], None]] = None,
+    symbol_id: int | Sequence[int],
+    log: Callable[[str], None] | None = None,
 ) -> None:
     request = ProtoOAUnsubscribeSpotsReq()
     request.ctidTraderAccountId = account_id
@@ -49,4 +50,4 @@ def send_spot_unsubscribe(
         request.symbolId.append(int(symbol_id))
     client.send(request)
     if log:
-        log(format_sent_unsubscribe(f"已送出報價退訂：{symbol_id}"))
+        log(format_sent_unsubscribe(f"Quote unsubscribe sent: {symbol_id}"))

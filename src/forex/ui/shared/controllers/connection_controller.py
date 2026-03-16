@@ -1,6 +1,6 @@
-from typing import Callable, Optional
+from collections.abc import Callable
 
-from PySide6.QtCore import QObject, Signal, Slot, QTimer
+from PySide6.QtCore import QObject, QTimer, Signal, Slot
 from PySide6.QtWidgets import QMessageBox, QWidget
 
 from forex.application.broker.protocols import AppAuthServiceLike, OAuthServiceLike
@@ -26,9 +26,9 @@ class ConnectionController(QObject):
         use_cases: BrokerUseCases,
         app_state=None,
         event_bus=None,
-        on_service_ready: Optional[Callable[[AppAuthServiceLike], None]] = None,
-        on_oauth_ready: Optional[Callable[[OAuthServiceLike], None]] = None,
-        on_reset_controllers: Optional[Callable[[], None]] = None,
+        on_service_ready: Callable[[AppAuthServiceLike], None] | None = None,
+        on_oauth_ready: Callable[[OAuthServiceLike], None] | None = None,
+        on_reset_controllers: Callable[[], None] | None = None,
     ) -> None:
         super().__init__(parent)
         self._parent = parent
@@ -38,18 +38,18 @@ class ConnectionController(QObject):
         self._on_service_ready = on_service_ready
         self._on_oauth_ready = on_oauth_ready
         self._on_reset_controllers = on_reset_controllers
-        self._service: Optional[AppAuthServiceLike] = None
-        self._oauth_service: Optional[OAuthServiceLike] = None
+        self._service: AppAuthServiceLike | None = None
+        self._oauth_service: OAuthServiceLike | None = None
         self._app_auth_dialog_open = False
         self._oauth_dialog_open = False
         self._connection_in_progress = False
 
     @property
-    def service(self) -> Optional[AppAuthServiceLike]:
+    def service(self) -> AppAuthServiceLike | None:
         return self._service
 
     @property
-    def oauth_service(self) -> Optional[OAuthServiceLike]:
+    def oauth_service(self) -> OAuthServiceLike | None:
         return self._oauth_service
 
     @property
@@ -68,8 +68,8 @@ class ConnectionController(QObject):
 
     def seed_services(
         self,
-        service: Optional[AppAuthServiceLike],
-        oauth_service: Optional[OAuthServiceLike],
+        service: AppAuthServiceLike | None,
+        oauth_service: OAuthServiceLike | None,
     ) -> None:
         self._service = service
         self._oauth_service = oauth_service
@@ -121,7 +121,11 @@ class ConnectionController(QObject):
             self._oauth_service = None
             self.oauthStatusChanged.emit(int(ConnectionStatus.DISCONNECTED))
 
-            if self._service and getattr(self._service, "status", None) != ConnectionStatus.DISCONNECTED:
+            if (
+                self._service
+                and getattr(self._service, "status", None)
+                != ConnectionStatus.DISCONNECTED
+            ):
                 self._service.disconnect()
             if self._service and hasattr(self._service, "clear_log_history"):
                 try:
@@ -167,9 +171,16 @@ class ConnectionController(QObject):
         if self._oauth_dialog_open:
             return
         if not self._service:
-            QMessageBox.warning(self._parent, "App Auth Required", "Complete App authentication before OAuth.")
+            QMessageBox.warning(
+                self._parent,
+                "App Auth Required",
+                "Complete App authentication before OAuth.",
+            )
             return
-        if self._oauth_service and self._oauth_service.status == ConnectionStatus.ACCOUNT_AUTHENTICATED:
+        if (
+            self._oauth_service
+            and self._oauth_service.status == ConnectionStatus.ACCOUNT_AUTHENTICATED
+        ):
             auto_connect = False
         self._oauth_dialog_open = True
         dialog = OAuthDialog(

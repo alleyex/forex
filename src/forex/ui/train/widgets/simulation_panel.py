@@ -1,40 +1,39 @@
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Optional
 
 try:
     import pyqtgraph as pg
 except ImportError:  # pragma: no cover - optional dependency
     pg = None
 
-from PySide6.QtCore import Qt, Signal, QElapsedTimer
+from PySide6.QtCore import QElapsedTimer, Qt, Signal
 from PySide6.QtWidgets import (
-    QWidget,
-    QVBoxLayout,
+    QDoubleSpinBox,
+    QFileDialog,
     QFormLayout,
+    QFrame,
     QGridLayout,
+    QGroupBox,
     QLabel,
     QLineEdit,
     QPushButton,
-    QSpinBox,
-    QDoubleSpinBox,
-    QFileDialog,
     QSizePolicy,
-    QGroupBox,
+    QSpinBox,
     QSplitter,
     QTabWidget,
-    QFrame,
+    QVBoxLayout,
+    QWidget,
 )
 
-from forex.ui.shared.widgets.log_widget import LogWidget
-from forex.ui.shared.widgets.layout_helpers import (
-    apply_form_label_width,
-    align_form_fields,
-    build_browse_row,
-    configure_form_layout,
+from forex.config.paths import DEFAULT_MODEL_PATH, MODEL_DIR, RAW_HISTORY_DIR
+from forex.ui.shared.styles.tokens import (
+    FORM_LABEL_WIDTH_COMPACT,
+    PRIMARY,
+    SIMULATION_PARAMS,
+    STAT_LABEL,
+    STAT_VALUE,
 )
-from forex.ui.shared.utils.path_utils import latest_file_in_dir
 from forex.ui.shared.utils.formatters import (
     format_action_distribution,
     format_drawdown_window,
@@ -43,14 +42,14 @@ from forex.ui.shared.utils.formatters import (
     format_streak_stats,
     format_trade_stats,
 )
-from forex.ui.shared.styles.tokens import (
-    FORM_LABEL_WIDTH_COMPACT,
-    PRIMARY,
-    SIMULATION_PARAMS,
-    STAT_LABEL,
-    STAT_VALUE,
+from forex.ui.shared.utils.path_utils import latest_file_in_dir
+from forex.ui.shared.widgets.layout_helpers import (
+    align_form_fields,
+    apply_form_label_width,
+    build_browse_row,
+    configure_form_layout,
 )
-from forex.config.paths import DEFAULT_MODEL_PATH, MODEL_DIR, RAW_HISTORY_DIR
+from forex.ui.shared.widgets.log_widget import LogWidget
 from forex.ui.train.services import UIParamsStore
 
 
@@ -126,7 +125,7 @@ class SimulationParamsPanel(QWidget):
     start_requested = Signal(dict)
     stop_requested = Signal()
 
-    def __init__(self, parent: Optional[QWidget] = None) -> None:
+    def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
         self._loading_params = False
         self._simulation_running = False
@@ -254,7 +253,12 @@ class SimulationParamsPanel(QWidget):
 
     def set_simulation_running(self, running: bool) -> None:
         self._simulation_running = bool(running)
-        self._start_button.setText("Stop Playback" if self._simulation_running else "Start Playback")
+        button_text = (
+            "Stop Playback"
+            if self._simulation_running
+            else "Start Playback"
+        )
+        self._start_button.setText(button_text)
 
     def _toggle_simulation(self) -> None:
         if self._simulation_running:
@@ -340,7 +344,7 @@ class SimulationParamsPanel(QWidget):
 
 
 class PlaybackDetailsPanel(QWidget):
-    def __init__(self, parent: Optional[QWidget] = None) -> None:
+    def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
         self._summary_state = {
             "total_return": None,
@@ -578,13 +582,13 @@ class PlaybackDetailsPanel(QWidget):
 
     def update_summary(
         self,
-        total_return: Optional[float] = None,
-        max_drawdown: Optional[float] = None,
-        sharpe: Optional[float] = None,
-        trades: Optional[int] = None,
-        equity: Optional[float] = None,
-        trade_rate_1k: Optional[float] = None,
-        quality_gate: Optional[str] = None,
+        total_return: float | None = None,
+        max_drawdown: float | None = None,
+        sharpe: float | None = None,
+        trades: int | None = None,
+        equity: float | None = None,
+        trade_rate_1k: float | None = None,
+        quality_gate: str | None = None,
     ) -> None:
         if total_return is not None:
             self._summary_state["total_return"] = total_return
@@ -645,7 +649,7 @@ class PlaybackDetailsPanel(QWidget):
 
 
 class SimulationPanel(QWidget):
-    def __init__(self, parent: Optional[QWidget] = None) -> None:
+    def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
         self._charts_available = pg is not None
         self._steps: list[int] = []
@@ -653,7 +657,7 @@ class SimulationPanel(QWidget):
         self._plot_timer = QElapsedTimer()
         self._plot_interval_ms = 400
         self._max_points = 2000
-        self._last_point: Optional[tuple[int, float]] = None
+        self._last_point: tuple[int, float] | None = None
         self._setup_ui()
 
     def _setup_ui(self) -> None:

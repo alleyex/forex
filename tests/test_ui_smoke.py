@@ -2,19 +2,21 @@ from __future__ import annotations
 
 import os
 import unittest
+from pathlib import Path
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 os.environ.setdefault("QT_OPENGL", "software")
 os.environ.setdefault("QT_QUICK_BACKEND", "software")
 
-from PySide6.QtWidgets import QApplication
 from PySide6.QtGui import QFont
+from PySide6.QtWidgets import QApplication, QToolBar
 
 from forex.application.broker.use_cases import BrokerUseCases
 from forex.application.events import EventBus
 from forex.application.state import AppState
 from forex.infrastructure.broker.fake.provider import FakeProvider
 from forex.ui.live.main_window import LiveMainWindow
+from forex.ui.shared.widgets.log_widget import LogWidget
 from forex.ui.train.main_window import MainWindow
 from forex.ui.train.widgets.training_panel import TrainingPanel
 
@@ -46,9 +48,42 @@ class UISmokeTest(unittest.TestCase):
         # Keep smoke test deterministic: avoid deferred auto-connect side effects.
         window._auto_connect_timer.stop()
         self.assertIn("Live", window.windowTitle())
+        self.assertEqual(window._load_best_model_button.text(), "Use Best Playback Model")
+        self.assertEqual(window._project_root, Path(__file__).resolve().parents[1])
+        self.assertTrue(
+            (
+                window._project_root / "config" / "training_presets" / "best_playback_s12.json"
+            ).exists()
+        )
+        timeframes = [
+            window._trade_timeframe.itemText(index)
+            for index in range(window._trade_timeframe.count())
+        ]
+        self.assertIn("M10", timeframes)
+        self.assertEqual(window._log_panel.current_filter, "INFO")
+        self.assertEqual(window._lot_fixed.text(), "Fixed lot size")
+        self.assertEqual(window._lot_risk.text(), "Risk % of balance")
+        self.assertIsNotNone(window._risk_sizing_preview)
+        self.assertEqual(window._auto_margin_usage_cap_ratio, 0.5)
         window.close()
         window.deleteLater()
         self._app.processEvents()
+
+    def test_best_playback_compatibility_warnings_are_generated(self) -> None:
+        warnings = LiveMainWindow._build_best_playback_compatibility_warnings(
+            current_symbol="EURUSD",
+            current_timeframe="M1",
+            current_position_step=0.02,
+            current_slippage_bps=0.03,
+            applied_symbol="EURUSD",
+            applied_timeframe="M10",
+            env_config={"position_step": 0.05, "slippage_bps": 0.225},
+            training_args={"reward_mode": "tp_sl_proxy"},
+            metadata={"details": {"symbol_id": 1, "timeframe": "M10"}},
+        )
+        self.assertIn("timeframe changed from M1 to M10", warnings)
+        self.assertIn("reward_mode is tp_sl_proxy, not path_penalty", warnings)
+        self.assertIn("position_step was updated from 0.02 to 0.05", warnings)
 
     def test_training_panel_accepts_eval_mean_reward_metric(self) -> None:
         panel = TrainingPanel()
@@ -61,6 +96,59 @@ class UISmokeTest(unittest.TestCase):
             self.assertEqual(list(y_data), [0.25])
         panel.close()
         panel.deleteLater()
+        self._app.processEvents()
+
+    def test_log_widget_declares_explicit_foreground_color(self) -> None:
+        widget = LogWidget()
+        style_sheet = widget._text_edit.styleSheet()
+        self.assertIn("color: #d8e0ea;", style_sheet)
+        self.assertIn("selection-color: #f5f7fb;", style_sheet)
+        widget.set_filter_level("WARN")
+        self.assertEqual(widget.current_filter, "WARN")
+        widget.close()
+        widget.deleteLater()
+        self._app.processEvents()
+
+    def test_live_quote_table_declares_explicit_row_colors(self) -> None:
+        window = LiveMainWindow(
+            use_cases=BrokerUseCases(FakeProvider()),
+            event_bus=EventBus(),
+            app_state=AppState(),
+        )
+        window._auto_connect_timer.stop()
+        style_sheet = window._quotes_table.styleSheet()
+        self.assertIn("alternate-background-color: #252c35;", style_sheet)
+        self.assertIn("selection-color: #f5f7fb;", style_sheet)
+        self.assertIn("QTableWidget#quotesTable::item", style_sheet)
+        self.assertEqual(window._quotes_table.verticalHeader().defaultSectionSize(), 30)
+        self.assertEqual(window._quotes_table.horizontalHeader().height(), 34)
+        window.close()
+        window.deleteLater()
+        self._app.processEvents()
+
+    def test_live_toolbar_and_status_bar_use_named_shell_styles(self) -> None:
+        window = LiveMainWindow(
+            use_cases=BrokerUseCases(FakeProvider()),
+            event_bus=EventBus(),
+            app_state=AppState(),
+        )
+        window._auto_connect_timer.stop()
+        toolbar = window.findChild(QToolBar, "liveToolbar")
+        self.assertIsNotNone(toolbar)
+        self.assertEqual(window.statusBar().objectName(), "liveStatusBar")
+        self.assertEqual(window._app_auth_label.objectName(), "statusChip")
+        self.assertEqual(window._oauth_label.objectName(), "statusChip")
+        window.close()
+        window.deleteLater()
+        self._app.processEvents()
+
+    def test_log_widget_title_uses_dense_live_typography(self) -> None:
+        widget = LogWidget(title="Runtime Log")
+        style_sheet = widget._title_label.styleSheet()
+        self.assertIn("font-size:12px", style_sheet)
+        self.assertIn("font-weight:600", style_sheet)
+        widget.close()
+        widget.deleteLater()
         self._app.processEvents()
 
 

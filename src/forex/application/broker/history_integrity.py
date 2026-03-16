@@ -5,8 +5,6 @@ import json
 from dataclasses import asdict, dataclass
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Optional
-
 
 _TIMEFRAME_STEP_MINUTES = {
     "M1": 1,
@@ -64,16 +62,22 @@ class HistoryIntegrityService:
         self,
         csv_path: str | Path,
         *,
-        timeframe: Optional[str] = None,
+        timeframe: str | None = None,
         exclude_weekends: bool = True,
     ) -> HistoryIntegrityReport:
         path = Path(csv_path)
         rows = self._read_timestamps(path)
-        timeframe_name = (timeframe or self._read_timeframe_from_meta(path) or "unknown").upper()
+        timeframe_name = (
+            timeframe or self._read_timeframe_from_meta(path) or "unknown"
+        ).upper()
         expected_step = self._resolve_expected_step(timeframe_name, rows)
         duplicates = self._count_duplicates(rows)
         backward = self._count_backward(rows)
-        gaps, missing_bars = self._detect_gaps(rows, expected_step, exclude_weekends=exclude_weekends)
+        gaps, missing_bars = self._detect_gaps(
+            rows,
+            expected_step,
+            exclude_weekends=exclude_weekends,
+        )
         return HistoryIntegrityReport(
             csv_path=str(path),
             timeframe=timeframe_name,
@@ -145,7 +149,7 @@ class HistoryIntegrityService:
         return out
 
     @staticmethod
-    def _read_timeframe_from_meta(path: Path) -> Optional[str]:
+    def _read_timeframe_from_meta(path: Path) -> str | None:
         meta_path = path.with_suffix(path.suffix + ".meta.json")
         if not meta_path.exists():
             return None
@@ -167,7 +171,11 @@ class HistoryIntegrityService:
         if by_tf is not None:
             return by_tf
         sorted_unique = sorted(set(values))
-        diffs = [b - a for a, b in zip(sorted_unique, sorted_unique[1:]) if b > a]
+        diffs = [
+            right - left
+            for left, right in zip(sorted_unique, sorted_unique[1:], strict=False)
+            if right > left
+        ]
         if not diffs:
             return 1
         counts: dict[int, int] = {}
@@ -178,11 +186,15 @@ class HistoryIntegrityService:
     @staticmethod
     def _count_duplicates(values: list[int]) -> int:
         sorted_values = sorted(values)
-        return sum(1 for a, b in zip(sorted_values, sorted_values[1:]) if b == a)
+        return sum(
+            1
+            for left, right in zip(sorted_values, sorted_values[1:], strict=False)
+            if right == left
+        )
 
     @staticmethod
     def _count_backward(values: list[int]) -> int:
-        return sum(1 for a, b in zip(values, values[1:]) if b < a)
+        return sum(1 for left, right in zip(values, values[1:], strict=False) if right < left)
 
     def _detect_gaps(
         self,
@@ -196,7 +208,7 @@ class HistoryIntegrityService:
         unique_sorted = sorted(set(values))
         gaps: list[GapItem] = []
         missing_total = 0
-        for start, end in zip(unique_sorted, unique_sorted[1:]):
+        for start, end in zip(unique_sorted, unique_sorted[1:], strict=False):
             diff = end - start
             if diff <= expected_step:
                 continue

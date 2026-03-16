@@ -6,13 +6,34 @@ build-backend = "setuptools.build_meta"
 name = "forex"
 version = "0.1.0"
 description = "Forex trading UI, broker integration, and RL tooling"
-readme = "docs/architecture.md"
+readme = "README.md"
 requires-python = ">=3.10"
 license = { text = "Proprietary" }
+keywords = ["ctrader", "desktop-ui", "forex", "reinforcement-learning", "trading"]
+classifiers = [
+  "Development Status :: 3 - Alpha",
+  "Environment :: X11 Applications :: Qt",
+  "Intended Audience :: Developers",
+  "Intended Audience :: Financial and Insurance Industry",
+  "Operating System :: OS Independent",
+  "Programming Language :: Python :: 3",
+  "Programming Language :: Python :: 3.10",
+  "Programming Language :: Python :: 3.11",
+  "Topic :: Office/Business :: Financial :: Investment",
+  "Topic :: Scientific/Engineering :: Artificial Intelligence",
+  "Typing :: Typed",
+]
 
 dependencies = []
 
+[project.urls]
+Homepage = "https://github.com/alleyex/forex"
+Repository = "https://github.com/alleyex/forex"
+Issues = "https://github.com/alleyex/forex/issues"
+Changelog = "https://github.com/alleyex/forex/blob/main/CHANGELOG.md"
+
 [project.scripts]
+forex = "forex.app.cli.launcher:main"
 forex-train = "forex.app.cli.train:main"
 forex-live = "forex.app.cli.live:main"
 
@@ -34,12 +55,14 @@ ctrader = [
   "ctrader-open-api",
 ]
 dev = [
+  "black",
+  "import-linter",
+  "mypy",
+  "pre-commit",
   "pytest",
   "pytest-cov",
   "ruff",
-  "black",
-  "mypy",
-  "import-linter",
+  "vulture",
 ]
 
 [tool.setuptools]
@@ -49,7 +72,39 @@ package-dir = {"" = "src"}
 where = ["src"]
 
 [tool.setuptools.package-data]
+"forex" = ["py.typed"]
 "forex.ui.shared.styles" = ["app.qss"]
+
+[tool.black]
+line-length = 100
+target-version = ["py310"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py310"
+
+[tool.ruff.lint]
+select = [
+  "E",
+  "F",
+  "I",
+  "B",
+  "UP",
+]
+
+[tool.ruff.lint.isort]
+known-first-party = ["forex"]
+
+[tool.pytest.ini_options]
+minversion = "7.0"
+testpaths = ["tests"]
+addopts = "-ra"
+
+[tool.mypy]
+python_version = "3.10"
+warn_unused_configs = true
+ignore_missing_imports = true
+pretty = true
 
 [tool.importlinter]
 include_external_packages = false

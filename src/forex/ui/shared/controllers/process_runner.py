@@ -1,5 +1,5 @@
 import sys
-from typing import Callable, Optional
+from collections.abc import Callable
 
 from PySide6.QtCore import QObject, QProcess, QProcessEnvironment, QTimer
 
@@ -9,12 +9,12 @@ class ProcessRunner(QObject):
         self,
         *,
         parent: QObject,
-        on_stdout_line: Optional[Callable[[str], None]] = None,
-        on_stderr_line: Optional[Callable[[str], None]] = None,
-        on_finished: Optional[Callable[[int, QProcess.ExitStatus], None]] = None,
+        on_stdout_line: Callable[[str], None] | None = None,
+        on_stderr_line: Callable[[str], None] | None = None,
+        on_finished: Callable[[int, QProcess.ExitStatus], None] | None = None,
     ) -> None:
         super().__init__(parent)
-        self._process: Optional[QProcess] = None
+        self._process: QProcess | None = None
         self._on_stdout_line = on_stdout_line
         self._on_stderr_line = on_stderr_line
         self._on_finished = on_finished
@@ -23,7 +23,12 @@ class ProcessRunner(QObject):
     def is_running(self) -> bool:
         return bool(self._process and self._process.state() != QProcess.NotRunning)
 
-    def start(self, program: Optional[str], args: list[str], env: Optional[dict[str, str]] = None) -> bool:
+    def start(
+        self,
+        program: str | None,
+        args: list[str],
+        env: dict[str, str] | None = None,
+    ) -> bool:
         if self.is_running():
             return False
         self._stopping = False
@@ -48,7 +53,12 @@ class ProcessRunner(QObject):
         QTimer.singleShot(kill_after_ms, self._force_kill)
         return True
 
-    def stop_blocking(self, *, terminate_timeout_ms: int = 3000, kill_timeout_ms: int = 1000) -> bool:
+    def stop_blocking(
+        self,
+        *,
+        terminate_timeout_ms: int = 3000,
+        kill_timeout_ms: int = 1000,
+    ) -> bool:
         if not self.is_running():
             return False
         self._stopping = True

@@ -1,19 +1,26 @@
-"""
-即時 K 線推播服務
-"""
+"""Live trendbar streaming service."""
+import time
+from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import datetime, timezone
-import time
-from typing import Callable, Optional, Protocol
+from typing import Protocol
 
 from ctrader_open_api import Client
 from ctrader_open_api.messages.OpenApiMessages_pb2 import (
     ProtoOASubscribeLiveTrendbarReq,
     ProtoOAUnsubscribeLiveTrendbarReq,
 )
-from ctrader_open_api.messages.OpenApiModelMessages_pb2 import ProtoOAPayloadType, ProtoOATrendbarPeriod
+from ctrader_open_api.messages.OpenApiModelMessages_pb2 import (
+    ProtoOAPayloadType,
+    ProtoOATrendbarPeriod,
+)
 
-from forex.infrastructure.broker.base import BaseCallbacks, LogHistoryMixin, OperationStateMixin, build_callbacks
+from forex.infrastructure.broker.base import (
+    BaseCallbacks,
+    LogHistoryMixin,
+    OperationStateMixin,
+    build_callbacks,
+)
 from forex.infrastructure.broker.ctrader.services.app_auth_service import AppAuthService
 from forex.infrastructure.broker.ctrader.services.base import CTraderRequestLifecycleMixin
 from forex.infrastructure.broker.ctrader.services.message_helpers import (
@@ -54,8 +61,8 @@ class ErrorMessage(Protocol):
 
 @dataclass
 class TrendbarServiceCallbacks(BaseCallbacks):
-    """TrendbarService 的回調函式"""
-    on_trendbar: Optional[Callable[[dict], None]] = None
+    """Callbacks for TrendbarService."""
+    on_trendbar: Callable[[dict], None] | None = None
 
 
 class TrendbarService(
@@ -64,7 +71,7 @@ class TrendbarService(
     OperationStateMixin,
 ):
     """
-    訂閱即時 K 線推播
+    Subscribe to live trendbar streaming.
     """
 
     def __init__(self, app_auth_service: AppAuthService):
@@ -72,26 +79,26 @@ class TrendbarService(
         self._callbacks = TrendbarServiceCallbacks()
         self._in_progress = False
         self._log_history = []
-        self._account_id: Optional[int] = None
-        self._symbol_id: Optional[int] = None
+        self._account_id: int | None = None
+        self._symbol_id: int | None = None
         self._period: int = ProtoOATrendbarPeriod.M1
         self._period_name: str = "M1"
         self._period_minutes: int = 1
-        self._last_bar: Optional[dict] = None
+        self._last_bar: dict | None = None
         self._spot_subscribed = False
         self._trendbar_subscribed = False
         self._await_spot_subscribe = False
-        self._pending_trendbar_request: Optional[ProtoOASubscribeLiveTrendbarReq] = None
-        self._last_bar_ts: Optional[int] = None
-        self._client: Optional[Client] = None
+        self._pending_trendbar_request: ProtoOASubscribeLiveTrendbarReq | None = None
+        self._last_bar_ts: int | None = None
+        self._client: Client | None = None
 
     def set_callbacks(
         self,
-        on_trendbar: Optional[Callable[[dict], None]] = None,
-        on_error: Optional[Callable[[str], None]] = None,
-        on_log: Optional[Callable[[str], None]] = None,
+        on_trendbar: Callable[[dict], None] | None = None,
+        on_error: Callable[[str], None] | None = None,
+        on_log: Callable[[str], None] | None = None,
     ) -> None:
-        """設定回調函式"""
+        """Set callbacks."""
         self._callbacks = build_callbacks(
             TrendbarServiceCallbacks,
             on_trendbar=on_trendbar,
@@ -101,7 +108,7 @@ class TrendbarService(
         self._replay_log_history()
 
     def subscribe(self, account_id: int, symbol_id: int, timeframe: str = "M1") -> None:
-        """訂閱即時 K 線"""
+        """Subscribe to live trendbars."""
         if self._in_progress:
             if self._trendbar_subscribed:
                 self.unsubscribe()
@@ -138,7 +145,7 @@ class TrendbarService(
             self._ensure_spot_subscription()
 
     def unsubscribe(self) -> None:
-        """取消訂閱即時 K 線"""
+        """Unsubscribe from live trendbars."""
         if not self._in_progress or self._account_id is None or self._symbol_id is None:
             return
         # Skip network unsubscribe until live trendbar subscription is confirmed.
@@ -164,7 +171,7 @@ class TrendbarService(
         self._cleanup_request_lifecycle(timeout_tracker=None, handler=self._handle_message)
         self._log(
             format_sent_unsubscribe(
-                f"已取消 K 線訂閱：{self._symbol_id} ({self._period_name})"
+                f"Cancelled trendbar subscription: {self._symbol_id} ({self._period_name})"
             )
         )
 
@@ -197,10 +204,18 @@ class TrendbarService(
             msg,
             {
                 ProtoOAPayloadType.PROTO_OA_SPOT_EVENT: self._on_spot_event,
-                ProtoOAPayloadType.PROTO_OA_SUBSCRIBE_SPOTS_RES: self._on_spot_subscribe_confirmed,
-                ProtoOAPayloadType.PROTO_OA_UNSUBSCRIBE_SPOTS_RES: self._on_spot_unsubscribe_confirmed,
-                ProtoOAPayloadType.PROTO_OA_SUBSCRIBE_LIVE_TRENDBAR_RES: self._on_trendbar_subscribe_confirmed,
-                ProtoOAPayloadType.PROTO_OA_UNSUBSCRIBE_LIVE_TRENDBAR_RES: self._on_trendbar_unsubscribe_confirmed,
+                ProtoOAPayloadType.PROTO_OA_SUBSCRIBE_SPOTS_RES: (
+                    self._on_spot_subscribe_confirmed
+                ),
+                ProtoOAPayloadType.PROTO_OA_UNSUBSCRIBE_SPOTS_RES: (
+                    self._on_spot_unsubscribe_confirmed
+                ),
+                ProtoOAPayloadType.PROTO_OA_SUBSCRIBE_LIVE_TRENDBAR_RES: (
+                    self._on_trendbar_subscribe_confirmed
+                ),
+                ProtoOAPayloadType.PROTO_OA_UNSUBSCRIBE_LIVE_TRENDBAR_RES: (
+                    self._on_trendbar_unsubscribe_confirmed
+                ),
                 ProtoOAPayloadType.PROTO_OA_ERROR_RES: self._on_error,
             },
         )
@@ -208,7 +223,7 @@ class TrendbarService(
     def _on_spot_subscribe_confirmed(self, _msg: object) -> None:
         self._log(
             format_confirm(
-                "報價訂閱已確認",
+                "Quote subscription confirmed",
                 ProtoOAPayloadType.PROTO_OA_SUBSCRIBE_SPOTS_RES,
             )
         )
@@ -219,7 +234,7 @@ class TrendbarService(
     def _on_spot_unsubscribe_confirmed(self, _msg: object) -> None:
         self._log(
             format_confirm(
-                "報價退訂已確認",
+                "Quote unsubscribe confirmed",
                 ProtoOAPayloadType.PROTO_OA_UNSUBSCRIBE_SPOTS_RES,
             )
         )
@@ -228,7 +243,7 @@ class TrendbarService(
         self._trendbar_subscribed = True
         self._log(
             format_confirm(
-                "K 線訂閱已確認",
+                "Trendbar subscription confirmed",
                 ProtoOAPayloadType.PROTO_OA_SUBSCRIBE_LIVE_TRENDBAR_RES,
             )
         )
@@ -237,7 +252,7 @@ class TrendbarService(
         self._trendbar_subscribed = False
         self._log(
             format_confirm(
-                "K 線退訂已確認",
+                "Trendbar unsubscribe confirmed",
                 ProtoOAPayloadType.PROTO_OA_UNSUBSCRIBE_LIVE_TRENDBAR_RES,
             )
         )
@@ -302,7 +317,7 @@ class TrendbarService(
             "close": close_price / divisor,
         }
 
-    def _update_from_spot(self, msg: SpotEventMessage) -> Optional[dict]:
+    def _update_from_spot(self, msg: SpotEventMessage) -> dict | None:
         price = self._extract_price(msg)
         if price is None:
             return None
@@ -320,7 +335,7 @@ class TrendbarService(
         return dict(self._last_bar)
 
     @staticmethod
-    def _extract_price(msg: SpotEventMessage) -> Optional[float]:
+    def _extract_price(msg: SpotEventMessage) -> float | None:
         bid = getattr(msg, "bid", None)
         ask = getattr(msg, "ask", None)
         has_bid = getattr(msg, "hasBid", None)
@@ -339,7 +354,7 @@ class TrendbarService(
             return ask_val
         return None
 
-    def _extract_bucket_minutes(self, msg: SpotEventMessage) -> Optional[int]:
+    def _extract_bucket_minutes(self, msg: SpotEventMessage) -> int | None:
         ts = getattr(msg, "spotTimestamp", None)
         if ts is None:
             ts = getattr(msg, "timestamp", None)
@@ -421,7 +436,7 @@ class TrendbarService(
             return
         self._log(
             format_sent_subscribe(
-                f"已送出 K 線訂閱：{self._symbol_id} ({self._period_name})"
+                f"Trendbar subscription sent: {self._symbol_id} ({self._period_name})"
             )
         )
         self._pending_trendbar_request = None
