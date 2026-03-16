@@ -102,6 +102,21 @@ class UISmokeTest(unittest.TestCase):
         widget.deleteLater()
         self._app.processEvents()
 
+    def test_live_quote_table_declares_explicit_row_colors(self) -> None:
+        window = LiveMainWindow(
+            use_cases=BrokerUseCases(FakeProvider()),
+            event_bus=EventBus(),
+            app_state=AppState(),
+        )
+        window._auto_connect_timer.stop()
+        style_sheet = window._quotes_table.styleSheet()
+        self.assertIn("alternate-background-color: #252c35;", style_sheet)
+        self.assertIn("selection-color: #f5f7fb;", style_sheet)
+        self.assertIn("QTableWidget#quotesTable::item", style_sheet)
+        window.close()
+        window.deleteLater()
+        self._app.processEvents()
+
 
 if __name__ == "__main__":
     unittest.main()

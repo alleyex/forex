@@ -111,6 +111,22 @@ class LivePanelFactory:
         table.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
         table.setStyleSheet(
             """
+            QTableWidget#positionsTable {
+                background: #1f252d;
+                alternate-background-color: #252c35;
+                color: #d3d8e0;
+                selection-background-color: #2f6db3;
+                selection-color: #f5f7fb;
+                gridline-color: #2a323c;
+            }
+            QTableWidget#positionsTable::item {
+                color: #d3d8e0;
+                background: transparent;
+            }
+            QTableWidget#positionsTable::item:selected {
+                color: #f5f7fb;
+                background: #2f6db3;
+            }
             QTableWidget#positionsTable QScrollBar:vertical {
                 background: transparent;
                 width: 8px;
@@ -175,6 +191,22 @@ class LivePanelFactory:
         table.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
         table.setStyleSheet(
             """
+            QTableWidget#quotesTable {
+                background: #1f252d;
+                alternate-background-color: #252c35;
+                color: #d3d8e0;
+                selection-background-color: #2f6db3;
+                selection-color: #f5f7fb;
+                gridline-color: #2a323c;
+            }
+            QTableWidget#quotesTable::item {
+                color: #d3d8e0;
+                background: transparent;
+            }
+            QTableWidget#quotesTable::item:selected {
+                color: #f5f7fb;
+                background: #2f6db3;
+            }
             QTableWidget#quotesTable QScrollBar:vertical {
                 background: transparent;
                 width: 8px;
