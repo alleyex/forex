@@ -71,6 +71,8 @@ class LiveAutoTradeCoordinator:
             return
         if not w._app_state or not w._app_state.selected_account_id:
             return
+        config = self._effective_trading_config()
+        min_bars_required = max(64, int(getattr(config, "window_size", 1)) + 16)
         w._auto_last_decision_ts = time.time()
         now_ts = datetime.utcnow().timestamp()
         min_interval = (
@@ -82,12 +84,14 @@ class LiveAutoTradeCoordinator:
             remain = max(0.0, min_interval - (now_ts - w._auto_last_action_ts))
             w._auto_debug_fields("signal_throttled", wait_s=f"{remain:.1f}")
             return
-        if len(w._candles) < 30:
+        if len(w._candles) < min_bars_required:
             w._auto_debug_fields(
                 "insufficient_candles",
                 have=len(w._candles),
-                need=30,
+                need=min_bars_required,
+                window=int(getattr(config, "window_size", 1)),
             )
+            w._request_recent_history(force=True)
             return
 
         df = pd.DataFrame(
@@ -109,9 +113,15 @@ class LiveAutoTradeCoordinator:
             w._auto_log(f"❌ Feature build failed: {exc}")
             return
         if feature_set.features.shape[0] <= 0:
-            w._auto_debug_log("feature rows empty")
+            w._auto_debug_fields(
+                "feature_rows_empty",
+                candles=len(w._candles),
+                need=min_bars_required,
+                window=int(getattr(config, "window_size", 1)),
+                scaler_features=len(getattr(w._auto_feature_scaler, "names", []) or []),
+            )
+            w._request_recent_history(force=True)
             return
-        config = self._effective_trading_config()
         max_position = max(1e-6, float(config.max_position))
         obs_idx = int(feature_set.features.shape[0] - 1)
         obs = build_window_observation(
