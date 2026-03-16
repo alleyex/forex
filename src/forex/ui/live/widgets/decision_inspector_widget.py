@@ -61,6 +61,7 @@ class DecisionInspectorWidget(QWidget):
         ("near_full_hold", "Near-Full Hold"),
         ("rebalance", "Rebalance"),
     ]
+    _SUMMARY_FIELDS = _INPUT_FIELDS + _NORMALIZED_FIELDS
 
     def __init__(
         self,
@@ -94,16 +95,11 @@ class DecisionInspectorWidget(QWidget):
 
         layout.addWidget(
             self._build_stage_card(
-                "Signal Snapshot",
-                self._INPUT_FIELDS,
-                self._input_labels,
-            )
-        )
-        layout.addWidget(
-            self._build_stage_card(
-                "Execution Plan",
-                self._NORMALIZED_FIELDS,
-                self._normalized_labels,
+                "Decision Summary",
+                self._SUMMARY_FIELDS,
+                {},
+                columns=3,
+                register_label=self._register_summary_label,
             )
         )
         layout.addWidget(
@@ -119,6 +115,9 @@ class DecisionInspectorWidget(QWidget):
         title: str,
         fields: list[tuple[str, str]],
         target_labels: dict[str, QLabel],
+        *,
+        columns: int = 2,
+        register_label=None,
     ) -> QGroupBox:
         box = QGroupBox(title)
         box.setObjectName("card")
@@ -128,10 +127,11 @@ class DecisionInspectorWidget(QWidget):
         grid.setContentsMargins(12, 12, 12, 12)
         grid.setHorizontalSpacing(12)
         grid.setVerticalSpacing(6)
+        columns = max(1, int(columns))
 
         for index, (field, label_text) in enumerate(fields):
-            row = index // 2
-            col = index % 2
+            row = index // columns
+            col = index % columns
             cell = QWidget(box)
             cell_layout = QHBoxLayout(cell)
             cell_layout.setContentsMargins(0, 0, 0, 0)
@@ -154,10 +154,20 @@ class DecisionInspectorWidget(QWidget):
             cell_layout.addWidget(value_label, 1)
             grid.addWidget(cell, row, col)
             target_labels[field] = value_label
+            if register_label is not None:
+                register_label(field, value_label)
 
-        grid.setColumnStretch(0, 1)
-        grid.setColumnStretch(1, 1)
+        for column in range(columns):
+            grid.setColumnStretch(column, 1)
         return box
+
+    def _register_summary_label(self, field: str, label: QLabel) -> None:
+        input_keys = {name for name, _ in self._INPUT_FIELDS}
+        normalized_keys = {name for name, _ in self._NORMALIZED_FIELDS}
+        if field in input_keys:
+            self._input_labels[field] = label
+        if field in normalized_keys:
+            self._normalized_labels[field] = label
 
     @staticmethod
     def _time_label_with_local_offset() -> str:
