@@ -7,6 +7,7 @@ from PySide6.QtCore import QTimer
 
 class LiveChartCoordinator:
     """Encapsulates live chart update and range-control behavior."""
+    _DISPLAY_WINDOW_SECONDS = 12 * 60 * 60
 
     def __init__(self, window) -> None:
         self._window = window
@@ -34,11 +35,16 @@ class LiveChartCoordinator:
     def set_candles(self, candles: list[tuple[float, float, float, float, float]]) -> None:
         self._window._pending_candles = candles
 
-    @staticmethod
     def _visible_candles(
+        self,
         candles: list[tuple[float, float, float, float, float]],
     ) -> list[tuple[float, float, float, float, float]]:
-        return list(candles[-50:])
+        if not candles:
+            return []
+        last_ts = float(candles[-1][0])
+        window_start = last_ts - float(self._DISPLAY_WINDOW_SECONDS)
+        visible = [candle for candle in candles if float(candle[0]) >= window_start]
+        return visible or [candles[-1]]
 
     def flush_chart_update(self) -> None:
         w = self._window
@@ -67,7 +73,7 @@ class LiveChartCoordinator:
         if step_seconds <= 0:
             step_seconds = 60
         last_ts = plot_candles[-1][0]
-        first_ts = plot_candles[0][0]
+        first_ts = max(plot_candles[0][0], last_ts - float(self._DISPLAY_WINDOW_SECONDS))
         right_padding_candles = 4
         right_ts = last_ts + (right_padding_candles * step_seconds)
         w._chart_plot.setXRange(
@@ -238,7 +244,7 @@ class LiveChartCoordinator:
 
     def handle_chart_auto_button_clicked(self, *_args) -> None:
         w = self._window
-        w._auto_debug_log("chart auto button clicked; reapply 50-bar display range")
+        w._auto_debug_log("chart auto button clicked; reapply 12-hour display range")
         self.reapply_chart_window_from_latest()
         QTimer.singleShot(0, self.reapply_chart_window_from_latest)
         QTimer.singleShot(80, self.reapply_chart_window_from_latest)
@@ -279,7 +285,7 @@ class LiveChartCoordinator:
         if step_seconds <= 0:
             step_seconds = 60
         last_ts = plot_candles[-1][0]
-        first_ts = plot_candles[0][0]
+        first_ts = max(plot_candles[0][0], last_ts - float(self._DISPLAY_WINDOW_SECONDS))
         right_padding_candles = 4
         right_ts = last_ts + (right_padding_candles * step_seconds)
         y_low, y_high = self.compute_chart_y_range(plot_candles)
