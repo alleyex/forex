@@ -40,24 +40,24 @@ class DecisionInspectorWidget(QWidget):
         ("tf", "Timeframe"),
         ("candles", "Candles"),
         ("features", "Features"),
-        ("pos", "Position"),
-        ("action", "Action"),
-        ("target", "Target"),
+        ("pos", "Current Pos"),
+        ("action", "Policy Action"),
+        ("target", "Risk Target"),
         ("confidence", "Confidence"),
     ]
     _NORMALIZED_FIELDS = [
         ("threshold", "Threshold"),
-        ("desired_raw", "Desired Raw"),
-        ("desired", "Desired"),
+        ("desired_raw", "Raw Desired"),
+        ("desired", "Final Desired"),
         ("step", "Step"),
         ("pos_id", "Pos ID"),
     ]
     _STATE_FIELDS = [
         ("symbol", "Symbol"),
         ("side", "Side"),
-        ("open_same", "Open Same"),
-        ("open_symbol", "Open Symbol"),
-        ("cap", "Cap"),
+        ("open_same", "Same-Side Open"),
+        ("open_symbol", "Open Symbol Pos"),
+        ("cap", "Position Cap"),
         ("near_full_hold", "Near-Full Hold"),
         ("rebalance", "Rebalance"),
     ]
@@ -94,21 +94,21 @@ class DecisionInspectorWidget(QWidget):
 
         layout.addWidget(
             self._build_stage_card(
-                "Decision Input",
+                "Signal Snapshot",
                 self._INPUT_FIELDS,
                 self._input_labels,
             )
         )
         layout.addWidget(
             self._build_stage_card(
-                "Decision Normalized",
+                "Execution Plan",
                 self._NORMALIZED_FIELDS,
                 self._normalized_labels,
             )
         )
         layout.addWidget(
             self._build_stage_card(
-                "Strategy State",
+                "Position State",
                 self._STATE_FIELDS,
                 self._state_labels,
             )
