@@ -56,6 +56,22 @@ class UISmokeTest(unittest.TestCase):
         window.deleteLater()
         self._app.processEvents()
 
+    def test_best_playback_compatibility_warnings_are_generated(self) -> None:
+        warnings = LiveMainWindow._build_best_playback_compatibility_warnings(
+            current_symbol="EURUSD",
+            current_timeframe="M1",
+            current_position_step=0.02,
+            current_slippage_bps=0.03,
+            applied_symbol="EURUSD",
+            applied_timeframe="M10",
+            env_config={"position_step": 0.05, "slippage_bps": 0.225},
+            training_args={"reward_mode": "tp_sl_proxy"},
+            metadata={"details": {"symbol_id": 1, "timeframe": "M10"}},
+        )
+        self.assertIn("timeframe changed from M1 to M10", warnings)
+        self.assertIn("reward_mode is tp_sl_proxy, not path_penalty", warnings)
+        self.assertIn("position_step was updated from 0.02 to 0.05", warnings)
+
     def test_training_panel_accepts_eval_mean_reward_metric(self) -> None:
         panel = TrainingPanel()
         panel.append_metric_point("eval/mean_reward", 10000, 0.25)

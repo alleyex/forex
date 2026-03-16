@@ -398,6 +398,10 @@ class LiveMainWindow(QMainWindow):
         training_args = self._load_json_file(run_dir / "training_args.json")
         env_config = self._load_json_file(run_dir / "model.env.json")
         metadata = self._load_training_data_metadata(training_args)
+        current_symbol = self._trade_symbol.currentText().strip()
+        current_timeframe = self._trade_timeframe.currentText().strip().upper()
+        current_position_step = float(self._position_step.value())
+        current_slippage_bps = float(self._slippage_bps.value())
         self._autotrade_loading = True
         try:
             self._model_path.setText(self._normalize_model_path_text(str(model_path)))
@@ -417,6 +421,23 @@ class LiveMainWindow(QMainWindow):
             "✅ Applied best playback model preset: "
             f"{model_path.name} | symbol={symbol or '-'} | timeframe={timeframe or '-'}"
         )
+        warnings = self._build_best_playback_compatibility_warnings(
+            current_symbol=current_symbol,
+            current_timeframe=current_timeframe,
+            current_position_step=current_position_step,
+            current_slippage_bps=current_slippage_bps,
+            applied_symbol=symbol,
+            applied_timeframe=timeframe,
+            env_config=env_config,
+            training_args=training_args,
+            metadata=metadata,
+        )
+        if warnings:
+            self._auto_log("⚠️ Compatibility check:")
+            for warning in warnings:
+                self._auto_log(f"   - {warning}")
+        else:
+            self._auto_log("✅ Compatibility check passed for live preset application")
 
     def _apply_live_symbol(self, metadata: dict | None) -> None:
         if not isinstance(metadata, dict):
@@ -470,6 +491,75 @@ class LiveMainWindow(QMainWindow):
         except (OSError, json.JSONDecodeError):
             return None
         return payload if isinstance(payload, dict) else None
+
+    @staticmethod
+    def _build_best_playback_compatibility_warnings(
+        *,
+        current_symbol: str,
+        current_timeframe: str,
+        current_position_step: float,
+        current_slippage_bps: float,
+        applied_symbol: str,
+        applied_timeframe: str,
+        env_config: dict | None,
+        training_args: dict | None,
+        metadata: dict | None,
+    ) -> list[str]:
+        warnings: list[str] = []
+        details = metadata.get("details", {}) if isinstance(metadata, dict) else {}
+        trained_symbol_id = details.get("symbol_id") if isinstance(details, dict) else None
+        trained_timeframe = (
+            str(details.get("timeframe", "")).strip().upper()
+            if isinstance(details, dict)
+            else ""
+        )
+        reward_mode = (
+            str(training_args.get("reward_mode", "")).strip()
+            if isinstance(training_args, dict)
+            else ""
+        )
+
+        if current_symbol and applied_symbol and current_symbol != applied_symbol:
+            warnings.append(f"symbol changed from {current_symbol} to {applied_symbol}")
+        if current_timeframe and applied_timeframe and current_timeframe != applied_timeframe:
+            warnings.append(
+                f"timeframe changed from {current_timeframe} to {applied_timeframe}"
+            )
+        if applied_timeframe and trained_timeframe and applied_timeframe != trained_timeframe:
+            warnings.append(
+                "live timeframe "
+                f"{applied_timeframe} differs from training timeframe {trained_timeframe}"
+            )
+        if trained_symbol_id is None:
+            warnings.append("training data metadata did not include symbol_id")
+        if not trained_timeframe:
+            warnings.append("training data metadata did not include timeframe")
+        if reward_mode and reward_mode != "path_penalty":
+            warnings.append(f"reward_mode is {reward_mode}, not path_penalty")
+
+        if isinstance(env_config, dict):
+            model_position_step = env_config.get("position_step")
+            model_slippage_bps = env_config.get("slippage_bps")
+            if (
+                model_position_step is not None
+                and abs(float(model_position_step) - current_position_step) > 1e-9
+            ):
+                warnings.append(
+                    "position_step was updated from "
+                    f"{current_position_step:g} to {float(model_position_step):g}"
+                )
+            if (
+                model_slippage_bps is not None
+                and abs(float(model_slippage_bps) - current_slippage_bps) > 1e-9
+            ):
+                warnings.append(
+                    "slippage_bps was updated from "
+                    f"{current_slippage_bps:g} to {float(model_slippage_bps):g}"
+                )
+        else:
+            warnings.append("model.env.json could not be loaded")
+
+        return warnings
 
     # Auto Trade UI State / Persistence
     def _trading_widgets(self) -> list[QWidget]:
