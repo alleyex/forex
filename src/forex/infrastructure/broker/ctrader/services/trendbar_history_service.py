@@ -71,6 +71,7 @@ class TrendbarHistoryService(
 
     _MIN_TIMESTAMP_MS = 0
     _MAX_TIMESTAMP_MS = 2147483646000
+    _WIDE_WINDOW_MINUTES = 60 * 24 * 14
     _PERIOD_LABELS = {
         ProtoOATrendbarPeriod.M1: "M1",
         ProtoOATrendbarPeriod.M2: "M2",
@@ -327,15 +328,35 @@ class TrendbarHistoryService(
 
     def _on_history(self, msg: TrendbarHistoryMessage) -> None:
         bars = list(getattr(msg, "trendbar", []))
+        has_more = bool(getattr(msg, "hasMore", False))
         if not bars and not self._retried_wide:
             self._retried_wide = True
-            wide_window = 60 * 24 * 14
             self._log("⚠️ History response was empty; retrying with a wider time window")
             self._prepare_request(
                 self._last_request_count,
                 use_seconds=False,
-                window_minutes=wide_window,
+                window_minutes=self._WIDE_WINDOW_MINUTES,
                 from_ts=self._current_range[0] if self._current_range else None,
+                to_ts=self._current_range[1] if self._current_range else None,
+            )
+            self._maybe_send_request()
+            return
+        if (
+            bars
+            and not has_more
+            and not self._retried_wide
+            and len(bars) < self._minimum_useful_bar_count()
+        ):
+            self._retried_wide = True
+            self._log(
+                "⚠️ History returned too few bars for feature warmup; "
+                "retrying with a wider time window"
+            )
+            self._prepare_request(
+                self._last_request_count,
+                use_seconds=False,
+                window_minutes=self._WIDE_WINDOW_MINUTES,
+                from_ts=None,
                 to_ts=self._current_range[1] if self._current_range else None,
             )
             self._maybe_send_request()
@@ -362,7 +383,6 @@ class TrendbarHistoryService(
         else:
             self._history_buffer.extend(self._to_dict(bar) for bar in bars)
 
-        has_more = bool(getattr(msg, "hasMore", False))
         if has_more and not self._request_ranges and bars:
             oldest_minutes = min(int(bar.utcTimestampInMinutes) for bar in bars)
             oldest_ts = oldest_minutes * 60 * 1000
@@ -404,6 +424,11 @@ class TrendbarHistoryService(
         if self._callbacks.on_history_received:
             self._callbacks.on_history_received(self._history_buffer)
         self._cleanup()
+
+    def _minimum_useful_bar_count(self) -> int:
+        # Live feature pipelines need at least 64 bars to satisfy the largest
+        # rolling min_periods used by the residual/alpha profiles.
+        return max(64, min(self._last_request_count, 128) // 3)
 
     def _to_dict(self, bar: TrendbarMessage) -> dict:
         low = int(bar.low)

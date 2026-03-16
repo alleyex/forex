@@ -34,3 +34,9 @@ def test_default_window_respects_m5_timeframe() -> None:
     service = TrendbarHistoryService(_DummyAppAuthService())
     service.fetch(account_id=1, symbol_id=1, count=50, timeframe="M5")
     assert service._last_request_window == 250
+
+
+def test_minimum_useful_bar_count_has_live_feature_floor() -> None:
+    service = TrendbarHistoryService(_DummyAppAuthService())
+    service._last_request_count = 220
+    assert service._minimum_useful_bar_count() == 64
