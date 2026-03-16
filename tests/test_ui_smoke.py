@@ -46,6 +46,11 @@ class UISmokeTest(unittest.TestCase):
         # Keep smoke test deterministic: avoid deferred auto-connect side effects.
         window._auto_connect_timer.stop()
         self.assertIn("Live", window.windowTitle())
+        timeframes = [
+            window._trade_timeframe.itemText(index)
+            for index in range(window._trade_timeframe.count())
+        ]
+        self.assertIn("M10", timeframes)
         window.close()
         window.deleteLater()
         self._app.processEvents()

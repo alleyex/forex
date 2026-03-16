@@ -414,7 +414,7 @@ class LiveUIBuilder:
         w._trade_symbol.currentTextChanged.connect(w._handle_trade_symbol_changed)
 
         w._trade_timeframe = QComboBox()
-        w._trade_timeframe.addItems(["M1", "M5", "M15", "M30", "H1", "H4"])
+        w._trade_timeframe.addItems(["M1", "M5", "M10", "M15", "M30", "H1", "H4"])
         basic_card_form.addRow("Timeframe", w._trade_timeframe)
         w._trade_timeframe.currentTextChanged.connect(w._handle_trade_timeframe_changed)
         form_basic.addRow(basic_card)

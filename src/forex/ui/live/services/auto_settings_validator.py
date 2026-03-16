@@ -4,7 +4,7 @@ from __future__ import annotations
 class AutoTradeSettingsValidator:
     """Validates Auto Trade UI settings before starting trading."""
 
-    _TIMEFRAMES = {"M1", "M5", "M15", "M30", "H1", "H4"}
+    _TIMEFRAMES = {"M1", "M5", "M10", "M15", "M30", "H1", "H4"}
 
     def __init__(self, window) -> None:
         self._window = window
