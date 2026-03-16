@@ -265,6 +265,9 @@ class LogWidget(QWidget):
             QPlainTextEdit {
                 background: #0f1115;
                 border: 1px solid #2f3742;
+                color: #d8e0ea;
+                selection-background-color: #2f6db3;
+                selection-color: #f5f7fb;
             }
             QPlainTextEdit QScrollBar:vertical {
                 background: transparent;

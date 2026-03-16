@@ -16,6 +16,7 @@ from forex.application.events import EventBus
 from forex.application.state import AppState
 from forex.infrastructure.broker.fake.provider import FakeProvider
 from forex.ui.live.main_window import LiveMainWindow
+from forex.ui.shared.widgets.log_widget import LogWidget
 from forex.ui.train.main_window import MainWindow
 from forex.ui.train.widgets.training_panel import TrainingPanel
 
@@ -90,6 +91,15 @@ class UISmokeTest(unittest.TestCase):
             self.assertEqual(list(y_data), [0.25])
         panel.close()
         panel.deleteLater()
+        self._app.processEvents()
+
+    def test_log_widget_declares_explicit_foreground_color(self) -> None:
+        widget = LogWidget()
+        style_sheet = widget._text_edit.styleSheet()
+        self.assertIn("color: #d8e0ea;", style_sheet)
+        self.assertIn("selection-color: #f5f7fb;", style_sheet)
+        widget.close()
+        widget.deleteLater()
         self._app.processEvents()
 
 
