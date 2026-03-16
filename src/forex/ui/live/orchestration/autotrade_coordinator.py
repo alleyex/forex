@@ -122,6 +122,17 @@ class LiveAutoTradeCoordinator:
             )
             w._request_recent_history(force=True)
             return
+        warmup_bars = max(0, int(getattr(w, "_auto_startup_warmup_bars", 0)))
+        seen_bars = int(getattr(w, "_auto_startup_seen_bars", 0)) + 1
+        w._auto_startup_seen_bars = seen_bars
+        if seen_bars <= warmup_bars:
+            w._auto_debug_fields(
+                "startup_warmup",
+                bars_seen=seen_bars,
+                bars_needed=warmup_bars,
+                candles=len(w._candles),
+            )
+            return
         max_position = max(1e-6, float(config.max_position))
         obs_idx = int(feature_set.features.shape[0] - 1)
         obs = build_window_observation(
@@ -428,6 +439,20 @@ class LiveAutoTradeCoordinator:
                 self._effective_max_position(),
             )
         )
+        if not bool(getattr(w, "_auto_first_trade_done", False)) and desired != 0.0:
+            first_trade_cap = max(
+                0.0,
+                float(getattr(w, "_auto_first_trade_max_abs_position", 0.5)),
+            )
+            capped_desired = float(np.clip(desired, -first_trade_cap, first_trade_cap))
+            if capped_desired != desired:
+                w._auto_debug_fields(
+                    "first_trade_cap",
+                    original=f"{desired:.3f}",
+                    capped=f"{capped_desired:.3f}",
+                    limit=f"{first_trade_cap:.3f}",
+                )
+                desired = capped_desired
         desired_side = "buy" if desired > 0 else "sell"
         w._auto_debug_fields(
             "decision_normalized",
@@ -694,6 +719,7 @@ class LiveAutoTradeCoordinator:
         if not order_id:
             return False
         w._auto_position = desired
+        w._auto_first_trade_done = True
         return True
 
     def calc_volume(self, *, signal_strength: float | None = None) -> int:

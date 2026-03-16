@@ -83,6 +83,8 @@ class LiveAutoLifecycleService:
         w._auto_enabled = True
         w._auto_position = 0.0
         w._auto_position_id = None
+        w._auto_startup_seen_bars = 0
+        w._auto_first_trade_done = False
         w._auto_last_action_ts = None
         w._auto_peak_balance = None
         w._auto_day_balance = None
@@ -122,6 +124,11 @@ class LiveAutoLifecycleService:
         w._auto_log(
             "ℹ️ Strategy profile: "
             f"same-side near-full hold={near_full_text} (|desired|>=0.95)."
+        )
+        w._auto_log(
+            "ℹ️ Startup guard: observe first "
+            f"{int(getattr(w, '_auto_startup_warmup_bars', 0))} bars; "
+            "cap first trade at |0.50| position."
         )
         w._auto_log("✅ Auto trading started")
 
