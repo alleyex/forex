@@ -38,7 +38,7 @@ class LiveChartCoordinator:
     def _visible_candles(
         candles: list[tuple[float, float, float, float, float]],
     ) -> list[tuple[float, float, float, float, float]]:
-        return list(candles)
+        return list(candles[-50:])
 
     def flush_chart_update(self) -> None:
         w = self._window
@@ -238,7 +238,7 @@ class LiveChartCoordinator:
 
     def handle_chart_auto_button_clicked(self, *_args) -> None:
         w = self._window
-        w._auto_debug_log("chart auto button clicked; reapply full history range")
+        w._auto_debug_log("chart auto button clicked; reapply 50-bar display range")
         self.reapply_chart_window_from_latest()
         QTimer.singleShot(0, self.reapply_chart_window_from_latest)
         QTimer.singleShot(80, self.reapply_chart_window_from_latest)
