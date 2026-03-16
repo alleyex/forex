@@ -10,6 +10,7 @@ from PySide6.QtWidgets import (
     QGroupBox,
     QHBoxLayout,
     QLabel,
+    QToolButton,
     QVBoxLayout,
     QWidget,
 )
@@ -79,6 +80,9 @@ class DecisionInspectorWidget(QWidget):
         self._latest_input: _DecisionEntry | None = None
         self._latest_normalized: _DecisionEntry | None = None
         self._latest_state: _DecisionEntry | None = None
+        self._summary_line: QLabel | None = None
+        self._details_toggle: QToolButton | None = None
+        self._details_panel: QGroupBox | None = None
         self._input_labels: dict[str, QLabel] = {}
         self._normalized_labels: dict[str, QLabel] = {}
         self._state_labels: dict[str, QLabel] = {}
@@ -89,9 +93,46 @@ class DecisionInspectorWidget(QWidget):
     def _setup_ui(self, title: str) -> None:
         layout = QVBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
-        layout.setSpacing(8)
+        layout.setSpacing(6)
 
         _ = title
+
+        summary_box = QGroupBox("Latest Decision")
+        summary_box.setObjectName("card")
+        summary_box.setProperty("titleTone", "line")
+        summary_box.setProperty("titleAlign", "left")
+        summary_layout = QVBoxLayout(summary_box)
+        summary_layout.setContentsMargins(12, 12, 12, 12)
+        summary_layout.setSpacing(8)
+
+        self._summary_line = QLabel("-", summary_box)
+        self._summary_line.setTextInteractionFlags(Qt.TextSelectableByMouse)
+        self._summary_line.setWordWrap(True)
+        self._summary_line.setStyleSheet("color:#d3d8e0; font-weight:600;")
+        summary_layout.addWidget(self._summary_line)
+
+        self._details_toggle = QToolButton(summary_box)
+        self._details_toggle.setText("Show Details")
+        self._details_toggle.setCheckable(True)
+        self._details_toggle.setChecked(False)
+        self._details_toggle.setToolButtonStyle(Qt.ToolButtonTextOnly)
+        self._details_toggle.setStyleSheet(
+            """
+            QToolButton {
+                color: #9aa6b2;
+                background: transparent;
+                border: none;
+                padding: 0;
+                font-weight: 500;
+            }
+            QToolButton:hover {
+                color: #d3d8e0;
+            }
+            """
+        )
+        self._details_toggle.toggled.connect(self._set_details_visible)
+        summary_layout.addWidget(self._details_toggle, 0, Qt.AlignLeft)
+        layout.addWidget(summary_box)
 
         layout.addWidget(
             self._build_stage_card(
@@ -102,13 +143,13 @@ class DecisionInspectorWidget(QWidget):
                 register_label=self._register_summary_label,
             )
         )
-        layout.addWidget(
-            self._build_stage_card(
-                "Position State",
-                self._STATE_FIELDS,
-                self._state_labels,
-            )
+        self._details_panel = self._build_stage_card(
+            "Position State",
+            self._STATE_FIELDS,
+            self._state_labels,
         )
+        self._details_panel.setVisible(False)
+        layout.addWidget(self._details_panel)
 
     def _build_stage_card(
         self,
@@ -168,6 +209,13 @@ class DecisionInspectorWidget(QWidget):
             self._input_labels[field] = label
         if field in normalized_keys:
             self._normalized_labels[field] = label
+
+    @Slot(bool)
+    def _set_details_visible(self, visible: bool) -> None:
+        if self._details_panel is not None:
+            self._details_panel.setVisible(bool(visible))
+        if self._details_toggle is not None:
+            self._details_toggle.setText("Hide Details" if visible else "Show Details")
 
     @staticmethod
     def _time_label_with_local_offset() -> str:
@@ -273,6 +321,28 @@ class DecisionInspectorWidget(QWidget):
                 if field in self._latest_state.fields:
                     value = self._display_value(self._latest_state.fields[field])
                     self._state_labels[field].setText(value)
+        self._render_summary_line()
+
+    def _render_summary_line(self) -> None:
+        if self._summary_line is None:
+            return
+        decision_time = self._input_labels.get("decision_time")
+        timeframe = self._input_labels.get("tf")
+        risk_target = self._input_labels.get("target")
+        final_desired = self._normalized_labels.get("desired")
+        symbol = self._state_labels.get("symbol")
+        side = self._state_labels.get("side")
+        current_pos = self._input_labels.get("pos")
+
+        parts = [
+            f"Time {decision_time.text() if decision_time else '-'}",
+            f"{symbol.text() if symbol else '-'} {timeframe.text() if timeframe else '-'}",
+            f"Side {side.text() if side else '-'}",
+            f"Current {current_pos.text() if current_pos else '-'}",
+            f"Target {risk_target.text() if risk_target else '-'}",
+            f"Final {final_desired.text() if final_desired else '-'}",
+        ]
+        self._summary_line.setText(" | ".join(parts))
 
     @staticmethod
     def _display_value(raw_value: str) -> str:
