@@ -59,6 +59,28 @@ class LiveAccountController:
                 if w._auto_day_key != day_key:
                     w._auto_day_key = day_key
                     w._auto_day_balance = w._auto_balance
+            used_margin = getattr(snapshot, "used_margin", None)
+            if used_margin is not None:
+                w._auto_used_margin = float(used_margin)
+            free_margin = getattr(snapshot, "free_margin", None)
+            if free_margin is not None:
+                w._auto_free_margin = float(free_margin)
+            leverage_in_cents = getattr(snapshot, "leverage_in_cents", None)
+            if leverage_in_cents is not None:
+                try:
+                    leverage_value = float(leverage_in_cents) / 100.0
+                except (TypeError, ValueError):
+                    leverage_value = 0.0
+                if leverage_value > 0.0:
+                    w._auto_leverage = leverage_value
+            max_leverage = getattr(snapshot, "max_leverage", None)
+            if max_leverage is not None:
+                try:
+                    max_leverage_value = float(max_leverage)
+                except (TypeError, ValueError):
+                    max_leverage_value = 0.0
+                if max_leverage_value > 0.0:
+                    w._auto_max_leverage = max_leverage_value
             w.logRequested.emit("✅ Funds received")
             w.accountSummaryUpdated.emit(snapshot)
 

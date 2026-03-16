@@ -60,6 +60,11 @@ def _make_window() -> SimpleNamespace:
         _auto_position=0.0,
         _auto_position_id=None,
         _auto_balance=10000.0,
+        _auto_used_margin=0.0,
+        _auto_free_margin=10000.0,
+        _auto_leverage=100.0,
+        _auto_max_leverage=100.0,
+        _auto_margin_usage_cap_ratio=0.5,
         _auto_first_trade_done=False,
         _auto_first_trade_max_abs_position=0.5,
         _account_summary_labels={"currency": SimpleNamespace(text=lambda: "USD")},
@@ -106,3 +111,16 @@ def test_risk_percent_sizing_uses_balance_and_stop_loss_distance() -> None:
     volume = coordinator.calc_volume()
 
     assert volume == 5000000
+
+
+def test_risk_percent_sizing_is_capped_by_margin_usage_limit() -> None:
+    window = _make_window()
+    window._lot_risk = _CheckBoxStub(True)
+    window._lot_value = _SpinBoxStub(1.0)
+    window._auto_balance = 100.0
+    window._auto_used_margin = 49.0
+    coordinator = LiveAutoTradeCoordinator(window)
+
+    volume = coordinator.calc_volume()
+
+    assert volume == 100000

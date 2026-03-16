@@ -697,6 +697,9 @@ class LiveAutoTradeCoordinator:
             return False
 
         volume = self.calc_volume(signal_strength=abs(desired))
+        if volume <= 0:
+            w._auto_log("ℹ️ Trade skipped by margin cap: no safe volume available.")
+            return False
         stop_loss_points, take_profit_points = self.calc_sl_tp_pips()
         w._auto_debug_fields(
             "place_order",
@@ -739,6 +742,8 @@ class LiveAutoTradeCoordinator:
                 strength=f"{strength:.3f}",
                 scaled_lot=f"{lot:.4f}",
             )
+        if lot <= 0.0:
+            return 0
         units = int(max(1, round(lot * 100000)))
         raw_volume = units * 100
         symbol_name = ""
@@ -785,27 +790,149 @@ class LiveAutoTradeCoordinator:
             )
             return fallback_lot
 
-        risk_amount = float(balance) * (configured_value / 100.0)
-        stop_loss_cost_per_lot = float(stop_loss_points) * point_value_per_lot
-        if stop_loss_cost_per_lot <= 0.0:
-            fallback_lot = max(0.01, (float(balance) * (configured_value / 100.0)) / 100000.0)
-            w._auto_log("⚠️ Invalid stop-loss cost for risk sizing; using balance-percent fallback.")
-            return fallback_lot
-
-        lot = max(0.01, risk_amount / stop_loss_cost_per_lot)
+        risk_lot = self._estimate_risk_lot_only()
+        margin_capped_lot, margin_meta = self._apply_margin_cap_to_lot(risk_lot)
         w._auto_debug_fields(
             "risk_sizing",
             balance=f"{float(balance):.2f}",
             risk_pct=f"{configured_value:.2f}",
-            risk_amount=f"{risk_amount:.2f}",
+            risk_amount=f"{float(balance) * (configured_value / 100.0):.2f}",
             stop_loss_points=stop_loss_points,
             point_value_per_lot=f"{point_value_per_lot:.4f}",
-            base_lot=f"{lot:.4f}",
+            risk_lot=f"{risk_lot:.4f}",
+            margin_cap_lot=f"{margin_capped_lot:.4f}",
+            final_lot=f"{margin_capped_lot:.4f}",
         )
-        return lot
+        if margin_meta["cap_applied"]:
+            w._auto_debug_fields(
+                "margin_cap",
+                balance=f"{margin_meta['balance']:.2f}",
+                used_margin=f"{margin_meta['used_margin']:.2f}",
+                max_used_margin=f"{margin_meta['max_used_margin']:.2f}",
+                remaining_budget=f"{margin_meta['remaining_budget']:.2f}",
+                leverage=f"{margin_meta['leverage']:.1f}",
+                per_lot=f"{margin_meta['margin_per_lot']:.2f}",
+                risk_lot=f"{risk_lot:.4f}",
+                capped_lot=f"{margin_capped_lot:.4f}",
+            )
+        return margin_capped_lot
 
     def estimate_base_lot(self) -> float:
         return float(self._calculate_base_lot())
+
+    def estimate_lot_preview(self) -> dict[str, float | bool | str]:
+        w = self._window
+        configured_value = float(w._lot_value.value())
+        if not w._lot_risk.isChecked():
+            return {
+                "mode": "fixed",
+                "configured_lot": configured_value,
+                "final_lot": configured_value,
+                "cap_applied": False,
+            }
+        risk_lot = self._estimate_risk_lot_only()
+        final_lot, margin_meta = self._apply_margin_cap_to_lot(risk_lot)
+        return {
+            "mode": "risk",
+            "risk_lot": risk_lot,
+            "final_lot": final_lot,
+            "cap_applied": bool(margin_meta["cap_applied"]),
+            "balance": float(margin_meta["balance"]),
+            "used_margin": float(margin_meta["used_margin"]),
+            "max_used_margin": float(margin_meta["max_used_margin"]),
+            "remaining_budget": float(margin_meta["remaining_budget"]),
+            "stop_loss_points": float(self.calc_sl_tp_pips()[0]),
+        }
+
+    def _estimate_risk_lot_only(self) -> float:
+        w = self._window
+        configured_value = float(w._lot_value.value())
+        balance = getattr(w, "_auto_balance", None)
+        if not balance or float(balance) <= 0.0:
+            return configured_value
+
+        stop_loss_points, _ = self.calc_sl_tp_pips()
+        if not stop_loss_points or stop_loss_points <= 0:
+            return max(0.01, (float(balance) * (configured_value / 100.0)) / 100000.0)
+
+        point_value_per_lot = self._estimate_point_value_per_lot()
+        if point_value_per_lot <= 0.0:
+            return max(0.01, (float(balance) * (configured_value / 100.0)) / 100000.0)
+
+        risk_amount = float(balance) * (configured_value / 100.0)
+        stop_loss_cost_per_lot = float(stop_loss_points) * point_value_per_lot
+        if stop_loss_cost_per_lot <= 0.0:
+            return max(0.01, (float(balance) * (configured_value / 100.0)) / 100000.0)
+        return max(0.01, risk_amount / stop_loss_cost_per_lot)
+
+    def _apply_margin_cap_to_lot(self, lot: float) -> tuple[float, dict[str, float | bool]]:
+        w = self._window
+        balance = float(getattr(w, "_auto_balance", None) or 0.0)
+        used_margin = max(0.0, float(getattr(w, "_auto_used_margin", None) or 0.0))
+        cap_ratio = max(
+            0.0,
+            min(1.0, float(getattr(w, "_auto_margin_usage_cap_ratio", 0.5))),
+        )
+        max_used_margin = max(0.0, balance * cap_ratio)
+        remaining_budget = max_used_margin - used_margin
+        margin_per_lot = self._estimate_margin_required_per_lot()
+        leverage = self._effective_account_leverage()
+        meta = {
+            "balance": balance,
+            "used_margin": used_margin,
+            "max_used_margin": max_used_margin,
+            "remaining_budget": remaining_budget,
+            "margin_per_lot": margin_per_lot,
+            "leverage": leverage,
+            "cap_applied": False,
+        }
+        if lot <= 0.0:
+            return 0.0, meta
+        if balance <= 0.0 or margin_per_lot <= 0.0:
+            return lot, meta
+        if remaining_budget <= 0.0:
+            meta["cap_applied"] = True
+            return 0.0, meta
+        margin_lot_cap = remaining_budget / margin_per_lot
+        final_lot = max(0.0, min(float(lot), float(margin_lot_cap)))
+        meta["cap_applied"] = final_lot + 1e-9 < float(lot)
+        return final_lot, meta
+
+    def _effective_account_leverage(self) -> float:
+        w = self._window
+        leverage = float(getattr(w, "_auto_leverage", None) or 0.0)
+        if leverage > 0.0:
+            return leverage
+        max_leverage = float(getattr(w, "_auto_max_leverage", None) or 0.0)
+        if max_leverage > 0.0:
+            return max_leverage
+        return 100.0
+
+    def _estimate_margin_required_per_lot(self) -> float:
+        w = self._window
+        symbol_name = ""
+        try:
+            symbol_name = w._trade_symbol.currentText()
+        except Exception:
+            symbol_name = w._symbol_name
+        symbol_name = str(symbol_name or "").strip().upper()
+        if len(symbol_name) != 6:
+            return 0.0
+
+        base_currency = symbol_name[:3]
+        account_currency = self._account_currency()
+        leverage = self._effective_account_leverage()
+        if leverage <= 0.0:
+            return 0.0
+        base_to_account = self._estimate_fx_conversion_rate(
+            from_currency=base_currency,
+            to_currency=account_currency,
+        )
+        if base_to_account <= 0.0:
+            return 0.0
+        contract_size = 100000.0
+        notional_in_account = contract_size * base_to_account
+        return notional_in_account / leverage
 
     def _estimate_point_value_per_lot(self) -> float:
         w = self._window

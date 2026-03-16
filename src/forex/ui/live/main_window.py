@@ -649,27 +649,32 @@ class LiveMainWindow(QMainWindow):
         if label is None:
             return
         try:
-            estimated_lot = float(self._autotrade_coordinator.estimate_base_lot())
+            preview = self._autotrade_coordinator.estimate_lot_preview()
         except Exception:
-            estimated_lot = 0.0
+            preview = {"mode": "fixed", "final_lot": 0.0, "cap_applied": False}
         if getattr(self, "_lot_risk", None) and self._lot_risk.isChecked():
-            balance = getattr(self, "_auto_balance", None)
-            stop_loss = float(self._stop_loss.value()) if hasattr(self, "_stop_loss") else 0.0
-            balance_text = (
-                f"balance {float(balance):.2f}, " if balance and float(balance) > 0.0 else ""
-            )
-            if stop_loss > 0:
+            risk_lot = float(preview.get("risk_lot", preview.get("final_lot", 0.0)))
+            final_lot = float(preview.get("final_lot", 0.0))
+            stop_loss = float(preview.get("stop_loss_points", 0.0))
+            balance = float(preview.get("balance", 0.0))
+            used_margin = float(preview.get("used_margin", 0.0))
+            max_used_margin = float(preview.get("max_used_margin", 0.0))
+            if bool(preview.get("cap_applied", False)):
                 label.setText(
-                    "Approx. "
-                    f"{estimated_lot:.3f} lot using "
-                    f"{balance_text}SL {stop_loss:.0f} points."
+                    f"Risk lot {risk_lot:.3f}, capped to {final_lot:.3f} "
+                    f"to keep used margin <= {max_used_margin:.2f} "
+                    f"(balance {balance:.2f}, used {used_margin:.2f}, SL {stop_loss:.0f})."
+                )
+            elif stop_loss > 0:
+                label.setText(
+                    f"Risk lot {final_lot:.3f} with balance {balance:.2f}, "
+                    f"used margin {used_margin:.2f}/{max_used_margin:.2f}, "
+                    f"SL {stop_loss:.0f}."
                 )
             else:
-                label.setText(
-                    f"Approx. {estimated_lot:.3f} lot. Add a stop loss for full risk sizing."
-                )
+                label.setText(f"Approx. {final_lot:.3f} lot. Add a stop loss for full risk sizing.")
             return
-        label.setText(f"Fixed order size: {estimated_lot:.3f} lot.")
+        label.setText(f"Fixed order size: {float(preview.get('final_lot', 0.0)):.3f} lot.")
 
     def _setup_autotrade_persistence(self) -> None:
         self._auto_settings_persistence.setup()

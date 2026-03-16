@@ -33,6 +33,11 @@ def initialize_live_window_state(window) -> None:
     window._auto_first_trade_max_abs_position = 0.5
     window._auto_last_action_ts = None
     window._auto_balance = None
+    window._auto_used_margin = None
+    window._auto_free_margin = None
+    window._auto_leverage = None
+    window._auto_max_leverage = None
+    window._auto_margin_usage_cap_ratio = 0.5
     window._auto_peak_balance = None
     window._auto_day_balance = None
     window._auto_day_key = None
