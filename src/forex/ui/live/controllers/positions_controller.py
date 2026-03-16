@@ -67,7 +67,10 @@ class LivePositionsController:
         except Exception:
             pos_list = []
         w._open_positions = pos_list
+        if not pos_list:
+            w._auto_used_margin = 0.0
         w._sync_auto_position_from_positions(pos_list)
+        w._refresh_account_balance()
         self.schedule_positions_refresh()
 
     def update_positions_table(self, positions: list[object]) -> None:

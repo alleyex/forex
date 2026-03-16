@@ -118,9 +118,24 @@ def test_risk_percent_sizing_is_capped_by_margin_usage_limit() -> None:
     window._lot_risk = _CheckBoxStub(True)
     window._lot_value = _SpinBoxStub(1.0)
     window._auto_balance = 100.0
+    window._open_positions = [SimpleNamespace(positionId=1)]
     window._auto_used_margin = 49.0
     coordinator = LiveAutoTradeCoordinator(window)
 
     volume = coordinator.calc_volume()
 
     assert volume == 100000
+
+
+def test_risk_percent_sizing_ignores_stale_used_margin_without_open_positions() -> None:
+    window = _make_window()
+    window._lot_risk = _CheckBoxStub(True)
+    window._lot_value = _SpinBoxStub(0.3)
+    window._auto_balance = 312.34
+    window._auto_used_margin = 68.91
+    coordinator = LiveAutoTradeCoordinator(window)
+
+    preview = coordinator.estimate_lot_preview()
+
+    assert preview["cap_applied"] is False
+    assert preview["used_margin"] == pytest.approx(0.0)

@@ -868,7 +868,11 @@ class LiveAutoTradeCoordinator:
     def _apply_margin_cap_to_lot(self, lot: float) -> tuple[float, dict[str, float | bool]]:
         w = self._window
         balance = float(getattr(w, "_auto_balance", None) or 0.0)
-        used_margin = max(0.0, float(getattr(w, "_auto_used_margin", None) or 0.0))
+        open_positions = list(getattr(w, "_open_positions", []) or [])
+        if open_positions:
+            used_margin = max(0.0, float(getattr(w, "_auto_used_margin", None) or 0.0))
+        else:
+            used_margin = 0.0
         cap_ratio = max(
             0.0,
             min(1.0, float(getattr(w, "_auto_margin_usage_cap_ratio", 0.5))),
