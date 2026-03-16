@@ -204,6 +204,7 @@ class LiveMainWindow(QMainWindow):
             monospace=True,
             font_point_delta=2,
         )
+        self._log_panel.set_filter_level("INFO")
 
         content = QWidget()
         content_layout = QVBoxLayout(content)

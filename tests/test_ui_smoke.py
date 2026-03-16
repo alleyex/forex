@@ -60,6 +60,7 @@ class UISmokeTest(unittest.TestCase):
             for index in range(window._trade_timeframe.count())
         ]
         self.assertIn("M10", timeframes)
+        self.assertEqual(window._log_panel.current_filter, "INFO")
         window.close()
         window.deleteLater()
         self._app.processEvents()
@@ -98,6 +99,8 @@ class UISmokeTest(unittest.TestCase):
         style_sheet = widget._text_edit.styleSheet()
         self.assertIn("color: #d8e0ea;", style_sheet)
         self.assertIn("selection-color: #f5f7fb;", style_sheet)
+        widget.set_filter_level("WARN")
+        self.assertEqual(widget.current_filter, "WARN")
         widget.close()
         widget.deleteLater()
         self._app.processEvents()

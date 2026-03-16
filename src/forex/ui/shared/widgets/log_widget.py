@@ -383,6 +383,16 @@ class LogWidget(QWidget):
         self._repeat_suppressed_count = 0
         self._text_edit.clear()
 
+    @property
+    def current_filter(self) -> str:
+        return self._current_filter
+
+    def set_filter_level(self, level: str) -> None:
+        normalized = str(level or "All").strip()
+        if normalized not in self._FILTER_LEVELS:
+            normalized = "All"
+        self._set_filter(normalized)
+
     def _extract_level(self, message: str) -> str:
         match = self._level_pattern.search(message)
         if match:
