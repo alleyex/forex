@@ -16,9 +16,29 @@ from PySide6.QtWidgets import (
 
 class LivePanelFactory:
     @staticmethod
+    def _configure_dense_table(
+        table: QTableWidget,
+        *,
+        header_height: int = 34,
+        row_height: int = 30,
+    ) -> None:
+        header = table.horizontalHeader()
+        header.setSectionResizeMode(QHeaderView.Stretch)
+        header.setMinimumHeight(header_height)
+        header.setFixedHeight(header_height)
+        header.setHighlightSections(False)
+        vertical = table.verticalHeader()
+        vertical.setDefaultSectionSize(row_height)
+        vertical.setMinimumSectionSize(row_height)
+        table.setWordWrap(False)
+        table.setCornerButtonEnabled(False)
+
+    @staticmethod
     def build_positions_panel(window) -> QWidget:
         panel = QGroupBox("Positions")
         layout = QVBoxLayout(panel)
+        layout.setContentsMargins(10, 10, 10, 10)
+        layout.setSpacing(8)
 
         account_combo = QComboBox()
         account_combo.setObjectName("accountSelector")
@@ -108,7 +128,7 @@ class LivePanelFactory:
         table.setSelectionBehavior(QTableWidget.SelectRows)
         table.setSelectionMode(QTableWidget.SingleSelection)
         table.setAlternatingRowColors(True)
-        table.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
+        LivePanelFactory._configure_dense_table(table)
         table.setStyleSheet(
             """
             QTableWidget#positionsTable {
@@ -118,10 +138,12 @@ class LivePanelFactory:
                 selection-background-color: #2f6db3;
                 selection-color: #f5f7fb;
                 gridline-color: #2a323c;
+                font-size: 12px;
             }
             QTableWidget#positionsTable::item {
                 color: #d3d8e0;
                 background: transparent;
+                padding: 0 8px;
             }
             QTableWidget#positionsTable::item:selected {
                 color: #f5f7fb;
@@ -178,6 +200,8 @@ class LivePanelFactory:
     def build_quotes_panel(window) -> QWidget:
         panel = QGroupBox("Quotes")
         layout = QVBoxLayout(panel)
+        layout.setContentsMargins(10, 10, 10, 10)
+        layout.setSpacing(8)
 
         rows = max(1, len(window._quote_symbols))
         table = QTableWidget(rows, 5)
@@ -188,7 +212,7 @@ class LivePanelFactory:
         table.setSelectionBehavior(QTableWidget.SelectRows)
         table.setSelectionMode(QTableWidget.SingleSelection)
         table.setAlternatingRowColors(True)
-        table.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
+        LivePanelFactory._configure_dense_table(table)
         table.setStyleSheet(
             """
             QTableWidget#quotesTable {
@@ -198,10 +222,12 @@ class LivePanelFactory:
                 selection-background-color: #2f6db3;
                 selection-color: #f5f7fb;
                 gridline-color: #2a323c;
+                font-size: 12px;
             }
             QTableWidget#quotesTable::item {
                 color: #d3d8e0;
                 background: transparent;
+                padding: 0 8px;
             }
             QTableWidget#quotesTable::item:selected {
                 color: #f5f7fb;

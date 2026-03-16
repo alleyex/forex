@@ -166,6 +166,7 @@ class LogWidget(QWidget):
 
         if title:
             self._title_label = QLabel(title)
+            self._title_label.setStyleSheet("color:#cfd6df; font-weight:600;")
             header.addWidget(self._title_label)
 
         header.addStretch(1)
@@ -177,6 +178,7 @@ class LogWidget(QWidget):
         self._btn_filter.setToolTip("Filter level: All")
         self._btn_filter.setPopupMode(QToolButton.InstantPopup)
         self._btn_filter.setAutoRaise(True)
+        self._btn_filter.setFixedSize(22, 22)
         self._btn_filter.setStyleSheet(
             """
             QToolButton {
@@ -208,6 +210,7 @@ class LogWidget(QWidget):
         )
         self._btn_copy.setToolTip("Copy")
         self._btn_copy.setAutoRaise(True)
+        self._btn_copy.setFixedSize(22, 22)
         self._btn_copy.setStyleSheet(
             """
             QToolButton {
@@ -234,6 +237,7 @@ class LogWidget(QWidget):
         )
         self._btn_clear.setToolTip("Clear")
         self._btn_clear.setAutoRaise(True)
+        self._btn_clear.setFixedSize(22, 22)
         self._btn_clear.setStyleSheet(
             """
             QToolButton {

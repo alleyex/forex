@@ -113,6 +113,8 @@ class UISmokeTest(unittest.TestCase):
         self.assertIn("alternate-background-color: #252c35;", style_sheet)
         self.assertIn("selection-color: #f5f7fb;", style_sheet)
         self.assertIn("QTableWidget#quotesTable::item", style_sheet)
+        self.assertEqual(window._quotes_table.verticalHeader().defaultSectionSize(), 30)
+        self.assertEqual(window._quotes_table.horizontalHeader().height(), 34)
         window.close()
         window.deleteLater()
         self._app.processEvents()
