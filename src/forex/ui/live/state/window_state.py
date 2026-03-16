@@ -62,7 +62,7 @@ def initialize_live_window_state(window) -> None:
     window._candlestick_item = None
     window._last_price_line = None
     window._last_price_label = None
-    window._project_root = Path(__file__).resolve().parents[2]
+    window._project_root = Path(__file__).resolve().parents[5]
     window._symbol_names, window._symbol_id_map = window._load_symbol_catalog()
     window._symbol_id_to_name = {
         symbol_id: name

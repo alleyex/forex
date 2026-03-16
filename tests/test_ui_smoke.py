@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import os
 import unittest
+from pathlib import Path
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 os.environ.setdefault("QT_OPENGL", "software")
@@ -47,6 +48,12 @@ class UISmokeTest(unittest.TestCase):
         window._auto_connect_timer.stop()
         self.assertIn("Live", window.windowTitle())
         self.assertEqual(window._load_best_model_button.text(), "Use Best Playback Model")
+        self.assertEqual(window._project_root, Path(__file__).resolve().parents[1])
+        self.assertTrue(
+            (
+                window._project_root / "config" / "training_presets" / "best_playback_s12.json"
+            ).exists()
+        )
         timeframes = [
             window._trade_timeframe.itemText(index)
             for index in range(window._trade_timeframe.count())

@@ -89,7 +89,7 @@ class LiveMainWindow(QMainWindow):
     _CARD_LINE_TITLE_COLOR = "#3a4452"
     _CARD_LINE_TITLE_FONT_SIZE_PX = 10
     _CARD_LINE_TITLE_OFFSET_PX = -20
-    _BEST_PLAYBACK_PRESET_PATH = Path("config/training_presets/best_playback_s12.json")
+    _BEST_PLAYBACK_PRESET_RELATIVE_PATH = Path("config/training_presets/best_playback_s12.json")
 
     # Initialization
     def __init__(
@@ -480,9 +480,10 @@ class LiveMainWindow(QMainWindow):
         meta_path = Path(f"{data_path}.meta.json")
         return self._load_json_file(meta_path)
 
-    @classmethod
-    def _load_best_playback_preset(cls) -> dict | None:
-        return cls._load_json_file(cls._BEST_PLAYBACK_PRESET_PATH)
+    def _load_best_playback_preset(self) -> dict | None:
+        return self._load_json_file(
+            self._project_root / self._BEST_PLAYBACK_PRESET_RELATIVE_PATH
+        )
 
     @staticmethod
     def _load_json_file(path: Path) -> dict | None:
