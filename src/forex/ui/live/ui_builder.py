@@ -427,20 +427,20 @@ class LiveUIBuilder:
 
     def _build_trade_tab(self, *, form_trade: QFormLayout, panel: QWidget) -> None:
         w = self._window
-        trade_card, trade_card_form = self._create_card("Position Sizing", title_tone="line")
+        trade_card, trade_card_form = self._create_card("Risk Sizing", title_tone="line")
         lot_row = QWidget()
         lot_layout = QVBoxLayout(lot_row)
         lot_layout.setContentsMargins(0, 0, 0, 0)
         lot_layout.setSpacing(4)
-        w._lot_fixed = QRadioButton("Fixed lot")
-        w._lot_risk = QRadioButton("Risk %")
+        w._lot_fixed = QRadioButton("Fixed lot size")
+        w._lot_risk = QRadioButton("Risk % of balance")
         w._lot_fixed.setChecked(True)
         lot_group = QButtonGroup(panel)
         lot_group.addButton(w._lot_fixed)
         lot_group.addButton(w._lot_risk)
         lot_layout.addWidget(w._lot_fixed)
         lot_layout.addWidget(w._lot_risk)
-        trade_card_form.addRow("Sizing", lot_row)
+        trade_card_form.addRow("Sizing mode", lot_row)
 
         w._lot_value = QDoubleSpinBox()
         w._lot_value.setDecimals(2)
@@ -448,7 +448,10 @@ class LiveUIBuilder:
         w._lot_value.setSingleStep(0.01)
         w._lot_value.setValue(0.1)
         w._lot_value.setSuffix(" lots")
-        trade_card_form.addRow("Lot / Risk%", w._lot_value)
+        w._lot_value.setToolTip(
+            "Fixed mode: direct lot size. Risk mode: percent of balance sized against stop loss."
+        )
+        trade_card_form.addRow("Lot or risk %", w._lot_value)
         w._lot_fixed.toggled.connect(w._sync_lot_value_style)
         w._lot_risk.toggled.connect(w._sync_lot_value_style)
         w._sync_lot_value_style()
