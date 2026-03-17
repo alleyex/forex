@@ -29,6 +29,24 @@ class _DecisionEntry:
 
 class DecisionInspectorWidget(QWidget):
     appendRequested = Signal(str)
+    _VALUE_BASE_STYLE = "color:#d3d8e0; font-weight:600;"
+    _VALUE_MUTED_STYLE = "color:#7f8a96; font-weight:600;"
+    _VALUE_BUY_STYLE = (
+        "color:#1fd19a; font-weight:700; background:#17392f; "
+        "border-radius:4px; padding:1px 6px;"
+    )
+    _VALUE_SELL_STYLE = (
+        "color:#ff7666; font-weight:700; background:#3d2424; "
+        "border-radius:4px; padding:1px 6px;"
+    )
+    _VALUE_ON_STYLE = (
+        "color:#8fc6ff; font-weight:700; background:#1f3550; "
+        "border-radius:4px; padding:1px 6px;"
+    )
+    _VALUE_OFF_STYLE = (
+        "color:#9aa6b2; font-weight:700; background:#2a313a; "
+        "border-radius:4px; padding:1px 6px;"
+    )
 
     _LEVEL_PREFIX_PATTERN = re.compile(
         r"^\[(DEBUG|INFO|OK|WARN|ERROR|TRADING|TRADE)\]\s*",
@@ -174,7 +192,7 @@ class DecisionInspectorWidget(QWidget):
             value_label = QLabel("-", cell)
             value_label.setTextInteractionFlags(Qt.TextSelectableByMouse)
             value_label.setAlignment(Qt.AlignLeft | Qt.AlignVCenter)
-            value_label.setStyleSheet("color:#d3d8e0; font-weight:600;")
+            value_label.setStyleSheet(self._VALUE_MUTED_STYLE)
 
             cell_layout.addWidget(key_label)
             cell_layout.addWidget(value_label, 1)
@@ -300,6 +318,39 @@ class DecisionInspectorWidget(QWidget):
                 if field in self._latest_state.fields:
                     value = self._display_value(self._latest_state.fields[field])
                     self._state_labels[field].setText(value)
+
+        for field, label in self._input_labels.items():
+            self._apply_value_style(field, label)
+        for field, label in self._normalized_labels.items():
+            self._apply_value_style(field, label)
+        for field, label in self._state_labels.items():
+            self._apply_value_style(field, label)
+
+    def _apply_value_style(self, field: str, label: QLabel) -> None:
+        value = label.text().strip()
+        normalized = value.lower()
+
+        if value in {"-", ""}:
+            label.setStyleSheet(self._VALUE_MUTED_STYLE)
+            return
+
+        if field == "side":
+            if normalized == "buy":
+                label.setStyleSheet(self._VALUE_BUY_STYLE)
+                return
+            if normalized == "sell":
+                label.setStyleSheet(self._VALUE_SELL_STYLE)
+                return
+
+        if field in {"rebalance", "near_full_hold"}:
+            if normalized == "on":
+                label.setStyleSheet(self._VALUE_ON_STYLE)
+                return
+            if normalized == "off":
+                label.setStyleSheet(self._VALUE_OFF_STYLE)
+                return
+
+        label.setStyleSheet(self._VALUE_BASE_STYLE)
 
     @staticmethod
     def _display_value(raw_value: str) -> str:
