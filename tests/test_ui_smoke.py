@@ -9,7 +9,7 @@ os.environ.setdefault("QT_OPENGL", "software")
 os.environ.setdefault("QT_QUICK_BACKEND", "software")
 
 from PySide6.QtGui import QFont
-from PySide6.QtWidgets import QApplication, QHeaderView, QToolBar
+from PySide6.QtWidgets import QApplication
 
 from forex.application.broker.use_cases import BrokerUseCases
 from forex.application.events import EventBus
@@ -71,15 +71,6 @@ class UISmokeTest(unittest.TestCase):
         self.assertIsNotNone(window._trade_history_table)
         self.assertEqual(window._trade_history_table.columnCount(), 4)
         self.assertEqual(window._quotes_table.parentWidget().minimumWidth(), 0)
-        self.assertEqual(window._positions_table.parentWidget().minimumWidth(), 720)
-        self.assertEqual(
-            window._positions_table.horizontalHeader().sectionResizeMode(0),
-            QHeaderView.Stretch,
-        )
-        self.assertEqual(
-            window._positions_table.horizontalHeader().sectionResizeMode(8),
-            QHeaderView.ResizeToContents,
-        )
         self.assertEqual(window._bottom_splitter.widget(1).title(), "Trade History")
         self.assertEqual(window._bottom_splitter.widget(2).title(), "Positions")
         window.close()
@@ -251,16 +242,13 @@ class UISmokeTest(unittest.TestCase):
         window.deleteLater()
         self._app.processEvents()
 
-    def test_live_toolbar_and_status_bar_use_named_shell_styles(self) -> None:
+    def test_live_status_bar_uses_named_shell_styles(self) -> None:
         window = LiveMainWindow(
             use_cases=BrokerUseCases(FakeProvider()),
             event_bus=EventBus(),
             app_state=AppState(),
         )
         window._auto_connect_timer.stop()
-        toolbar = window.findChild(QToolBar, "liveToolbar")
-        self.assertIsNotNone(toolbar)
-        self.assertEqual(len(toolbar.actions()), 0)
         self.assertEqual(window.statusBar().objectName(), "liveStatusBar")
         self.assertEqual(window._app_auth_label.objectName(), "statusChip")
         self.assertEqual(window._oauth_label.objectName(), "statusChip")

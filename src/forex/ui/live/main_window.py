@@ -22,7 +22,6 @@ from PySide6.QtWidgets import (
     QMainWindow,
     QSplitter,
     QTableWidgetItem,
-    QToolBar,
     QVBoxLayout,
     QWidget,
 )
@@ -253,7 +252,6 @@ class LiveMainWindow(QMainWindow):
         central_layout.addWidget(splitter)
         self.setCentralWidget(central)
 
-        self._setup_toolbar()
         self._setup_status_bar()
 
     def _build_positions_panel(self) -> QWidget:
@@ -882,14 +880,6 @@ class LiveMainWindow(QMainWindow):
         return self._value_formatter.format_price(value, digits=digits)
 
     # Connection / Account Orchestration
-    def _setup_toolbar(self) -> None:
-        toolbar = QToolBar("Live toolbar", self)
-        toolbar.setObjectName("liveToolbar")
-        toolbar.setMovable(False)
-        toolbar.setFloatable(False)
-        toolbar.setToolButtonStyle(Qt.ToolButtonTextBesideIcon)
-        self.addToolBar(toolbar)
-
     def _setup_status_bar(self) -> None:
         status_bar = self.statusBar()
         status_bar.setObjectName("liveStatusBar")
