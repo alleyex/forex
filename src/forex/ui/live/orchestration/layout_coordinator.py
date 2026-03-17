@@ -15,16 +15,16 @@ class LiveLayoutCoordinator:
         total = splitter.width()
         if total <= 0:
             return
-        # Keep Auto Trading narrower than chart, but aligned with the quotes/log grid.
+        # Align Auto Trading with the visible left-side workspace under it.
         left = None
         bottom = getattr(w, "_bottom_splitter", None)
         if bottom is not None:
             sizes = bottom.sizes()
-            if sizes:
-                left = sizes[0] + max(32, int(total * 0.04))
+            if len(sizes) >= 2:
+                left = sizes[0] + sizes[1]
         if left is None:
             left = max(320, int(total * 0.30))
-        left = max(320, min(int(total * 0.38), left))
+        left = max(320, min(int(total * 0.45), left))
         right = max(640, total - left)
         splitter.setSizes([left, right])
 
