@@ -71,6 +71,8 @@ class UISmokeTest(unittest.TestCase):
         self.assertIsNotNone(window._trade_history_table)
         self.assertEqual(window._trade_history_table.columnCount(), 4)
         self.assertEqual(window._quotes_table.parentWidget().minimumWidth(), 0)
+        self.assertEqual(window._bottom_splitter.widget(1).title(), "Trade History")
+        self.assertEqual(window._bottom_splitter.widget(2).title(), "Positions")
         window.close()
         window.deleteLater()
         self._app.processEvents()
