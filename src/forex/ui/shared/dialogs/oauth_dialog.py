@@ -172,10 +172,18 @@ class OAuthDialog(BaseAuthDialog):
         self._connect_signals()
         if self._service:
             self._service.set_callbacks(
-                on_oauth_success=lambda t: self.authSucceeded.emit(t),
-                on_error=lambda e: self.authFailed.emit(e),
-                on_log=lambda m: self.logReceived.emit(m),
-                on_status_changed=lambda s: self.statusChanged.emit(int(s)),
+                on_oauth_success=lambda t: self._call_on_ui_thread(
+                    lambda: self.authSucceeded.emit(t)
+                ),
+                on_error=lambda e: self._call_on_ui_thread(
+                    lambda: self.authFailed.emit(str(e))
+                ),
+                on_log=lambda m: self._call_on_ui_thread(
+                    lambda: self.logReceived.emit(str(m))
+                ),
+                on_status_changed=lambda s: self._call_on_ui_thread(
+                    lambda: self.statusChanged.emit(int(s))
+                ),
             )
             self.statusChanged.emit(int(self._service.status))
         self._load_initial_data()
@@ -296,9 +304,15 @@ class OAuthDialog(BaseAuthDialog):
             return
 
         self._login_service.set_callbacks(
-            on_oauth_login_success=lambda t: self.loginSucceeded.emit(t),
-            on_error=lambda e: self.loginFailed.emit(e),
-            on_log=lambda m: self.logReceived.emit(m),
+            on_oauth_login_success=lambda t: self._call_on_ui_thread(
+                lambda: self.loginSucceeded.emit(t)
+            ),
+            on_error=lambda e: self._call_on_ui_thread(
+                lambda: self.loginFailed.emit(str(e))
+            ),
+            on_log=lambda m: self._call_on_ui_thread(
+                lambda: self.logReceived.emit(str(m))
+            ),
         )
 
         self._state.login_in_progress = True
@@ -341,9 +355,9 @@ class OAuthDialog(BaseAuthDialog):
         def run_exchange() -> None:
             try:
                 tokens = service.exchange_code(code)
-                self.loginSucceeded.emit(tokens)
+                self._call_on_ui_thread(lambda: self.loginSucceeded.emit(tokens))
             except Exception as exc:
-                self.loginFailed.emit(str(exc))
+                self._call_on_ui_thread(lambda: self.loginFailed.emit(str(exc)))
 
         threading.Thread(target=run_exchange, daemon=True).start()
 
@@ -381,9 +395,13 @@ class OAuthDialog(BaseAuthDialog):
             self._use_cases.fetch_accounts,
             self._app_auth_service,
             access_token,
-            lambda a: self.accountsReceived.emit(a),
-            lambda e: self.accountsFailed.emit(e),
-            lambda m: self.logReceived.emit(m),
+            lambda a: self._call_on_ui_thread(lambda: self.accountsReceived.emit(a)),
+            lambda e: self._call_on_ui_thread(
+                lambda: self.accountsFailed.emit(str(e))
+            ),
+            lambda m: self._call_on_ui_thread(
+                lambda: self.logReceived.emit(str(m))
+            ),
         )
 
     def _refresh_access_token_if_needed(self) -> bool:
@@ -410,9 +428,13 @@ class OAuthDialog(BaseAuthDialog):
                     existing_account_id=tokens.account_id,
                 )
                 refreshed.save(self._token_file)
-                self.tokenRefreshSucceeded.emit(refreshed)
+                self._call_on_ui_thread(
+                    lambda: self.tokenRefreshSucceeded.emit(refreshed)
+                )
             except Exception as exc:
-                self.tokenRefreshFailed.emit(str(exc))
+                self._call_on_ui_thread(
+                    lambda: self.tokenRefreshFailed.emit(str(exc))
+                )
 
         threading.Thread(target=run_refresh, daemon=True).start()
         return True
@@ -469,10 +491,18 @@ class OAuthDialog(BaseAuthDialog):
             return
 
         self._service.set_callbacks(
-            on_oauth_success=lambda t: self.authSucceeded.emit(t),
-            on_error=lambda e: self.authFailed.emit(e),
-            on_log=lambda m: self.logReceived.emit(m),
-            on_status_changed=lambda s: self.statusChanged.emit(int(s)),
+            on_oauth_success=lambda t: self._call_on_ui_thread(
+                lambda: self.authSucceeded.emit(t)
+            ),
+            on_error=lambda e: self._call_on_ui_thread(
+                lambda: self.authFailed.emit(str(e))
+            ),
+            on_log=lambda m: self._call_on_ui_thread(
+                lambda: self.logReceived.emit(str(m))
+            ),
+            on_status_changed=lambda s: self._call_on_ui_thread(
+                lambda: self.statusChanged.emit(int(s))
+            ),
         )
 
         self._state.auth_in_progress = True
@@ -656,9 +686,13 @@ class OAuthDialog(BaseAuthDialog):
             self._use_cases.fetch_ctid_profile,
             self._app_auth_service,
             access_token,
-            lambda p: self.profileReceived.emit(p),
-            lambda e: self.profileFailed.emit(e),
-            lambda m: self.logReceived.emit(m),
+            lambda p: self._call_on_ui_thread(lambda: self.profileReceived.emit(p)),
+            lambda e: self._call_on_ui_thread(
+                lambda: self.profileFailed.emit(str(e))
+            ),
+            lambda m: self._call_on_ui_thread(
+                lambda: self.logReceived.emit(str(m))
+            ),
         )
 
     def _set_accounts_busy(self, busy: bool) -> None:

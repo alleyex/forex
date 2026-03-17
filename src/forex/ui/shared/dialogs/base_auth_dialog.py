@@ -5,8 +5,8 @@ import json
 import os
 from dataclasses import dataclass
 
-from PySide6.QtCore import Slot
-from PySide6.QtWidgets import QDialog
+from PySide6.QtCore import QThread, Signal, Slot
+from PySide6.QtWidgets import QApplication, QDialog
 
 from forex.application.events import EventBus
 from forex.ui.shared.utils.formatters import (
@@ -27,6 +27,8 @@ class DialogState:
 
 class BaseAuthDialog(QDialog):
     """Base dialog with shared UI, logging, and status helpers."""
+
+    uiCallRequested = Signal(object)
 
     def __init__(
         self,
@@ -59,6 +61,18 @@ class BaseAuthDialog(QDialog):
     def _create_status_widget(self) -> StatusWidget:
         self._status_widget = StatusWidget(parent=self)
         return self._status_widget
+
+    @Slot(object)
+    def _run_ui_call(self, callback) -> None:
+        if callable(callback):
+            callback()
+
+    def _call_on_ui_thread(self, callback) -> None:
+        app = QApplication.instance()
+        if app is None or QThread.currentThread() == app.thread():
+            callback()
+            return
+        self.uiCallRequested.emit(callback)
 
     # ─────────────────────────────────────────────────────────────
     # Log handling
@@ -112,6 +126,7 @@ class BaseAuthDialog(QDialog):
     # ─────────────────────────────────────────────────────────────
 
     def _connect_common_signals(self) -> None:
+        self.uiCallRequested.connect(self._run_ui_call)
         log_signal = getattr(self, "logReceived", None)
         if log_signal is not None and hasattr(log_signal, "connect"):
             log_signal.connect(self._log_info)

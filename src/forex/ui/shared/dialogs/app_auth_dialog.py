@@ -142,10 +142,18 @@ class AppAuthDialog(BaseAuthDialog):
         self._connect_signals()
         if self._service:
             self._service.set_callbacks(
-                on_app_auth_success=lambda c: self.authSucceeded.emit(c),
-                on_error=lambda e: self.authFailed.emit(e),
-                on_log=lambda m: self.logReceived.emit(m),
-                on_status_changed=lambda s: self.statusChanged.emit(int(s)),
+                on_app_auth_success=lambda c: self._call_on_ui_thread(
+                    lambda: self.authSucceeded.emit(c)
+                ),
+                on_error=lambda e: self._call_on_ui_thread(
+                    lambda: self.authFailed.emit(str(e))
+                ),
+                on_log=lambda m: self._call_on_ui_thread(
+                    lambda: self.logReceived.emit(str(m))
+                ),
+                on_status_changed=lambda s: self._call_on_ui_thread(
+                    lambda: self.statusChanged.emit(int(s))
+                ),
             )
             self.statusChanged.emit(int(self._service.status))
         self._load_credentials()
@@ -231,10 +239,18 @@ class AppAuthDialog(BaseAuthDialog):
         
         # Configure callbacks
         self._service.set_callbacks(
-            on_app_auth_success=lambda c: self.authSucceeded.emit(c),
-            on_error=lambda e: self.authFailed.emit(e),
-            on_log=lambda m: self.logReceived.emit(m),
-            on_status_changed=lambda s: self.statusChanged.emit(int(s)),
+            on_app_auth_success=lambda c: self._call_on_ui_thread(
+                lambda: self.authSucceeded.emit(c)
+            ),
+            on_error=lambda e: self._call_on_ui_thread(
+                lambda: self.authFailed.emit(str(e))
+            ),
+            on_log=lambda m: self._call_on_ui_thread(
+                lambda: self.logReceived.emit(str(m))
+            ),
+            on_status_changed=lambda s: self._call_on_ui_thread(
+                lambda: self.statusChanged.emit(int(s))
+            ),
         )
         
         # Start the connection
