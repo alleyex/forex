@@ -77,9 +77,9 @@ class LiveLayoutCoordinator:
         if total <= 0:
             return
         quotes = 0
-        history = max(340, int(total * 0.24))
-        positions = max(720, int(total * 0.46))
-        log = max(260, total - quotes - positions - history)
+        history = max(320, int(total * 0.22))
+        positions = max(860, int(total * 0.52))
+        log = max(280, total - quotes - positions - history)
         if quotes + positions + history + log > total:
             log = max(220, total - quotes - positions - history)
         if quotes + positions + history + log <= total:
