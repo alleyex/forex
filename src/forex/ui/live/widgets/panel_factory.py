@@ -228,8 +228,6 @@ class LivePanelFactory:
                 font-size: 12px;
             }
             QTableWidget#tradeHistoryTable::item {
-                color: #d3d8e0;
-                background: transparent;
                 padding: 0 8px;
             }
             QTableWidget#tradeHistoryTable::item:selected {
