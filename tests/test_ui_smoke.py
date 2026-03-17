@@ -98,6 +98,38 @@ class UISmokeTest(unittest.TestCase):
         self.assertEqual(window._trade_history_table.item(0, 2).text(), "SELL")
         self.assertEqual(window._trade_history_table.item(0, 3).text(), "0.080")
         self.assertEqual(window._trade_history_table.item(0, 4).text(), "12.34")
+        self.assertEqual(
+            window._trade_history_table.item(0, 4).foreground().color().name(),
+            "#1fd19a",
+        )
+        window.close()
+        window.deleteLater()
+        self._app.processEvents()
+
+    def test_live_trade_history_colors_negative_realized_pnl_red(self) -> None:
+        window = LiveMainWindow(
+            use_cases=BrokerUseCases(FakeProvider()),
+            event_bus=EventBus(),
+            app_state=AppState(),
+        )
+        window._auto_connect_timer.stop()
+        rows = [
+            {
+                "timestamp": 1773653100000,
+                "symbol_id": 1,
+                "side": "BUY",
+                "volume": 1000000,
+                "realized_pnl": -8.5,
+            }
+        ]
+
+        window._handle_trade_history_received(rows)
+
+        self.assertEqual(window._trade_history_table.item(0, 4).text(), "-8.50")
+        self.assertEqual(
+            window._trade_history_table.item(0, 4).foreground().color().name(),
+            "#ff7666",
+        )
         window.close()
         window.deleteLater()
         self._app.processEvents()

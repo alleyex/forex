@@ -13,7 +13,7 @@ from PySide6.QtCore import (
     Signal,
     Slot,
 )
-from PySide6.QtGui import QAction
+from PySide6.QtGui import QAction, QColor
 from PySide6.QtWidgets import (
     QApplication,
     QFileDialog,
@@ -844,6 +844,11 @@ class LiveMainWindow(QMainWindow):
                     table.setItem(row, col, existing)
                 else:
                     existing.setText(str(value))
+                if col == 4:
+                    realized_pnl = float(item.get("realized_pnl", 0.0))
+                    existing.setForeground(
+                        QColor("#1fd19a") if realized_pnl > 0 else QColor("#ff7666")
+                    )
 
     def _symbol_list_path(self) -> Path:
         return self._project_root / SYMBOL_LIST_FILE
