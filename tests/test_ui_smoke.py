@@ -260,6 +260,7 @@ class UISmokeTest(unittest.TestCase):
         window._auto_connect_timer.stop()
         toolbar = window.findChild(QToolBar, "liveToolbar")
         self.assertIsNotNone(toolbar)
+        self.assertEqual(len(toolbar.actions()), 0)
         self.assertEqual(window.statusBar().objectName(), "liveStatusBar")
         self.assertEqual(window._app_auth_label.objectName(), "statusChip")
         self.assertEqual(window._oauth_label.objectName(), "statusChip")

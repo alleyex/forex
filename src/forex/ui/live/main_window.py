@@ -13,7 +13,7 @@ from PySide6.QtCore import (
     Signal,
     Slot,
 )
-from PySide6.QtGui import QAction, QColor
+from PySide6.QtGui import QColor
 from PySide6.QtWidgets import (
     QApplication,
     QFileDialog,
@@ -21,7 +21,6 @@ from PySide6.QtWidgets import (
     QLabel,
     QMainWindow,
     QSplitter,
-    QStyle,
     QTableWidgetItem,
     QToolBar,
     QVBoxLayout,
@@ -890,12 +889,6 @@ class LiveMainWindow(QMainWindow):
         toolbar.setFloatable(False)
         toolbar.setToolButtonStyle(Qt.ToolButtonTextBesideIcon)
         self.addToolBar(toolbar)
-
-        connect_icon = self.style().standardIcon(QStyle.SP_BrowserReload)
-        self._action_toggle_connection = QAction(connect_icon, "Connection", self)
-        self._action_toggle_connection.setToolTip("Connect or disconnect from cTrader")
-        toolbar.addAction(self._action_toggle_connection)
-        self._action_toggle_connection.triggered.connect(self._toggle_connection)
 
     def _setup_status_bar(self) -> None:
         status_bar = self.statusBar()
