@@ -55,11 +55,11 @@ class DecisionInspectorWidget(QWidget):
     _STATE_FIELDS = [
         ("symbol", "Symbol"),
         ("side", "Side"),
+        ("cap", "Position Cap"),
         ("open_same", "Same-Side Open"),
         ("open_symbol", "Open Symbol Pos"),
-        ("cap", "Position Cap"),
-        ("near_full_hold", "Near-Full Hold"),
         ("rebalance", "Rebalance"),
+        ("near_full_hold", "Near-Full Hold"),
     ]
     _SUMMARY_FIELDS = _INPUT_FIELDS + _NORMALIZED_FIELDS
 
@@ -107,6 +107,7 @@ class DecisionInspectorWidget(QWidget):
                 "Position State",
                 self._STATE_FIELDS,
                 self._state_labels,
+                columns=3,
             )
         )
 
