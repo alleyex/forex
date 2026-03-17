@@ -62,7 +62,7 @@ class UISmokeTest(unittest.TestCase):
         self.assertEqual(window._log_panel.current_filter, "INFO")
         self.assertEqual(window._lot_fixed.text(), "Fixed lot size")
         self.assertEqual(window._lot_risk.text(), "Risk % of balance")
-        self.assertIsNotNone(window._risk_sizing_preview)
+        self.assertFalse(hasattr(window, "_risk_sizing_preview"))
         self.assertEqual(window._auto_margin_usage_cap_ratio, 0.5)
         self.assertEqual(window._auto_startup_warmup_bars, 1)
         self.assertTrue(window._weekend_guard.isChecked())

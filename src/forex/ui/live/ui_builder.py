@@ -502,12 +502,6 @@ class LiveUIBuilder:
         w._lot_risk.toggled.connect(w._refresh_risk_sizing_preview)
         w._lot_value.valueChanged.connect(w._refresh_risk_sizing_preview)
 
-        w._risk_sizing_preview = QLabel("-")
-        w._risk_sizing_preview.setWordWrap(True)
-        w._risk_sizing_preview.setObjectName("riskSizingPreview")
-        w._risk_sizing_preview.setStyleSheet("color:#9aa6b2; font-size:11px;")
-        trade_card_form.addRow("Estimated lot size", w._risk_sizing_preview)
-
         w._max_positions = QSpinBox()
         w._max_positions.setRange(1, 20)
         w._max_positions.setValue(1)
