@@ -805,9 +805,18 @@ class LiveMainWindow(QMainWindow):
         table = getattr(self, "_trade_history_table", None)
         if table is None:
             return
-        entries = list(rows or [])
-        table.setRowCount(len(entries))
-        for row, item in enumerate(entries):
+        visible_entries: list[dict] = []
+        for item in list(rows or []):
+            realized_pnl = item.get("realized_pnl", None)
+            try:
+                if realized_pnl is None or abs(float(realized_pnl)) < 0.005:
+                    continue
+            except (TypeError, ValueError):
+                continue
+            visible_entries.append(item)
+
+        table.setRowCount(len(visible_entries))
+        for row, item in enumerate(visible_entries):
             symbol_id = int(item.get("symbol_id", 0) or 0)
             symbol_name = self._symbol_id_to_name.get(symbol_id) or (
                 f"#{symbol_id}" if symbol_id else "-"
@@ -817,14 +826,7 @@ class LiveMainWindow(QMainWindow):
                 lot_text = f"{self._volume_to_lots(float(volume)):.3f}"
             except (TypeError, ValueError):
                 lot_text = "-"
-            realized_pnl = item.get("realized_pnl", None)
-            try:
-                if realized_pnl is None or abs(float(realized_pnl)) < 0.005:
-                    pnl_text = "-"
-                else:
-                    pnl_text = f"{float(realized_pnl):,.2f}"
-            except (TypeError, ValueError):
-                pnl_text = "-"
+            pnl_text = f"{float(item.get('realized_pnl', 0.0)):,.2f}"
             timestamp = item.get("timestamp")
             time_text = self._format_time(timestamp) if timestamp else "-"
             values = [

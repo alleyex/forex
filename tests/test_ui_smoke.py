@@ -74,7 +74,7 @@ class UISmokeTest(unittest.TestCase):
         window.deleteLater()
         self._app.processEvents()
 
-    def test_live_trade_history_renders_broker_rows(self) -> None:
+    def test_live_trade_history_renders_nonzero_broker_rows(self) -> None:
         window = LiveMainWindow(
             use_cases=BrokerUseCases(FakeProvider()),
             event_bus=EventBus(),
@@ -87,7 +87,7 @@ class UISmokeTest(unittest.TestCase):
                 "symbol_id": 1,
                 "side": "SELL",
                 "volume": 800000,
-                "realized_pnl": None,
+                "realized_pnl": 12.34,
             }
         ]
 
@@ -97,12 +97,12 @@ class UISmokeTest(unittest.TestCase):
         self.assertEqual(window._trade_history_table.item(0, 1).text(), "EURUSD")
         self.assertEqual(window._trade_history_table.item(0, 2).text(), "SELL")
         self.assertEqual(window._trade_history_table.item(0, 3).text(), "0.080")
-        self.assertEqual(window._trade_history_table.item(0, 4).text(), "-")
+        self.assertEqual(window._trade_history_table.item(0, 4).text(), "12.34")
         window.close()
         window.deleteLater()
         self._app.processEvents()
 
-    def test_live_trade_history_hides_zero_realized_pnl(self) -> None:
+    def test_live_trade_history_hides_zero_realized_pnl_rows(self) -> None:
         window = LiveMainWindow(
             use_cases=BrokerUseCases(FakeProvider()),
             event_bus=EventBus(),
@@ -121,7 +121,7 @@ class UISmokeTest(unittest.TestCase):
 
         window._handle_trade_history_received(rows)
 
-        self.assertEqual(window._trade_history_table.item(0, 4).text(), "-")
+        self.assertEqual(window._trade_history_table.rowCount(), 0)
         window.close()
         window.deleteLater()
         self._app.processEvents()
