@@ -231,6 +231,7 @@ class LiveMainWindow(QMainWindow):
         bottom_splitter.addWidget(positions_panel)
         bottom_splitter.addWidget(trade_history_panel)
         bottom_splitter.addWidget(self._log_panel)
+        bottom_splitter.setCollapsible(0, True)
         bottom_splitter.setStretchFactor(0, 1)
         bottom_splitter.setStretchFactor(1, 2)
         bottom_splitter.setStretchFactor(2, 2)

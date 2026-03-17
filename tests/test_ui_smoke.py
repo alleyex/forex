@@ -70,6 +70,7 @@ class UISmokeTest(unittest.TestCase):
         self.assertEqual(window._weekend_resume_hour.value(), 0)
         self.assertIsNotNone(window._trade_history_table)
         self.assertEqual(window._trade_history_table.columnCount(), 4)
+        self.assertEqual(window._quotes_table.parentWidget().minimumWidth(), 0)
         window.close()
         window.deleteLater()
         self._app.processEvents()

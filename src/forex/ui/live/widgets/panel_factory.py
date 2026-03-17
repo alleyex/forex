@@ -284,7 +284,7 @@ class LivePanelFactory:
     @staticmethod
     def build_quotes_panel(window) -> QWidget:
         panel = QGroupBox("Quotes")
-        panel.setMinimumWidth(180)
+        panel.setMinimumWidth(0)
         panel.setMinimumHeight(180)
         layout = QVBoxLayout(panel)
         layout.setContentsMargins(10, 10, 10, 10)
