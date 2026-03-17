@@ -8,7 +8,6 @@ from PySide6.QtCore import Qt, QThread, Signal, Slot
 from PySide6.QtWidgets import (
     QFrame,
     QGridLayout,
-    QGroupBox,
     QHBoxLayout,
     QLabel,
     QVBoxLayout,
@@ -114,14 +113,10 @@ class DecisionInspectorWidget(QWidget):
 
         layout.addWidget(self._build_combined_card())
 
-    def _build_combined_card(self) -> QGroupBox:
-        box = QGroupBox("Decision Snapshot")
-        box.setObjectName("card")
-        box.setProperty("titleTone", "line")
-        box.setProperty("titleAlign", "left")
-
+    def _build_combined_card(self) -> QWidget:
+        box = QWidget()
         layout = QVBoxLayout(box)
-        layout.setContentsMargins(12, 10, 12, 10)
+        layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(8)
 
         summary_box = self._build_stage_section(
