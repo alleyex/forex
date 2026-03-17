@@ -121,8 +121,8 @@ class DecisionInspectorWidget(QWidget):
         box.setProperty("titleAlign", "left")
 
         layout = QVBoxLayout(box)
-        layout.setContentsMargins(12, 12, 12, 12)
-        layout.setSpacing(10)
+        layout.setContentsMargins(12, 10, 12, 10)
+        layout.setSpacing(8)
 
         summary_box = self._build_stage_section(
             "Decision Summary",
@@ -160,17 +160,18 @@ class DecisionInspectorWidget(QWidget):
         section = QWidget()
         section_layout = QVBoxLayout(section)
         section_layout.setContentsMargins(0, 0, 0, 0)
-        section_layout.setSpacing(8)
+        section_layout.setSpacing(4)
 
         title_label = QLabel(title, section)
         title_label.setStyleSheet("color:#9aa6b2; font-size:11px; font-weight:600;")
+        title_label.setContentsMargins(0, 0, 0, 0)
         section_layout.addWidget(title_label)
 
         grid_host = QWidget(section)
         grid = QGridLayout(grid_host)
         grid.setContentsMargins(0, 0, 0, 0)
         grid.setHorizontalSpacing(12)
-        grid.setVerticalSpacing(6)
+        grid.setVerticalSpacing(4)
         columns = max(1, int(columns))
 
         for index, (field, label_text) in enumerate(fields):
