@@ -22,6 +22,7 @@ from PySide6.QtWidgets import (
     QMainWindow,
     QSplitter,
     QStyle,
+    QTableWidgetItem,
     QToolBar,
     QVBoxLayout,
     QWidget,
@@ -223,13 +224,16 @@ class LiveMainWindow(QMainWindow):
 
         quotes_panel = self._build_quotes_panel()
         positions_panel = self._build_positions_panel()
+        trade_history_panel = self._build_trade_history_panel()
         bottom_splitter = QSplitter(Qt.Horizontal)
         bottom_splitter.addWidget(quotes_panel)
         bottom_splitter.addWidget(positions_panel)
+        bottom_splitter.addWidget(trade_history_panel)
         bottom_splitter.addWidget(self._log_panel)
         bottom_splitter.setStretchFactor(0, 1)
         bottom_splitter.setStretchFactor(1, 2)
-        bottom_splitter.setStretchFactor(2, 1)
+        bottom_splitter.setStretchFactor(2, 2)
+        bottom_splitter.setStretchFactor(3, 1)
         self._bottom_splitter = bottom_splitter
         QTimer.singleShot(0, self._align_panels_at_startup)
 
@@ -253,6 +257,9 @@ class LiveMainWindow(QMainWindow):
 
     def _build_positions_panel(self) -> QWidget:
         return LivePanelFactory.build_positions_panel(self)
+
+    def _build_trade_history_panel(self) -> QWidget:
+        return LivePanelFactory.build_trade_history_panel(self)
 
     def _build_quotes_panel(self) -> QWidget:
         return LivePanelFactory.build_quotes_panel(self)
@@ -731,6 +738,37 @@ class LiveMainWindow(QMainWindow):
 
     def _format_time(self, timestamp) -> str:
         return self._value_formatter.format_time(timestamp)
+
+    def _append_trade_history_entry(
+        self,
+        *,
+        symbol: str | None,
+        event: str,
+        side: str | None,
+        lot_text: str | None,
+        position_id=None,
+        timestamp: str | None = None,
+    ) -> None:
+        table = getattr(self, "_trade_history_table", None)
+        if table is None:
+            return
+        row = 0
+        table.insertRow(row)
+        values = [
+            timestamp or time.strftime("%H:%M:%S"),
+            symbol or "-",
+            event or "-",
+            side or "-",
+            lot_text or "-",
+            "-" if position_id in (None, "") else str(position_id),
+        ]
+        for col, value in enumerate(values):
+            item = QTableWidgetItem(str(value))
+            item.setTextAlignment(Qt.AlignCenter)
+            table.setItem(row, col, item)
+        max_rows = int(getattr(self, "_trade_history_max_rows", 200))
+        while table.rowCount() > max_rows:
+            table.removeRow(table.rowCount() - 1)
 
     def _symbol_list_path(self) -> Path:
         return self._project_root / SYMBOL_LIST_FILE

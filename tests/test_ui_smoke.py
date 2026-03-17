@@ -3,6 +3,7 @@ from __future__ import annotations
 import os
 import unittest
 from pathlib import Path
+from types import SimpleNamespace
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 os.environ.setdefault("QT_OPENGL", "software")
@@ -68,6 +69,36 @@ class UISmokeTest(unittest.TestCase):
         self.assertTrue(window._weekend_guard.isChecked())
         self.assertEqual(window._weekend_cutoff_hour.value(), 20)
         self.assertEqual(window._weekend_resume_hour.value(), 0)
+        self.assertIsNotNone(window._trade_history_table)
+        self.assertEqual(window._trade_history_table.columnCount(), 6)
+        window.close()
+        window.deleteLater()
+        self._app.processEvents()
+
+    def test_live_trade_history_records_execution_rows(self) -> None:
+        window = LiveMainWindow(
+            use_cases=BrokerUseCases(FakeProvider()),
+            event_bus=EventBus(),
+            app_state=AppState(),
+        )
+        window._auto_connect_timer.stop()
+        payload = {
+            "client_order_id": "abc-1",
+            "position_id": 24486008,
+            "order": SimpleNamespace(symbolId=1, tradeSide=1, volume=800000),
+            "position": None,
+            "deal": None,
+            "requested_volume": 800000,
+        }
+
+        window._auto_runtime_service.handle_order_execution(payload)
+
+        self.assertEqual(window._trade_history_table.rowCount(), 1)
+        self.assertEqual(window._trade_history_table.item(0, 1).text(), "EURUSD")
+        self.assertEqual(window._trade_history_table.item(0, 2).text(), "Open")
+        self.assertEqual(window._trade_history_table.item(0, 3).text(), "BUY")
+        self.assertEqual(window._trade_history_table.item(0, 4).text(), "0.080")
+        self.assertEqual(window._trade_history_table.item(0, 5).text(), "24486008")
         window.close()
         window.deleteLater()
         self._app.processEvents()

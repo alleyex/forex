@@ -201,6 +201,91 @@ class LivePanelFactory:
         return panel
 
     @staticmethod
+    def build_trade_history_panel(window) -> QWidget:
+        panel = QGroupBox("Trade History")
+        layout = QVBoxLayout(panel)
+        layout.setContentsMargins(10, 10, 10, 10)
+        layout.setSpacing(8)
+
+        table = QTableWidget(0, 6)
+        table.setObjectName("tradeHistoryTable")
+        table.setHorizontalHeaderLabels(
+            ["Time", "Symbol", "Event", "Side", "Volume", "Pos ID"]
+        )
+        table.verticalHeader().setVisible(False)
+        table.setEditTriggers(QTableWidget.NoEditTriggers)
+        table.setSelectionBehavior(QTableWidget.SelectRows)
+        table.setSelectionMode(QTableWidget.SingleSelection)
+        table.setAlternatingRowColors(True)
+        LivePanelFactory._configure_dense_table(table)
+        table.setStyleSheet(
+            """
+            QTableWidget#tradeHistoryTable {
+                background: #1f252d;
+                alternate-background-color: #252c35;
+                color: #d3d8e0;
+                selection-background-color: #2f6db3;
+                selection-color: #f5f7fb;
+                gridline-color: #2a323c;
+                font-size: 12px;
+            }
+            QTableWidget#tradeHistoryTable::item {
+                color: #d3d8e0;
+                background: transparent;
+                padding: 0 8px;
+            }
+            QTableWidget#tradeHistoryTable::item:selected {
+                color: #f5f7fb;
+                background: #2f6db3;
+            }
+            QTableWidget#tradeHistoryTable QScrollBar:vertical {
+                background: transparent;
+                width: 8px;
+                margin: 2px;
+            }
+            QTableWidget#tradeHistoryTable QScrollBar::handle:vertical {
+                background: rgba(210, 220, 232, 0.18);
+                min-height: 24px;
+                border-radius: 4px;
+            }
+            QTableWidget#tradeHistoryTable QScrollBar::handle:vertical:hover {
+                background: rgba(210, 220, 232, 0.30);
+            }
+            QTableWidget#tradeHistoryTable QScrollBar::add-line:vertical,
+            QTableWidget#tradeHistoryTable QScrollBar::sub-line:vertical,
+            QTableWidget#tradeHistoryTable QScrollBar::add-page:vertical,
+            QTableWidget#tradeHistoryTable QScrollBar::sub-page:vertical {
+                background: transparent;
+                height: 0px;
+            }
+            QTableWidget#tradeHistoryTable QScrollBar:horizontal {
+                background: transparent;
+                height: 8px;
+                margin: 2px;
+            }
+            QTableWidget#tradeHistoryTable QScrollBar::handle:horizontal {
+                background: rgba(210, 220, 232, 0.18);
+                min-width: 24px;
+                border-radius: 4px;
+            }
+            QTableWidget#tradeHistoryTable QScrollBar::handle:horizontal:hover {
+                background: rgba(210, 220, 232, 0.30);
+            }
+            QTableWidget#tradeHistoryTable QScrollBar::add-line:horizontal,
+            QTableWidget#tradeHistoryTable QScrollBar::sub-line:horizontal,
+            QTableWidget#tradeHistoryTable QScrollBar::add-page:horizontal,
+            QTableWidget#tradeHistoryTable QScrollBar::sub-page:horizontal {
+                background: transparent;
+                width: 0px;
+            }
+            """
+        )
+
+        layout.addWidget(table)
+        window._trade_history_table = table
+        return panel
+
+    @staticmethod
     def build_quotes_panel(window) -> QWidget:
         panel = QGroupBox("Quotes")
         layout = QVBoxLayout(panel)

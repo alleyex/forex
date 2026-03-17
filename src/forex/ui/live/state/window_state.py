@@ -155,6 +155,8 @@ def initialize_live_window_state(window) -> None:
     window._autotrade_settings_path = Path("data/auto_trade_settings.json")
     window._autotrade_loading = False
     window._quotes_table = None
+    window._trade_history_table = None
+    window._trade_history_max_rows = 200
     window._max_quote_rows = 4
     window._quote_symbols = window._default_quote_symbols()
     window._quote_digits = {
