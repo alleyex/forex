@@ -77,10 +77,10 @@ class LiveLayoutCoordinator:
         if total <= 0:
             return
         quotes = 0
-        history = max(320, int(total * 0.22))
-        positions = max(860, int(total * 0.52))
-        log = max(280, total - quotes - positions - history)
+        history = max(320, int(total * 0.24))
+        log = max(140, int(total * 0.12))
+        positions = max(420, total - quotes - history - log)
         if quotes + positions + history + log > total:
-            log = max(220, total - quotes - positions - history)
+            positions = max(420, total - quotes - history - log)
         if quotes + positions + history + log <= total:
             splitter.setSizes([quotes, history, positions, log])
