@@ -13,6 +13,7 @@ from PySide6.QtWidgets import (
     QLabel,
     QLineEdit,
     QRadioButton,
+    QSizePolicy,
     QSpinBox,
     QStyle,
     QTabWidget,
@@ -405,7 +406,8 @@ class LiveUIBuilder:
         )
         w._auto_log_panel.setMinimumHeight(340)
         w._auto_log_panel.setMaximumHeight(16777215)
-        model_tab_layout.addWidget(w._auto_log_panel)
+        w._auto_log_panel.setSizePolicy(QSizePolicy.Preferred, QSizePolicy.Maximum)
+        model_tab_layout.insertWidget(1, w._auto_log_panel, 0, Qt.AlignTop)
 
     def _build_basic_tab(self, *, form_basic: QFormLayout) -> None:
         w = self._window
