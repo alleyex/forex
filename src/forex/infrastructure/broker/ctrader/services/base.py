@@ -108,5 +108,10 @@ class CTraderRequestLifecycleMixin:
             self._emit_error(str(exc))
             self._cleanup_request_lifecycle(timeout_tracker=timeout_tracker, handler=handler)
             return False
-        client.send(request)
+        try:
+            client.send(request)
+        except Exception as exc:
+            self._emit_error(str(exc))
+            self._cleanup_request_lifecycle(timeout_tracker=timeout_tracker, handler=handler)
+            return False
         return True

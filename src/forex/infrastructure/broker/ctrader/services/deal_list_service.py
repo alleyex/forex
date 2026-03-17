@@ -79,6 +79,7 @@ class DealListService(
         self._log_history = []
         self._account_id: int | None = None
         self._max_rows: int = 15
+        self._from_timestamp: int | None = None
         self._to_timestamp: int | None = None
 
     def set_callbacks(
@@ -117,6 +118,9 @@ class DealListService(
         self._to_timestamp = (
             int(to_timestamp) if to_timestamp is not None else int(time.time() * 1000)
         )
+        # cTrader's protobuf schema requires a time window for deal history.
+        # Use a generous recent window and let maxRows cap the returned entries.
+        self._from_timestamp = int(self._to_timestamp - (30 * 24 * 60 * 60 * 1000))
         self._begin_request_lifecycle(
             timeout_tracker=self._timeout_tracker,
             timeout_seconds=timeout_seconds,
@@ -129,6 +133,7 @@ class DealListService(
         request = ProtoOADealListReq()
         request.ctidTraderAccountId = int(self._account_id or 0)
         request.maxRows = int(self._max_rows)
+        request.fromTimestamp = int(self._from_timestamp or 0)
         if self._to_timestamp is not None:
             request.toTimestamp = int(self._to_timestamp)
         self._log(format_request(f"Fetching trade history: latest {self._max_rows} deals"))
