@@ -404,8 +404,7 @@ class LiveUIBuilder:
             with_timestamp=True,
             max_entries=200,
         )
-        w._auto_log_panel.setMinimumHeight(340)
-        w._auto_log_panel.setMaximumHeight(16777215)
+        w._auto_log_panel.setMinimumHeight(0)
         w._auto_log_panel.setSizePolicy(QSizePolicy.Preferred, QSizePolicy.Maximum)
         model_tab_layout.insertWidget(1, w._auto_log_panel, 0, Qt.AlignTop)
 
