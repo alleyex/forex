@@ -826,13 +826,15 @@ class LiveMainWindow(QMainWindow):
                 lot_text = f"{self._volume_to_lots(float(volume)):.3f}"
             except (TypeError, ValueError):
                 lot_text = "-"
-            pnl_text = f"{float(item.get('realized_pnl', 0.0)):,.2f}"
+            realized_pnl = float(item.get("realized_pnl", 0.0))
+            pnl_text = f"{realized_pnl:+,.2f}"
             timestamp = item.get("timestamp")
             time_text = self._format_time(timestamp) if timestamp else "-"
+            side_text = str(item.get("side", "-") or "-").upper()
             values = [
                 time_text,
                 symbol_name,
-                str(item.get("side", "-") or "-"),
+                side_text,
                 lot_text,
                 pnl_text,
             ]
@@ -844,10 +846,21 @@ class LiveMainWindow(QMainWindow):
                     table.setItem(row, col, existing)
                 else:
                     existing.setText(str(value))
-                if col == 4:
-                    realized_pnl = float(item.get("realized_pnl", 0.0))
+                existing.setForeground(QColor("#d3d8e0"))
+                existing.setBackground(QColor(0, 0, 0, 0))
+                if col == 2:
+                    if side_text == "BUY":
+                        existing.setForeground(QColor("#1fd19a"))
+                        existing.setBackground(QColor("#10392d"))
+                    elif side_text == "SELL":
+                        existing.setForeground(QColor("#ff7666"))
+                        existing.setBackground(QColor("#3f1f24"))
+                elif col == 4:
                     existing.setForeground(
                         QColor("#1fd19a") if realized_pnl > 0 else QColor("#ff7666")
+                    )
+                    existing.setBackground(
+                        QColor("#10392d") if realized_pnl > 0 else QColor("#3f1f24")
                     )
 
     def _symbol_list_path(self) -> Path:
