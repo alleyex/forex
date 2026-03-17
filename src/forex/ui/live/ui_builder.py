@@ -8,6 +8,7 @@ from PySide6.QtWidgets import (
     QComboBox,
     QDoubleSpinBox,
     QFormLayout,
+    QGridLayout,
     QGroupBox,
     QHBoxLayout,
     QLabel,
@@ -555,54 +556,108 @@ class LiveUIBuilder:
         w._min_signal_interval = QSpinBox()
         w._min_signal_interval.setRange(0, 3600)
         w._min_signal_interval.setValue(5)
-        advanced_card_form.addRow("Min interval (s)", w._min_signal_interval)
 
         w._slippage_bps = QDoubleSpinBox()
         w._slippage_bps.setDecimals(2)
         w._slippage_bps.setRange(0.0, 50.0)
         w._slippage_bps.setValue(0.5)
-        advanced_card_form.addRow("Slippage bps", w._slippage_bps)
 
         w._fee_bps = QDoubleSpinBox()
         w._fee_bps.setDecimals(2)
         w._fee_bps.setRange(0.0, 50.0)
         w._fee_bps.setValue(1.0)
-        advanced_card_form.addRow("Fee bps", w._fee_bps)
 
         w._confidence = QDoubleSpinBox()
         w._confidence.setDecimals(2)
         w._confidence.setRange(0.0, 1.0)
         w._confidence.setSingleStep(0.05)
         w._confidence.setValue(0.0)
-        advanced_card_form.addRow("Confidence", w._confidence)
 
         w._position_step = QDoubleSpinBox()
         w._position_step.setDecimals(2)
         w._position_step.setRange(0.0, 1.0)
         w._position_step.setSingleStep(0.05)
         w._position_step.setValue(0.0)
-        advanced_card_form.addRow("Position step", w._position_step)
 
         w._near_full_hold = QCheckBox("Enable")
         w._near_full_hold.setChecked(True)
-        advanced_card_form.addRow("Near-full hold", w._near_full_hold)
 
         w._same_side_rebalance = QCheckBox("Enable")
         w._same_side_rebalance.setChecked(False)
-        advanced_card_form.addRow("Same-side rebalance", w._same_side_rebalance)
 
         w._one_position_mode = QCheckBox("Enable")
         w._one_position_mode.setChecked(True)
-        advanced_card_form.addRow("One-position mode", w._one_position_mode)
 
         w._scale_lot_by_signal = QCheckBox("Enable")
         w._scale_lot_by_signal.setChecked(False)
-        advanced_card_form.addRow("Scale lot by signal", w._scale_lot_by_signal)
 
         w._auto_debug = QCheckBox("Enable")
-        advanced_card_form.addRow("Debug logs", w._auto_debug)
         w._quote_affects_chart = QCheckBox("Enable")
         w._quote_affects_chart.setChecked(bool(getattr(w, "_quote_affects_chart_candles", False)))
         w._quote_affects_chart.toggled.connect(w._set_quote_chart_mode)
-        advanced_card_form.addRow("Quotes affect candles", w._quote_affects_chart)
+
+        content = QWidget()
+        content_layout = QVBoxLayout(content)
+        content_layout.setContentsMargins(0, 0, 0, 0)
+        content_layout.setSpacing(10)
+
+        numeric_grid = QGridLayout()
+        numeric_grid.setContentsMargins(0, 0, 0, 0)
+        numeric_grid.setHorizontalSpacing(16)
+        numeric_grid.setVerticalSpacing(8)
+
+        numeric_fields = [
+            ("Min interval (s)", w._min_signal_interval),
+            ("Slippage bps", w._slippage_bps),
+            ("Fee bps", w._fee_bps),
+            ("Confidence", w._confidence),
+            ("Position step", w._position_step),
+        ]
+        for index, (label_text, field_widget) in enumerate(numeric_fields):
+            row = index // 2
+            col = index % 2
+            field_layout = QVBoxLayout()
+            field_layout.setContentsMargins(0, 0, 0, 0)
+            field_layout.setSpacing(4)
+            field_label = QLabel(label_text)
+            field_label.setStyleSheet("color:#9aa6b2; font-weight:500;")
+            field_layout.addWidget(field_label)
+            field_layout.addWidget(field_widget)
+            numeric_grid.addLayout(field_layout, row, col)
+
+        numeric_grid.setColumnStretch(0, 1)
+        numeric_grid.setColumnStretch(1, 1)
+        content_layout.addLayout(numeric_grid)
+
+        toggle_grid = QGridLayout()
+        toggle_grid.setContentsMargins(0, 0, 0, 0)
+        toggle_grid.setHorizontalSpacing(16)
+        toggle_grid.setVerticalSpacing(6)
+
+        toggle_fields = [
+            ("Near-full hold", w._near_full_hold),
+            ("Same-side rebalance", w._same_side_rebalance),
+            ("One-position mode", w._one_position_mode),
+            ("Scale lot by signal", w._scale_lot_by_signal),
+            ("Debug logs", w._auto_debug),
+            ("Quotes affect candles", w._quote_affects_chart),
+        ]
+        for index, (label_text, toggle_widget) in enumerate(toggle_fields):
+            row = index // 2
+            col = index % 2
+            toggle_row = QWidget()
+            toggle_row_layout = QHBoxLayout(toggle_row)
+            toggle_row_layout.setContentsMargins(0, 0, 0, 0)
+            toggle_row_layout.setSpacing(8)
+            row_label = QLabel(label_text)
+            row_label.setStyleSheet("color:#d3d8e0;")
+            toggle_row_layout.addWidget(row_label)
+            toggle_row_layout.addStretch(1)
+            toggle_row_layout.addWidget(toggle_widget)
+            toggle_grid.addWidget(toggle_row, row, col)
+
+        toggle_grid.setColumnStretch(0, 1)
+        toggle_grid.setColumnStretch(1, 1)
+        content_layout.addLayout(toggle_grid)
+        advanced_card_form.addRow(content)
         form_adv.addRow(advanced_card)
