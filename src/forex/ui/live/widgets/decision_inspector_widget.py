@@ -133,12 +133,6 @@ class DecisionInspectorWidget(QWidget):
         )
         layout.addWidget(summary_box)
 
-        divider = QFrame(box)
-        divider.setFrameShape(QFrame.HLine)
-        divider.setFrameShadow(QFrame.Plain)
-        divider.setStyleSheet("color:#34404d; background:#34404d; min-height:1px;")
-        layout.addWidget(divider)
-
         state_box = self._build_stage_section(
             "Position State",
             self._STATE_FIELDS,
@@ -157,9 +151,17 @@ class DecisionInspectorWidget(QWidget):
         columns: int = 2,
         register_label=None,
     ) -> QWidget:
-        section = QWidget()
+        section = QFrame()
+        section.setObjectName("decisionInspectorSection")
+        section.setFrameShape(QFrame.StyledPanel)
+        section.setFrameShadow(QFrame.Plain)
+        section.setStyleSheet(
+            "QFrame#decisionInspectorSection {"
+            "border: 1px solid #34404d; border-radius: 8px; background: #2b333e;"
+            "}"
+        )
         section_layout = QVBoxLayout(section)
-        section_layout.setContentsMargins(0, 0, 0, 0)
+        section_layout.setContentsMargins(10, 8, 10, 8)
         section_layout.setSpacing(4)
 
         title_label = QLabel(title, section)
