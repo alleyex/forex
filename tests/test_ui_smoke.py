@@ -69,7 +69,7 @@ class UISmokeTest(unittest.TestCase):
         self.assertEqual(window._weekend_cutoff_hour.value(), 20)
         self.assertEqual(window._weekend_resume_hour.value(), 0)
         self.assertIsNotNone(window._trade_history_table)
-        self.assertEqual(window._trade_history_table.columnCount(), 6)
+        self.assertEqual(window._trade_history_table.columnCount(), 5)
         window.close()
         window.deleteLater()
         self._app.processEvents()
@@ -85,10 +85,9 @@ class UISmokeTest(unittest.TestCase):
             {
                 "timestamp": 1773653100000,
                 "symbol_id": 1,
-                "event": "Close",
                 "side": "SELL",
                 "volume": 800000,
-                "position_id": 24486008,
+                "realized_pnl": None,
             }
         ]
 
@@ -96,10 +95,9 @@ class UISmokeTest(unittest.TestCase):
 
         self.assertEqual(window._trade_history_table.rowCount(), 1)
         self.assertEqual(window._trade_history_table.item(0, 1).text(), "EURUSD")
-        self.assertEqual(window._trade_history_table.item(0, 2).text(), "Close")
-        self.assertEqual(window._trade_history_table.item(0, 3).text(), "SELL")
-        self.assertEqual(window._trade_history_table.item(0, 4).text(), "0.080")
-        self.assertEqual(window._trade_history_table.item(0, 5).text(), "24486008")
+        self.assertEqual(window._trade_history_table.item(0, 2).text(), "SELL")
+        self.assertEqual(window._trade_history_table.item(0, 3).text(), "0.080")
+        self.assertEqual(window._trade_history_table.item(0, 4).text(), "-")
         window.close()
         window.deleteLater()
         self._app.processEvents()

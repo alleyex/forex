@@ -30,6 +30,8 @@ from forex.infrastructure.broker.errors import ErrorCode, error_message
 
 
 class DealCloseDetailMessage(Protocol):
+    grossProfit: int | None
+    moneyDigits: int | None
     closedVolume: int | None
 
 
@@ -207,6 +209,18 @@ class DealListService(
                 or getattr(deal, "createTimestamp", None)
                 or getattr(deal, "utcLastUpdateTimestamp", None)
             )
+            realized_pnl = None
+            if close_detail is not None:
+                gross_profit = getattr(close_detail, "grossProfit", None)
+                money_digits = getattr(close_detail, "moneyDigits", None)
+                try:
+                    if gross_profit is not None:
+                        digits = int(money_digits or 0)
+                        realized_pnl = float(gross_profit) / (10**digits) if digits > 0 else float(
+                            gross_profit
+                        )
+                except (TypeError, ValueError):
+                    realized_pnl = None
             deals.append(
                 {
                     "deal_id": int(getattr(deal, "dealId", 0) or 0),
@@ -218,6 +232,7 @@ class DealListService(
                     "event": event,
                     "volume": int(volume_value or 0),
                     "execution_price": float(getattr(deal, "executionPrice", 0.0) or 0.0),
+                    "realized_pnl": realized_pnl,
                     "deal_status": int(getattr(deal, "dealStatus", 0) or 0),
                 }
             )

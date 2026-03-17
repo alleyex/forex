@@ -817,15 +817,19 @@ class LiveMainWindow(QMainWindow):
                 lot_text = f"{self._volume_to_lots(float(volume)):.3f}"
             except (TypeError, ValueError):
                 lot_text = "-"
+            realized_pnl = item.get("realized_pnl", None)
+            try:
+                pnl_text = "-" if realized_pnl is None else f"{float(realized_pnl):,.2f}"
+            except (TypeError, ValueError):
+                pnl_text = "-"
             timestamp = item.get("timestamp")
             time_text = self._format_time(timestamp) if timestamp else "-"
             values = [
                 time_text,
                 symbol_name,
-                str(item.get("event", "-") or "-"),
                 str(item.get("side", "-") or "-"),
                 lot_text,
-                str(item.get("position_id", "-") or "-"),
+                pnl_text,
             ]
             for col, value in enumerate(values):
                 existing = table.item(row, col)
