@@ -6,8 +6,8 @@ from datetime import datetime
 
 from PySide6.QtCore import Qt, QThread, Signal, Slot
 from PySide6.QtWidgets import (
-    QFrame,
     QGridLayout,
+    QGroupBox,
     QHBoxLayout,
     QLabel,
     QVBoxLayout,
@@ -146,23 +146,13 @@ class DecisionInspectorWidget(QWidget):
         columns: int = 2,
         register_label=None,
     ) -> QWidget:
-        section = QFrame()
-        section.setObjectName("decisionInspectorSection")
-        section.setFrameShape(QFrame.StyledPanel)
-        section.setFrameShadow(QFrame.Plain)
-        section.setStyleSheet(
-            "QFrame#decisionInspectorSection {"
-            "border: 1px solid #34404d; border-radius: 8px; background: #2b333e;"
-            "}"
-        )
+        section = QGroupBox(title)
+        section.setObjectName("card")
+        section.setProperty("titleTone", "line")
+        section.setProperty("titleAlign", "left")
         section_layout = QVBoxLayout(section)
         section_layout.setContentsMargins(10, 8, 10, 8)
         section_layout.setSpacing(4)
-
-        title_label = QLabel(title, section)
-        title_label.setStyleSheet("color:#9aa6b2; font-size:11px; font-weight:600;")
-        title_label.setContentsMargins(0, 0, 0, 0)
-        section_layout.addWidget(title_label)
 
         grid_host = QWidget(section)
         grid = QGridLayout(grid_host)
