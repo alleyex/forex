@@ -27,7 +27,7 @@ def initialize_live_window_state(window) -> None:
     window._auto_feature_scaler = None
     window._auto_position = 0.0
     window._auto_position_id = None
-    window._auto_startup_warmup_bars = 2
+    window._auto_startup_warmup_bars = 1
     window._auto_startup_seen_bars = 0
     window._auto_first_trade_done = False
     window._auto_first_trade_max_abs_position = 0.5
