@@ -84,7 +84,6 @@ class LiveAutoLifecycleService:
         w._auto_position = 0.0
         w._auto_position_id = None
         w._auto_startup_seen_bars = 0
-        w._auto_first_trade_done = False
         w._auto_last_action_ts = None
         w._auto_peak_balance = None
         w._auto_day_balance = None
@@ -127,8 +126,7 @@ class LiveAutoLifecycleService:
         )
         w._auto_log(
             "ℹ️ Startup guard: observe first "
-            f"{int(getattr(w, '_auto_startup_warmup_bars', 0))} bars; "
-            "cap first trade at |0.50| position."
+            f"{int(getattr(w, '_auto_startup_warmup_bars', 0))} bars."
         )
         if bool(getattr(w, "_auto_weekend_guard_enabled", False)):
             cutoff_hour = int(getattr(w, "_auto_weekend_cutoff_hour_utc", 20))

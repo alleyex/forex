@@ -72,8 +72,6 @@ def _make_window() -> SimpleNamespace:
         _auto_leverage=100.0,
         _auto_max_leverage=100.0,
         _auto_margin_usage_cap_ratio=0.5,
-        _auto_first_trade_done=False,
-        _auto_first_trade_max_abs_position=0.5,
         _account_summary_labels={"currency": SimpleNamespace(text=lambda: "USD")},
         _symbol_volume_loaded=True,
         _symbol_volume_constraints={"EURUSD": (100000, 100000)},
@@ -93,7 +91,7 @@ def _make_window() -> SimpleNamespace:
     )
 
 
-def test_execute_target_position_caps_first_trade_to_half_exposure() -> None:
+def test_execute_target_position_allows_full_exposure_on_first_trade() -> None:
     window = _make_window()
     coordinator = LiveAutoTradeCoordinator(window)
     coordinator.refresh_account_balance = lambda: None
@@ -104,8 +102,7 @@ def test_execute_target_position_caps_first_trade_to_half_exposure() -> None:
     did_execute = coordinator.execute_target_position(-1.0)
 
     assert did_execute is True
-    assert window._auto_position == pytest.approx(-0.5)
-    assert window._auto_first_trade_done is True
+    assert window._auto_position == pytest.approx(-1.0)
     assert len(window._order_service.place_calls) == 1
 
 
