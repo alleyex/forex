@@ -36,6 +36,7 @@ class LivePanelFactory:
     @staticmethod
     def build_positions_panel(window) -> QWidget:
         panel = QGroupBox("Positions")
+        panel.setMinimumWidth(720)
         layout = QVBoxLayout(panel)
         layout.setContentsMargins(10, 10, 10, 10)
         layout.setSpacing(8)
@@ -133,6 +134,12 @@ class LivePanelFactory:
         table.setSelectionMode(QTableWidget.SingleSelection)
         table.setAlternatingRowColors(True)
         LivePanelFactory._configure_dense_table(table)
+        header = table.horizontalHeader()
+        for column in range(table.columnCount()):
+            header.setSectionResizeMode(column, QHeaderView.ResizeToContents)
+        header.setSectionResizeMode(0, QHeaderView.Stretch)
+        header.setSectionResizeMode(8, QHeaderView.ResizeToContents)
+        header.setSectionResizeMode(9, QHeaderView.ResizeToContents)
         table.setStyleSheet(
             """
             QTableWidget#positionsTable {

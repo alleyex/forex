@@ -9,7 +9,7 @@ os.environ.setdefault("QT_OPENGL", "software")
 os.environ.setdefault("QT_QUICK_BACKEND", "software")
 
 from PySide6.QtGui import QFont
-from PySide6.QtWidgets import QApplication, QToolBar
+from PySide6.QtWidgets import QApplication, QHeaderView, QToolBar
 
 from forex.application.broker.use_cases import BrokerUseCases
 from forex.application.events import EventBus
@@ -71,6 +71,15 @@ class UISmokeTest(unittest.TestCase):
         self.assertIsNotNone(window._trade_history_table)
         self.assertEqual(window._trade_history_table.columnCount(), 4)
         self.assertEqual(window._quotes_table.parentWidget().minimumWidth(), 0)
+        self.assertEqual(window._positions_table.parentWidget().minimumWidth(), 720)
+        self.assertEqual(
+            window._positions_table.horizontalHeader().sectionResizeMode(0),
+            QHeaderView.Stretch,
+        )
+        self.assertEqual(
+            window._positions_table.horizontalHeader().sectionResizeMode(8),
+            QHeaderView.ResizeToContents,
+        )
         self.assertEqual(window._bottom_splitter.widget(1).title(), "Trade History")
         self.assertEqual(window._bottom_splitter.widget(2).title(), "Positions")
         window.close()
