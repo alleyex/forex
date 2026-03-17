@@ -52,6 +52,11 @@ class LiveAutoSettingsPersistence:
         _bind(w._near_full_hold, "toggled")
         _bind(w._same_side_rebalance, "toggled")
         _bind(w._one_position_mode, "toggled")
+        _bind(w._weekend_guard, "toggled")
+        _bind(w._weekend_cutoff_hour, "valueChanged")
+        _bind(w._weekend_cutoff_minute, "valueChanged")
+        _bind(w._weekend_resume_hour, "valueChanged")
+        _bind(w._weekend_resume_minute, "valueChanged")
         _bind(w._scale_lot_by_signal, "toggled")
         _bind(w._auto_debug, "toggled")
         _bind(w._quote_affects_chart, "toggled")
@@ -60,6 +65,11 @@ class LiveAutoSettingsPersistence:
         w = self._window
         if w._autotrade_loading:
             return
+        w._auto_weekend_guard_enabled = bool(w._weekend_guard.isChecked())
+        w._auto_weekend_cutoff_hour_utc = int(w._weekend_cutoff_hour.value())
+        w._auto_weekend_cutoff_minute_utc = int(w._weekend_cutoff_minute.value())
+        w._auto_weekend_resume_hour_utc = int(w._weekend_resume_hour.value())
+        w._auto_weekend_resume_minute_utc = int(w._weekend_resume_minute.value())
         payload = {
             "model_path": w._normalize_model_path_text(w._model_path.text().strip()),
             "symbol": w._trade_symbol.currentText(),
@@ -80,6 +90,11 @@ class LiveAutoSettingsPersistence:
             "near_full_hold": bool(w._near_full_hold.isChecked()),
             "same_side_rebalance": bool(w._same_side_rebalance.isChecked()),
             "one_position_mode": bool(w._one_position_mode.isChecked()),
+            "weekend_guard": bool(w._weekend_guard.isChecked()),
+            "weekend_cutoff_hour_utc": int(w._weekend_cutoff_hour.value()),
+            "weekend_cutoff_minute_utc": int(w._weekend_cutoff_minute.value()),
+            "weekend_resume_hour_utc": int(w._weekend_resume_hour.value()),
+            "weekend_resume_minute_utc": int(w._weekend_resume_minute.value()),
             "scale_lot_by_signal": bool(w._scale_lot_by_signal.isChecked()),
             "debug_logs": bool(w._auto_debug.isChecked()),
             "quote_affects_candles": bool(w._quote_affects_chart.isChecked()),
@@ -157,12 +172,45 @@ class LiveAutoSettingsPersistence:
                 w._one_position_mode.setChecked(bool(data.get("one_position_mode", True)))
             else:
                 w._one_position_mode.setChecked(True)
+            if "weekend_guard" in data:
+                w._weekend_guard.setChecked(bool(data.get("weekend_guard", True)))
+            if "weekend_cutoff_hour_utc" in data:
+                w._weekend_cutoff_hour.setValue(
+                    int(data.get("weekend_cutoff_hour_utc", w._weekend_cutoff_hour.value()))
+                )
+            if "weekend_cutoff_minute_utc" in data:
+                w._weekend_cutoff_minute.setValue(
+                    int(
+                        data.get(
+                            "weekend_cutoff_minute_utc",
+                            w._weekend_cutoff_minute.value(),
+                        )
+                    )
+                )
+            if "weekend_resume_hour_utc" in data:
+                w._weekend_resume_hour.setValue(
+                    int(data.get("weekend_resume_hour_utc", w._weekend_resume_hour.value()))
+                )
+            if "weekend_resume_minute_utc" in data:
+                w._weekend_resume_minute.setValue(
+                    int(
+                        data.get(
+                            "weekend_resume_minute_utc",
+                            w._weekend_resume_minute.value(),
+                        )
+                    )
+                )
             if "scale_lot_by_signal" in data:
                 w._scale_lot_by_signal.setChecked(bool(data.get("scale_lot_by_signal", False)))
             if "debug_logs" in data:
                 w._auto_debug.setChecked(bool(data.get("debug_logs", False)))
             if "quote_affects_candles" in data:
                 w._quote_affects_chart.setChecked(bool(data.get("quote_affects_candles", False)))
+            w._auto_weekend_guard_enabled = bool(w._weekend_guard.isChecked())
+            w._auto_weekend_cutoff_hour_utc = int(w._weekend_cutoff_hour.value())
+            w._auto_weekend_cutoff_minute_utc = int(w._weekend_cutoff_minute.value())
+            w._auto_weekend_resume_hour_utc = int(w._weekend_resume_hour.value())
+            w._auto_weekend_resume_minute_utc = int(w._weekend_resume_minute.value())
             self.sync_lot_value_style()
         finally:
             w._autotrade_loading = False

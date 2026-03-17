@@ -558,6 +558,47 @@ class LiveUIBuilder:
         w._one_position_mode.setChecked(True)
         advanced_card_form.addRow("One-position mode", w._one_position_mode)
 
+        weekend_card, weekend_card_form = self._create_card(
+            "Weekend Guard",
+            title_tone="line",
+        )
+        w._weekend_guard = QCheckBox("Enable")
+        w._weekend_guard.setChecked(bool(getattr(w, "_auto_weekend_guard_enabled", True)))
+        w._weekend_guard.setToolTip(
+            "Block new trades after the Friday cutoff, flatten open positions, "
+            "and resume on Monday."
+        )
+        weekend_card_form.addRow("Weekend guard", w._weekend_guard)
+
+        w._weekend_cutoff_hour = QSpinBox()
+        w._weekend_cutoff_hour.setRange(0, 23)
+        w._weekend_cutoff_hour.setValue(
+            int(getattr(w, "_auto_weekend_cutoff_hour_utc", 20))
+        )
+        weekend_card_form.addRow("Friday cutoff hour (UTC)", w._weekend_cutoff_hour)
+
+        w._weekend_cutoff_minute = QSpinBox()
+        w._weekend_cutoff_minute.setRange(0, 59)
+        w._weekend_cutoff_minute.setValue(
+            int(getattr(w, "_auto_weekend_cutoff_minute_utc", 0))
+        )
+        weekend_card_form.addRow("Friday cutoff minute", w._weekend_cutoff_minute)
+
+        w._weekend_resume_hour = QSpinBox()
+        w._weekend_resume_hour.setRange(0, 23)
+        w._weekend_resume_hour.setValue(
+            int(getattr(w, "_auto_weekend_resume_hour_utc", 0))
+        )
+        weekend_card_form.addRow("Monday resume hour (UTC)", w._weekend_resume_hour)
+
+        w._weekend_resume_minute = QSpinBox()
+        w._weekend_resume_minute.setRange(0, 59)
+        w._weekend_resume_minute.setValue(
+            int(getattr(w, "_auto_weekend_resume_minute_utc", 0))
+        )
+        weekend_card_form.addRow("Monday resume minute", w._weekend_resume_minute)
+        form_adv.addRow(weekend_card)
+
         w._scale_lot_by_signal = QCheckBox("Enable")
         w._scale_lot_by_signal.setChecked(False)
         advanced_card_form.addRow("Scale lot by signal", w._scale_lot_by_signal)
