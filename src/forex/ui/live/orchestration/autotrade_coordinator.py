@@ -3,7 +3,7 @@ from __future__ import annotations
 import json
 import time
 from dataclasses import replace
-from datetime import datetime
+from datetime import datetime, timezone
 
 import numpy as np
 import pandas as pd
@@ -70,6 +70,8 @@ class LiveAutoTradeCoordinator:
         if not w._auto_enabled or not w._auto_model:
             return
         if not w._app_state or not w._app_state.selected_account_id:
+            return
+        if self._handle_weekend_guard():
             return
         config = self._effective_trading_config()
         min_bars_required = max(64, int(getattr(config, "window_size", 1)) + 16)
@@ -185,6 +187,65 @@ class LiveAutoTradeCoordinator:
         did_execute = self.execute_target_position(target_position, feature_set=feature_set)
         if did_execute:
             w._auto_last_action_ts = now_ts
+
+    def _utc_now(self) -> datetime:
+        return datetime.now(timezone.utc)
+
+    def _weekend_guard_phase(self, now: datetime | None = None) -> str:
+        w = self._window
+        if not bool(getattr(w, "_auto_weekend_guard_enabled", False)):
+            return "trading_open"
+        current = now or self._utc_now()
+        current_utc = current.astimezone(timezone.utc)
+        weekday = int(current_utc.weekday())
+        hour_minute = (int(current_utc.hour), int(current_utc.minute))
+        cutoff = (
+            int(getattr(w, "_auto_weekend_cutoff_hour_utc", 20)),
+            int(getattr(w, "_auto_weekend_cutoff_minute_utc", 0)),
+        )
+        resume = (
+            int(getattr(w, "_auto_weekend_resume_hour_utc", 0)),
+            int(getattr(w, "_auto_weekend_resume_minute_utc", 0)),
+        )
+        if weekday == 4 and hour_minute >= cutoff:
+            return "friday_flatten"
+        if weekday == 5 or weekday == 6:
+            return "weekend_pause"
+        if weekday == 0 and hour_minute < resume:
+            return "weekend_pause"
+        return "trading_open"
+
+    def _handle_weekend_guard(self, now: datetime | None = None) -> bool:
+        w = self._window
+        phase = self._weekend_guard_phase(now)
+        previous = getattr(w, "_auto_last_weekend_guard_phase", None)
+        w._auto_last_weekend_guard_phase = phase
+        if phase != previous:
+            if phase == "friday_flatten":
+                w._auto_log(
+                    "ℹ️ Weekend guard active: no new trades after Friday cutoff; "
+                    "existing positions will be flattened."
+                )
+            elif phase == "weekend_pause":
+                w._auto_log("ℹ️ Weekend guard active: weekend trading is paused.")
+            elif previous in {"friday_flatten", "weekend_pause"}:
+                w._auto_startup_seen_bars = 0
+                w._auto_first_trade_done = False
+                w._auto_last_action_ts = None
+                w._auto_log(
+                    "ℹ️ Weekend guard lifted: trading resumed; startup warmup has been reset."
+                )
+        if phase == "trading_open":
+            return False
+        has_positions = bool(
+            getattr(w, "_open_positions", [])
+            or getattr(w, "_auto_position_id", None)
+        )
+        if not has_positions and abs(float(getattr(w, "_auto_position", 0.0) or 0.0)) > 0.0:
+            has_positions = True
+        if has_positions:
+            self.execute_target_position(0.0)
+        return True
 
     def trade_cost_bps(self) -> float:
         w = self._window

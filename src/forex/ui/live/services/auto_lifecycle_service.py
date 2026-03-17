@@ -130,6 +130,16 @@ class LiveAutoLifecycleService:
             f"{int(getattr(w, '_auto_startup_warmup_bars', 0))} bars; "
             "cap first trade at |0.50| position."
         )
+        if bool(getattr(w, "_auto_weekend_guard_enabled", False)):
+            cutoff_hour = int(getattr(w, "_auto_weekend_cutoff_hour_utc", 20))
+            cutoff_minute = int(getattr(w, "_auto_weekend_cutoff_minute_utc", 0))
+            resume_hour = int(getattr(w, "_auto_weekend_resume_hour_utc", 0))
+            resume_minute = int(getattr(w, "_auto_weekend_resume_minute_utc", 0))
+            w._auto_log(
+                "ℹ️ Weekend guard: flatten after Friday "
+                f"{cutoff_hour:02d}:{cutoff_minute:02d} UTC; "
+                f"resume Monday {resume_hour:02d}:{resume_minute:02d} UTC."
+            )
         w._auto_log("✅ Auto trading started")
 
     def _stop(self) -> None:

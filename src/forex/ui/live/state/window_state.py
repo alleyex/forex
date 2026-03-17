@@ -31,6 +31,12 @@ def initialize_live_window_state(window) -> None:
     window._auto_startup_seen_bars = 0
     window._auto_first_trade_done = False
     window._auto_first_trade_max_abs_position = 0.5
+    window._auto_weekend_guard_enabled = True
+    window._auto_weekend_cutoff_hour_utc = 20
+    window._auto_weekend_cutoff_minute_utc = 0
+    window._auto_weekend_resume_hour_utc = 0
+    window._auto_weekend_resume_minute_utc = 0
+    window._auto_last_weekend_guard_phase = None
     window._auto_last_action_ts = None
     window._auto_balance = None
     window._auto_used_margin = None

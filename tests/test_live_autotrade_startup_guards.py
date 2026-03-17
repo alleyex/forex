@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from datetime import datetime, timezone
 from types import SimpleNamespace
 
 import pytest
@@ -59,6 +60,12 @@ def _make_window() -> SimpleNamespace:
         _auto_enabled=True,
         _auto_position=0.0,
         _auto_position_id=None,
+        _auto_weekend_guard_enabled=True,
+        _auto_weekend_cutoff_hour_utc=20,
+        _auto_weekend_cutoff_minute_utc=0,
+        _auto_weekend_resume_hour_utc=0,
+        _auto_weekend_resume_minute_utc=0,
+        _auto_last_weekend_guard_phase=None,
         _auto_balance=10000.0,
         _auto_used_margin=0.0,
         _auto_free_margin=10000.0,
@@ -139,3 +146,36 @@ def test_risk_percent_sizing_ignores_stale_used_margin_without_open_positions() 
 
     assert preview["cap_applied"] is False
     assert preview["used_margin"] == pytest.approx(0.0)
+
+
+def test_weekend_guard_blocks_new_trades_after_friday_cutoff() -> None:
+    window = _make_window()
+    coordinator = LiveAutoTradeCoordinator(window)
+
+    blocked = coordinator._handle_weekend_guard(
+        datetime(2026, 3, 20, 20, 5, tzinfo=timezone.utc)
+    )
+
+    assert blocked is True
+    assert window._auto_last_weekend_guard_phase == "friday_flatten"
+
+
+def test_weekend_guard_flattens_existing_positions_during_blocked_window() -> None:
+    window = _make_window()
+    window._open_positions = [SimpleNamespace(positionId=1)]
+    window._auto_position = 0.5
+    coordinator = LiveAutoTradeCoordinator(window)
+    calls = {"targets": []}
+
+    def _execute_target_position(target, feature_set=None) -> bool:
+        calls["targets"].append(target)
+        return True
+
+    coordinator.execute_target_position = _execute_target_position
+
+    blocked = coordinator._handle_weekend_guard(
+        datetime(2026, 3, 21, 12, 0, tzinfo=timezone.utc)
+    )
+
+    assert blocked is True
+    assert calls["targets"] == [0.0]
