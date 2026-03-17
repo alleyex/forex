@@ -102,6 +102,30 @@ class UISmokeTest(unittest.TestCase):
         window.deleteLater()
         self._app.processEvents()
 
+    def test_live_trade_history_hides_zero_realized_pnl(self) -> None:
+        window = LiveMainWindow(
+            use_cases=BrokerUseCases(FakeProvider()),
+            event_bus=EventBus(),
+            app_state=AppState(),
+        )
+        window._auto_connect_timer.stop()
+        rows = [
+            {
+                "timestamp": 1773653100000,
+                "symbol_id": 1,
+                "side": "BUY",
+                "volume": 1000000,
+                "realized_pnl": 0.0,
+            }
+        ]
+
+        window._handle_trade_history_received(rows)
+
+        self.assertEqual(window._trade_history_table.item(0, 4).text(), "-")
+        window.close()
+        window.deleteLater()
+        self._app.processEvents()
+
     def test_best_playback_compatibility_warnings_are_generated(self) -> None:
         warnings = LiveMainWindow._build_best_playback_compatibility_warnings(
             current_symbol="EURUSD",

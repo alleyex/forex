@@ -819,7 +819,10 @@ class LiveMainWindow(QMainWindow):
                 lot_text = "-"
             realized_pnl = item.get("realized_pnl", None)
             try:
-                pnl_text = "-" if realized_pnl is None else f"{float(realized_pnl):,.2f}"
+                if realized_pnl is None or abs(float(realized_pnl)) < 0.005:
+                    pnl_text = "-"
+                else:
+                    pnl_text = f"{float(realized_pnl):,.2f}"
             except (TypeError, ValueError):
                 pnl_text = "-"
             timestamp = item.get("timestamp")
