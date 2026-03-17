@@ -114,6 +114,7 @@ class LiveSessionOrchestrator:
         w._ensure_quote_subscription()
         w._request_positions()
         w._refresh_account_balance()
+        w._refresh_trade_history()
         if not w._funds_timer.isActive():
             w._funds_timer.start()
         if reason:
@@ -133,6 +134,7 @@ class LiveSessionOrchestrator:
         w._dispose_history_service()
         w._dispose_trendbar_service()
         w._account_funds_uc = None
+        w._trade_history_service = None
         # Recreate order service as well so it doesn't keep a stale
         # AppAuthService reference after reconnect/service replacement.
         w._order_service = None

@@ -8,6 +8,7 @@ from PySide6.QtCore import QTimer
 def initialize_live_window_state(window) -> None:
     window._connection_controller = None
     window._history_service = None
+    window._trade_history_service = None
     window._history_requested = False
     window._pending_history = False
     window._last_history_request_key = None

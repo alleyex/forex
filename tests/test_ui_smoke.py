@@ -3,7 +3,6 @@ from __future__ import annotations
 import os
 import unittest
 from pathlib import Path
-from types import SimpleNamespace
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 os.environ.setdefault("QT_OPENGL", "software")
@@ -75,28 +74,30 @@ class UISmokeTest(unittest.TestCase):
         window.deleteLater()
         self._app.processEvents()
 
-    def test_live_trade_history_records_execution_rows(self) -> None:
+    def test_live_trade_history_renders_broker_rows(self) -> None:
         window = LiveMainWindow(
             use_cases=BrokerUseCases(FakeProvider()),
             event_bus=EventBus(),
             app_state=AppState(),
         )
         window._auto_connect_timer.stop()
-        payload = {
-            "client_order_id": "abc-1",
-            "position_id": 24486008,
-            "order": SimpleNamespace(symbolId=1, tradeSide=1, volume=800000),
-            "position": None,
-            "deal": None,
-            "requested_volume": 800000,
-        }
+        rows = [
+            {
+                "timestamp": 1773653100000,
+                "symbol_id": 1,
+                "event": "Close",
+                "side": "SELL",
+                "volume": 800000,
+                "position_id": 24486008,
+            }
+        ]
 
-        window._auto_runtime_service.handle_order_execution(payload)
+        window._handle_trade_history_received(rows)
 
         self.assertEqual(window._trade_history_table.rowCount(), 1)
         self.assertEqual(window._trade_history_table.item(0, 1).text(), "EURUSD")
-        self.assertEqual(window._trade_history_table.item(0, 2).text(), "Open")
-        self.assertEqual(window._trade_history_table.item(0, 3).text(), "BUY")
+        self.assertEqual(window._trade_history_table.item(0, 2).text(), "Close")
+        self.assertEqual(window._trade_history_table.item(0, 3).text(), "SELL")
         self.assertEqual(window._trade_history_table.item(0, 4).text(), "0.080")
         self.assertEqual(window._trade_history_table.item(0, 5).text(), "24486008")
         window.close()

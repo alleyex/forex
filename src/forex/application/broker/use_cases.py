@@ -17,6 +17,7 @@ from forex.application.broker.protocols import (
     AppAuthServiceLike,
     BrokerUseCaseFactory,
     CtidProfileUseCaseLike,
+    DealHistoryServiceLike,
     OAuthLoginServiceLike,
     OAuthServiceLike,
     OrderServiceLike,
@@ -133,6 +134,12 @@ class BrokerUseCases:
 
     def create_order_service(self, app_auth_service: AppAuthServiceLike) -> OrderServiceLike:
         return self._provider.create_order_service(app_auth_service=app_auth_service)
+
+    def create_deal_history_service(
+        self,
+        app_auth_service: AppAuthServiceLike,
+    ) -> DealHistoryServiceLike:
+        return self._provider.create_deal_history_service(app_auth_service=app_auth_service)
 
     @staticmethod
     def _cache_in_progress(cache: _UseCaseCache[_FetchUseCase]) -> bool:

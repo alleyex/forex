@@ -6,6 +6,7 @@ from forex.infrastructure.broker.ctrader.services.account_funds_service import A
 from forex.infrastructure.broker.ctrader.services.account_list_service import AccountListService
 from forex.infrastructure.broker.ctrader.services.app_auth_service import AppAuthService
 from forex.infrastructure.broker.ctrader.services.ctid_profile_service import CtidProfileService
+from forex.infrastructure.broker.ctrader.services.deal_list_service import DealListService
 from forex.infrastructure.broker.ctrader.services.oauth_login_service import OAuthLoginService
 from forex.infrastructure.broker.ctrader.services.oauth_service import OAuthService
 from forex.infrastructure.broker.ctrader.services.order_service import OrderService
@@ -73,3 +74,6 @@ class CTraderProvider(BrokerProvider):
 
     def create_order_service(self, app_auth_service: AppAuthService) -> OrderService:
         return OrderService(app_auth_service=app_auth_service)
+
+    def create_deal_history_service(self, app_auth_service: AppAuthService) -> DealListService:
+        return DealListService(app_auth_service=app_auth_service)

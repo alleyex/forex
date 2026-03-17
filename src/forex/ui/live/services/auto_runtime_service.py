@@ -164,11 +164,6 @@ class LiveAutoRuntimeService:
             side_text = "SELL"
         else:
             side_text = None
-        event_text = "Executed"
-        if order is not None:
-            event_text = "Open"
-        elif payload.get("client_order_id") is None and position_id:
-            event_text = "Close"
         parts = []
         if side_text:
             parts.append(side_text)
@@ -182,11 +177,5 @@ class LiveAutoRuntimeService:
             parts.append(f"(pos {position_id})")
         if parts:
             w._auto_log(f"✅ Order executed: {' '.join(parts)}")
-        w._append_trade_history_entry(
-            symbol=symbol_name,
-            event=event_text,
-            side=side_text,
-            lot_text=f"{lot:.3f}" if lot is not None else None,
-            position_id=position_id,
-        )
+        w._refresh_trade_history()
         w._request_positions()

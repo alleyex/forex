@@ -59,6 +59,10 @@ class BrokerProvider(BrokerUseCaseFactory, ABC):
     def create_order_service(self, app_auth_service):
         ...
 
+    @abstractmethod
+    def create_deal_history_service(self, app_auth_service):
+        ...
+
 
 DEFAULT_PROVIDER = "ctrader"
 _registry: dict[str, BrokerProvider] = {}

@@ -200,6 +200,26 @@ class OrderServiceLike(Protocol):
         ...
 
 
+class DealHistoryServiceLike(Protocol):
+    in_progress: bool
+
+    def set_callbacks(self, on_deals_received=None, on_error=None, on_log=None) -> None:
+        ...
+
+    def clear_log_history(self) -> None:
+        ...
+
+    def fetch(
+        self,
+        account_id: int,
+        *,
+        max_rows: int = 15,
+        to_timestamp: int | None = None,
+        timeout_seconds: int | None = None,
+    ) -> None:
+        ...
+
+
 class AccountFundsLike(Protocol):
     money_digits: int | None
     balance: float | None
@@ -306,4 +326,10 @@ class BrokerUseCaseFactory(Protocol):
         ...
 
     def create_order_service(self, app_auth_service: AppAuthServiceLike) -> OrderServiceLike:
+        ...
+
+    def create_deal_history_service(
+        self,
+        app_auth_service: AppAuthServiceLike,
+    ) -> DealHistoryServiceLike:
         ...

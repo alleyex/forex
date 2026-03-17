@@ -86,6 +86,7 @@ class LiveMainWindow(QMainWindow):
     positionsUpdated = Signal(object)
     accountSummaryUpdated = Signal(object)
     historyReceived = Signal(list)
+    tradeHistoryReceived = Signal(list)
     trendbarReceived = Signal(dict)
     quoteUpdated = Signal(int, object, object, object)
     _CARD_LINE_TITLE_COLOR = "#3a4452"
@@ -696,6 +697,36 @@ class LiveMainWindow(QMainWindow):
     def _refresh_account_balance(self) -> None:
         self._autotrade_coordinator.refresh_account_balance()
 
+    def _refresh_trade_history(self) -> None:
+        if not self._service or not self._app_state or not self._app_state.selected_account_id:
+            return
+        ready_fn = getattr(self, "_is_broker_runtime_ready", None)
+        runtime_ready = bool(ready_fn()) if callable(ready_fn) else True
+        if not runtime_ready or getattr(self, "_account_switch_in_progress", False):
+            return
+        try:
+            if getattr(self, "_trade_history_service", None) is None:
+                self._trade_history_service = self._use_cases.create_deal_history_service(
+                    self._service
+                )
+            service = self._trade_history_service
+            if getattr(service, "in_progress", False):
+                return
+        except Exception as exc:
+            self.logRequested.emit(f"⚠️ Trade history service unavailable: {exc}")
+            return
+
+        def _on_deals(rows: list[dict]) -> None:
+            self.tradeHistoryReceived.emit(rows)
+
+        service.set_callbacks(
+            on_deals_received=_on_deals,
+            on_error=lambda error: self.logRequested.emit(f"❌ Trade history error: {error}"),
+            on_log=self.logRequested.emit,
+        )
+        service.clear_log_history()
+        service.fetch(int(self._app_state.selected_account_id), max_rows=15)
+
     # Quotes / Positions Controllers
     def _ensure_quote_handler(self) -> None:
         self._quote_controller.ensure_quote_handler()
@@ -770,6 +801,41 @@ class LiveMainWindow(QMainWindow):
         while table.rowCount() > max_rows:
             table.removeRow(table.rowCount() - 1)
 
+    def _handle_trade_history_received(self, rows: list[dict]) -> None:
+        table = getattr(self, "_trade_history_table", None)
+        if table is None:
+            return
+        entries = list(rows or [])
+        table.setRowCount(len(entries))
+        for row, item in enumerate(entries):
+            symbol_id = int(item.get("symbol_id", 0) or 0)
+            symbol_name = self._symbol_id_to_name.get(symbol_id) or (
+                f"#{symbol_id}" if symbol_id else "-"
+            )
+            volume = item.get("volume", 0)
+            try:
+                lot_text = f"{self._volume_to_lots(float(volume)):.3f}"
+            except (TypeError, ValueError):
+                lot_text = "-"
+            timestamp = item.get("timestamp")
+            time_text = self._format_time(timestamp) if timestamp else "-"
+            values = [
+                time_text,
+                symbol_name,
+                str(item.get("event", "-") or "-"),
+                str(item.get("side", "-") or "-"),
+                lot_text,
+                str(item.get("position_id", "-") or "-"),
+            ]
+            for col, value in enumerate(values):
+                existing = table.item(row, col)
+                if existing is None:
+                    existing = QTableWidgetItem(str(value))
+                    existing.setTextAlignment(Qt.AlignCenter)
+                    table.setItem(row, col, existing)
+                else:
+                    existing.setText(str(value))
+
     def _symbol_list_path(self) -> Path:
         return self._project_root / SYMBOL_LIST_FILE
 
@@ -842,6 +908,7 @@ class LiveMainWindow(QMainWindow):
         self.positionsUpdated.connect(self._positions_controller.apply_positions_update)
         self.accountSummaryUpdated.connect(self._handle_account_summary_updated)
         self.historyReceived.connect(self._handle_history_received)
+        self.tradeHistoryReceived.connect(self._handle_trade_history_received)
         self.trendbarReceived.connect(self._handle_trendbar_received)
         self.quoteUpdated.connect(self._handle_quote_updated)
 

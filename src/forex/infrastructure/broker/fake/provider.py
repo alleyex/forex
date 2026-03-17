@@ -61,6 +61,11 @@ class FakeOrderCallbacks(BaseCallbacks):
 
 
 @dataclass
+class FakeDealHistoryCallbacks(BaseCallbacks):
+    on_deals_received: Callback | None = None
+
+
+@dataclass
 class FakeAppAuthService:
     host_type: str
     token_file: str
@@ -474,6 +479,40 @@ class FakeOrderService:
         return True
 
 
+@dataclass
+class FakeDealHistoryService:
+    app_auth_service: FakeAppAuthService
+    in_progress: bool = False
+    _callbacks: FakeDealHistoryCallbacks = field(
+        default_factory=FakeDealHistoryCallbacks,
+        repr=False,
+    )
+
+    def set_callbacks(self, on_deals_received=None, on_error=None, on_log=None) -> None:
+        self._callbacks = build_callbacks(
+            FakeDealHistoryCallbacks,
+            on_deals_received=on_deals_received,
+            on_error=on_error,
+            on_log=on_log,
+        )
+
+    def clear_log_history(self) -> None:
+        pass
+
+    def fetch(
+        self,
+        account_id: int,
+        *,
+        max_rows: int = 15,
+        to_timestamp: int | None = None,
+        timeout_seconds: int | None = None,
+    ) -> None:
+        _ = account_id, max_rows, to_timestamp, timeout_seconds
+        cb = self._callbacks.on_deals_received
+        if cb:
+            cb([])
+
+
 class FakeProvider(BrokerProvider):
     """Fake provider for tests and offline development."""
 
@@ -511,3 +550,6 @@ class FakeProvider(BrokerProvider):
 
     def create_order_service(self, app_auth_service):
         return FakeOrderService(app_auth_service=app_auth_service)
+
+    def create_deal_history_service(self, app_auth_service):
+        return FakeDealHistoryService(app_auth_service=app_auth_service)
