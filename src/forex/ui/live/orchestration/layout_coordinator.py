@@ -36,9 +36,9 @@ class LiveLayoutCoordinator:
         bottom = getattr(w, "_bottom_splitter", None)
         if top is None or bottom is None:
             return
-        # Treat Auto Trading width as the source of truth for the left column.
-        self.init_splitter_sizes(top)
+        # First size bottom so quotes width is known, then align top to it.
         self.init_bottom_splitter_sizes(bottom)
+        self.init_splitter_sizes(top)
         QTimer.singleShot(0, lambda: self.init_bottom_splitter_sizes(bottom))
         QTimer.singleShot(0, lambda: self.init_splitter_sizes(top))
         w._panel_alignment_done = True
@@ -73,23 +73,11 @@ class LiveLayoutCoordinator:
             splitter.setSizes([top, bottom])
 
     def init_bottom_splitter_sizes(self, splitter: QSplitter) -> None:
-        w = self._window
         total = splitter.width()
         if total <= 0:
             return
         quotes = 0
-        log = max(140, int(total * 0.12))
-        history = None
-        top = getattr(w, "_top_splitter", None)
-        if top is not None:
-            top_sizes = top.sizes()
-            if len(top_sizes) >= 2 and top_sizes[0] > 0:
-                history = top_sizes[0]
-        if history is None:
-            history = max(320, int(total * 0.24))
-        history = min(history, max(320, total - quotes - log - 420))
-        positions = max(420, total - quotes - history - log)
-        if quotes + positions + history + log > total:
-            positions = max(420, total - quotes - history - log)
-        if quotes + positions + history + log <= total:
-            splitter.setSizes([quotes, history, positions, log])
+        history = int(total * 0.25)
+        positions = int(total * 0.50)
+        log = max(0, total - quotes - history - positions)
+        splitter.setSizes([quotes, history, positions, log])
