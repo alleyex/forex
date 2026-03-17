@@ -69,7 +69,7 @@ class UISmokeTest(unittest.TestCase):
         self.assertEqual(window._weekend_cutoff_hour.value(), 20)
         self.assertEqual(window._weekend_resume_hour.value(), 0)
         self.assertIsNotNone(window._trade_history_table)
-        self.assertEqual(window._trade_history_table.columnCount(), 5)
+        self.assertEqual(window._trade_history_table.columnCount(), 4)
         window.close()
         window.deleteLater()
         self._app.processEvents()
@@ -95,9 +95,8 @@ class UISmokeTest(unittest.TestCase):
 
         self.assertEqual(window._trade_history_table.rowCount(), 1)
         self.assertEqual(window._trade_history_table.item(0, 1).text(), "EURUSD")
-        self.assertEqual(window._trade_history_table.item(0, 2).text(), "SELL")
-        self.assertEqual(window._trade_history_table.item(0, 3).text(), "0.080")
-        self.assertEqual(window._trade_history_table.item(0, 4).text(), "+12.34")
+        self.assertEqual(window._trade_history_table.item(0, 2).text(), "SELL 0.080")
+        self.assertEqual(window._trade_history_table.item(0, 3).text(), "+12.34")
         self.assertEqual(
             window._trade_history_table.item(0, 2).foreground().color().name(),
             "#ff7666",
@@ -107,11 +106,11 @@ class UISmokeTest(unittest.TestCase):
             "#3f1f24",
         )
         self.assertEqual(
-            window._trade_history_table.item(0, 4).foreground().color().name(),
+            window._trade_history_table.item(0, 3).foreground().color().name(),
             "#1fd19a",
         )
         self.assertEqual(
-            window._trade_history_table.item(0, 4).background().color().name(),
+            window._trade_history_table.item(0, 3).background().color().name(),
             "#10392d",
         )
         window.close()
@@ -137,7 +136,8 @@ class UISmokeTest(unittest.TestCase):
 
         window._handle_trade_history_received(rows)
 
-        self.assertEqual(window._trade_history_table.item(0, 4).text(), "-8.50")
+        self.assertEqual(window._trade_history_table.item(0, 2).text(), "BUY 0.100")
+        self.assertEqual(window._trade_history_table.item(0, 3).text(), "-8.50")
         self.assertEqual(
             window._trade_history_table.item(0, 2).foreground().color().name(),
             "#1fd19a",
@@ -147,11 +147,11 @@ class UISmokeTest(unittest.TestCase):
             "#10392d",
         )
         self.assertEqual(
-            window._trade_history_table.item(0, 4).foreground().color().name(),
+            window._trade_history_table.item(0, 3).foreground().color().name(),
             "#ff7666",
         )
         self.assertEqual(
-            window._trade_history_table.item(0, 4).background().color().name(),
+            window._trade_history_table.item(0, 3).background().color().name(),
             "#3f1f24",
         )
         window.close()

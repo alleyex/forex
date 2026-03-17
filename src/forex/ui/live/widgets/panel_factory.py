@@ -207,9 +207,9 @@ class LivePanelFactory:
         layout.setContentsMargins(10, 10, 10, 10)
         layout.setSpacing(8)
 
-        table = QTableWidget(0, 5)
+        table = QTableWidget(0, 4)
         table.setObjectName("tradeHistoryTable")
-        table.setHorizontalHeaderLabels(["Time", "Symbol", "Side", "Volume", "P/L"])
+        table.setHorizontalHeaderLabels(["Time", "Symbol", "Trade", "P/L"])
         table.verticalHeader().setVisible(False)
         table.setEditTriggers(QTableWidget.NoEditTriggers)
         table.setSelectionBehavior(QTableWidget.SelectRows)

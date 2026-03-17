@@ -831,11 +831,15 @@ class LiveMainWindow(QMainWindow):
             timestamp = item.get("timestamp")
             time_text = self._format_time(timestamp) if timestamp else "-"
             side_text = str(item.get("side", "-") or "-").upper()
+            trade_text = (
+                f"{side_text} {lot_text}"
+                if side_text in {"BUY", "SELL"} and lot_text != "-"
+                else side_text
+            )
             values = [
                 time_text,
                 symbol_name,
-                side_text,
-                lot_text,
+                trade_text,
                 pnl_text,
             ]
             for col, value in enumerate(values):
@@ -855,7 +859,7 @@ class LiveMainWindow(QMainWindow):
                     elif side_text == "SELL":
                         existing.setForeground(QColor("#ff7666"))
                         existing.setBackground(QColor("#3f1f24"))
-                elif col == 4:
+                elif col == 3:
                     existing.setForeground(
                         QColor("#1fd19a") if realized_pnl > 0 else QColor("#ff7666")
                     )
