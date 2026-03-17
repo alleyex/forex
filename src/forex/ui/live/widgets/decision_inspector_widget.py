@@ -6,6 +6,7 @@ from datetime import datetime
 
 from PySide6.QtCore import Qt, QThread, Signal, Slot
 from PySide6.QtWidgets import (
+    QFrame,
     QGridLayout,
     QGroupBox,
     QHBoxLayout,
@@ -93,25 +94,43 @@ class DecisionInspectorWidget(QWidget):
 
         _ = title
 
-        layout.addWidget(
-            self._build_stage_card(
-                "Decision Summary",
-                self._SUMMARY_FIELDS,
-                {},
-                columns=3,
-                register_label=self._register_summary_label,
-            )
-        )
-        layout.addWidget(
-            self._build_stage_card(
-                "Position State",
-                self._STATE_FIELDS,
-                self._state_labels,
-                columns=3,
-            )
-        )
+        layout.addWidget(self._build_combined_card())
 
-    def _build_stage_card(
+    def _build_combined_card(self) -> QGroupBox:
+        box = QGroupBox("Decision Snapshot")
+        box.setObjectName("card")
+        box.setProperty("titleTone", "line")
+        box.setProperty("titleAlign", "left")
+
+        layout = QVBoxLayout(box)
+        layout.setContentsMargins(12, 12, 12, 12)
+        layout.setSpacing(10)
+
+        summary_box = self._build_stage_section(
+            "Decision Summary",
+            self._SUMMARY_FIELDS,
+            {},
+            columns=3,
+            register_label=self._register_summary_label,
+        )
+        layout.addWidget(summary_box)
+
+        divider = QFrame(box)
+        divider.setFrameShape(QFrame.HLine)
+        divider.setFrameShadow(QFrame.Plain)
+        divider.setStyleSheet("color:#34404d; background:#34404d; min-height:1px;")
+        layout.addWidget(divider)
+
+        state_box = self._build_stage_section(
+            "Position State",
+            self._STATE_FIELDS,
+            self._state_labels,
+            columns=3,
+        )
+        layout.addWidget(state_box)
+        return box
+
+    def _build_stage_section(
         self,
         title: str,
         fields: list[tuple[str, str]],
@@ -119,13 +138,19 @@ class DecisionInspectorWidget(QWidget):
         *,
         columns: int = 2,
         register_label=None,
-    ) -> QGroupBox:
-        box = QGroupBox(title)
-        box.setObjectName("card")
-        box.setProperty("titleTone", "line")
-        box.setProperty("titleAlign", "left")
-        grid = QGridLayout(box)
-        grid.setContentsMargins(12, 12, 12, 12)
+    ) -> QWidget:
+        section = QWidget()
+        section_layout = QVBoxLayout(section)
+        section_layout.setContentsMargins(0, 0, 0, 0)
+        section_layout.setSpacing(8)
+
+        title_label = QLabel(title, section)
+        title_label.setStyleSheet("color:#9aa6b2; font-size:11px; font-weight:600;")
+        section_layout.addWidget(title_label)
+
+        grid_host = QWidget(section)
+        grid = QGridLayout(grid_host)
+        grid.setContentsMargins(0, 0, 0, 0)
         grid.setHorizontalSpacing(12)
         grid.setVerticalSpacing(6)
         columns = max(1, int(columns))
@@ -133,7 +158,7 @@ class DecisionInspectorWidget(QWidget):
         for index, (field, label_text) in enumerate(fields):
             row = index // columns
             col = index % columns
-            cell = QWidget(box)
+            cell = QWidget(grid_host)
             cell_layout = QHBoxLayout(cell)
             cell_layout.setContentsMargins(0, 0, 0, 0)
             cell_layout.setSpacing(4)
@@ -160,7 +185,8 @@ class DecisionInspectorWidget(QWidget):
 
         for column in range(columns):
             grid.setColumnStretch(column, 1)
-        return box
+        section_layout.addWidget(grid_host)
+        return section
 
     def _register_summary_label(self, field: str, label: QLabel) -> None:
         input_keys = {name for name, _ in self._INPUT_FIELDS}
