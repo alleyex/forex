@@ -1,6 +1,6 @@
 from collections.abc import Callable
 
-from PySide6.QtCore import QObject, QTimer, Signal, Slot
+from PySide6.QtCore import QObject, QThread, QTimer, Signal, Slot
 from PySide6.QtWidgets import QMessageBox, QWidget
 
 from forex.application.broker.protocols import AppAuthServiceLike, OAuthServiceLike
@@ -18,6 +18,7 @@ class ConnectionController(QObject):
     oauthStatusChanged = Signal(int)
     appAuthSucceeded = Signal(object)
     oauthSucceeded = Signal(object)
+    scheduleOauthDisconnect = Signal(object)
 
     def __init__(
         self,
@@ -43,6 +44,7 @@ class ConnectionController(QObject):
         self._app_auth_dialog_open = False
         self._oauth_dialog_open = False
         self._connection_in_progress = False
+        self.scheduleOauthDisconnect.connect(self._disconnect_oauth_later)
 
     @property
     def service(self) -> AppAuthServiceLike | None:
@@ -117,7 +119,10 @@ class ConnectionController(QObject):
                         logout()
                     except Exception:
                         pass
-                QTimer.singleShot(2500, lambda: oauth_service.disconnect())
+                if QThread.currentThread() is self.thread():
+                    QTimer.singleShot(2500, lambda: oauth_service.disconnect())
+                else:
+                    self.scheduleOauthDisconnect.emit(oauth_service)
             self._oauth_service = None
             self.oauthStatusChanged.emit(int(ConnectionStatus.DISCONNECTED))
 
@@ -147,6 +152,10 @@ class ConnectionController(QObject):
             self.disconnect_flow()
             return
         self.connect_flow()
+
+    @Slot(object)
+    def _disconnect_oauth_later(self, oauth_service: OAuthServiceLike) -> None:
+        QTimer.singleShot(2500, lambda: oauth_service.disconnect())
 
     def open_app_auth_dialog(self, *, auto_connect: bool = False) -> None:
         if self._app_auth_dialog_open:

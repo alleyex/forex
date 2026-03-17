@@ -75,6 +75,7 @@ from forex.ui.shared.widgets.log_widget import LogWidget
 class LiveMainWindow(QMainWindow):
     """Live trading application window."""
 
+    uiCallRequested = Signal(object)
     logRequested = Signal(str)
     appAuthStatusChanged = Signal(int)
     oauthStatusChanged = Signal(int)
@@ -143,7 +144,11 @@ class LiveMainWindow(QMainWindow):
             self.set_oauth_service(self._oauth_service)
 
         if self._app_state:
-            self._app_state.subscribe(self.appStateChanged.emit)
+            self._app_state.subscribe(
+                lambda state: self._call_on_ui_thread(
+                    lambda: self.appStateChanged.emit(state)
+                )
+            )
 
         self._ensure_positions_handler()
 
@@ -163,8 +168,12 @@ class LiveMainWindow(QMainWindow):
         clear_log_history_safe(self._service)
         set_callbacks_safe(
             self._service,
-            on_log=self.logRequested.emit,
-            on_status_changed=lambda s: self.appAuthStatusChanged.emit(int(s)),
+            on_log=lambda message: self._call_on_ui_thread(
+                lambda: self.logRequested.emit(str(message))
+            ),
+            on_status_changed=lambda s: self._call_on_ui_thread(
+                lambda: self.appAuthStatusChanged.emit(int(s))
+            ),
         )
         if getattr(self._service, "status", None) is not None:
             self._app_auth_label.setText(
@@ -182,10 +191,18 @@ class LiveMainWindow(QMainWindow):
         clear_log_history_safe(self._oauth_service)
         set_callbacks_safe(
             self._oauth_service,
-            on_log=self.logRequested.emit,
-            on_error=lambda e: self.oauthError.emit(str(e)),
-            on_oauth_success=lambda t: self.oauthSuccess.emit(t),
-            on_status_changed=lambda s: self.oauthStatusChanged.emit(int(s)),
+            on_log=lambda message: self._call_on_ui_thread(
+                lambda: self.logRequested.emit(str(message))
+            ),
+            on_error=lambda e: self._call_on_ui_thread(
+                lambda: self.oauthError.emit(str(e))
+            ),
+            on_oauth_success=lambda t: self._call_on_ui_thread(
+                lambda: self.oauthSuccess.emit(t)
+            ),
+            on_status_changed=lambda s: self._call_on_ui_thread(
+                lambda: self.oauthStatusChanged.emit(int(s))
+            ),
         )
         if getattr(self._oauth_service, "status", None) is not None:
             status = ConnectionStatus(self._oauth_service.status)
@@ -365,14 +382,14 @@ class LiveMainWindow(QMainWindow):
             getattr(self, "_history_poll_timer", None)
             and not self._history_poll_timer.isActive()
         ):
-            self._history_poll_timer.start()
+            self._start_timer_on_ui_thread(self._history_poll_timer)
 
     def _stop_history_polling(self) -> None:
         if (
             getattr(self, "_history_poll_timer", None)
             and self._history_poll_timer.isActive()
         ):
-            self._history_poll_timer.stop()
+            self._stop_timer_on_ui_thread(self._history_poll_timer)
 
     def _set_quote_chart_mode(self, enabled: bool) -> None:
         self._chart_coordinator.set_quote_chart_mode(enabled)
@@ -913,6 +930,7 @@ class LiveMainWindow(QMainWindow):
         self._connection_controller = controller
 
     def _connect_signals(self) -> None:
+        self.uiCallRequested.connect(self._run_ui_call)
         self.logRequested.connect(self._on_log_requested)
         self.logRequested.connect(self._log_panel.append)
         self.appAuthStatusChanged.connect(self._handle_app_auth_status)
@@ -926,6 +944,31 @@ class LiveMainWindow(QMainWindow):
         self.tradeHistoryReceived.connect(self._handle_trade_history_received)
         self.trendbarReceived.connect(self._handle_trendbar_received)
         self.quoteUpdated.connect(self._handle_quote_updated)
+
+    @Slot(object)
+    def _run_ui_call(self, callback) -> None:
+        if callable(callback):
+            callback()
+
+    def _call_on_ui_thread(self, callback) -> None:
+        app = QApplication.instance()
+        if app is None or QThread.currentThread() == app.thread():
+            callback()
+            return
+        self.uiCallRequested.emit(callback)
+
+    def _single_shot_on_ui_thread(self, delay_ms: int, callback) -> None:
+        self._call_on_ui_thread(lambda: QTimer.singleShot(int(delay_ms), callback))
+
+    def _start_timer_on_ui_thread(self, timer: QTimer | None) -> None:
+        if timer is None:
+            return
+        self._call_on_ui_thread(timer.start)
+
+    def _stop_timer_on_ui_thread(self, timer: QTimer | None) -> None:
+        if timer is None:
+            return
+        self._call_on_ui_thread(timer.stop)
 
     @Slot(str)
     def _on_log_requested(self, _message: str) -> None:
@@ -1067,11 +1110,11 @@ class LiveMainWindow(QMainWindow):
             oauth_auth = bool(controller.is_oauth_authenticated())
             if app_auth or oauth_auth:
                 controller.disconnect_flow()
-                QTimer.singleShot(1200, self._connect_after_forced_disconnect)
+                self._single_shot_on_ui_thread(1200, self._connect_after_forced_disconnect)
             else:
                 controller.connect_flow()
 
-        QTimer.singleShot(500, _do_reconnect)
+        self._single_shot_on_ui_thread(500, _do_reconnect)
 
     @Slot()
     def _connect_after_forced_disconnect(self) -> None:

@@ -116,7 +116,7 @@ class LiveAutoLifecycleService:
         w._request_positions()
         w._refresh_account_balance()
         if w._auto_watchdog_timer:
-            w._auto_watchdog_timer.start()
+            w._start_timer_on_ui_thread(w._auto_watchdog_timer)
         if getattr(w, "_history_only_chart_mode", False):
             w._start_history_polling()
         near_full_text = "ON" if bool(w._near_full_hold.isChecked()) else "OFF"
@@ -149,7 +149,7 @@ class LiveAutoLifecycleService:
             w._auto_trade_toggle.setEnabled(True)
         w._auto_enabled = False
         if w._auto_watchdog_timer and w._auto_watchdog_timer.isActive():
-            w._auto_watchdog_timer.stop()
+            w._stop_timer_on_ui_thread(w._auto_watchdog_timer)
         w._auto_order_busy_since = None
         w._auto_log("🛑 Auto trading stopped")
 

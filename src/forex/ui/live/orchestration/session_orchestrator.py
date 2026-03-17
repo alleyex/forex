@@ -87,7 +87,7 @@ class LiveSessionOrchestrator:
         w._stop_quote_subscription()
         self._needs_runtime_rebuild = True
         if w._funds_timer.isActive():
-            w._funds_timer.stop()
+            w._stop_timer_on_ui_thread(w._funds_timer)
         if w._auto_trade_toggle and w._auto_trade_toggle.isChecked():
             w._auto_trade_toggle.setChecked(False)
 
@@ -116,7 +116,7 @@ class LiveSessionOrchestrator:
         w._refresh_account_balance()
         w._refresh_trade_history()
         if not w._funds_timer.isActive():
-            w._funds_timer.start()
+            w._start_timer_on_ui_thread(w._funds_timer)
         if reason:
             w.logRequested.emit(f"ℹ️ runtime_resume | reason={reason}")
 
@@ -360,9 +360,9 @@ class LiveSessionOrchestrator:
         w._quote_subscribe_inflight.clear()
         w._stop_history_polling()
         if w._funds_timer and w._funds_timer.isActive():
-            w._funds_timer.stop()
+            w._stop_timer_on_ui_thread(w._funds_timer)
         if w._auto_watchdog_timer and w._auto_watchdog_timer.isActive():
-            w._auto_watchdog_timer.stop()
+            w._stop_timer_on_ui_thread(w._auto_watchdog_timer)
         if w._auto_enabled and w._auto_trade_toggle and w._auto_trade_toggle.isChecked():
             w._auto_trade_toggle.setChecked(False)
         w.logRequested.emit(

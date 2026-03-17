@@ -142,7 +142,7 @@ class LivePositionsController:
         if w._positions_refresh_pending:
             return
         w._positions_refresh_pending = True
-        w._positions_refresh_timer.start()
+        w._start_timer_on_ui_thread(w._positions_refresh_timer)
 
     def apply_positions_refresh(self) -> None:
         w = self._window
