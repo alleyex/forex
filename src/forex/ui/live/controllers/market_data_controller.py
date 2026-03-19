@@ -101,18 +101,18 @@ class LiveMarketDataController:
             w._history_service = w._use_cases.create_trendbar_history(w._service)
 
         def handle_history(rows: list[dict]) -> None:
-            w.historyReceived.emit(rows)
+            w._emit_history_received(rows)
 
         w._history_service.clear_log_history()
 
         def handle_error(error: str) -> None:
             w._history_requested = False
-            w.logRequested.emit(f"❌ History error: {error}")
+            w._emit_log(f"❌ History error: {error}")
 
         w._history_service.set_callbacks(
             on_history_received=handle_history,
             on_error=handle_error,
-            on_log=w.logRequested.emit,
+            on_log=w._emit_log,
         )
 
         from forex.utils.reactor_manager import reactor_manager
@@ -245,13 +245,13 @@ class LiveMarketDataController:
             w._trendbar_service = w._use_cases.create_trendbar(w._service)
 
         def handle_trendbar(data: dict) -> None:
-            w.trendbarReceived.emit(data)
+            w._emit_trendbar_received(data)
 
         w._trendbar_service.clear_log_history()
         w._trendbar_service.set_callbacks(
             on_trendbar=handle_trendbar,
             on_error=lambda e: self.handle_trendbar_error(e),
-            on_log=w.logRequested.emit,
+            on_log=w._emit_log,
         )
 
         from forex.utils.reactor_manager import reactor_manager

@@ -70,7 +70,7 @@ class LiveQuoteController:
                 client,
                 account_id=account_id,
                 symbol_id=pending_ids,
-                log=w.logRequested.emit,
+                log=w._emit_log,
                 subscribe_to_spot_timestamp=True,
             )
 
@@ -110,7 +110,7 @@ class LiveQuoteController:
                 client,
                 account_id=account_id,
                 symbol_id=unsubscribe_ids,
-                log=w.logRequested.emit,
+                log=w._emit_log,
             )
         w._quote_subscribed_ids.clear()
         w._quote_subscribe_inflight.clear()
@@ -140,7 +140,7 @@ class LiveQuoteController:
         spot_ts = getattr(msg, "spotTimestamp", None)
         if spot_ts is None:
             spot_ts = getattr(msg, "timestamp", None)
-        w.quoteUpdated.emit(int(symbol_id), bid, ask, spot_ts)
+        w._emit_quote_updated(int(symbol_id), bid, ask, spot_ts)
         return False
 
     def handle_quote_updated(self, symbol_id: int, bid, ask, spot_ts) -> None:

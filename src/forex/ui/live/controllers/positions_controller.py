@@ -57,7 +57,7 @@ class LivePositionsController:
             if int(account_id or 0) != int(w._app_state.selected_account_id):
                 return False
         positions = list(getattr(msg, "position", []))
-        w.positionsUpdated.emit(positions)
+        w._emit_positions_updated(positions)
         return False
 
     def apply_positions_update(self, positions: object) -> None:

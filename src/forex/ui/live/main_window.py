@@ -145,9 +145,7 @@ class LiveMainWindow(QMainWindow):
 
         if self._app_state:
             self._app_state.subscribe(
-                lambda state: self._call_on_ui_thread(
-                    lambda: self.appStateChanged.emit(state)
-                )
+                lambda state: self._emit_app_state_changed(state)
             )
 
         self._ensure_positions_handler()
@@ -168,12 +166,8 @@ class LiveMainWindow(QMainWindow):
         clear_log_history_safe(self._service)
         set_callbacks_safe(
             self._service,
-            on_log=lambda message: self._call_on_ui_thread(
-                lambda: self.logRequested.emit(str(message))
-            ),
-            on_status_changed=lambda s: self._call_on_ui_thread(
-                lambda: self.appAuthStatusChanged.emit(int(s))
-            ),
+            on_log=self._emit_log,
+            on_status_changed=self._emit_app_auth_status_changed,
         )
         if getattr(self._service, "status", None) is not None:
             self._app_auth_label.setText(
@@ -191,18 +185,10 @@ class LiveMainWindow(QMainWindow):
         clear_log_history_safe(self._oauth_service)
         set_callbacks_safe(
             self._oauth_service,
-            on_log=lambda message: self._call_on_ui_thread(
-                lambda: self.logRequested.emit(str(message))
-            ),
-            on_error=lambda e: self._call_on_ui_thread(
-                lambda: self.oauthError.emit(str(e))
-            ),
-            on_oauth_success=lambda t: self._call_on_ui_thread(
-                lambda: self.oauthSuccess.emit(t)
-            ),
-            on_status_changed=lambda s: self._call_on_ui_thread(
-                lambda: self.oauthStatusChanged.emit(int(s))
-            ),
+            on_log=self._emit_log,
+            on_error=self._emit_oauth_error,
+            on_oauth_success=self._emit_oauth_success,
+            on_status_changed=self._emit_oauth_status_changed,
         )
         if getattr(self._oauth_service, "status", None) is not None:
             status = ConnectionStatus(self._oauth_service.status)
@@ -956,6 +942,41 @@ class LiveMainWindow(QMainWindow):
             callback()
             return
         self.uiCallRequested.emit(callback)
+
+    def _emit_log(self, message: str) -> None:
+        self._call_on_ui_thread(lambda: self.logRequested.emit(str(message)))
+
+    def _emit_app_auth_status_changed(self, status: int) -> None:
+        self._call_on_ui_thread(lambda: self.appAuthStatusChanged.emit(int(status)))
+
+    def _emit_oauth_status_changed(self, status: int) -> None:
+        self._call_on_ui_thread(lambda: self.oauthStatusChanged.emit(int(status)))
+
+    def _emit_oauth_error(self, error: str) -> None:
+        self._call_on_ui_thread(lambda: self.oauthError.emit(str(error)))
+
+    def _emit_oauth_success(self, tokens) -> None:
+        self._call_on_ui_thread(lambda: self.oauthSuccess.emit(tokens))
+
+    def _emit_app_state_changed(self, state) -> None:
+        self._call_on_ui_thread(lambda: self.appStateChanged.emit(state))
+
+    def _emit_positions_updated(self, positions) -> None:
+        self._call_on_ui_thread(lambda: self.positionsUpdated.emit(positions))
+
+    def _emit_account_summary_updated(self, snapshot) -> None:
+        self._call_on_ui_thread(lambda: self.accountSummaryUpdated.emit(snapshot))
+
+    def _emit_history_received(self, rows: list[dict]) -> None:
+        self._call_on_ui_thread(lambda: self.historyReceived.emit(rows))
+
+    def _emit_trendbar_received(self, payload: dict) -> None:
+        self._call_on_ui_thread(lambda: self.trendbarReceived.emit(payload))
+
+    def _emit_quote_updated(self, symbol_id: int, bid, ask, spot_ts) -> None:
+        self._call_on_ui_thread(
+            lambda: self.quoteUpdated.emit(int(symbol_id), bid, ask, spot_ts)
+        )
 
     def _single_shot_on_ui_thread(self, delay_ms: int, callback) -> None:
         self._call_on_ui_thread(lambda: QTimer.singleShot(int(delay_ms), callback))

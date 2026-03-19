@@ -81,19 +81,19 @@ class LiveAccountController:
                     max_leverage_value = 0.0
                 if max_leverage_value > 0.0:
                     w._auto_max_leverage = max_leverage_value
-            w.logRequested.emit("✅ Funds received")
-            w.accountSummaryUpdated.emit(snapshot)
+            w._emit_log("✅ Funds received")
+            w._emit_account_summary_updated(snapshot)
 
         def _on_position_pnl(pnl_map: dict[int, float]) -> None:
             if pnl_map:
                 w._position_pnl_by_id.update(pnl_map)
                 if w._open_positions:
-                    w.positionsUpdated.emit(w._open_positions)
+                    w._emit_positions_updated(w._open_positions)
 
         funds_uc.set_callbacks(
             on_funds_received=_on_funds,
             on_position_pnl=_on_position_pnl,
-            on_log=w.logRequested.emit,
+            on_log=w._emit_log,
         )
         funds_uc.fetch(account_id)
 
@@ -126,7 +126,7 @@ class LiveAccountController:
             access_token,
             w._handle_accounts_received,
             w._handle_accounts_error,
-            w.logRequested.emit,
+            w._emit_log,
         )
 
     def handle_accounts_received(self, accounts: list[object]) -> None:

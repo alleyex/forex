@@ -57,5 +57,7 @@ class LiveAutoLogService:
                 normalized_level = "INFO"
             formatted = f"[{normalized_level}] {text}"
         if self._window._auto_log_panel:
-            self._window._auto_log_panel.append(formatted)
-        self._window.logRequested.emit(formatted)
+            self._window._call_on_ui_thread(
+                lambda: self._window._auto_log_panel.append(formatted)
+            )
+        self._window._emit_log(formatted)
