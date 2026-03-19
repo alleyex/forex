@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+from pathlib import Path
 
 
 class LiveSymbolController:
@@ -221,6 +222,99 @@ class LiveSymbolController:
             mapping[name] = symbol_id
             names.append(name)
         return names, mapping
+
+    def quote_symbols_ready(self) -> bool:
+        w = self._window
+        if not w._quote_symbols:
+            return False
+        resolved_ids: list[int] = []
+        for symbol in w._quote_symbols:
+            symbol_id = w._quote_symbol_ids.get(symbol)
+            if not isinstance(symbol_id, int) or symbol_id <= 0:
+                return False
+            resolved_ids.append(int(symbol_id))
+        return len(set(resolved_ids)) == len(resolved_ids)
+
+    def ensure_symbol_catalog(self) -> bool:
+        w = self._window
+        if self.quote_symbols_ready():
+            return True
+        if not w._service or not w._app_state or not w._app_state.selected_account_id:
+            return False
+        if w._symbol_list_uc is None:
+            try:
+                w._symbol_list_uc = w._use_cases.create_symbol_list(w._service)
+            except Exception as exc:
+                w._emit_log(f"⚠️ Failed to create symbol list service: {exc}")
+                return False
+        symbol_list_uc = w._symbol_list_uc
+        if getattr(symbol_list_uc, "in_progress", False):
+            return False
+
+        account_id = int(w._app_state.selected_account_id)
+
+        def _on_symbols(symbols: list[dict]) -> None:
+            self._save_symbol_catalog(symbols)
+            w._symbol_names, w._symbol_id_map = self.load_symbol_catalog()
+            w._symbol_id_to_name = {
+                symbol_id: name for name, symbol_id in w._symbol_id_map.items()
+            }
+            w._fx_symbols = self.filter_fx_symbols(w._symbol_names)
+            w._symbol_id = self.resolve_symbol_id(w._symbol_name)
+            w._quote_symbol_ids = {
+                name: self.resolve_symbol_id(name) for name in w._quote_symbols
+            }
+            w._quote_rows.clear()
+            w._quote_row_digits.clear()
+            w._call_on_ui_thread(w._rebuild_quotes_table)
+            w._emit_log(f"✅ Symbol catalog loaded: {len(symbols)} symbols")
+            w._ensure_quote_subscription()
+
+        symbol_list_uc.set_callbacks(
+            on_symbols_received=lambda symbols: w._call_on_ui_thread(
+                lambda: _on_symbols(list(symbols or []))
+            ),
+            on_error=lambda error: w._emit_log(f"❌ Symbol list error: {error}"),
+            on_log=w._emit_log,
+        )
+        w._emit_log("🔎 Loading symbol catalog for live quotes...")
+        from forex.utils.reactor_manager import reactor_manager
+
+        reactor_manager.ensure_running()
+        from twisted.internet import reactor
+
+        reactor.callFromThread(
+            symbol_list_uc.fetch,
+            account_id=account_id,
+            include_archived=False,
+        )
+        return False
+
+    def _save_symbol_catalog(self, symbols: list[dict]) -> None:
+        path = self._window._symbol_list_path()
+        payload: list[dict] = []
+        for symbol in symbols:
+            if not isinstance(symbol, dict):
+                continue
+            symbol_id = symbol.get("symbol_id")
+            symbol_name = symbol.get("symbol_name")
+            if not isinstance(symbol_id, int):
+                continue
+            if not isinstance(symbol_name, str) or not symbol_name.strip():
+                continue
+            payload.append(
+                {
+                    "symbol_id": int(symbol_id),
+                    "symbol_name": str(symbol_name),
+                }
+            )
+        if not payload:
+            return
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(
+            json.dumps(payload, ensure_ascii=True, indent=2),
+            encoding="utf-8",
+        )
 
     @staticmethod
     def filter_fx_symbols(names: list[str]) -> list[str]:

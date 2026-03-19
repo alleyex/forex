@@ -97,6 +97,8 @@ class LiveSessionOrchestrator:
             return
         if not w._app_state or not w._app_state.selected_account_id:
             return
+        if not w._symbol_controller.ensure_symbol_catalog():
+            return
         now = time.time()
         if now - self._last_resume_ts < 1.0:
             return
