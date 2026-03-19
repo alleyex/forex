@@ -39,6 +39,45 @@ class UISmokeTest(unittest.TestCase):
         window.deleteLater()
         self._app.processEvents()
 
+    def test_live_trade_history_refresh_uses_cooldown_unless_forced(self) -> None:
+        class StubTradeHistoryService:
+            def __init__(self) -> None:
+                self.in_progress = False
+                self.fetch_calls: list[tuple[int, int]] = []
+
+            def set_callbacks(self, **_kwargs) -> None:
+                return
+
+            def clear_log_history(self) -> None:
+                return
+
+            def fetch(self, account_id: int, *, max_rows: int = 15) -> None:
+                self.fetch_calls.append((account_id, max_rows))
+
+        window = LiveMainWindow(
+            use_cases=BrokerUseCases(FakeProvider()),
+            event_bus=EventBus(),
+            app_state=AppState(),
+        )
+        window._auto_connect_timer.stop()
+        window._app_state.selected_account_id = 123
+        window._trade_history_refresh_cooldown_s = 60.0
+        window._trade_history_service = StubTradeHistoryService()
+        window._service = object()
+        window._is_broker_runtime_ready = lambda: True
+
+        window._refresh_trade_history()
+        window._refresh_trade_history()
+        window._refresh_trade_history(force=True)
+
+        self.assertEqual(
+            window._trade_history_service.fetch_calls,
+            [(123, 15), (123, 15)],
+        )
+        window.close()
+        window.deleteLater()
+        self._app.processEvents()
+
     def test_live_main_window_initializes_and_closes(self) -> None:
         window = LiveMainWindow(
             use_cases=BrokerUseCases(FakeProvider()),

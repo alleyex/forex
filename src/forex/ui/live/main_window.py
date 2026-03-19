@@ -698,12 +698,17 @@ class LiveMainWindow(QMainWindow):
     def _refresh_account_balance(self) -> None:
         self._autotrade_coordinator.refresh_account_balance()
 
-    def _refresh_trade_history(self) -> None:
+    def _refresh_trade_history(self, *, force: bool = False) -> None:
         if not self._service or not self._app_state or not self._app_state.selected_account_id:
             return
         ready_fn = getattr(self, "_is_broker_runtime_ready", None)
         runtime_ready = bool(ready_fn()) if callable(ready_fn) else True
         if not runtime_ready or getattr(self, "_account_switch_in_progress", False):
+            return
+        now = time.time()
+        cooldown = float(getattr(self, "_trade_history_refresh_cooldown_s", 60.0) or 60.0)
+        last_refresh = float(getattr(self, "_last_trade_history_refresh_ts", 0.0) or 0.0)
+        if not force and cooldown > 0 and now - last_refresh < cooldown:
             return
         try:
             if getattr(self, "_trade_history_service", None) is None:
@@ -726,6 +731,7 @@ class LiveMainWindow(QMainWindow):
             on_log=self.logRequested.emit,
         )
         service.clear_log_history()
+        self._last_trade_history_refresh_ts = now
         service.fetch(int(self._app_state.selected_account_id), max_rows=15)
 
     # Quotes / Positions Controllers

@@ -177,5 +177,5 @@ class LiveAutoRuntimeService:
             parts.append(f"(pos {position_id})")
         if parts:
             w._auto_log(f"✅ Order executed: {' '.join(parts)}")
-        w._refresh_trade_history()
+        w._refresh_trade_history(force=True)
         w._request_positions()
